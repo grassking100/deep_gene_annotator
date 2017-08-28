@@ -32,6 +32,7 @@ threads=[]
 file_root_name=args.model
 print("Load model from:"+file_root_name)
 for i in range(length):
+    print("Create threads:"+str(i+1)+"/"+str(length))
     model=load_model(file_root_name+".h5",custom_objects={'tensor_end_with_terminal_binary_crossentropy':Exon_intron_finder.Exon_intron_finder.tensor_end_with_terminal_binary_crossentropy,'tensor_end_with_terminal_binary_accuracy':Exon_intron_finder.Exon_intron_finder.tensor_end_with_terminal_binary_accuracy})
     threads.append(Thread(taget=threading_evaluate),args=(model,x_testing[i],y_testing[i],i,results))
 #testing model
