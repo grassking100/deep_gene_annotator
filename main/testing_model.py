@@ -15,6 +15,9 @@ from Fasta_handler.Fasta_handler import seqs_index_selector,fastas2arr,seqs2dnn_
 import Exon_intron_finder
 import numpy
 import csv
+from threading import Thread
+def threading_evaluate(model,x,y,index,results):
+    results[i]=model.evaluate(numpy.array([x]),numpy.array([y]),batch_size=1,verbose=0)
 #load data
 input_file=args.fasta
 print("Load data from file:"+input_file)
@@ -22,19 +25,26 @@ print("Load data from file:"+input_file)
 x,y=seqs2dnn_data(seqs)
 x_testing=keras.preprocessing.sequence.pad_sequences(x, maxlen=None,padding='post')
 y_testing=keras.preprocessing.sequence.pad_sequences(y, maxlen=None,padding='post',value=-1)
+length=len(x)
+results=[None]*length
+threads=[]
 #load model
 file_root_name=args.model
 print("Load model from:"+file_root_name)
-model=load_model(file_root_name+".h5",custom_objects={'tensor_end_with_terminal_binary_crossentropy':Exon_intron_finder.Exon_intron_finder.tensor_end_with_terminal_binary_crossentropy,'tensor_end_with_terminal_binary_accuracy':Exon_intron_finder.Exon_intron_finder.tensor_end_with_terminal_binary_accuracy})
+for i in range(length):
+    model=load_model(file_root_name+".h5",custom_objects={'tensor_end_with_terminal_binary_crossentropy':Exon_intron_finder.Exon_intron_finder.tensor_end_with_terminal_binary_crossentropy,'tensor_end_with_terminal_binary_accuracy':Exon_intron_finder.Exon_intron_finder.tensor_end_with_terminal_binary_accuracy})
+    threads.append(Thread(taget=threading_evaluate),args=(model,x_testing[i],y_testing[i],i,results))
 #testing model
 print("Start testing")
-results=[]
-index=1
-length=len(x)
-for i in range(len(x_testing)):
-    print("Progress:"+str(round(100*index/length,2))+"%")
-    index+=1
-    results.append(model.evaluate(numpy.array([x_testing[i]]),numpy.array([y_testing[i]]),batch_size=1,verbose=0))
+for i in range(length):
+    threads[i].start()
+leave=0
+while(leave==length):
+    leave=0
+    for i in range(length):
+        if threads[i].isAlive():
+            leave+=1
+    print("Progress:"+str(round(100*(leave+1)/length,2))+"%")
 #save result(id,loss,accuracy)
 output_file=args.output
 print("Save file to "+output_file)
