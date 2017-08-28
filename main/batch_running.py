@@ -1,10 +1,14 @@
 import configparser
 import argparse
 import os, errno
-from Exon_intron_finder.Training_helper import traning_validation_data_index_selector
+import sys
+sys.path.append("~/../")
+from Exon_intron_finder import Training_helper
+from Exon_intron_finder import Exon_intron_finder
+from Training_helper import traning_validation_data_index_selector
 import random,time,importlib,math,sys,numpy as np
-from Exon_intron_finder.Exon_intron_finder import Convolution_layers_settings,Exon_intron_finder_factory
-from Exon_intron_finder.Exon_intron_finder import tensor_end_with_terminal_binary_crossentropy
+from Exon_intron_finder import Convolution_layers_settings,Exon_intron_finder_factory
+from Exon_intron_finder import tensor_end_with_terminal_binary_crossentropy
 from Exon_intron_finder.Exon_intron_finder import tensor_end_with_terminal_binary_accuracy
 from Exon_intron_finder.Model_evaluator import Model_evaluator
 from DNA_Vector.DNA_Vector import code2vec,codes2vec
@@ -25,16 +29,21 @@ def str2bool(value):
 class Setting_parser:
     def __init__(self):
         self._config=configparser.ConfigParser()
-    def set_setting_file(self,setting):
-        self.setting=setting
-    def get_setting_file(self):
-        return self.setting
+    @property
+    def config(self):
+        self._config    
+    @setting_file.setter
+    def setting_file(self,setting):
+        self.__setting=setting
+    @property
+    def setting_file(self):
+        return self.__setting
 class Model_setting_parser(Setting_parser):
     def __init__(self):
         super().__init__()
     def get_model_settings(self):
-        config=self._config
-        config.read(self.get_setting_file())                
+        config=self.config
+        config.read(self.setting_file)                
         root="model_setting"
         settings={}
         for k,v in config[root].items():
@@ -56,8 +65,8 @@ class Train_setting_parser(Setting_parser):
     def __init__(self):
         super().__init__()
     def get_show_settings(self):
-        config=self._config
-        config.read(self.get_setting_file())                
+        config=self.config
+        config.read(self.setting_file)                
         show_settings="show"
         settings={}
         key_bool_type=['model','verbose','prompt']
@@ -65,8 +74,8 @@ class Train_setting_parser(Setting_parser):
             settings[key]=str2bool(config[show_settings][key])
         return settings
     def get_training_settings(self):
-        config=self._config
-        config.read(self.get_setting_file())                           
+        config=self.config
+        config.read(self.setting_file)                           
         training_settings="training_settings"
         settings={}
         key_int_value=['step','progress_target','previous_epoch','batch_size']
@@ -111,7 +120,7 @@ class Batch_ruuning():
                 raise
     def print_model_information(self):
         print("Create model")
-        self.get_model().summary()
+        self.model.summary()
     def __restored_previous_result(self):
         if self.__previous_epoch>0:
             if self.is_prompt_visible():
@@ -123,11 +132,13 @@ class Batch_ruuning():
             return
     def __load_previous_result(self):
         whole_file_path=self.__previous_status_root
-        self.get_evaluator().add_previous_histories(np.load(whole_file_path+'.npy').tolist())
-        self.__best_model=load_model(whole_file_path+'.h5',custom_objects=
-                                     {'tensor_end_with_terminal_binary_accuracy':tensor_end_with_terminal_binary_accuracy,
-                                      'tensor_end_with_terminal_binary_crossentropy':tensor_end_with_terminal_binary_crossentropy})
-        self.get_evaluator().set_model(self.__best_model)
+        self.evaluator.add_previous_histories(np.load(whole_file_path+'.npy').tolist())
+        accuracy_function=tensor_end_with_terminal_binary_accuracy
+        binary_crossentropy_function=tensor_end_with_terminal_binary_crossentropy
+        self.__model=load_model(whole_file_path+'.h5',custom_objects=
+                                     {'tensor_end_with_terminal_binary_accuracy':accuracy_function,
+                                      'tensor_end_with_terminal_binary_crossentropy':binary_crossentropy_function})
+        self.evaluator.set_model(self.__model)
     def print_file_classification(self):
         print("Status of file:")
         for file in self.__training_files:
@@ -158,10 +169,13 @@ class Batch_ruuning():
         self.__train_id=self.__settings['id']
         self.__setting_record=self.__settings['setting_record']
         self.__image=self.__settings['image']
+    @property
     def is_prompt_visible(self):
         return self.__is_prompt_visible
+    @property
     def is_model_visible(self):  
         return self.__is_model_visible
+    @property
     def is_verbose_visible(self):
         return self.__is_verbose_visible
     def print_training_status(self):
@@ -175,9 +189,10 @@ class Batch_ruuning():
             convolution_layers_settings.add_layer(self.__convolution_layer_numbers[i],self.__convolution_layer_sizes[i])
         model=Exon_intron_finder_factory(convolution_layers_settings.get_settings(),self.__lstm_layer_number,
                                    self.__add_terminal_signal,self.__add_batch_normalize,self.__dropout)    
-        self.__best_model=model
-    def get_model(self):
-        return self.__best_model
+        self.__model=model
+    @property
+    def model(self):
+        return self.__model
     def __init_data(self):
         (self.__x_train,self.__y_train)=seqs2dnn_data(self.__training_seqs,False)
         (self.__x_validation,self.__y_validation)=seqs2dnn_data(self.__validation_seqs,False)
@@ -193,8 +208,9 @@ class Batch_ruuning():
         self.__evaluator=Model_evaluator()
         self.__evaluator.set_training_data(*self.get_training_set())
         self.__evaluator.set_validation_data(*self.get_validation_set())
-        self.__evaluator.set_model(self.get_model())
-    def get_evaluator(self):
+        self.__evaluator.set_model(self.model)
+    @property
+    def evaluator(self):
         return self.__evaluator
     def print_selected_information(self):
         training_size=self.__training_size
@@ -211,7 +227,7 @@ class Batch_ruuning():
         return whole_file_path
     def __prepare_first_train(self):
         saved_new_model=self.get_whole_path_file(0)
-        self.get_model().save(saved_new_model+'.h5')
+        self.model.save(saved_new_model+'.h5')
         key_not_to_store=["evaluator","y_validation","training_seqs","x_train","x_validation","settings","y_train","best_model","validation_seqs"]
         if self.is_prompt_visible():
             print('Cretae record file:'+self.__folder_name+"/"+self.__setting_record)
@@ -227,7 +243,7 @@ class Batch_ruuning():
                     writer.writerow([body_key,self.__dict__[key]])
         if self.is_prompt_visible():
             print('Cretae model image:'+self.__folder_name+"/"+self.__image)
-        plot_model(self.__best_model, to_file=self.__folder_name+"/"+self.__image)
+        plot_model(self.__model, to_file=self.__folder_name+"/"+self.__image)
     def run(self):   
         if self.is_prompt_visible():
             print("Start of running")
@@ -237,9 +253,9 @@ class Batch_ruuning():
             whole_file_path=self.get_whole_path_file(self.__step+progress)
             if self.is_prompt_visible():
                 print("Starting training:"+whole_file_path)
-            self.get_evaluator().evaluate(self.__step,self.__batch_size,True,int(self.is_model_visible()))
-            np.save(whole_file_path+'.npy', self.get_evaluator().get_histories()) 
-            self.get_model().save(whole_file_path+'.h5')
+            self.evaluator.evaluate(self.__step,self.__batch_size,True,int(self.is_model_visible()))
+            np.save(whole_file_path+'.npy', self.evaluator.get_histories()) 
+            self.model.save(whole_file_path+'.h5')
             if self.is_prompt_visible():
                 print("Saved training:"+whole_file_path)
         if self.is_prompt_visible():

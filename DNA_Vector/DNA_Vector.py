@@ -21,7 +21,7 @@ def code2vec(code,safe=False):
     else:
         return None
 #convert one hot encoding to DNA code
-def vec2code(vector):
+def vec2code(vector,safe=False):
     a=[1,0,0,0]
     t=[0,1,0,0]
     c=[0,0,1,0]
@@ -31,7 +31,8 @@ def vec2code(vector):
     for i in range(len(target)):
         if vector==target[i]:
             return code[i]
-    assert False,(str)(vector)+' is not in space'
+    if safe:
+        assert False,(str)(vector)+' is not in space'
     return None
 #convert DNA sequence to one hot encoding sequence
 def codes2vec(code,safe=False):
@@ -45,9 +46,13 @@ def codes2vec(code,safe=False):
             return None
     return arr
 #convert one hot encoding sequence to DNA sequence
-def vec2codes(vector):
+def vec2codes(vector,safe=False):
     vectors=list(vector)
     arr=[]
     for v in vectors:
-        arr.append(vec2code(v))
+        code=vec2code(v,safe)
+        if code is not None:
+            arr.append(code)
+        else:
+            return None
     return arr
