@@ -1,91 +1,87 @@
 import configparser
 import argparse
+import os, errno
 from Exon_intron_finder.Training_helper import traning_validation_data_index_selector
 import random,time,importlib,math,sys,numpy as np
 from Exon_intron_finder.Exon_intron_finder import Convolution_layers_settings,Exon_intron_finder_factory
-from Exon_intron_finder.Exon_intron_finder import tensor_end_with_terminal_binary_accuracy,tensor_end_with_terminal_binary_crossentropy
+from Exon_intron_finder.Exon_intron_finder import tensor_end_with_terminal_binary_crossentropy
+from Exon_intron_finder.Exon_intron_finder import tensor_end_with_terminal_binary_accuracy
 from Exon_intron_finder.Model_evaluator import Model_evaluator
 from DNA_Vector.DNA_Vector import code2vec,codes2vec
 from Fasta_handler.Fasta_handler import seqs_index_selector,fastas2arr,seqs2dnn_data
-from time import gmtime, strftime
+from time import gmtime,strftime
 from keras.models import load_model
+from keras.utils import plot_model
 import Exon_intron_finder
-import os, errno
+import csv
 __author__ = 'Ching-Tien Wang'
-class Setting_parser():
+def str2bool(value):
+    if value=="True":
+        return True
+    elif value=="False":
+        return False
+    else:
+        assert False, (str)(value)+" is neithor True of False"
+class Setting_parser:
     def __init__(self):
-        self.__config = configparser.ConfigParser()
-        self.__model_config = configparser.ConfigParser()
+        self._config=configparser.ConfigParser()
     def set_setting_file(self,setting):
         self.setting=setting
     def get_setting_file(self):
-        return(self.setting)
-    def get_setting(self):
-        self.__config.read(self.get_setting_file())
-        settings={'show':self.get_show_settings(),'training':self.get_training_settings(),'model':self.get_model_setting()}
-        return settings    
-    def str2bool(self,value):
-        if value=="True":
-            return True
-        elif value=="False":
-            return False
-        else:
-            assert False, (str)(value)+" is neithor True of False"
-    def get_model_setting_file(self):
-        config=self.__config
-        model_setting_file=config["model_setting"]['model_setting_file']
-        return model_setting_file
-    def get_model_setting(self):
-        model_setting_file=self.get_model_setting_file()
-        config=self.__model_config
-        config.read(model_setting_file)
+        return self.setting
+class Model_setting_parser(Setting_parser):
+    def __init__(self):
+        super().__init__()
+    def get_model_settings(self):
+        config=self._config
+        config.read(self.get_setting_file())                
         root="model_setting"
-        total_convolution_layer_size=config[root]['total_convolution_layer_size']
-        LSTM_layer_number=config[root]['LSTM_layer_number']
-        add_terminal_signal=self.str2bool(config[root]['add_terminal_signal'])
-        convolution_layer_sizes=[int(i) for i in config[root]['convolution_layer_sizes'].split(",")]
-        convolution_layer_numbers=[int(i) for i in config[root]['convolution_layer_numbers'].split(",")]
-        add_batch_normalize=self.str2bool(config[root]['add_batch_normalize'])
-        settings={'total_convolution_layer_size':int(total_convolution_layer_size),'LSTM_layer_number':int(LSTM_layer_number),
-                 'add_terminal_signal':add_terminal_signal,'convolution_layer_sizes':convolution_layer_sizes,
-                'convolution_layer_numbers':convolution_layer_numbers,
-                 'add_batch_normalize':add_batch_normalize}
+        settings={}
+        for k,v in config[root].items():
+            settings[k]=v
+        key_int_value=['total_convolution_layer_size','lstm_layer_number']
+        key_float_value=['dropout']
+        key_bool_value=['add_terminal_signal','add_batch_normalize']
+        key_ints_value=['convolution_layer_sizes','convolution_layer_numbers']
+        for key in key_int_value:
+            settings[key]=int(settings[key])
+        for key in key_float_value:
+            settings[key]=float(settings[key])  
+        for key in key_bool_value:
+            settings[key]=str2bool(settings[key]) 
+        for key in key_ints_value:
+            settings[key]=[int(i) for i in settings[key].split(",")]
         return settings
+class Train_setting_parser(Setting_parser):
+    def __init__(self):
+        super().__init__()
     def get_show_settings(self):
-        config=self.__config
+        config=self._config
+        config.read(self.get_setting_file())                
         show_settings="show"
-        model=self.str2bool(config[show_settings]['model'])
-        verbose=self.str2bool(config[show_settings]['verbose'])
-        prompt=self.str2bool(config[show_settings]['prompt'])
-        settings= {'model':model,'verbose':verbose,'prompt':prompt}
+        settings={}
+        key_bool_type=['model','verbose','prompt']
+        for key in key_bool_type:
+            settings[key]=str2bool(config[show_settings][key])
         return settings
     def get_training_settings(self):
-        config=self.__config
+        config=self._config
+        config.read(self.get_setting_file())                           
         training_settings="training_settings"
-        training_files=config[training_settings]['training_files'].split(",\n")
-        validation_files=config[training_settings]['validation_files'].split(",\n")
-        mode_id=config[training_settings]['mode_id']
-        train_id=config[training_settings]['train_id']
-        cross_validation=config[training_settings]['cross_validation']
-        epoch=config[training_settings]['epoch']
-        previous_status_root=config[training_settings]['previous_status_root']
-        step=config[training_settings]['step']
-        batch_size=config[training_settings]['batch_size']
-        outputfile_root=config[training_settings]['outputfile_root']
-        previous_epoch=config[training_settings]['previous_epoch']
-        settings= {'training_files':training_files,
-                   'validation_files':validation_files,
-                   'mode_id':mode_id,'train_id':train_id,'epoch':int(epoch),
-                   'step':int(step),'outputfile_root':outputfile_root,
-                   'previous_epoch':int(previous_epoch),
-                   'cross_validation':int(cross_validation),
-                   'batch_size':int(batch_size),
-                   'previous_status_root':previous_status_root}
+        settings={}
+        key_int_value=['step','progress_target','previous_epoch','batch_size']
+        key_array_value=['training_files','validation_files']
+        for k,v in config[training_settings].items():
+            settings[k]=v
+        for key in key_int_value:
+            settings[key]=int(settings[key])
+        for key in key_array_value:
+            settings[key]=settings[key].split(",\n")
         return settings
 class Batch_ruuning():
     #initialize all the variable needed
-    def __init__(self,setting):
-        self.__setting=setting
+    def __init__(self,settings):
+        self.__settings=settings
         #initialize all the variable from setting file
         self.__init_parameter()
         #get names and sequences from file
@@ -106,10 +102,10 @@ class Batch_ruuning():
         self.__create_stored_folder()
     def __create_stored_folder(self):
         try:
-            folder_name=self.__root+'/train_'+str(self.__train_id)
-            if not os.path.exists(folder_name):
-                print("Create folder:"+folder_name)
-                os.makedirs(folder_name)
+            self.__folder_name=self.__outputfile_root+'/'+str(self.__train_id)+"/"+str(self.__mode_id)
+            if not os.path.exists(self.__folder_name):
+                print("Create folder:"+self.__folder_name)
+                os.makedirs(self.__folder_name)
         except OSError as e:
             if e.errno != errno.EEXIST:
                 raise
@@ -133,22 +129,13 @@ class Batch_ruuning():
                                       'tensor_end_with_terminal_binary_crossentropy':tensor_end_with_terminal_binary_crossentropy})
         self.get_evaluator().set_model(self.__best_model)
     def print_file_classification(self):
-        print("Status of file")
-        for file in self.get_training_files():
-            print("    Training set:"+file)
-        for file in self.get_validation_files():
-            print("    Validation set:"+file)    
-    def get_training_files(self):
-        return self.__training_files
-    def get_validation_files(self):
-        return self.__validation_files
-    def get_training_seqs(self):
-        return self.__training_seqs
-    def get_validation_seqs(self):
-        return self.__validation_seqs
+        print("Status of file:")
+        for file in self.__training_files:
+            print("\tTraining set:"+file)
+        for file in self._Batch_ruuning__validation_files:
+            print("\tValidation set:"+file)    
     def __init_training_files_data(self):
         self.__training_seqs=[]
-        #print(self.__training_files)
         for file in self.__training_files:
             (name,seq)=fastas2arr(file)
             self.__training_seqs+=seq
@@ -157,41 +144,20 @@ class Batch_ruuning():
         for file in self.__validation_files:
             (name,seq)=fastas2arr(file)
             self.__validation_seqs+=seq
-    def __init_training_parameter(self):
-        root="training"
-        self.__cross_validation=self.__settings[root]['cross_validation']
-        self.__mode_id=self.__settings[root]['mode_id']
-        self.__training_files=self.__settings[root]['training_files']
-        self.__validation_files=self.__settings[root]['validation_files']
-        self.__progress_target=self.__settings[root]['epoch']
-        self.__previous_epoch=self.__settings[root]['previous_epoch']
-        self.__step=self.__settings[root]['step']
-        self.__batch_size=self.__settings[root]['batch_size']
-        self.__root=self.__settings[root]['outputfile_root']
-        self.__train_id=self.__settings[root]['train_id']
-        self.__train_file='/train_'+str(self.__train_id)+'/'
-        self.__date=strftime("%Y_%b_%d", gmtime())
-        self.__previous_status_root=self.__settings[root]['previous_status_root']
-    def __init_show_parameter(self):
-        root="show"
-        self.__is_model_visible=self.__settings[root]['model']
-        self.__is_verbose_visible=self.__settings[root]['verbose']
-        self.__is_prompt_visible=self.__settings[root]['prompt']
-    def __init_model_paramter(self):
-        root="model"
-        self.__total_convolution_layer_size=self.__settings[root]['total_convolution_layer_size']
-        self.__LSTM_layer_number=self.__settings[root]['LSTM_layer_number']
-        self.__add_terminal_signal=self.__settings[root]['add_terminal_signal']
-        self.__convolution_layer_sizes=self.__settings[root]['convolution_layer_sizes']
-        self.__convolution_layer_numbers=self.__settings[root]['convolution_layer_numbers']
-        self.__add_batch_normalize=self.__settings[root]['add_batch_normalize']
     def __init_parameter(self):
-        parser=Setting_parser()
-        parser.set_setting_file(self.__setting)
-        self.__settings=parser.get_setting()
-        self.__init_training_parameter()
-        self.__init_show_parameter()
-        self.__init_model_paramter()
+        roots=['model','training','show']
+        for root in roots:        
+            for k,v in self.__settings[root].items():
+                variable_tail_name=''
+                variable_head_name='_'+self.__class__.__name__+'__'
+                if root=='show':
+                    variable_tail_name+='_visible'
+                    variable_head_name+='is_'
+                setattr(self,variable_head_name+k+variable_tail_name, v)
+        self.__date=strftime("%Y_%b_%d", gmtime())
+        self.__train_id=self.__settings['id']
+        self.__setting_record=self.__settings['setting_record']
+        self.__image=self.__settings['image']
     def is_prompt_visible(self):
         return self.__is_prompt_visible
     def is_model_visible(self):  
@@ -199,63 +165,76 @@ class Batch_ruuning():
     def is_verbose_visible(self):
         return self.__is_verbose_visible
     def print_training_status(self):
+        status={'Progress target':self.__progress_target,'Start progress':self.__previous_epoch,'Step':self.__step,'Batch size':self.__batch_size,'Train id':self.__train_id,'Date':self.__date}
         print("Training satus:")
-        print("    Progress target:"+str(self.__progress_target))
-        print("    Start progress:"+str(self.__previous_epoch))
-        print("    Step:"+str(self.__step))
-        print("    Batch size:"+str(self.__batch_size))
-        print("    Train id:"+str(self.__train_id))
-        print("    Date:"+str(self.__date))
+        for k,v in status.items():
+            print("\t"+k+":"+str(v))
     def __init_model(self):
         convolution_layers_settings=Convolution_layers_settings()
         for i in range(self.__total_convolution_layer_size):
-            convolution_layers_settings.add_layer(self.__convolution_layer_numbers[i],
-                                                  self.__convolution_layer_sizes[i])
-        model=Exon_intron_finder_factory(convolution_layers_settings.get_settings(),
-                                   self.__LSTM_layer_number,
-                                   self.__add_terminal_signal,
-                                   self.__add_batch_normalize)    
+            convolution_layers_settings.add_layer(self.__convolution_layer_numbers[i],self.__convolution_layer_sizes[i])
+        model=Exon_intron_finder_factory(convolution_layers_settings.get_settings(),self.__lstm_layer_number,
+                                   self.__add_terminal_signal,self.__add_batch_normalize,self.__dropout)    
         self.__best_model=model
     def get_model(self):
         return self.__best_model
     def __init_data(self):
-        (self.__x_train,self.__y_train)=seqs2dnn_data(self.get_training_seqs(),False)
-        (self.__x_validation,self.__y_validation)=seqs2dnn_data(self.get_validation_seqs(),False)
+        (self.__x_train,self.__y_train)=seqs2dnn_data(self.__training_seqs,False)
+        (self.__x_validation,self.__y_validation)=seqs2dnn_data(self.__validation_seqs,False)
+        self.__training_size=len(self.__training_seqs)
+        self.__validation_size=len(self.__validation_seqs)
+        self.__valid_training_size=len(self.__y_train)
+        self.__valid_validation_size=len(self.__y_validation)
     def get_training_set(self):
         return self.__x_train,self.__y_train
     def get_validation_set(self):
         return self.__x_validation,self.__y_validation
     def __init_evaluator(self):
-        self.evaluator=Model_evaluator()
-        self.evaluator.set_training_data(*self.get_training_set())
-        self.evaluator.set_validation_data(*self.get_validation_set())
-        self.evaluator.set_model(self.get_model())
+        self.__evaluator=Model_evaluator()
+        self.__evaluator.set_training_data(*self.get_training_set())
+        self.__evaluator.set_validation_data(*self.get_validation_set())
+        self.__evaluator.set_model(self.get_model())
     def get_evaluator(self):
-        return self.evaluator
+        return self.__evaluator
     def print_selected_information(self):
-        training_size=len(self.get_training_seqs())
-        validation_size=len(self.get_validation_seqs())
-        valid_training_size=len(self.__y_train)
-        valid_validation_size=len(self.__y_validation)
-        print('Selected set number:'+(str)(training_size+validation_size))
-        print('Training set number:'+(str)(training_size))
-        print('Validation set number:'+(str)(validation_size))
-        print('Parsing and validate data...')
-        print('Selected valid set number:'+(str)(valid_training_size+valid_validation_size))
-        print('Training valid set number:'+(str)(valid_training_size))
-        print('Validation valid set number:'+(str)(valid_validation_size))
-    def get_while_path_file(self,progress_number):
+        training_size=self.__training_size
+        validation_size=self.__validation_size
+        valid_training_size=self.__valid_training_size
+        valid_validation_size=self.__valid_validation_size
+        status={'Selected set number':training_size+validation_size,'Training set number':training_size,'Validation set number':validation_size,'Selected valid set number':valid_training_size+valid_validation_size,'Training valid set number':valid_training_size,'Validation valid set number':valid_validation_size}
+        print("Status of data:")
+        for k,v in status.items():
+            print("\t"+k+":"+str(v))
+    def get_whole_path_file(self,progress_number):
         file_name='train_'+str(self.__train_id)+'_mode_'+str(self.__mode_id)+'_progress_'+str(progress_number)+'_'
-        whole_file_path=self.__root+self.__train_file+file_name+self.__date
+        whole_file_path=self.__folder_name+"/"+file_name+self.__date
         return whole_file_path
+    def __prepare_first_train(self):
+        saved_new_model=self.get_whole_path_file(0)
+        self.get_model().save(saved_new_model+'.h5')
+        key_not_to_store=["evaluator","y_validation","training_seqs","x_train","x_validation","settings","y_train","best_model","validation_seqs"]
+        if self.is_prompt_visible():
+            print('Cretae record file:'+self.__folder_name+"/"+self.__setting_record)
+        with open(self.__folder_name+"/"+self.__setting_record,"w") as file:
+            writer=csv.writer(file,delimiter=',')
+            writer.writerow(["attributes","value"])
+            keys=self.__dict__.keys()
+            values=self.__dict__.values()
+            head="_"+self.__class__.__name__+"__"
+            for key in keys:
+                body_key=key[len(head):]
+                if body_key not in key_not_to_store:
+                    writer.writerow([body_key,self.__dict__[key]])
+        if self.is_prompt_visible():
+            print('Cretae model image:'+self.__folder_name+"/"+self.__image)
+        plot_model(self.__best_model, to_file=self.__folder_name+"/"+self.__image)
     def run(self):   
         if self.is_prompt_visible():
             print("Start of running")
         if self.__previous_epoch==0:
-            saved_new_model=self.get_while_path_file(0)
-            self.get_model().save(saved_new_model+'.h5')
+            self.__prepare_first_train() 
         for progress in range(self.__previous_epoch,self.__progress_target,self.__step):
-            whole_file_path=self.get_while_path_file(self.__step+progress)
+            whole_file_path=self.get_whole_path_file(self.__step+progress)
             if self.is_prompt_visible():
                 print("Starting training:"+whole_file_path)
             self.get_evaluator().evaluate(self.__step,self.__batch_size,True,int(self.is_model_visible()))
@@ -268,8 +247,17 @@ class Batch_ruuning():
 if __name__=='__main__':
     prompt='batch_running.py --setting=<setting_file>'
     parser = argparse.ArgumentParser(description=prompt)
-    parser.add_argument('-s','--setting',help='Setting file name', required=True)
+    parser.add_argument('-t','--train_setting',help='Train setting file name', required=True)
+    parser.add_argument('-m','--model_setting',help='Model setting file name', required=True)
+    parser.add_argument('-id','--train_id',help='Train id', required=True)
+    parser.add_argument('-r','--setting_record',help='File name to save setting', required=True)
+    parser.add_argument('-image','--image',help='File name to save image', required=True)
     args = parser.parse_args()
-    batch_runner=Batch_ruuning(args.setting)
+    model_parser=Model_setting_parser()
+    model_parser.set_setting_file(args.model_setting)
+    train_parser=Train_setting_parser()
+    train_parser.set_setting_file(args.train_setting)
+    settings={'setting_record':args.setting_record,'image':args.image,'id':args.train_id,'training':train_parser.get_training_settings(),'show':train_parser.get_show_settings(),'model':model_parser.get_model_settings()}
+    batch_runner=Batch_ruuning(settings)
     batch_runner.run()
     print("End of program")
