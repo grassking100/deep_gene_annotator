@@ -1,0 +1,73 @@
+from . import keras
+from . import numpy
+#a evaluator which will train and evaluate the model
+class Model_evaluator:
+    def __init__(self):
+        self.x_train=[]
+        self.y_train=[]
+        self.x_validation=[]
+        self.y_validation=[]
+        self.histories=[]
+    def set_training_data(self,x,y):
+        self.x_train=x
+        self.y_train=y
+        return self
+    def set_validation_data(self,x,y):
+        self.x_validation=x
+        self.y_validation=y
+        return self
+    def clean_histories(self):
+        self.histories=[]
+    def add_previous_histories(self,histories):
+        self.histories=histories
+    def set_model(self,model):
+        self.model=model
+        return self
+    def get_model(self):
+        return self.model
+    def evaluate(self,epoches,batch_size,shuffle,verbose):
+        #padding data to same length
+        x_train=keras.preprocessing.sequence.pad_sequences(self.x_train, maxlen=None,padding='post')
+        y_train=keras.preprocessing.sequence.pad_sequences(self.y_train, maxlen=None,padding='post',value=-1)
+        x_validation=keras.preprocessing.sequence.pad_sequences(self.x_validation, maxlen=None,padding='post')
+        y_validation=keras.preprocessing.sequence.pad_sequences(self.y_validation, maxlen=None,padding='post',value=-1)
+        #training and evaluating the model
+        history=self.get_model().fit(numpy.array(x_train), 
+                                     numpy.array(y_train), 
+                                     batch_size=batch_size,
+                                     shuffle=shuffle,
+                                     epochs=epoches,
+                                     verbose=verbose,
+                                     validation_data=(numpy.array(x_validation),numpy.array(y_validation)))
+        #add record to histories
+        self.histories.append(history.history)
+        return self
+    def get_histories(self):
+        return self.histories
+    def get_accuracies(self):
+        return self.get_histories()['tensor_end_with_terminal_binary_accuracy']
+    def get_validation_accuracies(self):
+        return self.get_histories()['val_tensor_end_with_terminal_binary_accuracy']
+    def get_losses(self):
+        return self.get_histories()['loss']
+    def get_validation_losses(self):
+        return self.get_histories()['val_loss']
+    def get_last_validation_loss(self):
+        loss=self.get_validation_losses()
+        return loss[len(loss)-1]
+    def get_last_loss(self):
+        loss=self.get_losses()
+        return loss[len(loss)-1]
+    def get_last_accuracy(self):
+        acc=self.get_accuracies()
+        return acc[len(acc)-1]
+    def get_last_validation_accuracy(self):
+        acc=self.get_validation_accuracies()
+        return acc[len(acc)-1]   
+    def get_max_accuracy(self):
+        return max(self.get_accuracies())
+    def get_max_validation_accuracy(self):
+        return max(self.get_validation_accuracies())
+    
+
+    
