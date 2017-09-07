@@ -224,7 +224,7 @@ class Batch_ruuning():
     def __prepare_first_train(self):
         saved_new_model=self.get_whole_path_file(0)
         self.model.save(saved_new_model+'.h5')
-        key_not_to_store=["evaluator","y_validation","training_seqs","x_train","x_validation","settings","y_train","best_model","validation_seqs"]
+        key_not_to_store=["model","evaluator","y_validation","training_seqs","x_train","x_validation","settings","y_train","best_model","validation_seqs"]
         if self.is_prompt_visible:
             print('Cretae record file:'+self.__folder_name+"/"+self.__setting_record)
         with open(self.__folder_name+"/"+self.__setting_record,"w") as file:
