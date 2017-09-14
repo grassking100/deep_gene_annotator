@@ -1,7 +1,6 @@
 import unittest
 import sys
 sys.path.append("~/..")
-print(sys.path)
 from DNA_Vector.DNA_Vector import *
 class test_DNA_Vector(unittest.TestCase):
 	def test_code2vec(self):
