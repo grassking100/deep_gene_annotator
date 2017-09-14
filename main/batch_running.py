@@ -1,6 +1,8 @@
 import configparser
 import argparse
 import os, errno
+import sys
+sys.path.append("~/..")
 from Exon_intron_finder.Training_helper import traning_validation_data_index_selector
 import random,time,importlib,math,sys,numpy as np
 from Exon_intron_finder.Exon_intron_finder import Convolution_layers_settings,Exon_intron_finder_factory
