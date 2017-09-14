@@ -2,19 +2,20 @@ import configparser
 import argparse
 import os, errno
 import sys
-sys.path.append("~/..")
-from Exon_intron_finder.Training_helper import traning_validation_data_index_selector
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__+'/..' )) ) )
+print(sys.path)
+from gene_prediction.Exon_intron_finder.Training_helper import traning_validation_data_index_selector
 import random,time,importlib,math,sys,numpy as np
-from Exon_intron_finder.Exon_intron_finder import Convolution_layers_settings,Exon_intron_finder_factory
-from Exon_intron_finder.Exon_intron_finder import tensor_end_with_terminal_binary_crossentropy
-from Exon_intron_finder.Exon_intron_finder import tensor_end_with_terminal_binary_accuracy
-from Exon_intron_finder.Model_evaluator import Model_evaluator
-from DNA_Vector.DNA_Vector import code2vec,codes2vec
-from Fasta_handler.Fasta_handler import seqs_index_selector,fastas2arr,seqs2dnn_data
+from  gene_prediction.Exon_intron_finder.Exon_intron_finder import Convolution_layers_settings,Exon_intron_finder_factory
+from  gene_prediction.Exon_intron_finder.Exon_intron_finder import tensor_end_with_terminal_binary_crossentropy
+from  gene_prediction.Exon_intron_finder.Exon_intron_finder import tensor_end_with_terminal_binary_accuracy
+from  gene_prediction.Exon_intron_finder.Model_evaluator import Model_evaluator
+from  gene_prediction.DNA_Vector.DNA_Vector import code2vec,codes2vec
+from  gene_prediction.Fasta_handler.Fasta_handler import seqs_index_selector,fastas2arr,seqs2dnn_data
 from time import gmtime,strftime
 from keras.models import load_model
 from keras.utils import plot_model
-import Exon_intron_finder
+import  gene_prediction.Exon_intron_finder
 import csv
 __author__ = 'Ching-Tien Wang'
 def str2bool(value):
