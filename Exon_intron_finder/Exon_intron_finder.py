@@ -1,5 +1,4 @@
-from . import Input
-from . import Dropout,Convolution1D,Flatten,MaxPooling1D,LSTM,Reshape
+from . import Input,Dropout,Convolution1D,Flatten,MaxPooling1D,LSTM,Reshape,Activation
 from . import keras
 from . import Model
 from . import tensorflow as tf
@@ -50,14 +49,17 @@ def Exon_intron_finder_factory(convolution_settings=[], LSTM_layer_number=1,add_
     ############################
     #generate every convolution layer with input's setting
     for setting in convolution_settings:
-        convolution=Convolution1D(activation='relu',filters=setting['filter_num'],
+        bias=not add_batch_normalize
+        convolution=Convolution1D(filters=setting['filter_num'],
                                   kernel_size=setting['filter_size'], padding='same',
                                   name='Convolution'+(str)(index),
-                                  input_shape=(seq_size,code_dim))(previous_layer)
+                                  input_shape=(seq_size,code_dim),
+                                  use_bias=bias)(previous_layer)
         previous_layer=convolution
         if add_batch_normalize:
             batch=keras.layers.normalization.BatchNormalization(name='BatchNormal'+(str)(index))(previous_layer)
             previous_layer=batch
+        previous_layer=Activation('relu')(previous_layer)
         index+=1
     #choose algorithm to calculate the loss and accuracy
     if add_terminal_signal:
