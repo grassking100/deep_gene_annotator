@@ -1,7 +1,7 @@
 import tensorflow
 import random
 import sys
-sys.path.append("../")
+sys.path.append("../../")
 from Fasta_handler.Fasta_handler import *
 from keras.layers import Input,Dropout,Convolution1D,Flatten,MaxPooling1D,LSTM,Reshape,Activation
 import keras
