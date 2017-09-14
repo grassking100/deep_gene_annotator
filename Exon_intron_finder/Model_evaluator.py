@@ -25,12 +25,14 @@ class Model_evaluator:
         return self
     def get_model(self):
         return self.model
-    def evaluate(self,epoches,batch_size,shuffle,verbose):
+    def evaluate(self,epoches,batch_size,shuffle,verbose,log_file):
         #padding data to same length
         x_train=keras.preprocessing.sequence.pad_sequences(self.x_train, maxlen=None,padding='post')
         y_train=keras.preprocessing.sequence.pad_sequences(self.y_train, maxlen=None,padding='post',value=-1)
         x_validation=keras.preprocessing.sequence.pad_sequences(self.x_validation, maxlen=None,padding='post')
         y_validation=keras.preprocessing.sequence.pad_sequences(self.y_validation, maxlen=None,padding='post',value=-1)
+        tbCallBack = keras.callbacks.TensorBoard(log_dir='./'+log_file, histogram_freq=1, write_graph=True, write_grads=True, write_images=True)
+        tbCallBack.set_model(self.model)
         #training and evaluating the model
         history=self.get_model().fit(numpy.array(x_train), 
                                      numpy.array(y_train), 
@@ -38,7 +40,8 @@ class Model_evaluator:
                                      shuffle=shuffle,
                                      epochs=epoches,
                                      verbose=verbose,
-                                     validation_data=(numpy.array(x_validation),numpy.array(y_validation)))
+                                     validation_data=(numpy.array(x_validation),numpy.array(y_validation)),
+                                     callbacks=[tbCallBack])
         #add record to histories
         self.histories.append(history.history)
         return self

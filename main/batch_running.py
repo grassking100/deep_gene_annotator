@@ -1,8 +1,6 @@
 import configparser
 import argparse
 import os, errno
-import sys
-#sys.path.append("~/../")
 from Exon_intron_finder.Training_helper import traning_validation_data_index_selector
 import random,time,importlib,math,sys,numpy as np
 from Exon_intron_finder.Exon_intron_finder import Convolution_layers_settings,Exon_intron_finder_factory
@@ -249,7 +247,7 @@ class Batch_ruuning():
             whole_file_path=self.get_whole_path_file(self.__step+progress)
             if self.is_prompt_visible:
                 print("Starting training:"+whole_file_path)
-            self.evaluator.evaluate(self.__step,self.__batch_size,True,int(self.is_model_visible))
+            self.evaluator.evaluate(self.__step,self.__batch_size,True,int(self.is_model_visible),whole_file_path+'/log/')
             np.save(whole_file_path+'.npy', self.evaluator.get_histories()) 
             self.model.save(whole_file_path+'.h5')
             if self.is_prompt_visible:
