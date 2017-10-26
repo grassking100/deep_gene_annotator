@@ -38,7 +38,7 @@ class Convolution_layers_settings():
     def get_settings(self):
         return self.layers_settings
 #input model setting,and return model
-def Exon_intron_finder_factory(convolution_settings=[], LSTM_layer_number=1,add_terminal_signal=True,add_batch_normalize=False,dropout=0,learning_rate=0.001):
+def Exon_intron_finder_factory(convolution_settings=[], LSTM_layer_number=1,add_terminal_signal=True,add_batch_normalize=False,dropout=0,learning_rate=0.001,output_dim=1):
     #initialize the variable#####
     seq_size=None
     code_dim=4
@@ -75,7 +75,11 @@ def Exon_intron_finder_factory(convolution_settings=[], LSTM_layer_number=1,add_
     #concatenate two lstm rnn layers
     concatenate = keras.layers.concatenate(inputs=[lstm_forward,lstm_backword],name='Concatenate')
     #create last layer to predict the result
-    last=Convolution1D(activation='sigmoid',filters=1, kernel_size=1,name='Result')(concatenate)
+    if output_dim==1:
+        last_activation='sigmoid'
+    else:
+        last_activation='softmax'
+    last=Convolution1D(activation=last_activation,filters=output_dim, kernel_size=1,name='Result')(concatenate)
     #create model
     Exon_intron_finder= Model(inputs=input_layers, outputs=last)
     #set optimizer metrics,and loss to the model
