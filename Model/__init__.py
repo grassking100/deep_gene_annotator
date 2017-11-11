@@ -1,10 +1,10 @@
 import tensorflow
 import random
-from gene_prediction.Fasta_handler.Fasta_handler import *
+from sequence_annotation.Fasta_handler.Fasta_handler import *
 from keras.layers import Input,Dropout,Convolution1D,Flatten,MaxPooling1D,LSTM,Reshape,Activation
 import keras
 from keras.models import Model
-from gene_prediction.Exon_intron_finder.Exon_intron_finder import Exon_intron_finder_factory
-from gene_prediction.Exon_intron_finder.Model_evaluator import Model_evaluator
+from sequence_annotation.Model.Sequence_annotation_model_factory import Sequence_annotation_model_factory
+from sequence_annotation.Model.Model_trainer import Model_trainer
 import numpy
 
