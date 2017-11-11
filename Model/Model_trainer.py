@@ -1,7 +1,7 @@
 from . import keras
 from . import numpy
-#a evaluator which will train and evaluate the model
-class Model_evaluator:
+#a trainer which will train and evaluate the model
+class Model_trainer:
     def __init__(self):
         self.x_train=[]
         self.y_train=[]
