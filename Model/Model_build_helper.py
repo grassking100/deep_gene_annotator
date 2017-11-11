@@ -1,3 +1,5 @@
+from . import tensorflow as tf
+from . import keras
 #get all index which corresponding value equal -1 
 def tensor_non_terminal_index(tensor):
     index=tf.where(tf.not_equal(tensor,-1))

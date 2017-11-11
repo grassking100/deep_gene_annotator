@@ -1,9 +1,7 @@
 from . import Input,Dropout,Convolution1D,Flatten,MaxPooling1D,LSTM,Reshape,Activation
 from . import keras
 from . import Model
-from . import tensorflow as tf
-from . import tensor_end_with_terminal_binary_crossentropy
-from . import tensor_end_with_terminal_binary_accuracy
+from . import Model_build_helper
 #input model setting,and return model
 def Sequence_annotation_model_factory(convolution_settings=[], LSTM_layer_number=1,add_terminal_signal=True,add_batch_normalize=False,dropout=0,learning_rate=0.001,output_dim=1):
     #initialize the variable#####
@@ -30,8 +28,8 @@ def Sequence_annotation_model_factory(convolution_settings=[], LSTM_layer_number
         index+=1
     #choose algorithm to calculate the loss and accuracy
     if add_terminal_signal:
-        loss_func=tensor_end_with_terminal_binary_crossentropy
-        loss_acc=tensor_end_with_terminal_binary_accuracy
+        loss_func=Model_build_helper.tensor_end_with_terminal_binary_crossentropy
+        loss_acc=Model_build_helper.tensor_end_with_terminal_binary_accuracy
     else:
         loss_func=keras.losses.binary_crossentropy
         loss_acc=keras.metrics.binary_accuracy

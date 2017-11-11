@@ -33,7 +33,7 @@ class Model_setting_parser(Setting_parser):
         settings={}
         for k,v in self.config[root].items():
             settings[k]=v
-        key_int_value=['total_convolution_layer_size','lstm_layer_number']
+        key_int_value=['total_convolution_layer_size','lstm_layer_number','output_dim']
         key_float_value=['dropout','learning_rate']
         key_bool_value=['add_terminal_signal','add_batch_normalize']
         key_ints_value=['convolution_layer_sizes','convolution_layer_numbers']
@@ -170,8 +170,7 @@ class Model_training_pipeline():
         convolution_layers_settings=Convolution_layers_settings()
         for i in range(self.__total_convolution_layer_size):
             convolution_layers_settings.add_layer(self.__convolution_layer_numbers[i],self.__convolution_layer_sizes[i])
-        model=Sequence_annotation_model_factory(convolution_layers_settings.get_settings(),self.__lstm_layer_number,
-                                   self.__add_terminal_signal,self.__add_batch_normalize,self.__dropout,self.__learning_rate)    
+        model=Sequence_annotation_model_factory(convolution_layers_settings.get_settings(),self.__lstm_layer_number,self.__add_terminal_signal,self.__add_batch_normalize,self.__dropout,self.__learning_rate,self.__output_dim)    
         self.__model=model
     @property
     def model(self):
