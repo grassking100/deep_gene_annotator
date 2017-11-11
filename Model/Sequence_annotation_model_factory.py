@@ -29,8 +29,8 @@ def Sequence_annotation_model_factory(convolution_settings=[], LSTM_layer_number
         index+=1
     #choose algorithm to calculate the loss and accuracy
     if add_terminal_signal:
-        loss_func=sequence_annotation.Model.Model_build_helper.tensor_end_with_terminal_binary_crossentropy
-        loss_acc=sequence_annotation.Model.Model_build_helper.tensor_end_with_terminal_binary_accuracy
+        loss_func=Model_build_helper.tensor_end_with_terminal_binary_crossentropy
+        loss_acc=Model_build_helper.tensor_end_with_terminal_binary_accuracy
     else:
         loss_func=keras.losses.binary_crossentropy
         loss_acc=keras.metrics.binary_accuracy
