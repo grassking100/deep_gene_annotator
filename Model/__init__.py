@@ -7,4 +7,6 @@ from keras.models import Model
 from sequence_annotation.Model.Sequence_annotation_model_factory import Sequence_annotation_model_factory
 from sequence_annotation.Model.Model_trainer import Model_trainer
 import numpy
+from sequence_annotation.Model.Model_helper import tensor_end_with_terminal_binary_crossentropy
+from sequence_annotation.Model.Model_helper import tensor_end_with_terminal_binary_accuracy
 
