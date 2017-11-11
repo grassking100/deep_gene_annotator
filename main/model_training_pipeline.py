@@ -3,21 +3,6 @@ import argparse
 import os, errno
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__+'/..' )) ) )
-from sequence_annotation.Model.Training_helper import traning_validation_data_index_selector
-from sequence_annotation.Model.Model_build_helper import Convolution_layers_settings
-from sequence_annotation.Model.Sequence_annotation_model_factory import Sequence_annotation_model_factory
-from sequence_annotation.Model.Model_build_helper import tensor_end_with_terminal_binary_crossentropy
-from sequence_annotation.Model.Model_build_helper import tensor_end_with_terminal_binary_accuracy
-from sequence_annotation.Model.Model_trainer import Model_trainer
-from sequence_annotation.DNA_Vector.DNA_Vector import code2vec,codes2vec
-from sequence_annotation.Fasta_handler.Fasta_handler import seqs_index_selector,fastas2arr,seqs2dnn_data
-import random,time,importlib,math,sys,numpy as np
-from time import gmtime,strftime
-from keras.models import load_model
-from keras.utils import plot_model
-import sequence_annotation.Model
-import sequence_annotation
-import csv
 __author__ = 'Ching-Tien Wang'
 def str2bool(value):
     if value=="True":
@@ -85,7 +70,7 @@ class Train_setting_parser(Setting_parser):
         for key in key_array_value:
             settings[key]=settings[key].split(",\n")
         return settings
-class Batch_ruuning():
+class Model_training_pipeline():
     #initialize all the variable needed
     def __init__(self,settings):
         self.__settings=settings
@@ -100,11 +85,11 @@ class Batch_ruuning():
         self.__init_data()
         if self.is_prompt_visible:
             self.print_selected_information()
-        #create model and evaluator
+        #create model and trainer
         self.__init_model()
         if self.is_model_visible:
             self.print_model_information()
-        self.__init_evaluator()
+        self.__init_trainer()
         self.__restored_previous_result()
         self.__create_stored_folder()
     def __create_stored_folder(self):
@@ -130,18 +115,18 @@ class Batch_ruuning():
             return
     def __load_previous_result(self):
         whole_file_path=self.__previous_status_root
-        self.evaluator.add_previous_histories(np.load(whole_file_path+'.npy').tolist())
+        self.trainer.add_previous_histories(np.load(whole_file_path+'.npy').tolist())
         accuracy_function=tensor_end_with_terminal_binary_accuracy
         binary_crossentropy_function=tensor_end_with_terminal_binary_crossentropy
         self.__model=load_model(whole_file_path+'.h5',custom_objects=
                                      {'tensor_end_with_terminal_binary_accuracy':accuracy_function,
                                       'tensor_end_with_terminal_binary_crossentropy':binary_crossentropy_function})
-        self.evaluator.set_model(self.__model)
+        self.trainer.set_model(self.__model)
     def print_file_classification(self):
         print("Status of file:")
         for file in self.__training_files:
             print("\tTraining set:"+file)
-        for file in self._Batch_ruuning__validation_files:
+        for file in self._Model_training_pipeline__validation_files:
             print("\tValidation set:"+file)    
     def __init_training_files_data(self):
         self.__training_seqs=[]
@@ -185,7 +170,7 @@ class Batch_ruuning():
         convolution_layers_settings=Convolution_layers_settings()
         for i in range(self.__total_convolution_layer_size):
             convolution_layers_settings.add_layer(self.__convolution_layer_numbers[i],self.__convolution_layer_sizes[i])
-        model=Exon_intron_finder_factory(convolution_layers_settings.get_settings(),self.__lstm_layer_number,
+        model=Sequence_annotation_model_factory(convolution_layers_settings.get_settings(),self.__lstm_layer_number,
                                    self.__add_terminal_signal,self.__add_batch_normalize,self.__dropout,self.__learning_rate)    
         self.__model=model
     @property
@@ -202,14 +187,14 @@ class Batch_ruuning():
         return self.__x_train,self.__y_train
     def get_validation_set(self):
         return self.__x_validation,self.__y_validation
-    def __init_evaluator(self):
-        self.__evaluator=Model_evaluator()
-        self.__evaluator.set_training_data(*self.get_training_set())
-        self.__evaluator.set_validation_data(*self.get_validation_set())
-        self.__evaluator.set_model(self.model)
+    def __init_trainer(self):
+        self.__trainer=Model_trainer()
+        self.__trainer.set_training_data(*self.get_training_set())
+        self.__trainer.set_validation_data(*self.get_validation_set())
+        self.__trainer.set_model(self.model)
     @property
-    def evaluator(self):
-        return self.__evaluator
+    def trainer(self):
+        return self.__trainer
     def print_selected_information(self):
         training_size=self.__training_size
         validation_size=self.__validation_size
@@ -226,7 +211,7 @@ class Batch_ruuning():
     def __prepare_first_train(self):
         saved_new_model=self.get_whole_path_file(0)
         self.model.save(saved_new_model+'.h5')
-        key_not_to_store=["model","evaluator","y_validation","training_seqs","x_train","x_validation","settings","y_train","best_model","validation_seqs"]
+        key_not_to_store=["model","trainer","y_validation","training_seqs","x_train","x_validation","settings","y_train","best_model","validation_seqs"]
         if self.is_prompt_visible:
             print('Cretae record file:'+self.__folder_name+"/"+self.__setting_record)
         with open(self.__folder_name+"/"+self.__setting_record,"w") as file:
@@ -251,8 +236,8 @@ class Batch_ruuning():
             whole_file_path=self.get_whole_path_file(self.__step+progress)
             if self.is_prompt_visible:
                 print("Starting training:"+whole_file_path)
-            self.evaluator.evaluate(self.__step,self.__batch_size,True,int(self.is_model_visible),whole_file_path+'/log/')
-            np.save(whole_file_path+'.npy', self.evaluator.get_histories()) 
+            self.trainer.evaluate(self.__step,self.__batch_size,True,int(self.is_model_visible),whole_file_path+'/log/')
+            np.save(whole_file_path+'.npy', self.trainer.get_histories()) 
             self.model.save(whole_file_path+'.h5')
             if self.is_prompt_visible:
                 print("Saved training:"+whole_file_path)
@@ -272,6 +257,21 @@ if __name__=='__main__':
     train_parser=Train_setting_parser()
     train_parser.setting_file=args.train_setting
     settings={'setting_record':args.setting_record,'image':args.image,'id':args.train_id,'training':train_parser.get_training_settings(),'show':train_parser.get_show_settings(),'model':model_parser.get_model_settings()}
-    batch_runner=Batch_ruuning(settings)
+    from sequence_annotation.Model.Training_helper import traning_validation_data_index_selector
+    from sequence_annotation.Model.Model_build_helper import Convolution_layers_settings
+    from sequence_annotation.Model.Sequence_annotation_model_factory import Sequence_annotation_model_factory
+    from sequence_annotation.Model.Model_build_helper import tensor_end_with_terminal_binary_crossentropy
+    from sequence_annotation.Model.Model_build_helper import tensor_end_with_terminal_binary_accuracy
+    from sequence_annotation.Model.Model_trainer import Model_trainer
+    from sequence_annotation.DNA_Vector.DNA_Vector import code2vec,codes2vec
+    from sequence_annotation.Fasta_handler.Fasta_handler import seqs_index_selector,fastas2arr,seqs2dnn_data
+    import random,time,importlib,math,sys,numpy as np
+    from time import gmtime,strftime
+    from keras.models import load_model
+    from keras.utils import plot_model
+    import sequence_annotation.Model
+    import sequence_annotation
+    import csv
+    batch_runner=Model_training_pipeline(settings)
     batch_runner.run()
     print("End of program")
