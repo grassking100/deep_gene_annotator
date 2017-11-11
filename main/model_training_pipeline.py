@@ -116,8 +116,8 @@ class Model_training_pipeline():
     def __load_previous_result(self):
         whole_file_path=self.__previous_status_root
         self.trainer.add_previous_histories(np.load(whole_file_path+'.npy').tolist())
-        accuracy_function=tensor_end_with_terminal_binary_accuracy
-        binary_crossentropy_function=tensor_end_with_terminal_binary_crossentropy
+        accuracy_function=sequence_annotation.Model.Model_build_helper.tensor_end_with_terminal_binary_accuracy
+        binary_crossentropy_function=sequence_annotation.Model.Model_build_helper.tensor_end_with_terminal_binary_crossentropy
         self.__model=load_model(whole_file_path+'.h5',custom_objects=
                                      {'tensor_end_with_terminal_binary_accuracy':accuracy_function,
                                       'tensor_end_with_terminal_binary_crossentropy':binary_crossentropy_function})
