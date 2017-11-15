@@ -262,8 +262,10 @@ if __name__=='__main__':
     from sequence_annotation.model.model_build_helper import tensor_end_with_terminal_binary_crossentropy
     from sequence_annotation.model.model_build_helper import tensor_end_with_terminal_binary_accuracy
     from sequence_annotation.model.model_trainer import ModelTrainer
-    from sequence_annotation.DNA_Vector.DNA_Vector import code2vec,codes2vec
-    from sequence_annotation.fasta_handler.fasta_handler import seqs_index_selector,fastas2arr,seqs2dnn_data
+    from sequence_annotation.data_handler.DNA_vector import code2vec,codes2vec
+    from sequence_annotation.data_handler.seq_dnn import seqs2dnn_data
+    from sequence_annotation.model.training_helper import seqs_index_selector
+    from sequence_annotation.data_handler.fasta_handler import fastas2arr
     import random,time,importlib,math,sys,numpy as np
     from time import gmtime,strftime
     from keras.models import load_model
