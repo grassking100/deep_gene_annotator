@@ -62,7 +62,7 @@ class TrainSettingParser(SettingParser):
         training_settings="training_settings"
         settings={}
         key_int_value=['step','progress_target','previous_epoch','batch_size']
-        key_array_value=['training_files','validation_files']
+        key_array_value=['training_files','validation_files',"training_answers","validation_answers"]
         for k,v in self.config[training_settings].items():
             settings[k]=v
         for key in key_int_value:
@@ -77,13 +77,10 @@ class ModelTrainPipeline():
         #initialize all the variable from setting file
         self.__init_parameter()
         #get names and sequences from file
-        self.__init_training_files_data()
-        self.__init_validation_files_data()
-        if self.is_prompt_visible:
-            self.print_file_classification()
         #create training and validation set
         self.__init_data()
         if self.is_prompt_visible:
+            self.print_file_classification()
             self.print_selected_information()
         #create model and trainer
         self.__init_model()
@@ -128,16 +125,7 @@ class ModelTrainPipeline():
             print("\tTraining set:"+file)
         for file in self._ModelTrainPipeline__validation_files:
             print("\tValidation set:"+file)    
-    def __init_training_files_data(self):
-        self.__training_seqs=[]
-        for file in self.__training_files:
-            (name,seq)=fastas2arr(file)
-            self.__training_seqs+=seq
-    def __init_validation_files_data(self):
-        self.__validation_seqs=[]
-        for file in self.__validation_files:
-            (name,seq)=fastas2arr(file)
-            self.__validation_seqs+=seq
+   
     def __init_parameter(self):
         roots=['model','training','show']
         for root in roots:        
@@ -176,18 +164,29 @@ class ModelTrainPipeline():
     def model(self):
         return self.__model
     def __init_data(self):
-        (self.__x_train,self.__y_train)=seqs2dnn_data(self.__training_seqs,False)
-        (self.__x_validation,self.__y_validation)=seqs2dnn_data(self.__validation_seqs,False)
-        self.__training_size=len(self.__training_seqs)
-        self.__validation_size=len(self.__validation_seqs)
-        self.__valid_training_size=len(self.__y_train)
-        self.__valid_validation_size=len(self.__y_validation)
+        self.__x_train=[]
+        self.__y_train=[]
+        self.__x_validation=[]
+        self.__y_validation=[]
+        self.__training_size=0
+        self.__validation_size=0
+        for training_file,training_answer in zip(self.__training_files,self.__training_answers):
+            (x,y)=seq_ann_alignment(training_file,training_answer,True)
+            self.__x_train+=x
+            self.__y_train+=y
+            self.__training_size+=len(x)
+        for validation_file,validation_answer in zip(self.__validation_files,self.__validation_answers):
+            (x,y)=seq_ann_alignment(validation_file,validation_answer,True)
+            self.__x_validation+=x
+            self.__y_validation+=y
+            self.__validation_size+=len(x)
     def get_training_set(self):
         return self.__x_train,self.__y_train
     def get_validation_set(self):
         return self.__x_validation,self.__y_validation
     def __init_trainer(self):
         self.__trainer=ModelTrainer()
+        (x,y)=self.get_training_set()
         self.__trainer.set_training_data(*self.get_training_set())
         self.__trainer.set_validation_data(*self.get_validation_set())
         self.__trainer.set_model(self.model)
@@ -197,9 +196,7 @@ class ModelTrainPipeline():
     def print_selected_information(self):
         training_size=self.__training_size
         validation_size=self.__validation_size
-        valid_training_size=self.__valid_training_size
-        valid_validation_size=self.__valid_validation_size
-        status={'Selected set number':training_size+validation_size,'Training set number':training_size,'Validation set number':validation_size,'Selected valid set number':valid_training_size+valid_validation_size,'Training valid set number':valid_training_size,'Validation valid set number':valid_validation_size}
+        status={'Selected set number':training_size+validation_size,'Training set number':training_size,'Validation set number':validation_size}
         print("Status of data:")
         for k,v in status.items():
             print("\t"+k+":"+str(v))
@@ -263,9 +260,8 @@ if __name__=='__main__':
     from sequence_annotation.model.model_build_helper import tensor_end_with_terminal_binary_accuracy
     from sequence_annotation.model.model_trainer import ModelTrainer
     from sequence_annotation.data_handler.DNA_vector import code2vec,codes2vec
-    from sequence_annotation.data_handler.seq_dnn import seqs2dnn_data
+    from sequence_annotation.data_handler.seq_dnn import seqs2dnn_data,seq_ann_alignment
     from sequence_annotation.model.training_helper import seqs_index_selector
-    from sequence_annotation.data_handler.fasta_handler import fastas2arr
     import random,time,importlib,math,sys,numpy as np
     from time import gmtime,strftime
     from keras.models import load_model
