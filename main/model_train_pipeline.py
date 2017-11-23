@@ -232,7 +232,7 @@ class ModelTrainPipeline():
             whole_file_path=self.get_whole_path_file(self.__step+progress)
             if self.is_prompt_visible:
                 print("Starting training:"+whole_file_path)
-            self.trainer.train(self.__step,self.__batch_size,True,int(self.is_model_visible),whole_file_path+'/log/')
+            self.trainer.train(self.__step,self.__batch_size,True,int(self.is_verbose_visible),whole_file_path+'/log/')
             np.save(whole_file_path+'.npy', self.trainer.get_histories()) 
             self.model.save(whole_file_path+'.h5')
             if self.is_prompt_visible:
