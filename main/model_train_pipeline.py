@@ -62,7 +62,7 @@ class TrainSettingParser(SettingParser):
         training_settings="training_settings"
         settings={}
         key_int_value=['step','progress_target','previous_epoch','batch_size']
-        key_array_value=['training_files','validation_files',"training_answers","validation_answers"]
+        key_array_value=['training_files','validation_files']
         for k,v in self.config[training_settings].items():
             settings[k]=v
         for key in key_int_value:
@@ -170,13 +170,13 @@ class ModelTrainPipeline():
         self.__y_validation=[]
         self.__training_size=0
         self.__validation_size=0
-        for training_file,training_answer in zip(self.__training_files,self.__training_answers):
-            (x,y)=seq_ann_alignment(training_file,training_answer,True)
+        for training_file in self.__training_files:
+            (x,y)=seq_ann_alignment(training_file,self.__training_answers,True)
             self.__x_train+=(x)
             self.__y_train+=(y)
             self.__training_size+=len(x)
-        for validation_file,validation_answer in zip(self.__validation_files,self.__validation_answers):
-            (x,y)=seq_ann_alignment(validation_file,validation_answer,True)
+        for validation_file in self.__validation_files:
+            (x,y)=seq_ann_alignment(validation_file,self.__validation_answers,True)
             self.__x_validation+=(x)
             self.__y_validation+=(y)
             self.__validation_size+=len(x)
@@ -209,7 +209,7 @@ class ModelTrainPipeline():
         self.model.save(saved_new_model+'.h5')
         key_not_to_store=["model","trainer","y_validation","training_seqs","x_train","x_validation","settings","y_train","best_model","validation_seqs"]
         if self.is_prompt_visible:
-            print('Cretae record file:'+self.__folder_name+"/"+self.__setting_record)
+            print('Create record file:'+self.__folder_name+"/"+self.__setting_record)
         with open(self.__folder_name+"/"+self.__setting_record,"w") as file:
             writer=csv.writer(file,delimiter=',')
             writer.writerow(["attributes","value"])
@@ -221,7 +221,7 @@ class ModelTrainPipeline():
                 if body_key not in key_not_to_store:
                     writer.writerow([body_key,self.__dict__[key]])
         if self.is_prompt_visible:
-            print('Cretae model image:'+self.__folder_name+"/"+self.__image)
+            print('Create model image:'+self.__folder_name+"/"+self.__image)
         plot_model(self.__model,show_shapes=True, to_file=self.__folder_name+"/"+self.__image)
     def run(self):   
         if self.is_prompt_visible:

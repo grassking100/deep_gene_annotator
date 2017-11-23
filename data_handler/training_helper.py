@@ -40,8 +40,6 @@ def seq_ann_alignment(fasta_path,annotation_path,discard_dirty_sequence):
             ann.append(ann_seq[ann_type])
         #append corresponding annotation to array
         anns.append(numpy.transpose(ann))
-    print(len(seq_vecs))
-    print(len(anns))
     return(seq_vecs,anns)
 
 #get the index of cross validation data indice and testing data index
