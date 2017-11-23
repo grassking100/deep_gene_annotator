@@ -25,11 +25,9 @@ class ModelTrainer:
         return self
     def get_model(self):
         return self.model
-    def evaluate(self,epoches,batch_size,shuffle,verbose,log_file):
+    def train(self,epoches,batch_size,shuffle,verbose,log_file):
         #padding data to same length
-        
         x_train=keras.preprocessing.sequence.pad_sequences(self.x_train, maxlen=None,padding='post')
-        print(numpy.array(x_train).shape)
         y_train=keras.preprocessing.sequence.pad_sequences(self.y_train, maxlen=None,padding='post',value=-1)
         x_validation=keras.preprocessing.sequence.pad_sequences(self.x_validation, maxlen=None,padding='post')
         y_validation=keras.preprocessing.sequence.pad_sequences(self.y_validation, maxlen=None,padding='post',value=-1)

@@ -172,13 +172,13 @@ class ModelTrainPipeline():
         self.__validation_size=0
         for training_file,training_answer in zip(self.__training_files,self.__training_answers):
             (x,y)=seq_ann_alignment(training_file,training_answer,True)
-            self.__x_train+=x
-            self.__y_train+=y
+            self.__x_train+=(x)
+            self.__y_train+=(y)
             self.__training_size+=len(x)
         for validation_file,validation_answer in zip(self.__validation_files,self.__validation_answers):
             (x,y)=seq_ann_alignment(validation_file,validation_answer,True)
-            self.__x_validation+=x
-            self.__y_validation+=y
+            self.__x_validation+=(x)
+            self.__y_validation+=(y)
             self.__validation_size+=len(x)
     def get_training_set(self):
         return self.__x_train,self.__y_train
@@ -232,7 +232,7 @@ class ModelTrainPipeline():
             whole_file_path=self.get_whole_path_file(self.__step+progress)
             if self.is_prompt_visible:
                 print("Starting training:"+whole_file_path)
-            self.trainer.evaluate(self.__step,self.__batch_size,True,int(self.is_model_visible),whole_file_path+'/log/')
+            self.trainer.train(self.__step,self.__batch_size,True,int(self.is_model_visible),whole_file_path+'/log/')
             np.save(whole_file_path+'.npy', self.trainer.get_histories()) 
             self.model.save(whole_file_path+'.h5')
             if self.is_prompt_visible:
@@ -253,15 +253,13 @@ if __name__=='__main__':
     train_parser=TrainSettingParser()
     train_parser.setting_file=args.train_setting
     settings={'setting_record':args.setting_record,'image':args.image,'id':args.train_id,'training':train_parser.get_training_settings(),'show':train_parser.get_show_settings(),'model':model_parser.get_model_settings()}
-    from sequence_annotation.model.training_helper import traning_validation_data_index_selector
     from sequence_annotation.model.model_build_helper import CnnSettingCreator
     from sequence_annotation.model.sequence_annotation_model_factory import SeqAnnModelFactory
     from sequence_annotation.model.model_build_helper import tensor_end_with_terminal_binary_crossentropy
     from sequence_annotation.model.model_build_helper import tensor_end_with_terminal_binary_accuracy
     from sequence_annotation.model.model_trainer import ModelTrainer
     from sequence_annotation.data_handler.DNA_vector import code2vec,codes2vec
-    from sequence_annotation.data_handler.seq_dnn import seqs2dnn_data,seq_ann_alignment
-    from sequence_annotation.model.training_helper import seqs_index_selector
+    from sequence_annotation.data_handler.training_helper import seqs2dnn_data,seq_ann_alignment,seqs_index_selector
     import random,time,importlib,math,sys,numpy as np
     from time import gmtime,strftime
     from keras.models import load_model

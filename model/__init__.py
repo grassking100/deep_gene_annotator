@@ -1,6 +1,5 @@
 import tensorflow
-import random
-from sequence_annotation.data_handler.seq_dnn import *
+from sequence_annotation.data_handler.training_helper import *
 from sequence_annotation.data_handler.fasta_handler import *
 from keras.layers import Input,Dropout,Convolution1D,Flatten,MaxPooling1D,LSTM,Reshape,Activation
 import keras
