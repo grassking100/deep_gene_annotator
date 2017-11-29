@@ -3,10 +3,6 @@ from . import numpy
 #a trainer which will train and evaluate the model
 class ModelTrainer:
     def __init__(self):
-        self.x_train=[]
-        self.y_train=[]
-        self.x_validation=[]
-        self.y_validation=[]
         self.histories=[]
     def set_training_data(self,x,y):
         self.x_train=x
@@ -48,28 +44,40 @@ class ModelTrainer:
     def get_histories(self):
         return self.histories
     def get_accuracies(self):
-        return self.get_histories()['tensor_end_with_terminal_binary_accuracy']
+        return self.get_histories()['accuracy']
     def get_validation_accuracies(self):
-        return self.get_histories()['val_tensor_end_with_terminal_binary_accuracy']
+        return self.get_histories()['val_accuracy']
     def get_losses(self):
         return self.get_histories()['loss']
     def get_validation_losses(self):
         return self.get_histories()['val_loss']
     def get_last_validation_loss(self):
+        warnings.warn("this function is deprecated,it will be removed in the future",
+        PendingDeprecationWarning)
         loss=self.get_validation_losses()
         return loss[len(loss)-1]
     def get_last_loss(self):
+        warnings.warn("this function is deprecated,it will be removed in the future",
+        PendingDeprecationWarning)
         loss=self.get_losses()
         return loss[len(loss)-1]
     def get_last_accuracy(self):
+        warnings.warn("this function is deprecated,it will be removed in the future",
+        PendingDeprecationWarning)
         acc=self.get_accuracies()
         return acc[len(acc)-1]
     def get_last_validation_accuracy(self):
+        warnings.warn("this function is deprecated,it will be removed in the future",
+        PendingDeprecationWarning)
         acc=self.get_validation_accuracies()
         return acc[len(acc)-1]   
     def get_max_accuracy(self):
+        warnings.warn("this function is deprecated,it will be removed in the future",
+        PendingDeprecationWarning)
         return max(self.get_accuracies())
     def get_max_validation_accuracy(self):
+        warnings.warn("this function is deprecated,it will be removed in the future",
+        PendingDeprecationWarning)
         return max(self.get_validation_accuracies())
     
 

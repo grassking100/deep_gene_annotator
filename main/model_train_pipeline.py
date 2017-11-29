@@ -113,11 +113,20 @@ class ModelTrainPipeline():
     def __load_previous_result(self):
         whole_file_path=self.__previous_status_root
         self.trainer.add_previous_histories(np.load(whole_file_path+'.npy').tolist())
-        accuracy_function=sequence_annotation.model.model_build_helper.tensor_end_with_terminal_binary_accuracy
-        binary_crossentropy_function=sequence_annotation.model.model_build_helper.tensor_end_with_terminal_binary_crossentropy
-        self.__model=load_model(whole_file_path+'.h5',custom_objects=
-                                     {'tensor_end_with_terminal_binary_accuracy':accuracy_function,
-                                      'tensor_end_with_terminal_binary_crossentropy':binary_crossentropy_function})
+        accuracy_function=sequence_annotation.model.model_build_helper.tensor_end_with_terminal_categorical_accuracy
+        loss_function=sequence_annotation.model.model_build_helper.tensor_end_with_terminal_categorical_crossentropy
+        metrics={'tensor_end_with_terminal_categorical_accuracy':accuracy_function,
+         'tensor_end_with_terminal_categorical_crossentropy':loss_function}
+        if self.__add_terminal_signal:
+            terminal_signal=-1
+        else:
+            terminal_signal=None
+        precisions=[precision_creator("precision_"+str(i),self.__output_dim,i,terminal_signal) for i in range(0,self.__output_dim)]
+        recalls=[recall_creator("recall_"+str(i),self.__output_dim,i,terminal_signal) for i in range(0,self.__output_dim)]
+        for i in range(0,self.__output_dim):
+            metrics['precision_'+str(i)]=precisions[i]
+            metrics['recall_'+str(i)]=recalls[i]
+        self.__model=load_model(whole_file_path+'.h5',custom_objects=metrics)
         self.trainer.set_model(self.__model)
     def print_file_classification(self):
         print("Status of file:")
@@ -170,16 +179,22 @@ class ModelTrainPipeline():
         self.__y_validation=[]
         self.__training_size=0
         self.__validation_size=0
+        training_alignment=SeqAnnAlignment()
         for training_file in self.__training_files:
-            (x,y)=seq_ann_alignment(training_file,self.__training_answers,True)
-            self.__x_train+=(x)
-            self.__y_train+=(y)
-            self.__training_size+=len(x)
+            training_alignment.add_file_to_parse(training_file,self.__training_answers,True)
+        self.__x_train=training_alignment.seqs_vecs
+        self.__y_train=training_alignment.seqs_annotations
+        self.__training_size+=len(self.__x_train)    
+        validation_alignment=SeqAnnAlignment()
         for validation_file in self.__validation_files:
-            (x,y)=seq_ann_alignment(validation_file,self.__validation_answers,True)
-            self.__x_validation+=(x)
-            self.__y_validation+=(y)
-            self.__validation_size+=len(x)
+            validation_alignment.add_file_to_parse(validation_file,self.__validation_answers,True)
+        self.__x_validation=validation_alignment.seqs_vecs
+        self.__y_validation=validation_alignment.seqs_annotations
+        self.__validation_size+=len(self.__x_validation)
+        print("Training data statistic analysis (base)")
+        print(training_alignment.seqs_annotations_count)
+        print("Validation data statistic analysis (base)")
+        print(validation_alignment.seqs_annotations_count)
     def get_training_set(self):
         return self.__x_train,self.__y_train
     def get_validation_set(self):
@@ -256,10 +271,10 @@ if __name__=='__main__':
     from sequence_annotation.model.model_build_helper import CnnSettingCreator
     from sequence_annotation.model.sequence_annotation_model_factory import SeqAnnModelFactory
     from sequence_annotation.model.model_build_helper import tensor_end_with_terminal_binary_crossentropy
-    from sequence_annotation.model.model_build_helper import tensor_end_with_terminal_binary_accuracy
+    from sequence_annotation.model.model_build_helper import tensor_end_with_terminal_binary_accuracy,precision_creator,recall_creator
     from sequence_annotation.model.model_trainer import ModelTrainer
     from sequence_annotation.data_handler.DNA_vector import code2vec,codes2vec
-    from sequence_annotation.data_handler.training_helper import seqs2dnn_data,seq_ann_alignment,seqs_index_selector
+    from sequence_annotation.data_handler.training_helper import seqs2dnn_data,SeqAnnAlignment,seqs_index_selector
     import random,time,importlib,math,sys,numpy as np
     from time import gmtime,strftime
     from keras.models import load_model

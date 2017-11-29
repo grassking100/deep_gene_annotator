@@ -5,8 +5,8 @@ from . import deepdish
 from . import random
 from . import math
 from . import DNA_SeqException
-#read and return sequnece's one-hot-encoding vector and Exon-Intron data
 def seqs2dnn_data(seqs,discard_dirty_sequence):
+    #read and return sequnece's one-hot-encoding vector and Exon-Intron data
     code_dim=4
     vectors=[]
     valid_seqs_indice=[]
@@ -22,28 +22,54 @@ def seqs2dnn_data(seqs,discard_dirty_sequence):
             if not discard_dirty_sequence:
                 raise e
     return (valid_seqs_indice,vectors)
-#read and return sequnece's one-hot-encoding vector and annotation data
-def seq_ann_alignment(fasta_path,annotation_path,discard_dirty_sequence):
-    (names,seqs)=fasta2seqs(fasta_path)
-    ann_types=['utr_5','utr_3','intron','cds','intergenic_region']
-    #read annotation file
-    ann_seqs=deepdish.io.load(annotation_path)
-    anns=[]
-    (valid_seqs_indice,seq_vecs)=seqs2dnn_data(seqs,discard_dirty_sequence)
-    #for every name find corresponding sequnece and annotation 
-    #and convert sequnece to one-hot-encoding vector
-    for index in valid_seqs_indice:
-        name=names[index]
-        ann_seq=ann_seqs[str(name)]
-        ann=[]
-        for ann_type in ann_types:
-            ann.append(ann_seq[ann_type])
-        #append corresponding annotation to array
-        anns.append(numpy.transpose(ann))
-    return(seq_vecs,anns)
 
-#get the index of cross validation data indice and testing data index
+class SeqAnnAlignment():
+    def __init__(self):
+        self.__ANN_TYPES=['utr_5','utr_3','intron','cds','intergenic_region']
+        self.__names=[]
+        self.__seqs=[]
+        self.__anns=[]
+        self.__seqs_vecs=[]
+        self.__anns_count={}
+        for ann_type in self.__ANN_TYPES:
+            self.__anns_count[ann_type]=0
+    def add_file_to_parse(self,fasta_path,annotation_path,discard_dirty_sequence):
+        #read and return sequnece's one-hot-encoding vector and annotation data
+        (names,seqs)=fasta2seqs(fasta_path)
+        self.__names+=names
+        self.__seqs+=seqs
+        #read annotation file
+        ann_seqs=deepdish.io.load(annotation_path)
+        (valid_seqs_indice,seqs_vecs)=seqs2dnn_data(seqs,discard_dirty_sequence)
+        self.__seqs_vecs+=seqs_vecs
+        #for every name find corresponding sequnece and annotation 
+        #and convert sequnece to one-hot-encoding vector
+        for index in valid_seqs_indice:
+            name=names[index]
+            ann_seq=ann_seqs[str(name)].tolist()
+            ann=[]
+            for ann_type in self.__ANN_TYPES:
+                temp=ann_seq[ann_type]
+                self.__anns_count[ann_type]+=numpy.sum(temp)
+                ann.append(temp)
+            #append corresponding annotation to array
+            self.__anns.append(numpy.transpose(ann))
+    @property
+    def names(self):
+        return self.__names
+    @property
+    def seqs_vecs(self):
+        return self.__seqs_vecs
+    @property
+    def seqs_annotations(self):
+        return self.__anns
+    @property
+    def seqs_annotations_count(self):
+        return self.__anns_count
+
+
 def data_index_splitter(data_number,fraction_of_traning_validation,number_of_cross_validation,shuffle=True):
+    #get the index of cross validation data indice and testing data index
     data_index=list(range( data_number))
     if shuffle:
         random.shuffle(data_index)
@@ -54,14 +80,16 @@ def data_index_splitter(data_number,fraction_of_traning_validation,number_of_cro
     for i in range(traning_validation_number):
         cross_validation_index[i%number_of_cross_validation].append(train_validation_index[i])
     return(cross_validation_index,testing_index)
-#check if sequnece is single exon by checking it is capital or not
+
 def is_single_exon(seq):
+    #check if sequnece is single exon by checking it is capital or not
     for s in seq:
         if not s.isupper():
             return False
     return True
-#select sequnece index which length is between the specific range and choose to exclude single exon or not
+
 def seqs_index_selector(seqs,min_length,max_length,exclude_single_exon):
+    #select sequnece index which length is between the specific range and choose to exclude single exon or not
     sub_index=[]
     length=[len(s) for s in seqs]
     if max_length==-1:
