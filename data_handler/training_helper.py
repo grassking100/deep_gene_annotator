@@ -48,7 +48,8 @@ class SeqAnnAlignment():
             name=names[index]
             ann_seq=ann_seqs[str(name)].tolist()
             ann=[]
-            for ann_type in self.__ANN_TYPES:
+            for index in range(len(self.__ANN_TYPES)):
+                ann_type=self.__ANN_TYPES[index]
                 temp=ann_seq[ann_type]
                 self.__anns_count[ann_type]+=numpy.sum(temp)
                 ann.append(temp)

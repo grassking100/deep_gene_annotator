@@ -5,6 +5,7 @@ from . import tensor_end_with_terminal_binary_accuracy,tensor_end_with_terminal_
 from . import tensor_end_with_terminal_categorical_crossentropy,tensor_end_with_terminal_categorical_accuracy
 from . import precision_creator,recall_creator,rename
 from . import tensorflow as tf
+from . import SeqAnnModel
 def mean(x, axis=None, keepdims=False):
     """Mean of a tensor, alongside the specified axis.
     # Arguments
@@ -23,6 +24,10 @@ def mean(x, axis=None, keepdims=False):
     x=tf.boolean_mask(x, tf.logical_not(tf.is_nan(x)))
     return tf.reduce_mean(x, axis=axis, keep_dims=keepdims)    
 keras.backend.mean=mean
+
+
+
+
 def SeqAnnModelFactory(convolution_settings=[], LSTM_layer_number=1,add_terminal_signal=True,add_batch_normalize=False,dropout=0,learning_rate=0.001,output_dim=1):
     #input model setting,and return model
     seq_size=None
@@ -70,7 +75,7 @@ def SeqAnnModelFactory(convolution_settings=[], LSTM_layer_number=1,add_terminal
         last_activation='softmax'
     last=Convolution1D(activation=last_activation,filters=output_dim, kernel_size=1,name='Result')(concatenate)
     #create model
-    Exon_intron_finder= Model(inputs=input_layers, outputs=last)
+    Exon_intron_finder= SeqAnnModel(inputs=input_layers, outputs=last)
     #set optimizer metrics,and loss to the model
     keras.optimizers.Adam(lr=learning_rate)
     loss_acc.__name__="accuracy"

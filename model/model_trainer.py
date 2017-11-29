@@ -13,7 +13,7 @@ class ModelTrainer:
         self.y_validation=y
         return self
     def clean_histories(self):
-        self.histories=[]
+        self.histories={}
     def add_previous_histories(self,histories):
         self.histories=histories
     def set_model(self,model):
@@ -39,7 +39,11 @@ class ModelTrainer:
                                      validation_data=(numpy.array(x_validation),numpy.array(y_validation)),
                                      callbacks=[tbCallBack])
         #add record to histories
-        self.histories.append(history.history)
+        for k,v in history.history:
+            if k in history.history.keys():
+                self.histories[k]+=v
+            else:
+                self.histories[k]=[]
         return self
     def get_histories(self):
         return self.histories
