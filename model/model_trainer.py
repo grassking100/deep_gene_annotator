@@ -3,7 +3,7 @@ from . import numpy
 #a trainer which will train and evaluate the model
 class ModelTrainer:
     def __init__(self):
-        self.histories=[]
+        self.histories={}
     def set_training_data(self,x,y):
         self.x_train=x
         self.y_train=y
@@ -38,12 +38,16 @@ class ModelTrainer:
                                      verbose=verbose,
                                      validation_data=(numpy.array(x_validation),numpy.array(y_validation)),
                                      callbacks=[tbCallBack])
+        print(history.history)
+        print(self.histories)
         #add record to histories
-        for k,v in history.history:
-            if k in history.history.keys():
+        for k,v in history.history.items():
+            print(k)
+            print(v)
+            if k in self.histories.keys():
                 self.histories[k]+=v
             else:
-                self.histories[k]=[]
+                self.histories[k]=v
         return self
     def get_histories(self):
         return self.histories
