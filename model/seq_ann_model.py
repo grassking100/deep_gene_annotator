@@ -13,23 +13,18 @@ class CleanLogger(BaseLogger):
     """
     def __init__(self):
         super().__init__()
-        self.__hasInit=False
     def on_epoch_begin(self, epoch, logs=None):
         self.seen = 0
         self.totals = {}
         self.each_count={}
-    def __init_record(self,logs):
-        for key in logs.keys():
-            self.each_count[key]=0
-            self.totals[key] =0
     def on_batch_end(self, batch, logs=None):
         logs = logs or {}
         batch_size = logs.get('size', 0)
         self.seen += batch_size
-        if not self.__hasInit:
-            self.__init_record(logs)
-            self.__hasInit=True
         for k, v in logs.items():
+            if k not in self.each_count.keys():
+                self.each_count[k]=0
+                self.totals[k] =0
             if not np.isnan(v):
                 self.each_count[k]+=batch_size
                 self.totals[k] += v * batch_size 
@@ -286,5 +281,4 @@ class SeqAnnModel(Model):
                     outs[i]=np.float64('nan')
         if len(outs) == 1:
             return outs[0]
-        return outs 
-        #return 
+        return outs  

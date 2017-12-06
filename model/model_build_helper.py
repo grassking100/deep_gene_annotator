@@ -83,7 +83,6 @@ def precision_creator(function_name,number_of_class,target_index,terminal_signal
         TN=tf.reduce_sum(tf.multiply(1-numeric_true,1-numeric_pred))
         FP=N-TN
         return  TP/(TP+FP)
-        #return None
     return precision
 
 def recall_creator(function_name,number_of_class,target_index,terminal_signal=None):
