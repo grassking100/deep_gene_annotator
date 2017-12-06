@@ -22,9 +22,8 @@ def categorical_crossentropy_factory(class_number,weights=None,terminal_signal=N
         if terminal_signal is not None:
             (y_true,y_pred)=removed_terminal_tensors(y_true,y_pred,class_number,terminal_signal)
         if weights is not None:
-            loss=tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(y_true,y_pred,tf.constant(weights)))
-        else:            
-            loss=tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y_true,y_pred))
+            y_true=tf.multiply(y_true,weights)
+        loss=tf.reduce_mean(keras.losses.categorical_crossentropy(y_true,y_pred))        
         return loss
     return categorical_crossentropy
 def categorical_accuracy_factory(class_number,terminal_signal=None):                            
