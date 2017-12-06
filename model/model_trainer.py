@@ -38,16 +38,17 @@ class ModelTrainer:
                                      verbose=verbose,
                                      validation_data=(numpy.array(x_validation),numpy.array(y_validation)),
                                      callbacks=[tbCallBack])
-        print(history.history)
-        print(self.histories)
+        #print(history.history)
+        #
         #add record to histories
         for k,v in history.history.items():
-            print(k)
-            print(v)
+            #print(k)
+            #print(v)
             if k in self.histories.keys():
                 self.histories[k]+=v
             else:
                 self.histories[k]=v
+        #print(self.histories)
         return self
     def get_histories(self):
         return self.histories

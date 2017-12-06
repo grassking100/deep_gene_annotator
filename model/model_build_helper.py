@@ -16,19 +16,25 @@ def tensor_non_terminal_index(tensor):
     #get all index which corresponding value equal -1 
     index=tf.where(tf.not_equal(tensor,-1))
     return tf.reshape(index, [-1])
-
-def tensor_end_with_terminal_categorical_crossentropy(y_true,y_pred):
-    #calculate categorical crossentropy between y_true and y_pred which have terminal signal -1
-    (reshape_true,reshape_pred)=removed_terminal_tensors(y_true,y_pred,5,-1)
-    loss=tf.reduce_mean(keras.losses.categorical_crossentropy(reshape_true,reshape_pred))
-    return loss
-
-def tensor_end_with_terminal_categorical_accuracy(y_true,y_pred):
-    #calculate categorical crossentropy between y_true and y_pred which have terminal signal -1
-    (reshape_true,reshape_pred)=removed_terminal_tensors(y_true,y_pred,5,-1)
-    accuracy=tf.reduce_mean(keras.metrics.categorical_accuracy(reshape_true,reshape_pred))
-    return accuracy
-
+def categorical_crossentropy_factory(class_number,weights=None,terminal_signal=None):
+    def categorical_crossentropy(y_true,y_pred):
+        #calculate categorical crossentropy between y_true and y_pred
+        if terminal_signal is not None:
+            (y_true,y_pred)=removed_terminal_tensors(y_true,y_pred,class_number,terminal_signal)
+        if weights is not None:
+            loss=tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(y_true,y_pred,tf.constant(weights)))
+        else:            
+            loss=tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y_true,y_pred))
+        return loss
+    return categorical_crossentropy
+def categorical_accuracy_factory(class_number,terminal_signal=None):                            
+    def categorical_accuracy(y_true,y_pred):
+        #calculate categorical crossentropy between y_true and y_pred
+        if terminal_signal is not None:                         
+            (y_true,y_pred)=removed_terminal_tensors(y_true,y_pred,class_number,terminal_signal)
+        accuracy=tf.reduce_mean(keras.metrics.categorical_accuracy(y_true,y_pred))
+        return accuracy
+    return categorical_accuracy
 def tensor_end_with_terminal_binary_crossentropy(y_true,y_pred):
     #calculate binary crossentropy between y_true and y_pred which have terminal signal -1
     warnings.warn(

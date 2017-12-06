@@ -4,6 +4,7 @@ import os, errno
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__+'/..' )) ) )
 __author__ = 'Ching-Tien Wang'
+ANNOTATION_TYPES=['utr_5','utr_3','intron','cds','intergenic_region']
 def str2bool(value):
     if value=="True":
         return True
@@ -34,8 +35,9 @@ class ModelSettingParser(SettingParser):
         for k,v in self.config[root].items():
             settings[k]=v
         key_int_value=['total_convolution_layer_size','lstm_layer_number','output_dim']
+        
         key_float_value=['dropout','learning_rate']
-        key_bool_value=['add_terminal_signal','add_batch_normalize']
+        key_bool_value=['add_batch_normalize']
         key_ints_value=['convolution_layer_sizes','convolution_layer_numbers']
         for key in key_int_value:
             settings[key]=int(settings[key])
@@ -46,6 +48,7 @@ class ModelSettingParser(SettingParser):
         for key in key_ints_value:
             settings[key]=[int(i) for i in settings[key].split(",")]
         return settings
+
 class TrainSettingParser(SettingParser):
     def __init__(self):
         super(TrainSettingParser,self).__init__()
@@ -53,14 +56,15 @@ class TrainSettingParser(SettingParser):
         self.config.read(self.setting_file)                
         show_settings="show"
         settings={}
-        key_bool_type=['model','verbose','prompt']
-        for key in key_bool_type:
+        key_bool_value=['model','verbose','prompt']
+        for key in key_bool_value:
             settings[key]=str2bool(self.config[show_settings][key])
         return settings
     def get_training_settings(self):
         self.config.read(self.setting_file)                           
         training_settings="training_settings"
         settings={}
+        key_bool_value=['use_weights']
         key_int_value=['step','progress_target','previous_epoch','batch_size']
         key_array_value=['training_files','validation_files']
         for k,v in self.config[training_settings].items():
@@ -69,6 +73,14 @@ class TrainSettingParser(SettingParser):
             settings[key]=int(settings[key])
         for key in key_array_value:
             settings[key]=settings[key].split(",\n")
+        for key in key_bool_value:
+            settings[key]=str2bool(settings[key])
+        terminal_signal=settings['terminal_signal']
+        if str(terminal_signal)=="None":
+            settings['terminal_signal']=None
+        else:
+            settings['terminal_signal']=int(settings['terminal_signal'])
+        
         return settings
 class ModelTrainPipeline():
     #initialize all the variable needed
@@ -113,10 +125,13 @@ class ModelTrainPipeline():
     def __load_previous_result(self):
         whole_file_path=self.__previous_status_root
         self.trainer.add_previous_histories(np.load(whole_file_path+'.npy').tolist())
-        accuracy_function=sequence_annotation.model.model_build_helper.tensor_end_with_terminal_categorical_accuracy
-        loss_function=sequence_annotation.model.model_build_helper.tensor_end_with_terminal_categorical_crossentropy
-        metrics={'tensor_end_with_terminal_categorical_accuracy':accuracy_function,
-         'tensor_end_with_terminal_categorical_crossentropy':loss_function}
+        if self.__use_weights:
+            weights=self.__weights
+        else:
+            weights=None
+        loss_function=sequence_annotation.model.model_build_helper.categorical_crossentropy_factory(self.__output_dim,weights,-1)
+        accuracy_function=sequence_annotation.model.model_build_helper.categorical_accuracy_factory(self.__output_dim,-1)
+        metrics={'categorical_accuracy':accuracy_function,'categorical_crossentropy':loss_function}
         if self.__add_terminal_signal:
             terminal_signal=-1
         else:
@@ -167,7 +182,11 @@ class ModelTrainPipeline():
         cnn_setting_creator=CnnSettingCreator()
         for i in range(self.__total_convolution_layer_size):
             cnn_setting_creator.add_layer(self.__convolution_layer_numbers[i],self.__convolution_layer_sizes[i])
-        model=SeqAnnModelFactory(cnn_setting_creator.get_settings(),self.__lstm_layer_number,self.__add_terminal_signal,self.__add_batch_normalize,self.__dropout,self.__learning_rate,self.__output_dim)    
+        metrics=[]
+        for i in range(len(ANNOTATION_TYPES)):
+            metrics.append(precision_creator("precision_"+ANNOTATION_TYPES[i],self.__output_dim,i,self.__terminal_signal))
+            metrics.append(recall_creator("recall_"+ANNOTATION_TYPES[i],self.__output_dim,i,self.__terminal_signal))
+        model=SeqAnnModelFactory(cnn_setting_creator.get_settings(),self.__lstm_layer_number,self.__terminal_signal,self.__add_batch_normalize,self.__dropout,self.__learning_rate,self.__output_dim,self.__weights,metrics)    
         self.__model=model
     @property
     def model(self):
@@ -177,24 +196,32 @@ class ModelTrainPipeline():
         self.__y_train=[]
         self.__x_validation=[]
         self.__y_validation=[]
+        self.__weights=[]
         self.__training_size=0
         self.__validation_size=0
-        training_alignment=SeqAnnAlignment()
+        training_alignment=SeqAnnAlignment(ANNOTATION_TYPES)
         for training_file in self.__training_files:
             training_alignment.add_file_to_parse(training_file,self.__training_answers,True)
         self.__x_train=training_alignment.seqs_vecs
         self.__y_train=training_alignment.seqs_annotations
         self.__training_size+=len(self.__x_train)    
-        validation_alignment=SeqAnnAlignment()
+        validation_alignment=SeqAnnAlignment(ANNOTATION_TYPES)
         for validation_file in self.__validation_files:
             validation_alignment.add_file_to_parse(validation_file,self.__validation_answers,True)
         self.__x_validation=validation_alignment.seqs_vecs
         self.__y_validation=validation_alignment.seqs_annotations
         self.__validation_size+=len(self.__x_validation)
-        print("Training data statistic analysis (base)")
-        print(training_alignment.seqs_annotations_count)
-        print("Validation data statistic analysis (base)")
-        print(validation_alignment.seqs_annotations_count)
+        for k in ANNOTATION_TYPES:
+            self.__weights.append(1/training_alignment.seqs_annotations_count[k])
+        if self.is_prompt_visible:
+            print("Training data statistic analysis (base)")
+            print(training_alignment.seqs_annotations_count)
+            print("Validation data statistic analysis (base)")
+            print(validation_alignment.seqs_annotations_count)
+            if self.__use_weights:
+                print("Training data weights:")
+                for k in ANNOTATION_TYPES:
+                    print(k+":"+str(1/training_alignment.seqs_annotations_count[k]))
     def get_training_set(self):
         return self.__x_train,self.__y_train
     def get_validation_set(self):
@@ -270,8 +297,8 @@ if __name__=='__main__':
     settings={'setting_record':args.setting_record,'image':args.image,'id':args.train_id,'training':train_parser.get_training_settings(),'show':train_parser.get_show_settings(),'model':model_parser.get_model_settings()}
     from sequence_annotation.model.model_build_helper import CnnSettingCreator
     from sequence_annotation.model.sequence_annotation_model_factory import SeqAnnModelFactory
-    from sequence_annotation.model.model_build_helper import tensor_end_with_terminal_binary_crossentropy
-    from sequence_annotation.model.model_build_helper import tensor_end_with_terminal_binary_accuracy,precision_creator,recall_creator
+    from sequence_annotation.model.model_build_helper import categorical_crossentropy_factory
+    from sequence_annotation.model.model_build_helper import categorical_accuracy_factory,precision_creator,recall_creator
     from sequence_annotation.model.model_trainer import ModelTrainer
     from sequence_annotation.data_handler.DNA_vector import code2vec,codes2vec
     from sequence_annotation.data_handler.training_helper import seqs2dnn_data,SeqAnnAlignment,seqs_index_selector

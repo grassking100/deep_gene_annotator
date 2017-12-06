@@ -24,15 +24,15 @@ def seqs2dnn_data(seqs,discard_dirty_sequence):
     return (valid_seqs_indice,vectors)
 
 class SeqAnnAlignment():
-    def __init__(self):
-        self.__ANN_TYPES=['utr_5','utr_3','intron','cds','intergenic_region']
+    def __init__(self,annotation_types):
         self.__names=[]
         self.__seqs=[]
         self.__anns=[]
         self.__seqs_vecs=[]
         self.__anns_count={}
-        for ann_type in self.__ANN_TYPES:
-            self.__anns_count[ann_type]=0
+        self.ANN_TYPES=annotation_types
+        for ann_type in self.ANN_TYPES:
+                self.__anns_count[ann_type]=0
     def add_file_to_parse(self,fasta_path,annotation_path,discard_dirty_sequence):
         #read and return sequnece's one-hot-encoding vector and annotation data
         (names,seqs)=fasta2seqs(fasta_path)
@@ -48,13 +48,18 @@ class SeqAnnAlignment():
             name=names[index]
             ann_seq=ann_seqs[str(name)].tolist()
             ann=[]
-            for index in range(len(self.__ANN_TYPES)):
-                ann_type=self.__ANN_TYPES[index]
+            for ann_type in self.ANN_TYPES:
                 temp=ann_seq[ann_type]
                 self.__anns_count[ann_type]+=numpy.sum(temp)
                 ann.append(temp)
             #append corresponding annotation to array
             self.__anns.append(numpy.transpose(ann))
+    @property
+    def ANN_TYPES(self):
+        return self.__ANN_TYPES         
+    @ANN_TYPES.setter
+    def ANN_TYPES(self,v):
+        self.__ANN_TYPES=v
     @property
     def names(self):
         return self.__names

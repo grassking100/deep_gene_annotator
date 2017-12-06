@@ -1,32 +1,38 @@
+from . import tensorflow as tf  
+#from . import optimizers,losses
 from . import BaseLogger
 from . import Model
 from . import numpy as np
 from . import callbacks as cbks
 from . import _make_batches,_slice_arrays
+from keras.engine.training import _collect_metrics
+import keras.metrics as metrics_module
+
 class CleanLogger(BaseLogger):
     """Callback that accumulates epoch averages of metrics.
-    This callback is automatically applied to every Keras model.
     """
+    def __init__(self):
+        super().__init__()
+        self.__hasInit=False
     def on_epoch_begin(self, epoch, logs=None):
         self.seen = 0
         self.totals = {}
         self.each_count={}
+    def __init_record(self,logs):
+        for key in logs.keys():
+            self.each_count[key]=0
+            self.totals[key] =0
     def on_batch_end(self, batch, logs=None):
         logs = logs or {}
         batch_size = logs.get('size', 0)
         self.seen += batch_size
+        if not self.__hasInit:
+            self.__init_record(logs)
+            self.__hasInit=True
         for k, v in logs.items():
-            if k in self.totals:
-                if not np.isnan(v):
-                    self.each_count[k]+=batch_size
-                    self.totals[k] += v * batch_size                
-            else:
-                if not np.isnan(v):
-                    self.each_count[k]=batch_size
-                    self.totals[k] = v * batch_size
-                else:
-                    self.each_count[k]=0
-                    self.totals[k] = 0  
+            if not np.isnan(v):
+                self.each_count[k]+=batch_size
+                self.totals[k] += v * batch_size 
     def on_epoch_end(self, epoch, logs=None):
         if logs is not None:
             for k in self.params['metrics']:
@@ -202,3 +208,83 @@ class SeqAnnModel(Model):
                     break
             callbacks.on_train_end()
             return self.history
+    def _test_loop(self, f, ins, batch_size=None, verbose=0, steps=None):
+        """Abstract method to loop over some data in batches.
+        # Arguments
+            f: Keras function returning a list of tensors.
+            ins: list of tensors to be fed to `f`.
+            batch_size: integer batch size or `None`.
+            verbose: verbosity mode.
+            steps: Total number of steps (batches of samples)
+                before declaring predictions finished.
+                Ignored with the default value of `None`.
+        # Returns
+            Scalar loss (if the model has a single output and no metrics)
+            or list of scalars (if the model has multiple outputs
+            and/or metrics). The attribute `model.metrics_names` will give you
+            the display labels for the scalar outputs.
+        """
+        num_samples = self._check_num_samples(ins, batch_size,
+                                              steps,
+                                              'steps')
+        outs = []
+        if verbose == 1:
+            if steps is not None:
+                progbar = Progbar(target=steps)
+            else:
+                progbar = Progbar(target=num_samples)
+        denominators=[]
+        if steps is not None:
+            raise Exception("Unfixed problen add of nan")
+            for step in range(steps):
+                batch_outs = f(ins)
+                if isinstance(batch_outs, list):
+                    if step == 0:
+                        for _ in enumerate(batch_outs):
+                            outs.append(0.)
+                    for i, batch_out in enumerate(batch_outs):
+                        outs[i] += batch_out
+                else:
+                    if step == 0:
+                        outs.append(0.)
+                    outs[0] += batch_outs
+                if verbose == 1:
+                    progbar.update(step + 1)
+            for i in range(len(outs)):
+                outs[i] /= steps
+        else:
+            batches = _make_batches(num_samples, batch_size)
+            index_array = np.arange(num_samples)
+            for batch_index, (batch_start, batch_end) in enumerate(batches):
+                batch_ids = index_array[batch_start:batch_end]
+                if isinstance(ins[-1], float):
+                    # Do not slice the training phase flag.
+                    ins_batch = _slice_arrays(ins[:-1], batch_ids) + [ins[-1]]
+                else:
+                    ins_batch = _slice_arrays(ins, batch_ids)
+                batch_outs = f(ins_batch)
+                if isinstance(batch_outs, list):
+                    if batch_index == 0:
+                        for batch_out in enumerate(batch_outs):
+                            outs.append(0.)
+                            denominators.append(0.)
+                    for i, batch_out in enumerate(batch_outs):
+                        if not np.isnan(batch_out):
+                            denominators[i]+=len(batch_ids)
+                            outs[i] += batch_out * len(batch_ids)
+                else:
+                    if batch_index == 0:
+                        outs.append(0.)
+                    outs[0] += batch_outs * len(batch_ids)
+
+                if verbose == 1:
+                    progbar.update(batch_end)
+            for i in range(len(outs)):
+                if denominators[i]!=0:
+                    outs[i] /= denominators[i]
+                else:
+                    outs[i]=np.float64('nan')
+        if len(outs) == 1:
+            return outs[0]
+        return outs 
+        #return 
