@@ -196,7 +196,7 @@ class ModelTrainPipeline():
         self.__y_train=[]
         self.__x_validation=[]
         self.__y_validation=[]
-        self.__weights=[]
+        self.__weights=None
         self.__training_size=0
         self.__validation_size=0
         training_alignment=SeqAnnAlignment(ANNOTATION_TYPES)
@@ -211,10 +211,12 @@ class ModelTrainPipeline():
         self.__x_validation=validation_alignment.seqs_vecs
         self.__y_validation=validation_alignment.seqs_annotations
         self.__validation_size+=len(self.__x_validation)
-        for k in ANNOTATION_TYPES:
-            self.__weights.append(1/training_alignment.seqs_annotations_count[k])
-        sum_weight=sum(self.__weights)
-        self.__weights=[w/sum_weight for w in self.__weights]
+        if self.__use_weights:
+            self.__weights=[]
+            for k in ANNOTATION_TYPES:
+                self.__weights.append(1/training_alignment.seqs_annotations_count[k])
+            sum_weight=sum(self.__weights)
+            self.__weights=[100000*w/sum_weight for w in self.__weights]
         if self.is_prompt_visible:
             print("Training data statistic analysis (base)")
             print(training_alignment.seqs_annotations_count)
