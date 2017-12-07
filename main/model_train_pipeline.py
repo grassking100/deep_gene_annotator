@@ -216,7 +216,7 @@ class ModelTrainPipeline():
             for k in ANNOTATION_TYPES:
                 self.__weights.append(1/training_alignment.seqs_annotations_count[k])
             sum_weight=sum(self.__weights)
-            self.__weights=[100000*w/sum_weight for w in self.__weights]
+            self.__weights=[w/sum_weight for w in self.__weights]
         if self.is_prompt_visible:
             print("Training data statistic analysis (base)")
             print(training_alignment.seqs_annotations_count)
