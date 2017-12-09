@@ -33,7 +33,6 @@ def categorical_crossentropy_factory(class_number,is_static,weights=None,termina
         loss=tf.reduce_mean(keras.losses.categorical_crossentropy(y_true,y_pred))        
         return loss
     if is_static:
-        
         return static_categorical_crossentropy
     else:
         warnings.warn(

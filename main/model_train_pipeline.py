@@ -131,13 +131,13 @@ class ModelTrainPipeline():
             weights=None
         loss_function=sequence_annotation.model.model_build_helper.categorical_crossentropy_factory(self.__output_dim,True,weights,-1)
         accuracy_function=sequence_annotation.model.model_build_helper.categorical_accuracy_factory(self.__output_dim,-1)
-        metrics={'categorical_accuracy':accuracy_function,'categorical_crossentropy':loss_function}
-        precisions=[precision_creator("precision_"+str(i),self.__output_dim,i,self.__terminal_signal) for i in range(0,self.__output_dim)]
-        recalls=[recall_creator("recall_"+str(i),self.__output_dim,i,self.__terminal_signal) for i in range(0,self.__output_dim)]
-        for i in range(0,self.__output_dim):
-            metrics['precision_'+str(i)]=precisions[i]
-            metrics['recall_'+str(i)]=recalls[i]
-        self.__model=load_model(whole_file_path+'.h5',custom_objects=metrics)
+        custom_objects={'categorical_accuracy':accuracy_function,'static_categorical_crossentropy':loss_function}
+        for i in range(len(ANNOTATION_TYPES)):
+            ann_type=ANNOTATION_TYPES[i]
+            custom_objects['precision_'+ann_type]=precision_creator("precision_"+ann_type,self.__output_dim,i,self.__terminal_signal)
+            custom_objects['recall_'+ann_type]=recall_creator("recall_"+ann_type,self.__output_dim,i,self.__terminal_signal)
+        custom_objects['SeqAnnModel']=self.__model
+        self.__model=load_model(whole_file_path+'.h5',custom_objects)
         self.trainer.model=self.__model
     def print_file_classification(self):
         print("Status of file:")
