@@ -13,7 +13,6 @@ def seqs2dnn_data(seqs,discard_dirty_sequence):
     index=0
     for seq in seqs:
         try:
-            
             vec=codes2vec(seq)  
             vectors.append(numpy.array(vec).reshape(len(seq),code_dim))
             valid_seqs_indice.append(index)

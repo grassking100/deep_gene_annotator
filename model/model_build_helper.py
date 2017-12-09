@@ -1,6 +1,7 @@
 from . import tensorflow as tf
 from . import keras
 from . import warnings
+from . import numpy
 def removed_terminal_tensors(true,pred,number_of_class,value_to_ignore):
     reshape_pred=tf.reshape(pred,[-1])
     reshape_true=tf.reshape(true,[-1])
@@ -8,16 +9,9 @@ def removed_terminal_tensors(true,pred,number_of_class,value_to_ignore):
     clean_pred=tf.reshape(tf.gather(reshape_pred,index),[-1,number_of_class])
     clean_true=tf.reshape(tf.gather(reshape_true,index),[-1,number_of_class])
     return (clean_true,clean_pred)
-def tensor_non_terminal_index(tensor):
-    warnings.warn(
-            "tensor_non_terminal_index is deprecated,it will be removed in the future",
-            PendingDeprecationWarning
-    )
-    #get all index which corresponding value equal -1 
-    index=tf.where(tf.not_equal(tensor,-1))
-    return tf.reshape(index, [-1])
-def categorical_crossentropy_factory(class_number,weights=None,terminal_signal=None):
-    def categorical_crossentropy(y_true,y_pred):
+
+def categorical_crossentropy_factory(class_number,is_static,weights=None,terminal_signal=None):
+    def static_categorical_crossentropy(y_true,y_pred):
         #calculate categorical crossentropy between y_true and y_pred
         if terminal_signal is not None:
             (y_true,y_pred)=removed_terminal_tensors(y_true,y_pred,class_number,terminal_signal)
@@ -25,7 +19,30 @@ def categorical_crossentropy_factory(class_number,weights=None,terminal_signal=N
             y_true=tf.multiply(y_true,weights)
         loss=tf.reduce_mean(keras.losses.categorical_crossentropy(y_true,y_pred))        
         return loss
-    return categorical_crossentropy
+    def dynamic_categorical_crossentropy(y_true,y_pred):
+        #calculate categorical crossentropy between y_true and y_pred
+        if terminal_signal is not None:
+            (y_true,y_pred)=removed_terminal_tensors(y_true,y_pred,class_number,terminal_signal)
+        weights=tf.divide(1,tf.reduce_sum(y_true,0))
+        inf=tf.constant(numpy.float("inf"))
+        where_inf=tf.equal(weights,inf)
+        weights=tf.where(where_inf, tf.zeros_like(weights), weights)
+        sum_weights=tf.reduce_sum(weights)
+        weights=tf.divide(weights,sum_weights)
+        y_true=tf.multiply(y_true,weights)
+        loss=tf.reduce_mean(keras.losses.categorical_crossentropy(y_true,y_pred))        
+        return loss
+    if is_static:
+        
+        return static_categorical_crossentropy
+    else:
+        warnings.warn(
+            "Dynamic categorical crossentrophy function hasn't complete build yet"
+        )
+        return dynamic_categorical_crossentropy
+
+    
+    
 def categorical_accuracy_factory(class_number,terminal_signal=None):                            
     def categorical_accuracy(y_true,y_pred):
         #calculate categorical crossentropy between y_true and y_pred
@@ -34,32 +51,6 @@ def categorical_accuracy_factory(class_number,terminal_signal=None):
         accuracy=tf.reduce_mean(keras.metrics.categorical_accuracy(y_true,y_pred))
         return accuracy
     return categorical_accuracy
-def tensor_end_with_terminal_binary_crossentropy(y_true,y_pred):
-    #calculate binary crossentropy between y_true and y_pred which have terminal signal -1
-    warnings.warn(
-            "tensor_end_with_terminal_binary_crossentropy is deprecated,it will be removed in the future",
-            PendingDeprecationWarning
-    )
-    y_true=tf.reshape(y_true, [-1])
-    y_pred=tf.reshape(y_pred, [-1])
-    index=tensor_non_terminal_index(y_true)
-    loss=keras.losses.binary_crossentropy(
-        tf.gather(tf.cast(y_true,tf.float32),index),
-        tf.gather(y_pred,index))
-    return loss
-def tensor_end_with_terminal_binary_accuracy(y_true,y_pred):
-    #calculate binary accuracy between y_true and y_pred which have terminal signal -1
-    warnings.warn(
-            "tensor_end_with_terminal_binary_accuracy is deprecated,it will be removed in the future",
-            PendingDeprecationWarning
-    )
-    y_true=tf.reshape(y_true, [-1])
-    y_pred=tf.reshape(y_pred, [-1])
-    index=tensor_non_terminal_index(y_true)
-    accuracy=keras.metrics.binary_accuracy(
-        tf.gather(tf.cast(y_true,tf.float32),index),
-        tf.gather(y_pred,index))
-    return accuracy
 
 def rename(newname):
     def decorator(f):

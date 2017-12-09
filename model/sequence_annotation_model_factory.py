@@ -29,7 +29,7 @@ def SeqAnnModelFactory(convolution_settings=[], LSTM_layer_number=1,terminal_sig
         previous_layer=Activation('relu')(previous_layer)
         index+=1
     #choose algorithm to calculate the loss and accuracy
-    loss_func=categorical_crossentropy_factory(output_dim,weights,terminal_signal)
+    loss_func=categorical_crossentropy_factory(output_dim,True,weights,terminal_signal)
     loss_acc=categorical_accuracy_factory(output_dim,terminal_signal)
     #add lstm rnn layer#  
     lstm_forward=LSTM(LSTM_layer_number,return_sequences=True ,activation='tanh',name='LSTM_Forward',dropout=dropout)(previous_layer)

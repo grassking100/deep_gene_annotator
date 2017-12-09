@@ -124,25 +124,21 @@ class ModelTrainPipeline():
             return
     def __load_previous_result(self):
         whole_file_path=self.__previous_status_root
-        self.trainer.add_previous_histories(np.load(whole_file_path+'.npy').tolist())
+        self.trainer.histories=np.load(whole_file_path+'.npy').tolist()
         if self.__use_weights:
             weights=self.__weights
         else:
             weights=None
-        loss_function=sequence_annotation.model.model_build_helper.categorical_crossentropy_factory(self.__output_dim,weights,-1)
+        loss_function=sequence_annotation.model.model_build_helper.categorical_crossentropy_factory(self.__output_dim,True,weights,-1)
         accuracy_function=sequence_annotation.model.model_build_helper.categorical_accuracy_factory(self.__output_dim,-1)
         metrics={'categorical_accuracy':accuracy_function,'categorical_crossentropy':loss_function}
-        if self.__add_terminal_signal:
-            terminal_signal=-1
-        else:
-            terminal_signal=None
-        precisions=[precision_creator("precision_"+str(i),self.__output_dim,i,terminal_signal) for i in range(0,self.__output_dim)]
-        recalls=[recall_creator("recall_"+str(i),self.__output_dim,i,terminal_signal) for i in range(0,self.__output_dim)]
+        precisions=[precision_creator("precision_"+str(i),self.__output_dim,i,self.__terminal_signal) for i in range(0,self.__output_dim)]
+        recalls=[recall_creator("recall_"+str(i),self.__output_dim,i,self.__terminal_signal) for i in range(0,self.__output_dim)]
         for i in range(0,self.__output_dim):
             metrics['precision_'+str(i)]=precisions[i]
             metrics['recall_'+str(i)]=recalls[i]
         self.__model=load_model(whole_file_path+'.h5',custom_objects=metrics)
-        self.trainer.set_model(self.__model)
+        self.trainer.model=self.__model
     def print_file_classification(self):
         print("Status of file:")
         for file in self.__training_files:
@@ -233,9 +229,10 @@ class ModelTrainPipeline():
     def __init_trainer(self):
         self.__trainer=ModelTrainer()
         (x,y)=self.get_training_set()
-        self.__trainer.set_training_data(*self.get_training_set())
-        self.__trainer.set_validation_data(*self.get_validation_set())
-        self.__trainer.set_model(self.model)
+        self.trainer.set_training_data(*self.get_training_set())
+        self.trainer.set_validation_data(*self.get_validation_set())
+        self.trainer.model=self.model
+        self.trainer.padding_signal=self.__terminal_signal
     @property
     def trainer(self):
         return self.__trainer
@@ -279,7 +276,7 @@ class ModelTrainPipeline():
             if self.is_prompt_visible:
                 print("Starting training:"+whole_file_path)
             self.trainer.train(self.__step,self.__batch_size,True,int(self.is_verbose_visible),whole_file_path+'/log/')
-            np.save(whole_file_path+'.npy', self.trainer.get_histories()) 
+            np.save(whole_file_path+'.npy', self.trainer.histories) 
             self.model.save(whole_file_path+'.h5')
             if self.is_prompt_visible:
                 print("Saved training:"+whole_file_path)

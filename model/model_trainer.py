@@ -4,33 +4,51 @@ from . import numpy
 class ModelTrainer:
     def __init__(self):
         self.histories={}
+        self.padding_signal=None
     def set_training_data(self,x,y):
-        self.x_train=x
-        self.y_train=y
+        self.__x_train=x
+        self.__y_train=y
         return self
     def set_validation_data(self,x,y):
-        self.x_validation=x
-        self.y_validation=y
+        self.__x_validation=x
+        self.__y_validation=y
         return self
     def clean_histories(self):
         self.histories={}
-    def add_previous_histories(self,histories):
-        self.histories=histories
-    def set_model(self,model):
-        self.model=model
-        return self
-    def get_model(self):
-        return self.model
+    @property
+    def model(self):
+        return self.__model
+    @model.setter
+    def model(self,v):
+        self.__model=v
+    @property
+    def histories(self):
+        return self.__histories
+    @histories.setter
+    def histories(self,v):
+        self.__histories=v
+    @property
+    def padding_signal(self):
+        return self.__padding_signal
+    @padding_signal.setter
+    def padding_signal(self,v):
+        self.__padding_signal=v
     def train(self,epoches,batch_size,shuffle,verbose,log_file):
+        if self.padding_signal is not None:
         #padding data to same length
-        x_train=keras.preprocessing.sequence.pad_sequences(self.x_train, maxlen=None,padding='post')
-        y_train=keras.preprocessing.sequence.pad_sequences(self.y_train, maxlen=None,padding='post',value=-1)
-        x_validation=keras.preprocessing.sequence.pad_sequences(self.x_validation, maxlen=None,padding='post')
-        y_validation=keras.preprocessing.sequence.pad_sequences(self.y_validation, maxlen=None,padding='post',value=-1)
+            x_train=keras.preprocessing.sequence.pad_sequences(self.__x_train, maxlen=None,padding='post')
+            y_train=keras.preprocessing.sequence.pad_sequences(self.__y_train, maxlen=None,padding='post',value=self.padding_signal)
+            x_validation=keras.preprocessing.sequence.pad_sequences(self.__x_validation, maxlen=None,padding='post')
+            y_validation=keras.preprocessing.sequence.pad_sequences(self.__y_validation, maxlen=None,padding='post',value=self.padding_signal)
+        else:
+            x_train=self.__x_train
+            y_train=self.__y_train
+            x_validation=self.__x_validation
+            y_validation=self.__y_validation
         tbCallBack = keras.callbacks.TensorBoard(log_dir='./'+log_file, histogram_freq=1, write_graph=True, write_grads=True, write_images=True)
         tbCallBack.set_model(self.model)
         #training and evaluating the model
-        history=self.get_model().fit(numpy.array(x_train), 
+        history=self.model.fit(numpy.array(x_train), 
                                      numpy.array(y_train), 
                                      batch_size=batch_size,
                                      shuffle=shuffle,
@@ -38,56 +56,10 @@ class ModelTrainer:
                                      verbose=verbose,
                                      validation_data=(numpy.array(x_validation),numpy.array(y_validation)),
                                      callbacks=[tbCallBack])
-        #print(history.history)
-        #
         #add record to histories
         for k,v in history.history.items():
-            #print(k)
-            #print(v)
             if k in self.histories.keys():
                 self.histories[k]+=v
             else:
                 self.histories[k]=v
-        #print(self.histories)
         return self
-    def get_histories(self):
-        return self.histories
-    def get_accuracies(self):
-        return self.get_histories()['accuracy']
-    def get_validation_accuracies(self):
-        return self.get_histories()['val_accuracy']
-    def get_losses(self):
-        return self.get_histories()['loss']
-    def get_validation_losses(self):
-        return self.get_histories()['val_loss']
-    def get_last_validation_loss(self):
-        warnings.warn("this function is deprecated,it will be removed in the future",
-        PendingDeprecationWarning)
-        loss=self.get_validation_losses()
-        return loss[len(loss)-1]
-    def get_last_loss(self):
-        warnings.warn("this function is deprecated,it will be removed in the future",
-        PendingDeprecationWarning)
-        loss=self.get_losses()
-        return loss[len(loss)-1]
-    def get_last_accuracy(self):
-        warnings.warn("this function is deprecated,it will be removed in the future",
-        PendingDeprecationWarning)
-        acc=self.get_accuracies()
-        return acc[len(acc)-1]
-    def get_last_validation_accuracy(self):
-        warnings.warn("this function is deprecated,it will be removed in the future",
-        PendingDeprecationWarning)
-        acc=self.get_validation_accuracies()
-        return acc[len(acc)-1]   
-    def get_max_accuracy(self):
-        warnings.warn("this function is deprecated,it will be removed in the future",
-        PendingDeprecationWarning)
-        return max(self.get_accuracies())
-    def get_max_validation_accuracy(self):
-        warnings.warn("this function is deprecated,it will be removed in the future",
-        PendingDeprecationWarning)
-        return max(self.get_validation_accuracies())
-    
-
-    
