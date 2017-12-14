@@ -35,6 +35,7 @@ class ModelSettingParser(SettingParser):
         for k,v in self.config[root].items():
             settings[k]=v
         key_int_value=['total_convolution_layer_size','lstm_layer_number','output_dim']
+        
         key_float_value=['dropout','learning_rate']
         key_bool_value=['add_batch_normalize']
         key_ints_value=['convolution_layer_sizes','convolution_layer_numbers']
@@ -78,7 +79,8 @@ class TrainSettingParser(SettingParser):
         if str(terminal_signal)=="None":
             settings['terminal_signal']=None
         else:
-            settings['terminal_signal']=int(terminal_signal)
+            settings['terminal_signal']=int(settings['terminal_signal'])
+        
         return settings
 class ModelTrainPipeline():
     #initialize all the variable needed
@@ -127,8 +129,8 @@ class ModelTrainPipeline():
             weights=self.__weights
         else:
             weights=None
-        loss_function=sequence_annotation.model.model_build_helper.categorical_crossentropy_factory(self.__output_dim,True,weights,self.__terminal_signal)
-        accuracy_function=sequence_annotation.model.model_build_helper.categorical_accuracy_factory(self.__output_dim,self.__terminal_signal)
+        loss_function=sequence_annotation.model.model_build_helper.categorical_crossentropy_factory(self.__output_dim,True,weights,-1)
+        accuracy_function=sequence_annotation.model.model_build_helper.categorical_accuracy_factory(self.__output_dim,-1)
         custom_objects={'categorical_accuracy':accuracy_function,'static_categorical_crossentropy':loss_function}
         for i in range(len(ANNOTATION_TYPES)):
             ann_type=ANNOTATION_TYPES[i]
@@ -209,8 +211,8 @@ class ModelTrainPipeline():
             self.__weights=[]
             for k in ANNOTATION_TYPES:
                 self.__weights.append(1/training_alignment.seqs_annotations_count[k])
-            #sum_weight=sum(self.__weights)
-            #self.__weights=[w/sum_weight for w in self.__weights]
+            sum_weight=sum(self.__weights)
+            self.__weights=[w/sum_weight for w in self.__weights]
         if self.is_prompt_visible:
             print("Training data statistic analysis (base)")
             print(training_alignment.seqs_annotations_count)
