@@ -18,7 +18,7 @@ def fasta2seqs(file_name,number=-1):
     return(names,seqs)
 #read fasta file and return the data format which tensorflow can input
 def fasta2dnn_data(file_name,number=-1,safe=False):
-    (names,seqs)=fastas2arr(file_name,number)
+    (names,seqs)=fasta2seqs(file_name,number)
     return seqs2dnn_data(seqs,safe)
 
 class FastaExtractor:

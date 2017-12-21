@@ -10,13 +10,11 @@ def seqs2dnn_data(seqs,discard_dirty_sequence):
     code_dim=4
     vectors=[]
     valid_seqs_indice=[]
-    index=0
-    for seq in seqs:
+    for seq,index in zip(seqs,range(len(seqs))):
         try:
             vec=codes2vec(seq)  
             vectors.append(numpy.array(vec).reshape(len(seq),code_dim))
             valid_seqs_indice.append(index)
-            index+=1
         except DNA_SeqException as e:
             if not discard_dirty_sequence:
                 raise e
