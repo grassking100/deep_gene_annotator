@@ -1,65 +1,48 @@
-from . import keras
+"""This submodule provides trainer to train model"""
+from keras.callbacks import TensorBoard
 from . import numpy
-#a trainer which will train and evaluate the model
-class ModelTrainer:
+from . import Container
+class ModelTrainer(Container):
+    """a trainer which will train and evaluate the model"""
     def __init__(self):
-        self.histories={}
-        self.padding_signal=None
-    def set_training_data(self,x,y):
-        self.__x_train=x
-        self.__y_train=y
-        return self
-    def set_validation_data(self,x,y):
-        self.__x_validation=x
-        self.__y_validation=y
-        return self
-    def clean_histories(self):
-        self.histories={}
-    @property
-    def model(self):
-        return self.__model
-    @model.setter
-    def model(self,v):
-        self.__model=v
-    @property
-    def histories(self):
-        return self.__histories
-    @histories.setter
-    def histories(self,v):
-        self.__histories=v
-    @property
-    def padding_signal(self):
-        return self.__padding_signal
-    @padding_signal.setter
-    def padding_signal(self,v):
-        self.__padding_signal=v
-    def train(self,epoches,batch_size,shuffle,verbose,log_file):
-        if self.padding_signal is not None:
-        #padding data to same length
-            x_train=keras.preprocessing.sequence.pad_sequences(self.__x_train, maxlen=None,padding='post')
-            y_train=keras.preprocessing.sequence.pad_sequences(self.__y_train, maxlen=None,padding='post',value=self.padding_signal)
-            x_validation=keras.preprocessing.sequence.pad_sequences(self.__x_validation, maxlen=None,padding='post')
-            y_validation=keras.preprocessing.sequence.pad_sequences(self.__y_validation, maxlen=None,padding='post',value=self.padding_signal)
-        else:
-            x_train=self.__x_train
-            y_train=self.__y_train
-            x_validation=self.__x_validation
-            y_validation=self.__y_validation
-        tbCallBack = keras.callbacks.TensorBoard(log_dir='./'+log_file, histogram_freq=1, write_graph=True, write_grads=True, write_images=True)
-        tbCallBack.set_model(self.model)
+        super().__init__()
+        self.__valid_key = ['train_x','train_y','validation_x','validation_y']
+    def _validate_key(self, key):
+        """Validate the key"""
+        if key not in self.__valid_key:
+            raise Exception("Key:"+key+" is not a valid key")
+    def _validate_required(self):
+        """Validate required data"""
+        attrs = ['_model','_data']
+        for attr in attrs:
+            if getattr(self,attr) is None:
+                raise Exception("ModelTrainer needs "+attr+" to complete the quest")
+        for key in self.__valid_key:
+            if key not in self._data.keys():
+                raise Exception("ModelTrainer needs data about "+key+" to complete the quest")
+        self._valid_data_shape(self._data['train_x'],self._data['train_y'])
+        self._valid_data_shape(self._data['validation_x'],self._data['validation_y'])
+    def train(self, epoches, batch_size, shuffle, verbose, log_file):
+        """Train model"""
+        self._validate_required()
+        tb_call_back = TensorBoard(log_dir='./'+log_file, histogram_freq=1,
+                                   write_graph=True, write_grads=True,
+                                   write_images=True)
+        tb_call_back.set_model(self.model)
         #training and evaluating the model
-        history=self.model.fit(numpy.array(x_train), 
-                                     numpy.array(y_train), 
-                                     batch_size=batch_size,
-                                     shuffle=shuffle,
-                                     epochs=epoches,
-                                     verbose=verbose,
-                                     validation_data=(numpy.array(x_validation),numpy.array(y_validation)),
-                                     callbacks=[tbCallBack])
+        history = self.model.fit(numpy.array(self._data['train_x']),
+                                 numpy.array(self._data['train_y']),
+                                 batch_size=batch_size,
+                                 shuffle=shuffle,
+                                 epochs=epoches,
+                                 verbose=verbose,
+                                 validation_data=(numpy.array(self._data['validation_x']),
+                                                  numpy.array(self._data['validation_y'])),
+                                 callbacks=[tb_call_back])
         #add record to histories
-        for k,v in history.history.items():
-            if k in self.histories.keys():
-                self.histories[k]+=v
+        for key, value in history.history.items():
+            if key in self.result.keys():
+                self.result[key] += value
             else:
-                self.histories[k]=v
+                self.result[key] = value
         return self

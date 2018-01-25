@@ -1,12 +1,16 @@
-from . import seqs2dnn_data
-from . import pyplot as plt
-#visualize the exon probability along 5' end to 3' end DNA sequence
-def visualization(model,x,true_y):
-    for index in range(len(x)):
-        target=x[index]
-        data=model.predict(numpy.array([target]))[0]
+"""This submodule provides library about visualize"""
+from . import plt
+from . import numpy
+def visualization(model, sequences, annotations):
+    """visualize the exon probability along 5' end to 3' end DNA sequence"""
+    if len(sequences) != len(annotations):
+        raise "Length is not consistent"
+    length_of_data = len(sequences)
+    for index in range(length_of_data):
+        target = sequences[index]
+        data = model.predict(numpy.array([target]))[0]
         plt.plot(data)
-        plt.plot(true_y[index])
+        plt.plot(annotations[index])
         plt.title('index:'+str(index))
         plt.xlabel('nt')
         plt.ylabel('exon probability')

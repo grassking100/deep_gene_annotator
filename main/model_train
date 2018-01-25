@@ -1,0 +1,201 @@
+import numpy as np
+import os
+import errno
+import csv
+from keras.models import load_model
+from keras.utils import plot_model
+from . import ModelTrainer
+from . import handle_alignment_files
+class ModelTrainPipeline():
+    #initialize all the variable needed
+    def __init__(self, settings):
+        self.__init_trainer()
+        self.__restored_previous_result()
+        self.__create_stored_folder()
+        self.__outputfile_root = None
+        self.__train_id = None
+        self.__mode_id = None
+        self.__folder_name = None
+        self.__previous_status_root = None
+        self.__is_prompt_visible = None
+        self.__is_verbose_visible = None
+        self.__is_model_visible = None
+        self.__date = None
+        self.__train_id = None
+        self.__setting_record = None
+        self.__progress_target = None
+        self.__previous_epoch = None
+        self.__step = None
+        self.__trainer = None
+        self.__batch_size = None
+        self.__train_id = None
+        self.__date = None
+        self.__training_answers = None
+        self.__validation_answers = None
+        self.__model = None
+        self.__settings = settings
+        #initialize all the variable from setting file
+        self.__init_parameter()
+        #get names and sequences from file
+        #create training and validation set
+        self.__init_data()
+        if self.__is_prompt_visible:
+            self.print_file_classification()
+            self.print_selected_information()
+        #create model and trainer
+        self.__init_model()
+        if self.__is_model_visible:
+            self.print_model_information()
+    def __create_stored_folder(self):
+        try:
+            self.__folder_name = (self.__outputfile_root+'/'+str(self.__train_id)+
+                                  "/"+str(self.__mode_id))
+            if not os.path.exists(self.__folder_name):
+                print("Create folder:"+self.__folder_name)
+                os.makedirs(self.__folder_name)
+        except OSError as error:
+            if error.errno != errno.EEXIST:
+                raise
+    def print_model_information(self):
+        print("Create model")
+        self.model.summary()
+    def __restored_previous_result(self):
+        if self.__previous_epoch > 0:
+            if self.__is_prompt_visible:
+                print("Loading previous status:"+self.__previous_status_root)
+            self.__load_previous_result()
+        else:
+            if self.__is_prompt_visible:
+                print("Start a new training status")
+            return
+    def __load_previous_result(self):
+        whole_file_path = self.__previous_status_root
+        self.trainer.histories = np.load(whole_file_path+'.npy').tolist()
+        implementer = CustomObjectsImplementer(self.__settings)
+        custom_objects = implementer.implement()
+        custom_objects['SeqAnnModel'] = self.__model
+        self.__model = load_model(whole_file_path+'.h5', custom_objects)
+        self.trainer.model = self.__model
+    def print_file_classification(self):
+        print("Status of file:")
+        for file in self.__training_files:
+            print("\tTraining set:"+file)
+        for file in self.__validation_files:
+            print("\tValidation set:"+file)
+    def __init_parameter(self):
+        roots = ['model', 'training', 'show']
+        for root in roots:
+            for k, v in self.__settings[root].items():
+                variable_tail_name = ''
+                variable_head_name = '_'+self.__class__.__name__+'__'
+                if root == 'show':
+                    variable_tail_name += '_visible'
+                    variable_head_name += 'is_'
+                setattr(self, variable_head_name+k+variable_tail_name, v)
+        self.__date = strftime("%Y_%b_%d", gmtime())
+        self.__train_id = self.__settings['id']
+        self.__setting_record = self.__settings['setting_record']
+        self.__image = self.__settings['image']
+    def print_training_status(self):
+        status = {'Progress target':self.__progress_target,
+                  'Start progress':self.__previous_epoch,
+                  'Step':self.__step,
+                  'Batch size':self.__batch_size,
+                  'Train id':self.__train_id,
+                  'Date':self.__date,
+                  'Learning rate':self.__learning_rate}
+        print("Training satus:")
+        for k, v in status.items():
+            print("\t"+k+":"+str(v))
+    def __init_model(self):
+        implementer=SeqAnnModelSettingImplementer(self.__settings)
+        self.__model = implementer.implement()
+    @property
+    def model(self):
+        return self.__model
+    def __init_data(self):
+        self.__weights = None
+        (self.__x_train, self.__y_train, x_count) = handle_alignment_files(self.__training_files,
+                                                                           self.__training_answers)
+        (self.__x_validation, self.__y_validation, y_count) = handle_alignment_files(self.__validation_files,
+                                                                                     self.__validation_answers)
+        self.__training_size = len(self.__x_train)            
+        self.__validation_size = len(self.__x_validation)
+        if self.__use_weights:
+            self.__weights = []
+            for key in ANNOTATION_TYPES:
+                self.__weights.append(1/x_count[key])
+            sum_weight = sum(self.__weights)
+            self.__weights = [weight/sum_weight for weight in self.__weights]
+        if self.__is_prompt_visible:
+            print("Training data statistic analysis (base)")
+            print(x_count)
+            print("Validation data statistic analysis (base)")
+            print(y_count)
+            if self.__use_weights:
+                print("Training data weights:")
+                for ann, weight in zip(ANNOTATION_TYPES, self.__weights):
+                    print(ann+":"+str(weight))
+    def __init_trainer(self):
+        self.trainer = ModelTrainer()
+        self.trainer.set_training_data(self.__x_train, self.__y_train)
+        self.trainer.set_validation_data(self.__x_validation, self.__y_validation)
+        self.trainer.model = self.model
+        self.trainer.padding_signal = self.__settings['terminal_signal']
+    @property
+    def trainer(self):
+        return self.__trainer
+    def print_selected_information(self):
+        training_size = self.__training_size
+        validation_size = self.__validation_size
+        status = {'Selected set number':training_size+validation_size,
+                  'Training set number':training_size,
+                  'Validation set number':validation_size}
+        print("Status of data:")
+        for k, v in status.items():
+            print("\t"+k+":"+str(v))
+    def get_whole_path_file(self, progress_number):
+        file_name = (str(self.__train_id)+'_'+str(self.__mode_id)+
+                     '_progress_'+str(progress_number)+'_')
+        whole_file_path = self.__folder_name+"/"+file_name+self.__date
+        return whole_file_path
+    def __prepare_first_train(self):
+        saved_new_model = self.get_whole_path_file(0)
+        self.model.save(saved_new_model+'.h5')
+        key_not_to_store = ["model", "trainer", "y_validation", "training_seqs",
+                            "x_train", "x_validation", "settings", "y_train",
+                            "best_model", "validation_seqs"]
+        if self.__is_prompt_visible:
+            print('Create record file:'+self.__folder_name+"/"+self.__setting_record)
+        with open(self.__folder_name+"/"+self.__setting_record, "w") as file:
+            writer = csv.writer(file, delimiter=',')
+            writer.writerow(["attributes", "value"])
+            keys = self.__dict__.keys()
+            head = "_"+self.__class__.__name__+"__"
+            for key in keys:
+                body_key = key[len(head):]
+                if body_key not in key_not_to_store:
+                    writer.writerow([body_key, self.__dict__[key]])
+        if self.__is_prompt_visible:
+            print('Create model image:'+self.__folder_name+"/"+self.__image)
+        plot_model(self.__model, show_shapes=True,
+                   to_file=self.__folder_name+"/"+self.__image)
+    def run(self):   
+        if self.__is_prompt_visible:
+            print("Start of running")
+        if self.__previous_epoch == 0:
+            self.__prepare_first_train() 
+        for progress in range(self.__previous_epoch, self.__progress_target, self.__step):
+            whole_file_path = self.get_whole_path_file(self.__step+progress)
+            if self.__is_prompt_visible:
+                print("Starting training:"+whole_file_path)
+            self.trainer.train(self.__step, self.__batch_size, True,
+                               int(self.__is_verbose_visible),
+                               whole_file_path+'/log/')
+            np.save(whole_file_path+'.npy', self.trainer.histories) 
+            self.model.save(whole_file_path+'.h5')
+            if self.__is_prompt_visible:
+                print("Saved training:"+whole_file_path)
+        if self.__is_prompt_visible:
+            print("End of running")
+            
