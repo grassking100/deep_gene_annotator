@@ -1,7 +1,6 @@
 """This submodule provides class to defined Pipeline"""
 import os
 import errno
-import numpy as np
 from abc import ABCMeta, abstractmethod
 from time import gmtime, strftime
 from keras.models import load_model
@@ -12,7 +11,6 @@ from . import ModelFacade
 from . import TrainDataLoader
 from . import TrainSettingParser
 from . import ModelSettingParser
-from . import ModelTrainer
 from . import handle_alignment_files
 
 class Pipeline(metaclass=ABCMeta):
@@ -83,8 +81,6 @@ class TrainPipeline(Pipeline):
     def _init_folder_name(self):
         self.__folder_name = (self._setting['outputfile_root']+'/'+
                               self._setting['train_id']+'/'+self._setting['mode_id'])
-    def _create_folder(self):
-        super()._create_folder(self.__folder_name)
     def _parse(self):
         train_parser = TrainSettingParser(self._setting_file['training'])
         model_parser = ModelSettingParser(self._setting_file['model'])
@@ -109,9 +105,6 @@ class TrainPipeline(Pipeline):
         loader = TrainDataLoader()
         loader.load(self._container, train_x, train_y,
                     val_x , val_y,self._setting['terminal_signal'])
-    def _load_model(self):
-        super()._load_model()
-        previous_status_root = self._setting['previous_status_root']
     def _init_container(self):
         self._container.model = self._model
     def _validate_required(self):
@@ -130,7 +123,6 @@ class TrainPipeline(Pipeline):
         self._model.save(model_path+'.h5')
         plot_model(self._model, show_shapes=True,
                    to_file=self.__folder_name+"/"+self._setting['image_path'])
-        head="_"+self.__class__.__name__+"__"
         data = dict(self._setting)
         data['folder_name'] = str(self.__folder_name)
         data['save_time'] = strftime("%Y_%b_%d", gmtime())
@@ -145,7 +137,7 @@ class TrainPipeline(Pipeline):
         if self._setting['previous_epoch']==0:
             if self._setting['is_prompt_visible']:
                 print('Create record file:'+self.__folder_name+"/"+self._setting['setting_record_path'])
-            self._create_folder()
+            self._create_folder(self.__folder_name)
             self.__save_setting()
         else:
             self._container.result = self.__load_previous_result()

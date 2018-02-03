@@ -2,9 +2,11 @@
 from keras.layers.normalization import BatchNormalization
 from keras.layers import concatenate
 from keras.optimizers import Adam
-from . import Input, Convolution1D, LSTM, Activation
+from keras.layers import Input, Dropout, Convolution1D, Flatten
+from keras.layers import MaxPooling1D, LSTM, Reshape, Activation
 from . import SeqAnnModel
 from . import Builder
+from . import AttrValidator
 class SeqAnnModelBuilder(Builder):
     """This class will create and return sequence annotation model"""
     def __init__(self):
@@ -78,6 +80,11 @@ class SeqAnnModelBuilder(Builder):
         """Set custom_objects"""
         self.__custom_objects = custom_objects
         return self
+    def _validate(self):
+        attr_validator = AttrValidator(self)
+        attr_validator.is_protected_validated = True
+        attr_validator.is_public_validated = True
+        attr_validator.validate()
     def build(self):
         """Create and return model"""
         self._validate()

@@ -1,13 +1,11 @@
 """Create SeqAnnModel and CleanLogger"""
 from keras.utils.generic_utils import Progbar
 from keras.engine.training import _batch_shuffle
-from . import BaseLogger
-from . import Model
-from . import numpy as np
-from . import callbacks as cbks
-from . import _make_batches, _slice_arrays
-
-
+from keras.engine.training import _make_batches, _slice_arrays
+from keras.callbacks import BaseLogger
+import keras.callbacks as cbks
+from keras.models import Model
+import numpy as np
 class CleanLogger(BaseLogger):
     """Callback that accumulates epoch averages of metrics."""
     def __init__(self):

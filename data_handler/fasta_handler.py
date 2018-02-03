@@ -3,7 +3,10 @@
     if number is negative, then all the sequneces will be read
     otherwirse read part of sequneces, the number indicate how many to read
 """
-from . import SeqIO, SeqRecord, Seq, IUPACAmbiguousDNA
+from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
+from Bio.Alphabet.IUPAC import IUPACAmbiguousDNA
 from .sequence_handler import seqs2dnn_data
 
 def fasta2seqs(file_name, number=-1):

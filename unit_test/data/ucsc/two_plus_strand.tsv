@@ -1,0 +1,3 @@
+#bin	name	chrom	strand	txStart	txEnd	cdsStart	cdsEnd	exonCount	exonStarts	exonEnds	score	name2	cdsStartStat	cdsEndStat	exonFrames
+83	seq_1	chr1	+	5	20	7	18	2	5,15	10,20
+83	seq_2	chr2	+	5	20	5	5	0		

@@ -1,11 +1,10 @@
 """This submodule provides API to handle data for training"""
 import tensorflow as tf
-from . import numpy
+import numpy
+import deepdish
+import random
 from . import fasta2seqs
 from . import seqs2dnn_data
-from . import deepdish
-from . import random
-
 def removed_terminal_tensors(true, pred, number_of_class, value_to_ignore):
     """Remove specific terminal singal"""
     reshape_pred = tf.reshape(pred, [-1])

@@ -1,6 +1,6 @@
 """This submodule provides library about visualize"""
-from . import plt
-from . import numpy
+import matplotlib.pyplot as plt
+import numpy
 def visualization(model, sequences, annotations):
     """visualize the exon probability along 5' end to 3' end DNA sequence"""
     if len(sequences) != len(annotations):

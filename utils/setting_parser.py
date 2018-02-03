@@ -75,8 +75,6 @@ class ModelSettingParser(SettingParser):
         self._add_vector_of_int_values(setting_, key_ints_value)
 class TrainSettingParser(SettingParser):
     """The class provide method to parse training setting file"""
-    def __init__(self, setting_file):
-        super().__init__(setting_file)
     def __parse_show_settings(self):
         """Parse setting of showing"""
         root = "show"

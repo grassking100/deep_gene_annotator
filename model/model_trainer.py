@@ -1,30 +1,29 @@
 """This submodule provides trainer to train model"""
 from keras.callbacks import TensorBoard
-from . import numpy
-from . import Container
-class ModelTrainer(Container):
+import numpy
+from . import ModelWorker
+from . import DataValidator, DictValidator, AttrValidator
+class ModelTrainer(ModelWorker):
     """a trainer which will train and evaluate the model"""
     def __init__(self):
         super().__init__()
-        self.__valid_key = ['train_x','train_y','validation_x','validation_y']
-    def _validate_key(self, key):
-        """Validate the key"""
-        if key not in self.__valid_key:
-            raise Exception("Key:"+key+" is not a valid key")
-    def _validate_required(self):
+        self._valid_data_keys = ['train_x','train_y','validation_x','validation_y']
+    def _validate(self):
         """Validate required data"""
-        attrs = ['_model','_data']
-        for attr in attrs:
-            if getattr(self,attr) is None:
-                raise Exception("ModelTrainer needs "+attr+" to complete the quest")
-        for key in self.__valid_key:
-            if key not in self._data.keys():
-                raise Exception("ModelTrainer needs data about "+key+" to complete the quest")
-        self._valid_data_shape(self._data['train_x'],self._data['train_y'])
-        self._valid_data_shape(self._data['validation_x'],self._data['validation_y'])
+        attr_validator = AttrValidator(self)
+        attr_validator.is_protected_validated = True
+        attr_validator.validate()
+        dict_validator = DictValidator(self._data)
+        dict_validator.key_of_validated_value = self._valid_data_keys
+        dict_validator.key_must_included = self._valid_data_keys
+        dict_validator.invalid_values = [None]
+        dict_validator.validate()
+        data_validator = DataValidator()
+        data_validator.same_shape(self._data['train_x'],self._data['train_y'])
+        data_validator.same_shape(self._data['validation_x'],self._data['validation_y'])
     def train(self, epoches, batch_size, shuffle, verbose, log_file):
         """Train model"""
-        self._validate_required()
+        self._validate()
         tb_call_back = TensorBoard(log_dir='./'+log_file, histogram_freq=1,
                                    write_graph=True, write_grads=True,
                                    write_images=True)

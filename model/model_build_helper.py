@@ -1,9 +1,9 @@
 """This submodule help user to create metric function,or customize objects or cnn setting"""
 from keras.losses import categorical_crossentropy
 from keras.metrics import categorical_accuracy
-from . import tensorflow as tf
-from . import warnings
-from . import numpy
+import tensorflow as tf
+import warnings
+import numpy
 from . import removed_terminal_tensors
 from . import Builder
 class CategoricalCrossEntropyFactory:
@@ -148,7 +148,9 @@ class CnnSettingBuilder(Builder):
         """Add a convolution layer setting"""
         setting = {'filter_num':filter_num, 'filter_size':filter_size}
         self.__layers_settings.append(setting)
-        return self 
+        return self
+    def _validate(self):
+        pass
     def build(self):
         """Get settings"""
         self._validate()

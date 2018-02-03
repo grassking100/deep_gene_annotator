@@ -4,6 +4,7 @@ from . import RecallFactory
 from . import CategoricalAccuracyFactory
 from . import CategoricalCrossEntropyFactory
 from . import SeqAnnModel
+from . import AttrValidator
 class CustomObjectsBuilder(Builder):
     """This class create and stored custom objects list"""
     def __init__(self):
@@ -34,11 +35,9 @@ class CustomObjectsBuilder(Builder):
         self.__custom_objects[model_name] = model_function
         return self
     def _validate(self):
-        """Validate if all attribute is set correctly"""
-        keys = [self.__loss_name, self.__accuracy_name]
-        for key in keys:
-            if key not in self.__custom_objects.keys():
-                raise Exception("Builder needs "+key+" to complete the quest")
+        attr_validator = AttrValidator(self)
+        attr_validator.is_privated_validated = True
+        attr_validator.validate()
     def build(self):
         """return custom objects dictionary"""
         self._validate()
