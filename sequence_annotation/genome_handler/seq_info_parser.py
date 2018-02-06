@@ -41,7 +41,6 @@ class USCUParser(SeqInfoParser):
                 if row[key] < 0:
                     raise NegativeNumberException(key,row[key])
             for key in value_int_list:
-                
                 if row[key] is not None and np.any(row[key] < 0):
                     raise NegativeNumberException(key,row[key])
     def parse(self):
@@ -66,8 +65,8 @@ class USCUParser(SeqInfoParser):
                 start_indice += [None]
                 end_indice += [None]
             else:
-                start_indice += [np.array(start.split(","),dtype="int")]
-                end_indice += [(np.array(end.split(","),dtype="int")-1)]
+                start_indice += [np.array(start[:-1].split(","),dtype="int")]
+                end_indice += [(np.array(end[:-1].split(","),dtype="int")-1)]
         temp_data['exonEnds'] =  np.array(end_indice)
         temp_data['exonStarts'] = np.array(start_indice)
         for index in self._raw_data.index:

@@ -29,11 +29,34 @@ class AnnGenomeCreator:
         validator.key_must_included = ['source','chromosome']
         validator.validate()
     def _get_init_genome(self):
+        """Get initialized genome"""        
         genome = AnnSeqContainer()
         genome.ANN_TYPES = self._ANN_TYPES
+        for id_, length in self._data_information['chromosome'].items():
+            for strand in ['plus','minus']:
+                ann_seq = AnnSequence()
+                ann_seq.length = length
+                ann_seq.chromosome_id = id_
+                ann_seq.strand = strand
+                ann_seq.source = self._data_information['source']
+                ann_seq.id = id_+"_"+strand
+                ann_seq.ANN_TYPES = self._ANN_TYPES
+                ann_seq.initSpace()
+                genome.add(ann_seq)
         return genome
+    def _add_seq_to_genome(self, ann_seq, start_index, end_index,):
+        chrom_id = ann_seq.chromosome_id
+        strand = ann_seq.strand
+        chrom = self._data.get(chrom_id+"_"+strand)
+        for type_ in chrom.ANN_TYPES:
+            seq = ann_seq.get_ann(type_)
+            if strand=='minus':
+                seq = np.flip(seq, 0)
+            chrom.add_ann(type_,seq,start_index,end_index)
     def _create_seq(self,seq_info):
-        """Get initialized genome"""
+        txStart = seq_info['txStart']
+        txEnd = seq_info['txEnd']
+        length = txEnd-txStart+1
         chrom_id = seq_info['chrom']
         strand_type = seq_info['strand']
         strand = ""
@@ -43,7 +66,7 @@ class AnnGenomeCreator:
             strand = "minus"
         else:
             raise InvalidStrandType(strand_type)
-        nt_number = self._data_information['chromosome'][chrom_id]
+        nt_number = length
         ann_seq = AnnSequence()
         ann_seq.id = seq_info['name']
         ann_seq.length = nt_number
@@ -74,7 +97,10 @@ class AnnGenomeCreator:
             relate_cdsStart=row['cdsStart'] - txStart
             relate_cdsEnd=row['cdsEnd'] - txStart
             length = txEnd-txStart+1
-            template_ann_seq = self.__get_template_ann_seq(length)           
+            strand = row['strand']
+            template_ann_seq = self.__get_template_ann_seq(length)
+            gene_start_index = txStart
+            gene_end_index = txEnd
             if row['exonCount']==0:
                 template_ann_seq.add_ann('utr_5', 1)
             else:
@@ -91,27 +117,30 @@ class AnnGenomeCreator:
                 template_ann_seq.op_not_ann('utr','exon','ORF')
                 template_ann_seq.op_not_ann('intron','ORF','exon')
                 utr = template_ann_seq.get_ann('utr')
+
                 if np.any(utr==1):
+                    chrom_length = self._data_information['chromosome'][row['chrom']]
                     utr_false_index=np.where(utr==0)[0]
                     utr_split_index_start=utr_false_index[0]
                     utr_split_index_end=utr_false_index[-1]
-                    if row['strand'] == '+':
-                        template_ann_seq.set_ann('utr_5_potential',1,
-                                                 0,utr_split_index_start-1)
-                        template_ann_seq.set_ann('utr_3_potential',1,
-                                                 utr_split_index_end+1,length-1)
-                    elif row['strand'] == '-':
-                        template_ann_seq.set_ann('utr_3_potential',1,
-                                                 0,utr_split_index_start-1)
-                        template_ann_seq.set_ann('utr_5_potential',1,
-                                                 utr_split_index_end+1,length-1)
+                    if  strand== '+':
+                        if utr_split_index_start-1 >= 0:
+                            template_ann_seq.set_ann('utr_5_potential',1,0,utr_split_index_start-1)
+                        if utr_split_index_end +1 < length:
+                            template_ann_seq.set_ann('utr_3_potential',1,utr_split_index_end+1,length-1)
+                    elif strand == '-':
+                        if utr_split_index_start-1 >= 0:
+                            template_ann_seq.set_ann('utr_3_potential',1,0,utr_split_index_start-1)
+                        if utr_split_index_end +1 < length:
+                            template_ann_seq.set_ann('utr_5_potential',1,utr_split_index_end+1,length-1)
+                        gene_start_index = chrom_length-1-txEnd
+                        gene_end_index = chrom_length-1-txStart
                     else:
-                        raise InvalidStrandType(row['strand'])
+                        raise InvalidStrandType(strand)
                     template_ann_seq.op_and_ann('utr_5','utr_5_potential','utr')
                     template_ann_seq.op_and_ann('utr_3','utr_3_potential','utr')
             #add template annotated chromosmome to whole annotated chromosmome
             ann_seq =self._create_seq(row)
-            for ann_type in self._ANN_TYPES:
-                data = template_ann_seq.get_ann(ann_type)
-                ann_seq.add_ann(ann_type,data,txStart,txEnd)
-            self._data.add(ann_seq)
+            for type_ in ann_seq.ANN_TYPES:
+                ann_seq.set_ann(type_,template_ann_seq.get_ann(type_))
+            self._add_seq_to_genome(ann_seq,gene_start_index,gene_end_index)

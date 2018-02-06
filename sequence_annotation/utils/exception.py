@@ -46,7 +46,6 @@ class InvalidStrandType(Exception):
         msg = ("Strand type"+type_+" "
                "is not expected")
         super().__init__(msg)
-
 class LengthNotEqualException(Exception):
     def __init__(self, input_length,output_length):
         msg = ("Input data must have same length of "
@@ -56,9 +55,10 @@ class LengthNotEqualException(Exception):
                " "+str(output_length))
         super().__init__(msg)
 class ReturnNoneException(Exception):
-    def __init__(self,attr_name,solution):
+    def __init__(self,attr_name,solution=None):
         msg = "Try to return "+attr_name+" with None value"
-        msg +=(","+solution)
+        if solution is not None:
+            msg +=(","+solution)
         super().__init__(msg)
 class UninitializedException(Exception):
     def __init__(self,class_name,solution):

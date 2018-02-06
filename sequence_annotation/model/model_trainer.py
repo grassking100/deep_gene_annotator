@@ -5,17 +5,17 @@ from . import ModelWorker
 from . import DataValidator, DictValidator, AttrValidator
 class ModelTrainer(ModelWorker):
     """a trainer which will train and evaluate the model"""
-    def __init__(self):
-        super().__init__()
-        self._valid_data_keys = ['train_x','train_y','validation_x','validation_y']
+    @property
+    def valid_data_keys(self):
+        return ['train_x','train_y','validation_x','validation_y']
     def _validate(self):
         """Validate required data"""
         attr_validator = AttrValidator(self)
         attr_validator.is_protected_validated = True
         attr_validator.validate()
         dict_validator = DictValidator(self._data)
-        dict_validator.key_of_validated_value = self._valid_data_keys
-        dict_validator.key_must_included = self._valid_data_keys
+        dict_validator.key_of_validated_value = self.valid_data_keys
+        dict_validator.key_must_included = self.valid_data_keys
         dict_validator.invalid_values = [None]
         dict_validator.validate()
         data_validator = DataValidator()

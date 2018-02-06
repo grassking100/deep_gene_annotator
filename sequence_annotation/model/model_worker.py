@@ -1,5 +1,6 @@
 """This submodule provide abstract class about model container"""
 from abc import ABCMeta, abstractmethod
+from . import ReturnNoneException
 class ModelWorker(metaclass=ABCMeta):
     """The class hold model and handle with data input, model pedict and model result"""
     def __init__(self):
@@ -11,7 +12,7 @@ class ModelWorker(metaclass=ABCMeta):
     def result(self):
         """Get result"""
         if self._result is None:
-            raise Exception("There is not result yet")
+            raise ReturnNoneException("result")
         return self._result
     @result.setter
     def result(self, result):

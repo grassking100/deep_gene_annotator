@@ -14,9 +14,9 @@ from . import ModelSettingParser
 from . import handle_alignment_files
 
 class Pipeline(metaclass=ABCMeta):
-    def __init__(self, setting_file, container):
+    def __init__(self, setting_file, worker):
         self._setting_file = setting_file
-        self._container = container
+        self._worker = worker
         self._setting = None
         self._weights = None
         self._model = None
@@ -33,13 +33,13 @@ class Pipeline(metaclass=ABCMeta):
     def _load_data(self):
         pass
     @abstractmethod
-    def _init_container(self):
+    def _init_worker(self):
         pass
     @abstractmethod
     def execute(self):
         pass
     def _init_model(self):
-        model_facade = ModelFacade(self._setting)
+        model_facade = ModelFacade(self._setting,self._weights)
         self._model = model_facade.model()
     def _load_model(self):
         previous_status_root = self._setting['previous_status_root']
@@ -53,6 +53,7 @@ class Pipeline(metaclass=ABCMeta):
                                      'accuracy','static_cross_entropy')
         self._model = load_model(previous_status_root+'.h5', facade.custom_objects)
     def _calculate_weights(self,count):
+        self._weights = []
         weights = []
         total_count = 0
         for key in self._setting['ANN_TYPES']:
@@ -68,16 +69,16 @@ class Pipeline(metaclass=ABCMeta):
             if erro.errno != errno.EEXIST:
                 raise
 class TrainPipeline(Pipeline):
-    def __init__(self, setting_file, container):
-        super().__init__(setting_file, container)
+    def __init__(self, setting_file, worker):
+        super().__init__(setting_file, worker)
         self.__folder_name = None
         self._parse()
         self._init_folder_name()
-        self._init_model()
         self._load_data()
+        self._init_model()
         if self._setting['previous_epoch'] > 0:
             self._load_model()
-        self._init_container()
+        self._init_worker()
     def _init_folder_name(self):
         self.__folder_name = (self._setting['outputfile_root']+'/'+
                               self._setting['train_id']+'/'+self._setting['mode_id'])
@@ -103,10 +104,10 @@ class TrainPipeline(Pipeline):
         if self._setting['use_weights']:
             self._calculate_weights(train_x_count)
         loader = TrainDataLoader()
-        loader.load(self._container, train_x, train_y,
+        loader.load(self._worker, train_x, train_y,
                     val_x , val_y,self._setting['terminal_signal'])
-    def _init_container(self):
-        self._container.model = self._model
+    def _init_worker(self):
+        self._worker.model = self._model
     def _validate_required(self):
         keys = ['_setting','_model']
         for key in keys:
@@ -126,8 +127,8 @@ class TrainPipeline(Pipeline):
         data = dict(self._setting)
         data['folder_name'] = str(self.__folder_name)
         data['save_time'] = strftime("%Y_%b_%d", gmtime())
-        for key, value in self._weights.items():
-            data[key+'_weight'] = value
+        for type_, value in zip(self._setting['ANN_TYPES'],self._weights):
+            data[type_+'_weight'] = value
         df = pd.DataFrame(list(data.items()),columns=['attribute','value'])
         df.to_csv(self.__folder_name+"/"+self._setting['setting_record_path'],index =False)
     def __load_previous_result(self):
@@ -140,7 +141,7 @@ class TrainPipeline(Pipeline):
             self._create_folder(self.__folder_name)
             self.__save_setting()
         else:
-            self._container.result = self.__load_previous_result()
+            self._worker.result = self.__load_previous_result()
         for progress in range(self._setting['previous_epoch'],
                               self._setting['progress_target'],self._setting['step']):
             if progress+self._setting['step'] > self._setting['progress_target']:
@@ -150,8 +151,8 @@ class TrainPipeline(Pipeline):
                 step = self._setting['step']
                 finished_progress_number = self._setting['progress_target']
             path = self.__get_whole_file_path(finished_progress_number)
-            self._container.train(step, self._setting['batch_size'],
+            self._worker.train(step, self._setting['batch_size'],
                                   True, int(self._setting['is_verbose_visible']),path+'/log/')
-            df = pd.DataFrame().from_dict(self._container.result)
+            df = pd.DataFrame().from_dict(self._worker.result)
             df.to_csv(path+'.csv',index =False)
             self._model.save(path+'.h5')

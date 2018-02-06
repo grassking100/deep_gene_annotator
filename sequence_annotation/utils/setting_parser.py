@@ -105,5 +105,4 @@ class TrainSettingParser(SettingParser):
         if str(terminal_signal) == "None":
             self._setting['terminal_signal'] = None
         else:
-            
             self._setting['terminal_signal'] = int(setting_['terminal_signal'])

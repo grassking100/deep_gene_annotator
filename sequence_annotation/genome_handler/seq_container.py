@@ -28,7 +28,13 @@ class SeqContainer(metaclass=ABCMeta):
     def to_data_frame(self):
         df = pd.DataFrame.from_dict(self._dict,'index')
         return df
-    def add(self, seq):
+    def add(self,seq_seqs):
+        if type(seq_seqs) == list:
+            for seq in seq_seqs:
+                self._add(seq)
+        else:
+            self._add(seq_seqs)
+    def _add(self, seq):
         self._validate()
         self._validate_seq(seq)
         id_ = seq.id
@@ -37,13 +43,34 @@ class SeqContainer(metaclass=ABCMeta):
         self._dict[id_] = seq
     def get(self, id_):
         if id_ not in self._dict.keys():
-            raise Exception("There is no sequence about " + id_)    
+            raise Exception("There is no sequence about " + id_)  
         return self._dict[id_]
+    def to_data_frame(self):
+        data = []
+        for item in self.data:
+            data.append(item.to_dict())
+        return pd.DataFrame().from_dict(data)
 class SeqInfoContainer(SeqContainer):
     def _validate(self):
         pass
     def _validate_seq(self,seq):
         pass
+    def to_gtf(self):
+        df = self.to_data_frame()
+        selected_df = df[['id','source','strand']].copy()
+        selected_df['seqname'] = df['chromosome_id']
+        selected_df['start'] = df['start'] + 1
+        selected_df['end'] = df['end'] + 1
+        selected_df['feature'] = df['id']
+        selected_df['score'] = '.'
+        selected_df['frame'] = '.'
+        selected_df['attribute'] = "seed_id="+df['ann_type']+"_"+df['ann_status']
+        gtf_order = ['seqname','source','feature',
+                     'start','end','score',
+                     'strand','frame','attribute']
+        selected_df['strand']=selected_df['strand'].str.replace("plus", '+')
+        selected_df['strand']=selected_df['strand'].str.replace("minus", '-')
+        return selected_df[gtf_order]
 class AnnSeqContainer(SeqContainer):
     def __init__(self):
         super().__init__()
@@ -62,18 +89,3 @@ class AnnSeqContainer(SeqContainer):
         validator = AttrValidator(self)
         validator.is_protected_validated = True
         validator.validate()
-class AnnGenomeManipulator():
-    def to_normalized(self, ann_seq_genome):
-        genome = AnnSeqContainer()
-        genome.ANN_TYPES = ann_seq_genome.ANN_TYPES
-        genome.note="normalized"
-        for seq in ann_seq_genome.data:
-            genome.add(seq.get_normalized())
-        return genome 
-    def to_one_hot(self, ann_seq_genome, background_ann_type):
-        genome = AnnSeqContainer()
-        genome.ANN_TYPES = ann_seq_genome.ANN_TYPES
-        genome.note="one-hot"
-        for seq in genome.data:
-            genome.add(seq.get_one_hot(background_ann_type))
-        return genome

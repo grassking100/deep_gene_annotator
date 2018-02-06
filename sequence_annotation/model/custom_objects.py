@@ -43,12 +43,13 @@ class CustomObjectsBuilder(Builder):
         self._validate()
         return self.__custom_objects
 class CustomObjectsFacade:
-    def __init__(self, annotation_types, output_dim, terminal_signal, accuracy_name, loss_name):
+    def __init__(self, annotation_types, output_dim, terminal_signal, weights, accuracy_name, loss_name,):
         self.__annotation_types = annotation_types
         self.__output_dim = output_dim
         self.__terminal_signal = terminal_signal
         self.__accuracy_name = accuracy_name
         self.__loss_name = loss_name
+        self.__weights = weights
     @property
     def custom_objects(self):
         builder = CustomObjectsBuilder()
@@ -63,8 +64,10 @@ class CustomObjectsFacade:
             builder.add_recall_metric("recall_"+ann_type, recall_metric)
         class_number = len(self.__annotation_types)
         builder.add_model('SeqAnnModel', SeqAnnModel)
-        accuracy = CategoricalAccuracyFactory(class_number).accuracy
-        loss = CategoricalCrossEntropyFactory(class_number, True).cross_entropy
+        accuracy = CategoricalAccuracyFactory(class_number,self.__terminal_signal).accuracy
+        loss = CategoricalCrossEntropyFactory(class_number,
+                                              True, self.__weights,
+                                              self.__terminal_signal).cross_entropy
         builder.add_accuracy_metric(self.__accuracy_name,accuracy)
         builder.add_loss_metric(self.__loss_name,loss)
         return builder.build()

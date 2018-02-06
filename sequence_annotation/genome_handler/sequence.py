@@ -3,15 +3,17 @@ from abc import abstractmethod, abstractproperty
 import numpy as np
 from . import AttrValidator
 from . import ValueOutOfRange, NegativeNumberException, InvalidStrandType, InvalidAnnotation, UninitializedException
-def bitwise_not(lhs, rhs):
-    return np.bitwise_and(lhs,np.logical_not(rhs))
+def logical_not(lhs, rhs):
+    return np.logical_and(lhs,np.logical_not(rhs))
 class Sequence(metaclass=ABCMeta):
-    def __init__(self):
+    def __init__(self,object_=None):
+        self._note = ""
         self._id = None
         self._source = None
         self._chromosome_id = None
         self._strand = None
-        self._note = ""
+        if object_ is not None:
+            self._copy(object_,self._copied_attrs())
     def to_dict(self):
         dictionary = {}
         dictionary['id'] = self._id
@@ -20,15 +22,11 @@ class Sequence(metaclass=ABCMeta):
         dictionary['strand'] = self._strand
         dictionary['note'] = self._note
         return dictionary
-    def copy(self):
-        return self._copy(self._copied_attrs())
     def _copied_attrs(self):
-        return ['_source','_chromosome_id','_strand','_note','_id']
-    def _copy(self,attrs):
-        seq = self.__class__()
+        return ['_source','_chromosome_id','_strand','_id','_note']
+    def _copy(self,source,attrs):
         for attr in attrs:
-            setattr(seq,attr,getattr(self,attr))
-        return seq
+            setattr(self,attr,getattr(source,attr))
     @property
     def id(self):
         return self._id
@@ -56,9 +54,12 @@ class Sequence(metaclass=ABCMeta):
     @chromosome_id.setter
     def chromosome_id(self, value):
         self._chromosome_id = value
+    @property
+    def valid_strand(self):
+        return ['plus','minus']
     @strand.setter
     def strand(self, value):
-        if value not in ['plus','minus']:
+        if value not in self.valid_strand:
             raise InvalidStrandType(value)
         self._strand = value
     @abstractproperty
@@ -68,14 +69,14 @@ class Sequence(metaclass=ABCMeta):
     def _validate(self):
         pass
 class SeqInformation(Sequence):
-    def __init__(self):
-        super().__init__()
+    def __init__(self,object_=None):
         self._start = None
         self._end = None
         self._extra_index = None
         self._extra_index_name = None
         self._ann_type = None
         self._ann_status = None
+        super().__init__(object_)
     def _copied_attrs(self):
         return super()._copied_attrs()+['_start','_end',
                                         '_ann_type','_ann_status',
@@ -136,13 +137,24 @@ class SeqInformation(Sequence):
         if value < 0:
             raise NegativeNumberException("extra_index",value)
         self._extra_index = value
+    @property
+    def extra_index_name(self):
+        return self._extra_index
+    @extra_index_name.setter
+    def extra_index_name(self, value):
+        self._extra_index_name = value
 class AnnSequence(Sequence):
-    def __init__(self,):
-        super().__init__()
-        self._ANN_TYPES = None
+    def __init__(self,object_=None):
         self._data = None
-        self._length = None
         self._has_space = False
+        self._ANN_TYPES = None
+        self._length = None
+        super().__init__(object_)
+        if object_ is not None:
+            self._data = {}
+            if self._has_space:
+                for type_ in self._ANN_TYPES:
+                    self._data[type_] = getattr(object_,'_data')[type_]
     def to_dict(self):
         dictionary = super().to_dict()
         dictionary['ANN_TYPES'] = self._ANN_TYPES
@@ -151,10 +163,7 @@ class AnnSequence(Sequence):
         dictionary['has_space'] = self._has_space
         return dictionary
     def _copied_attrs(self):
-        return super()._copied_attrs()+['_ANN_TYPES','_length']
-    @property
-    def data(self):
-        return self._data
+        return super()._copied_attrs()+['_ANN_TYPES','_length','_has_space']
     @property
     def ANN_TYPES(self):
         return self._ANN_TYPES
@@ -171,7 +180,7 @@ class AnnSequence(Sequence):
         self._length = value
     @property
     def has_space(self):
-        return self.has_space
+        return self._has_space
     def _validate(self):
         attr_validator = AttrValidator(self)
         attr_validator.is_protected_validated = True
@@ -181,7 +190,8 @@ class AnnSequence(Sequence):
         self._validate()
         self._has_space = True
         for ann_type in self._ANN_TYPES:
-            self._data[ann_type] = np.array([0]*self._length)
+            self._data[ann_type] = np.array([0.0]*self._length)
+        return self
     def _validate_input_index(self, start_index, end_index):
         if start_index < 0:
             raise NegativeNumberException('start_index',start_index)
@@ -191,6 +201,8 @@ class AnnSequence(Sequence):
             raise ValueOutOfRange('start_index',start_index,range(self._length))
         if end_index >= self._length :
             raise ValueOutOfRange('end_index',end_index,range(self._length))
+        if start_index>end_index:
+            raise Exception("Start index must not larger than End index")
     def _validate_input_ann_type(self, ann_type):
         if ann_type not in self._ANN_TYPES:
             raise InvalidAnnotation(ann_type)
@@ -198,27 +210,32 @@ class AnnSequence(Sequence):
         if not self._has_space:
             name = self.__class__.__name__
             raise UninitializedException(name,"Please use method,initSpace")
-    def op_and_ann(self, lhs_ann_type, rhs_1_ann_type, rhs_2_ann_type,
+    def op_and_ann(self, stored_ann_type, masked_ann_type, mask_ann_type,
                    start_index=None, end_index=None):
-        self._bitwise_ann(lhs_ann_type, rhs_1_ann_type, rhs_2_ann_type,
-                          np.bitwise_and, start_index, end_index)
-    def op_or_ann(self, lhs_ann_type, rhs_1_ann_type, rhs_2_ann_type,
+        self._logical_ann(stored_ann_type, masked_ann_type, mask_ann_type,
+                          np.logical_and, start_index, end_index)
+        return self
+    def op_or_ann(self, stored_ann_type, masked_ann_type, mask_ann_type,
                   start_index=None, end_index=None):
-        self._bitwise_ann(lhs_ann_type, rhs_1_ann_type, rhs_2_ann_type,
-                          np.bitwise_or, start_index, end_index)
-    def op_not_ann(self, lhs_ann_type, rhs_1_ann_type, rhs_2_ann_type,
+        self._logical_ann(stored_ann_type, masked_ann_type, mask_ann_type,
+                          np.logical_or, start_index, end_index)
+        return self
+    def op_not_ann(self, stored_ann_type, masked_ann_type, mask_ann_type,
                    start_index=None, end_index=None):
-        self._bitwise_ann(lhs_ann_type, rhs_1_ann_type, rhs_2_ann_type,
-                          bitwise_not, start_index, end_index)    
-    def _bitwise_ann(self, lhs_ann_type, rhs_1_ann_type, rhs_2_ann_type,
-                     bitwise_function, start_index=None, end_index=None):
-        rhs_1_ann = self.get_ann(rhs_1_ann_type, start_index, end_index)
-        rhs_2_ann = self.get_ann(rhs_2_ann_type, start_index, end_index)
-        result = bitwise_function(rhs_1_ann,rhs_2_ann)
-        self.set_ann(lhs_ann_type, result, start_index, end_index)
+        self._logical_ann(stored_ann_type, masked_ann_type, mask_ann_type,
+                          logical_not, start_index, end_index)
+        return self
+    def _logical_ann(self, stored_ann_type, masked_ann_type, mask_ann_type,
+                     logical_function, start_index=None, end_index=None):
+        masked_ann = self.get_ann(masked_ann_type, start_index, end_index)
+        mask_ann = self.get_ann(mask_ann_type, start_index, end_index)
+        mask = logical_function(masked_ann,mask_ann)
+        masked_ann[np.logical_not(mask)] = 0
+        self.set_ann(stored_ann_type, masked_ann, start_index, end_index)
     def add_ann(self, ann_type, value, start_index=None, end_index=None):
         ann = self.get_ann(ann_type, start_index, end_index)
         self.set_ann(ann_type, ann + value, start_index, end_index)
+        return self
     def set_ann(self,ann_type, value, start_index=None, end_index=None):
         if start_index is None:
             start_index = 0
@@ -228,6 +245,7 @@ class AnnSequence(Sequence):
         self._validate_input_ann_type(ann_type)
         self._validate_input_index(start_index, end_index)
         self._data[ann_type][start_index : end_index+1]=value
+        return self
     def get_ann(self,ann_type, start_index=None, end_index=None):
         if start_index is None:
             start_index = 0
@@ -236,33 +254,44 @@ class AnnSequence(Sequence):
         self._validate_is_init()
         self._validate_input_ann_type(ann_type)
         self._validate_input_index(start_index, end_index)
-        return self._data[ann_type][start_index : end_index+1]
-    def get_normalized(self):
+        return self._data[ann_type][start_index : end_index+1].copy()
+    def get_normalized(self, frontground_types, background_type):
         self._validate_is_init()
-        temp_ann_seq = self.copy()
-        temp_ann_seq.initSpace()
-        values = np.array(list(self.data.values()))
-        nomralized_values = values / values.sum(0)
-        np.nan_to_num(nomralized_values)
-        normalized_data = dict((ann_type,value) for ann_type,value in zip(self.ANN_TYPES,nomralized_values))
-        for ann_type in self._ANN_TYPES:
-            temp_ann_seq.set_ann(ann_type,normalized_data[ann_type])
-        return temp_ann_seq
-    def _handle_background(self,ann_seq,background_type):
-        frontground_seq = np.array([0]*ann_seq.length)
-        frontground_types = [type_ for type_ in ann_seq.ANN_TYPES if type_ is not background_type]
+        ann_seq = AnnSequence(self)
+        values = []
+        frontground_seq = self._get_frontground(ann_seq,frontground_types)
+        background_seq = self._get_background(ann_seq,frontground_types)
         for type_ in frontground_types:
-            frontground_seq = np.bitwise_or(frontground_seq,ann_seq.get_ann(type_))
-        background_seq = np.invert(frontground_seq)
-        ann_seq.set_seq(background_type,background_seq)
-    def get_one_hot(self,background_type):
-        ann_seq =self.get_normalized()
-        self._handle_background(ann_seq,background_type)
-        values = np.array(list(ann_seq.data.values()))
-        one_hot_value = np.array([0],self._length*len(self._ANN_TYPES))
-        one_hot_value.shape = (self._ANN_TYPES,self._length)
-        one_hot_value[values.argmax(0),np.arange(self._length)]=1.0
-        one_hot_data =dict((ann_type,value) for ann_type,value in zip(self._ANN_TYPES,one_hot_value))
-        for ann_type in self._ANN_TYPES:
-            ann_seq.set_ann(ann_type,one_hot_data[ann_type])
-        return ann_seq 
+            values.append(ann_seq.get_ann(type_))
+        sum_values = np.array(values).sum(0)
+        for type_ in frontground_types:
+            numerator = self.get_ann(type_)
+            denominator = sum_values
+            with np.errstate(divide='ignore', invalid='ignore'):
+                result = numerator / denominator
+                result[denominator == 0] = 0
+                result[np.logical_not(frontground_seq)] = 0
+                ann_seq.set_ann(type_,result)
+        ann_seq.set_ann(background_type,background_seq)
+        return ann_seq
+    def get_one_hot(self, frontground_types,background_type):
+        ann_seq = self.get_normalized(frontground_types,background_type)
+        values = []
+        one_hot_value = {}
+        for type_ in ann_seq.ANN_TYPES:
+            values.append(ann_seq.get_ann(type_))
+            one_hot_value[type_] =[0]*ann_seq.length
+        one_hot_indice = np.argmax(values,0)
+        for index,one_hot_index in enumerate(one_hot_indice):
+            one_hot_type = ann_seq.ANN_TYPES[one_hot_index]
+            one_hot_value[one_hot_type][index]=1
+        for type_ in frontground_types:
+            ann_seq.set_ann(type_,one_hot_value[type_])
+        return ann_seq
+    def _get_background(self,ann_seq,frontground_types):
+        return  np.logical_not(self._get_frontground(ann_seq,frontground_types))
+    def _get_frontground(self,ann_seq,frontground_types):
+        frontground_seq = np.array([0]*ann_seq.length)
+        for type_ in frontground_types:
+            frontground_seq = np.logical_or(frontground_seq,ann_seq.get_ann(type_))
+        return frontground_seq

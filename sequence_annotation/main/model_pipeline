@@ -1,0 +1,86 @@
+import os
+import errno
+import csv
+from time import gmtime, strftime
+import numpy as np
+from keras.models import load_model
+from keras.utils import plot_model
+from . import CategoricalCrossEntropyFactory, CategoricalAccuracyFactory
+from . import CnnSettingCreator
+from . import SeqAnnModelFactory
+from . import CustomObjectsHandler
+from . import PrecisionFactory, RecallFactory
+from . import ModelTrainer
+from . import handle_alignment_files
+ANNOTATION_TYPES = ['utr_5', 'utr_3', 'intron', 'cds', 'intergenic_region']
+class ModelTrainPipeline():
+    #initialize all the variable needed
+    def __init__(self, settings):
+        self.__init_trainer()
+        self.__restored_previous_result()
+        self.__create_stored_folder()
+        self.__outputfile_root = None
+        self.__mode_id = None
+        self.__folder_name = None
+        self.__previous_status_root = None
+        self.__is_prompt_visible = None
+        self.__is_verbose_visible = None
+        self.__is_model_visible = None
+        self.__date = None
+        self.__weights = None
+        self.__train_id = None
+        self.__setting_record = None
+        self.__progress_target = None
+        self.__previous_epoch = None
+        self.__trainer = None
+        self.__validation_files = []
+        self.__training_files = []
+        self.__use_weights = None
+        self.__training_answers = None
+        self.__validation_answers = None
+        self.__model = None
+        self.__settings = settings
+        #initialize all the variable from setting file
+        self.__init_parameter()
+        #get names and sequences from file
+        #create training and validation set
+        self.__init_data()
+        if self.__is_prompt_visible:
+            self.print_file_classification()
+            self.print_selected_information()
+        #create model and trainer
+        self.__init_model()
+        if self.__is_model_visible:
+            self.print_model_information()
+    def __init_model(self):
+        seq_ann_model_implementer = SeqAnnModelImplementer()
+        custom_objects_implementer = CustomObjectsImplementer()
+        custom_objects_implementer.settings = settings
+        custom_objects = custom_objects_implementer.implement
+        seq_ann_model_implementer.settings = settings
+        self.__model = seq_ann_model_implementer.implement
+    def __init_data(self):
+        self.__weights = None
+        (self.__x_train, self.__y_train,
+         x_count) = handle_alignment_files(self.__training_files, self.__training_answers)
+        (self.__x_validation, self.__y_validation,
+         y_count) = handle_alignment_files(self.__validation_files, self.__validation_answers)
+        self.__training_size = len(self.__x_train)            
+        self.__validation_size = len(self.__x_validation)
+        if self.__use_weights:
+            self.__weights = []
+            for key in ANNOTATION_TYPES:
+                self.__weights.append(1/x_count[key])
+            sum_weight = sum(self.__weights)
+            self.__weights = [weight/sum_weight for weight in self.__weights]
+        if self.__is_prompt_visible:
+            print("Training data statistic analysis (base)")
+            print(x_count)
+            print("Validation data statistic analysis (base)")
+            print(y_count)
+            if self.__use_weights:
+                print("Training data weights:")
+                for ann, weight in zip(ANNOTATION_TYPES, self.__weights):
+                    print(ann+":"+str(weight))
+    def __init_container(self):
+        raise Exception("The class has not implement this method yet.")
