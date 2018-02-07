@@ -42,7 +42,7 @@ class TestSeqInfoGenerator(unittest.TestCase):
                                     TestSeqInfoGenerator.frontground_types,
                                     TestSeqInfoGenerator.background_type)
         extractor.extract()
-        regions = extractor.regions
+        regions = extractor.result
         generator = SeqInfoGenerator(regions,
                                      TestSeqInfoGenerator.principle,
                                      TestSeqInfoGenerator.chroms_info,

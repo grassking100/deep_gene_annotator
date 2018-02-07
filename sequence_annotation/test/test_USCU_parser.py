@@ -11,17 +11,17 @@ class TestUSCUParser(unittest.TestCase):
         file_path = file_prefix + 'two_plus_strand.tsv'
         parser = USCUParser(file_path)
         parser.parse()
-        self.assertEqual(list,type(parser.data))
+        self.assertEqual(list,type(parser.result))
     def test_read_get_data_type(self):
         file_path = file_prefix + 'one_plus_strand_both_utr.tsv'
         parser = USCUParser(file_path)
         parser.parse()
-        self.assertEqual(list,type(parser.data))
+        self.assertEqual(list,type(parser.result))
     def test_not_parse(self):
         file_path = file_prefix + 'one_plus_strand_both_utr.tsv'
         parser = USCUParser(file_path)
         with self.assertRaises(ReturnNoneException):
-            data = parser.data
+            data = parser.result
     def test_negative_index(self):
         file_path = file_prefix + 'negative_index.tsv'
         parser = USCUParser(file_path)

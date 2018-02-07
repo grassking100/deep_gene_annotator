@@ -1,5 +1,6 @@
 from . import SeqInfoContainer
 from . import SeqInformation
+from . import validate_return
 class RegionExtractor:
     """#Get annotated region information"""
     def __init__(self,ann_seq,frontground_types,background_type):
@@ -11,7 +12,8 @@ class RegionExtractor:
         self._seq_info_genome = SeqInfoContainer()
         self._parse_regions(self._data)
     @property
-    def regions(self):
+    @validate_return("use extract before access the data")
+    def result(self):
         return self._seq_info_genome
     def _parse_regions(self,seq):
         for type_ in seq.ANN_TYPES:

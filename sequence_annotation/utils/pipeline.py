@@ -43,14 +43,11 @@ class Pipeline(metaclass=ABCMeta):
         self._model = model_facade.model()
     def _load_model(self):
         previous_status_root = self._setting['previous_status_root']
-        #if self._setting['use_weights']:
-        #    weights=self._weights
-        #else:
-        #    weights=None
         facade = CustomObjectsFacade(self._setting['ANN_TYPES'],
                                      self._setting['output_dim'],
                                      self._setting['terminal_signal'],
-                                     'accuracy','static_cross_entropy')
+                                     self._weights,
+                                     'accuracy','loss')
         self._model = load_model(previous_status_root+'.h5', facade.custom_objects)
     def _calculate_weights(self,count):
         self._weights = []
@@ -132,7 +129,9 @@ class TrainPipeline(Pipeline):
         df = pd.DataFrame(list(data.items()),columns=['attribute','value'])
         df.to_csv(self.__folder_name+"/"+self._setting['setting_record_path'],index =False)
     def __load_previous_result(self):
-        return pd.read_csv(self._setting['previous_status_root']+".csv", index_col=1, skiprows=1).to_dict()
+        result = pd.read_csv(self._setting['previous_status_root']+".csv",
+                             index_col=False, skiprows=None).to_dict(orient='list')
+        return result
     def execute(self):
         self._validate_required()
         if self._setting['previous_epoch']==0:
@@ -146,10 +145,11 @@ class TrainPipeline(Pipeline):
                               self._setting['progress_target'],self._setting['step']):
             if progress+self._setting['step'] > self._setting['progress_target']:
                 step = self._setting['progress_target'] - progress
-                finished_progress_number = progress + self._setting['step']
+                finished_progress_number = self._setting['progress_target']
             else:
                 step = self._setting['step']
-                finished_progress_number = self._setting['progress_target']
+                finished_progress_number = progress + self._setting['step']
+            print("\n"+str(progress)+"/"+str(self._setting['progress_target']))
             path = self.__get_whole_file_path(finished_progress_number)
             self._worker.train(step, self._setting['batch_size'],
                                   True, int(self._setting['is_verbose_visible']),path+'/log/')

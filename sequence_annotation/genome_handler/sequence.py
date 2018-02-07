@@ -28,6 +28,9 @@ class Sequence(metaclass=ABCMeta):
         for attr in attrs:
             setattr(self,attr,getattr(source,attr))
     @property
+    def data(self):
+        return self._data
+    @property
     def id(self):
         return self._id
     @id.setter
@@ -65,9 +68,10 @@ class Sequence(metaclass=ABCMeta):
     @abstractproperty
     def length(self):
         pass
-    @abstractmethod
     def _validate(self):
-        pass
+        attr_validator = AttrValidator(self)
+        attr_validator.is_protected_validated = True
+        attr_validator.validate()
 class SeqInformation(Sequence):
     def __init__(self,object_=None):
         self._start = None
@@ -91,8 +95,6 @@ class SeqInformation(Sequence):
         dictionary['ann_type'] = self._ann_type
         dictionary['ann_status'] = self._ann_status
         return dictionary
-    def _validate(self):
-        pass
     @property
     def ann_type(self):
         return self._ann_type
@@ -112,7 +114,7 @@ class SeqInformation(Sequence):
     @property
     def length(self):
         self._validated_for_length()
-        return self._end-self._start
+        return self._end-self._start+1
     @property
     def start(self):
         return self._start
@@ -181,10 +183,6 @@ class AnnSequence(Sequence):
     @property
     def has_space(self):
         return self._has_space
-    def _validate(self):
-        attr_validator = AttrValidator(self)
-        attr_validator.is_protected_validated = True
-        attr_validator.validate()
     def initSpace(self):
         self._data = {}
         self._validate()

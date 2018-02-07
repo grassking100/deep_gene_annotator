@@ -3,10 +3,11 @@ from abc import ABCMeta
 from abc import abstractmethod
 import numpy as np
 from . import AttrValidator
+from . import validate_return
 from . import NegativeNumberException,InvalidStrandType,ReturnNoneException
 class SeqInfoParser(metaclass=ABCMeta):
     def __init__(self,file_path):
-        self._data = None
+        self._result = None
         self._raw_data = None
         self._read_file(file_path)
     @abstractmethod
@@ -19,10 +20,9 @@ class SeqInfoParser(metaclass=ABCMeta):
     def _validate(self):
         pass
     @property
-    def data(self):
-        if self._data is None:
-            raise ReturnNoneException("data","use method parse before access the data")
-        return self._data
+    @validate_return("use method parse before access the data")
+    def result(self):
+        return self._result
 class USCUParser(SeqInfoParser):
     """Purpose:Parse file from USCU table and get data which stored infomration(zero-based)"""
     def _validate(self):
@@ -34,7 +34,7 @@ class USCUParser(SeqInfoParser):
     def _validate_data(self):
         value_int = ['txStart','txEnd','cdsStart','cdsEnd','exonCount']
         value_int_list = ['exonEnds','exonStarts']
-        for row in self._data:
+        for row in self._result:
             if not (row['strand']=='+' or row['strand']=='-'):
                 raise InvalidStrandType(row['strand'])
             for key in value_int:
@@ -48,7 +48,7 @@ class USCUParser(SeqInfoParser):
         value_int_zero_based_list = ['txStart','cdsStart','exonCount']
         value_int_one_based_list = ['txEnd','cdsEnd']
         value_str_list = ['chrom','strand','name']
-        self._data = []
+        self._result = []
         temp_data = {}
         for key in value_int_zero_based_list:
             temp_data[key] = np.array(self._raw_data[key].tolist(),dtype="int")
@@ -73,6 +73,6 @@ class USCUParser(SeqInfoParser):
             row = {}
             for key in temp_data.keys():
                 row[key] = temp_data[key][index]
-            self._data.append(row)
+            self._result.append(row)
         self._validate_data()
         

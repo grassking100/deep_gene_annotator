@@ -33,7 +33,7 @@ class TestRegionExtractor(unittest.TestCase):
         self._add_seq2(chrom)
         extractor = RegionExtractor(chrom,TestRegionExtractor.frontground_types,TestRegionExtractor.background_type)
         extractor.extract()
-        regions = extractor.regions
+        regions = extractor.result
         test = []
         for region in regions.data:
             test.append({'type':region.ann_type, 'start':region.start,
@@ -56,7 +56,7 @@ class TestRegionExtractor(unittest.TestCase):
         self._add_seq1(chrom)
         extractor = RegionExtractor(chrom,TestRegionExtractor.frontground_types,TestRegionExtractor.background_type)
         extractor.extract()
-        regions = extractor.regions
+        regions = extractor.result
         test = []
         for region in regions.data:
             test.append({'type':region.ann_type, 'start':region.start,

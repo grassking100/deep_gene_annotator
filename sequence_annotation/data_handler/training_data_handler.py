@@ -39,7 +39,7 @@ class SeqAnnAlignment():
         #and convert sequnece to one-hot-encoding vector
         for index in valid_seqs_indice:
             name = names[index]
-            ann_seq = ann_seqs[str(name)].tolist()
+            ann_seq = ann_seqs[str(name)]
             ann = []
             for ann_type in self.ANN_TYPES:
                 temp = ann_seq[ann_type]

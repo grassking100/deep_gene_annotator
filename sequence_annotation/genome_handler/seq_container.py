@@ -5,7 +5,7 @@ from . import InvalidAnnotation
 import pandas as pd
 class SeqContainer(metaclass=ABCMeta):
     def __init__(self):
-        self._dict = {}
+        self._data = {}
         self._note = ""
     @property
     def note(self):
@@ -16,7 +16,7 @@ class SeqContainer(metaclass=ABCMeta):
     @property
     def data(self):
         """Return sequences in order based on their id"""
-        unsorted_seqs = list(self._dict.values())
+        unsorted_seqs = list(self._data.values())
         sorted_seqs = sorted(unsorted_seqs, key=lambda seq: seq.id)
         return sorted_seqs
     @abstractmethod
@@ -26,7 +26,7 @@ class SeqContainer(metaclass=ABCMeta):
     def _validate(self):
         pass
     def to_data_frame(self):
-        df = pd.DataFrame.from_dict(self._dict,'index')
+        df = pd.DataFrame.from_dict(self._data,'index')
         return df
     def add(self,seq_seqs):
         if type(seq_seqs) == list:
@@ -38,13 +38,13 @@ class SeqContainer(metaclass=ABCMeta):
         self._validate()
         self._validate_seq(seq)
         id_ = seq.id
-        if id_ in self._dict.keys():
+        if id_ in self._data.keys():
             raise Exception("ID," + str(id_) + ", is duplicated")
-        self._dict[id_] = seq
+        self._data[id_] = seq
     def get(self, id_):
-        if id_ not in self._dict.keys():
+        if id_ not in self._data.keys():
             raise Exception("There is no sequence about " + id_)  
-        return self._dict[id_]
+        return self._data[id_]
     def to_data_frame(self):
         data = []
         for item in self.data:
@@ -89,3 +89,8 @@ class AnnSeqContainer(SeqContainer):
         validator = AttrValidator(self)
         validator.is_protected_validated = True
         validator.validate()
+    def to_dict(self):
+        dict_ = {}
+        for item in self.data:
+            dict_[item.id] = item.data
+        return dict_

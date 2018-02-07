@@ -4,26 +4,29 @@ from . import AnnSequence
 from . import ReturnNoneException
 from . import InvalidStrandType
 from . import DictValidator
-class AnnGenomeCreator:
+from . import Creator
+from . import validate_return
+class AnnGenomeCreator(Creator):
     """Purpose:Make sequences of numeric value represent annotated region occupy or not"""
     def __init__(self,genome_information,uscu_data):
+        super().__init__()
         self._data_information = genome_information
         self._uscu_data = uscu_data
-        self._data = None
         self._ANN_TYPES = self._get_ann_types()
     def _get_ann_types(self):
         return ['intergenic_region','utr_3','utr_5','intron','cds']
+    def _validate(self):
+        pass
     def create(self):
+        self._validate()
         self._validate_genome_info()
-        self._data = self._get_init_genome()
+        self._result = self._get_init_genome()
         self.__annotate_genome()
     @property
-    def data(self):
+    @validate_return("use method create before access the data")
+    def result(self):
         """Get data"""
-        if self._data is None:
-            raise ReturnNoneException("data",
-                                      "use method create before access the data")
-        return self._data
+        return self._result
     def _validate_genome_info(self):
         validator = DictValidator(self._data_information)
         validator.key_must_included = ['source','chromosome']
@@ -47,7 +50,7 @@ class AnnGenomeCreator:
     def _add_seq_to_genome(self, ann_seq, start_index, end_index,):
         chrom_id = ann_seq.chromosome_id
         strand = ann_seq.strand
-        chrom = self._data.get(chrom_id+"_"+strand)
+        chrom = self._result.get(chrom_id+"_"+strand)
         for type_ in chrom.ANN_TYPES:
             seq = ann_seq.get_ann(type_)
             if strand=='minus':

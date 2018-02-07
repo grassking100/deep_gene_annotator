@@ -4,6 +4,7 @@ from . import SeqInformation
 from . import SeqInfoContainer
 from . import DictValidator
 from . import ReturnNoneException
+from . import validate_return
 class SeqInfoGenerator:
     """Extract selected regions' annotation information"""
     def __init__(self, region_container, principle, chroms_info,
@@ -18,14 +19,12 @@ class SeqInfoGenerator:
         self._seed_id_prefix = seed_id_prefix
         self._seq_id_prefix = seq_id_prefix
     @property
+    @validate_return("use method generate before access the data")
     def seqs_info(self):
-        if self._seqs_info is None:
-            raise ReturnNoneException("seqs_info","use method generate before access to it")
         return self._seqs_info
     @property
+    @validate_return("use method generate before access the data")
     def seeds(self):
-        if self._seeds is None:
-            raise ReturnNoneException("seeds","use method generate before access to it")
         return self._seeds
     @property
     def valid_data_keys(self):

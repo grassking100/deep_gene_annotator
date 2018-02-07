@@ -15,16 +15,16 @@ class TestAnnGenomeCreator(unittest.TestCase):
         file_path =file_prefix + 'one_plus_strand_all_utr_5.tsv'
         parser = USCUParser(file_path)
         parser.parse()
-        creator = AnnGenomeCreator(RealGenome.genome_information,parser.data)
+        creator = AnnGenomeCreator(RealGenome.genome_information,parser.result)
         with self.assertRaises(ReturnNoneException):
-            data = creator.data
+            data = creator.result
     def test_create_type(self):
         file_path = file_prefix + 'one_plus_strand_all_utr_5.tsv'
         parser = USCUParser(file_path)
         parser.parse()
-        creator = AnnGenomeCreator(RealGenome.genome_information,parser.data)
+        creator = AnnGenomeCreator(RealGenome.genome_information,parser.result)
         creator.create()
-        self.assertEqual(AnnSeqContainer,type(creator.data))
+        self.assertEqual(AnnSeqContainer,type(creator.result))
     def _test_seq(self, real_seq,test_seq):
         self.assertEqual(real_seq.id,test_seq.id)
         self.assertEqual(real_seq.strand,test_seq.strand)
@@ -44,45 +44,45 @@ class TestAnnGenomeCreator(unittest.TestCase):
         real_genome = TestAnnGenomeCreator.real_genome.one_plus_strand_all_utr_5(False)  
         parser = USCUParser(file_path)
         parser.parse()
-        creator = AnnGenomeCreator(RealGenome.genome_information,parser.data)
+        creator = AnnGenomeCreator(RealGenome.genome_information,parser.result)
         creator.create()
-        test_genome = creator.data
+        test_genome = creator.result
         self._test_genome(real_genome,test_genome)
     def test_two_plus_strand(self):
         file_path = file_prefix + 'two_plus_strand.tsv'
         real_genome = TestAnnGenomeCreator.real_genome.two_plus_strand(False)  
         parser = USCUParser(file_path)
         parser.parse()
-        creator = AnnGenomeCreator(RealGenome.genome_information,parser.data)
+        creator = AnnGenomeCreator(RealGenome.genome_information,parser.result)
         creator.create()
-        test_genome = creator.data
+        test_genome = creator.result
         self._test_genome(real_genome,test_genome)
     def test_two_seq_on_same_plus(self):
         file_path = file_prefix + 'two_seq_on_same_plus_strand.tsv'
         real_genome = TestAnnGenomeCreator.real_genome.two_seq_on_same_plus_strand(False)  
         parser = USCUParser(file_path)
         parser.parse()
-        creator = AnnGenomeCreator(RealGenome.genome_information,parser.data)
+        creator = AnnGenomeCreator(RealGenome.genome_information,parser.result)
         creator.create()
-        test_genome = creator.data
+        test_genome = creator.result
         self._test_genome(real_genome,test_genome)
     def test_one_plus_strand_both(self):
         file_path = file_prefix + 'one_plus_strand_both_utr.tsv'
         real_genome = TestAnnGenomeCreator.real_genome.one_plus_strand_both_utr(False)  
         parser = USCUParser(file_path)
         parser.parse()
-        creator = AnnGenomeCreator(RealGenome.genome_information,parser.data)
+        creator = AnnGenomeCreator(RealGenome.genome_information,parser.result)
         creator.create()
-        test_genome = creator.data
+        test_genome = creator.result
         self._test_genome(real_genome,test_genome)
     def test_minus_strand(self):
         file_path = file_prefix + 'minus_strand.tsv'
         real_genome = TestAnnGenomeCreator.real_genome.minus_strand(False)  
         parser = USCUParser(file_path)
         parser.parse()
-        creator = AnnGenomeCreator(RealGenome.genome_information,parser.data)
+        creator = AnnGenomeCreator(RealGenome.genome_information,parser.result)
         creator.create()
-        test_genome = creator.data
+        test_genome = creator.result
         self._test_genome(real_genome,test_genome)
 
 if __name__=="__main__":    
