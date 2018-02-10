@@ -1,5 +1,6 @@
 """This submodule provides class to parse setting file"""
 from abc import ABCMeta, abstractmethod
+from pathlib import Path
 import configparser
 def str2bool(value):
     if value == "True":
@@ -12,8 +13,12 @@ class SettingParser(metaclass=ABCMeta):
     """The class provide method to parse ini format file"""
     def __init__(self, setting_file):
         self._config = configparser.ConfigParser()
+        self._validate_file_exist(setting_file)
         self._config.read(setting_file)
         self._setting = None
+    def _validate_file_exist(self, path):
+        if not Path(path).exists():
+            raise FileNotFoundError(path)
     @abstractmethod
     def parse(self):
         """Parse setting"""

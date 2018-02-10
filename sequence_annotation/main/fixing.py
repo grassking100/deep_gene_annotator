@@ -1,7 +1,7 @@
 import os
 import sys
 import deepdish
-import numpy as np
+import pandas as pd
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__+'/..'))))
 from sequence_annotation.genome_handler.seq_info_parser import USCUParser
 from sequence_annotation.genome_handler.ann_genome_creator import AnnGenomeCreator
@@ -23,29 +23,9 @@ principle = {'remove_end_of_strand':True,'with_random_choose':False,'replaceable
 frontground_types = ['cds','intron','utr_5','utr_3']
 background_type = 'intergenic_region'
 if __name__ == "__main__":
-    parser = USCUParser(file_path)
-    parser.parse()
-    print("AnnGenomeCreator")
-    creator = AnnGenomeCreator(genome_information,parser.result)
-    creator.create()
-    deepdish.io.save('deep_learning/ann_genome.h5', creator.result.to_dict(),('zlib',9))
-    print("RegionExtractor")
-    chroms = SeqInfoContainer()
-    print("prepare for extract "+str(len(creator.result.data))+" regions")
-    index =0 
-    for chrom in creator.result.data:
-        extractor = RegionExtractor(chrom,frontground_types,background_type)
-        print("....extracting("+str(index)+"/"+str(len(creator.result.data))+")")
-        extractor.extract()
-        chroms.add(extractor.result.data)
-        index += 1
-    print("SeqInfoGenerator")
-    generator = SeqInfoGenerator(chroms,principle,genome_information['chromosome'],"seed_2018_2_8","seq_2018_2_8")
-    generator.generate()
-    generator.seeds.to_gtf().to_csv("deep_learning/seed.gtf",index=False,sep="\t", header=False)
-    generator.seqs_info.to_gtf().to_csv("deep_learning/seq.gtf",index=False,sep="\t", header=False)
-    print("AnnSeqExtractor")
-    ext = AnnSeqExtractor(creator.result, generator.seqs_info)
+    seqs_info = pd.read_csv("deep_learning/seq.gtf",sep="\t", header=None)
+    result=deepdish.io.load('deep_learning/ann_genome.h5')
+    print(seqs_info)
+    ext = AnnSeqExtractor(result, seqs_info)
     ext.extract()
-    #deepdish.io.save('deep_learning/test.h5', ext.result.to_dict(),('zlib',9))
-    np.save('deep_learning/answer.npy', ext.result.to_dict())
+    deepdish.io.save('deep_learning/test.h5', ext.result.to_dict(),('zlib',9))

@@ -106,7 +106,7 @@ class SeqAnnModelBuilder(Builder):
             if self.__add_batch_normalize:
                 batch = BatchNormalization(name='BatchNormal'+(str)(index))(previous_layer)
                 previous_layer = batch
-            previous_layer = Activation('relu')(previous_layer)
+            previous_layer = Activation('relu',name='ReLu'+(str)(index))(previous_layer)
         #add lstm rnn layer#
         lstm_forward = LSTM(self.__lstm_layer_number, return_sequences=True, activation='tanh',
                             name='LSTM_Forward', dropout=self.__dropout)(previous_layer)

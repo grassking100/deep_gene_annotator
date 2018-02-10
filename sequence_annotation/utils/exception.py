@@ -15,6 +15,11 @@ class NegativeNumberException(ValueError):
     def __init__(self, value_name, value):
         msg =(value_name+","+str(value)+", must not be negative")
         super().__init__(msg)
+class NotPositiveException(ValueError):
+    def __init__(self, value_name, value):
+        msg =(value_name+","+str(value)+", must be positive")
+        super().__init__(msg)
+
 class DictKeyNotExistException(Exception):
     def __init__(self, key):
         msg = ("Key,"+key+", doesn't exist in"

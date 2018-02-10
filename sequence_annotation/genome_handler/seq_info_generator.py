@@ -112,10 +112,10 @@ class SeqInfoGenerator:
         index = sequence_info.extra_index
         new_start = index-(half_length+random.randint(0, max_diff))
         new_end = index+(half_length+random.randint(0, max_diff))
-        if new_start >=  length:
-            new_start = length - 1
-        if new_end < 0:
-            new_end = 0
+        if new_end >=  length:
+            new_end = length - 1
+        if new_start < 0:
+            new_start = 0
         sequence_info.start = new_start
         sequence_info.end = new_end
         sequence_info.id = self._seq_id_prefix+"_"+str(self._seq_id)

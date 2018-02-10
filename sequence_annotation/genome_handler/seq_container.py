@@ -1,8 +1,8 @@
 from abc import ABCMeta
 from abc import abstractmethod
+import pandas as pd
 from . import AttrValidator
 from . import InvalidAnnotation
-import pandas as pd
 class SeqContainer(metaclass=ABCMeta):
     def __init__(self):
         self._data = {}
@@ -25,9 +25,6 @@ class SeqContainer(metaclass=ABCMeta):
     @abstractmethod
     def _validate(self):
         pass
-    def to_data_frame(self):
-        df = pd.DataFrame.from_dict(self._data,'index')
-        return df
     def add(self,seq_seqs):
         if type(seq_seqs) == list:
             for seq in seq_seqs:

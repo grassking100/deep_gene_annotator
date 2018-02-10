@@ -2,7 +2,12 @@ from abc import ABCMeta
 from abc import abstractmethod, abstractproperty
 import numpy as np
 from . import AttrValidator
-from . import ValueOutOfRange, NegativeNumberException, InvalidStrandType, InvalidAnnotation, UninitializedException
+from . import get_protected_attrs_names
+from . import ValueOutOfRange
+from . import UninitializedException
+from . import NegativeNumberException
+from . import InvalidStrandType
+from . import InvalidAnnotation
 def logical_not(lhs, rhs):
     return np.logical_and(lhs,np.logical_not(rhs))
 class Sequence(metaclass=ABCMeta):
@@ -22,6 +27,15 @@ class Sequence(metaclass=ABCMeta):
         dictionary['strand'] = self._strand
         dictionary['note'] = self._note
         return dictionary
+    def _validate_dict_keys(self, dict_):
+        names = get_protected_attrs_names(dict_)
+        validator = DictValidator(dict_)
+        validator.keys_must_included = names
+        validator.validate()
+    def from_dict(self, dict_):
+        self._validate_dict_key(dict_)
+        for key, value in dict_.items():
+            setattr(self,key,value)
     def _copied_attrs(self):
         return ['_source','_chromosome_id','_strand','_id','_note']
     def _copy(self,source,attrs):

@@ -55,7 +55,7 @@ class USCUParser(SeqInfoParser):
         for key in value_int_one_based_list:
             temp_data[key] = np.array(self._raw_data[key].tolist(),dtype="int")-1
         for key in value_str_list:
-            temp_data[key] = np.array(self._raw_data[key].tolist())
+            temp_data[key] = np.array(self._raw_data[key].tolist(),dtype="str")
         end_indice = []
         start_indice = []
         ends = np.array(self._raw_data['exonEnds'].tolist())

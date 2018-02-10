@@ -1,5 +1,6 @@
 from abc import ABCMeta,abstractmethod
 from . import MissingExpectDictKey, InvalidValueInDict, AttrIsNoneException, LengthNotEqualException, DictKeyNotExistException
+from . import get_protected_attrs_names
 class IVaildable(metaclass=ABCMeta):
     @abstractmethod
     def validate(self):
@@ -56,10 +57,7 @@ class AttrValidator(IVaildable):
         attrs = [attr for attr in dir(self._object) if attr.startswith('_'+class_name+'__')]
         return attrs
     def _protected_attr_names(self):
-        class_name = self._object.__class__.__name__
-        attrs = [attr for attr in dir(self._object) if attr.startswith('_') 
-                and not attr.endswith('__') and not attr.startswith('_'+class_name+'__')]
-        return attrs
+        return get_protected_attrs_names(self._object)
     def _public_attr_names(self):
         attrs = [attr for attr in dir(self._object) if not attr.startswith('_')]
         return attrs

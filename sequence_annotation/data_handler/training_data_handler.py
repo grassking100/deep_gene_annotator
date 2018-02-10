@@ -1,6 +1,6 @@
 """This submodule provides API to handle data for training"""
 import tensorflow as tf
-import numpy
+import numpy as np
 import deepdish
 import random
 from . import fasta2seqs
@@ -13,7 +13,6 @@ def removed_terminal_tensors(true, pred, number_of_class, value_to_ignore):
     clean_pred = tf.reshape(tf.gather(reshape_pred, index), [-1, number_of_class])
     clean_true = tf.reshape(tf.gather(reshape_true, index), [-1, number_of_class])
     return (clean_true, clean_pred)
-
 
 class SeqAnnAlignment():
     """Make data in fasta file can align with answer file"""
@@ -32,7 +31,7 @@ class SeqAnnAlignment():
         self.__names += names
         self.__seqs += seqs
         #read annotation file
-        ann_seqs = deepdish.io.load(annotation_path)
+        ann_seqs = np.load(annotation_path).item()
         (valid_seqs_indice, seqs_vecs) = seqs2dnn_data(seqs, discard_dirty_sequence)
         self.__seqs_vecs += seqs_vecs
         #for every name find corresponding sequnece and annotation
@@ -43,10 +42,10 @@ class SeqAnnAlignment():
             ann = []
             for ann_type in self.ANN_TYPES:
                 temp = ann_seq[ann_type]
-                self.__anns_count[ann_type] += numpy.sum(temp)
+                self.__anns_count[ann_type] += np.sum(temp)
                 ann.append(temp)
             #append corresponding annotation to array
-            self.__anns.append(numpy.transpose(ann))
+            self.__anns.append(np.transpose(ann))
     @property
     def ANN_TYPES(self):
         """Get annotation type"""
