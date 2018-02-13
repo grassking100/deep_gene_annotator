@@ -71,23 +71,30 @@ class TrainPipeline(Pipeline):
         self.__folder_name = None
         self._parse()
         self._init_folder_name()
+        if self._setting['is_prompt_visible']:
+            print("Loading data")
         self._load_data()
-        self._init_model()
         if self._setting['previous_epoch'] > 0:
+            if self._setting['is_prompt_visible']:
+                print("Load previous model")
             self._load_model()
+        else:
+            if self._setting['is_prompt_visible']:
+                print("Initialize the model")
+            self._init_model()
+        if self._setting['is_prompt_visible']:
+            print("Initialize training worker")
         self._init_worker()
     def _init_folder_name(self):
         self.__folder_name = (self._setting['outputfile_root']+'/'+
                               self._setting['train_id']+'/'+self._setting['mode_id'])
     def _parse(self):
-        train_parser = TrainSettingParser(self._setting_file['training'])
-        model_parser = ModelSettingParser(self._setting_file['model'])
+        train_parser = TrainSettingParser(self._setting_file['training_setting_path'])
+        model_parser = ModelSettingParser(self._setting_file['model_setting_path'])
         model_parser.parse()
         train_parser.parse()
         self._setting = dict(train_parser.setting)
         self._setting['train_id'] = self._setting_file['train_id']
-        self._setting['image_path'] = self._setting_file['image_path']
-        self._setting['setting_record_path'] = self._setting_file['setting_record_path']
         self._setting.update(model_parser.setting)
     def _load_data(self):
         (train_x,
@@ -120,14 +127,14 @@ class TrainPipeline(Pipeline):
         model_path=self.__get_whole_file_path(0)
         self._model.save(model_path+'.h5')
         plot_model(self._model, show_shapes=True,
-                   to_file=self.__folder_name+"/"+self._setting['image_path'])
+                   to_file=self.__folder_name+"/"+self._setting['model_image_name'])
         data = dict(self._setting)
         data['folder_name'] = str(self.__folder_name)
         data['save_time'] = strftime("%Y_%b_%d", gmtime())
         for type_, value in zip(self._setting['ANN_TYPES'],self._weights):
             data[type_+'_weight'] = value
         df = pd.DataFrame(list(data.items()),columns=['attribute','value'])
-        df.to_csv(self.__folder_name+"/"+self._setting['setting_record_path'],index =False)
+        df.to_csv(self.__folder_name+"/"+self._setting['setting_record_name'],index =False)
     def __load_previous_result(self):
         result = pd.read_csv(self._setting['previous_status_root']+".csv",
                              index_col=False, skiprows=None).to_dict(orient='list')
@@ -136,10 +143,12 @@ class TrainPipeline(Pipeline):
         self._validate_required()
         if self._setting['previous_epoch']==0:
             if self._setting['is_prompt_visible']:
-                print('Create record file:'+self.__folder_name+"/"+self._setting['setting_record_path'])
+                print('Create record file:'+self.__folder_name+"/"+self._setting['setting_record_name'])
             self._create_folder(self.__folder_name)
             self.__save_setting()
         else:
+            if self._setting['is_prompt_visible']:
+                print('Loading previous result')
             self._worker.result = self.__load_previous_result()
         for progress in range(self._setting['previous_epoch'],
                               self._setting['progress_target'],self._setting['step']):
@@ -149,10 +158,16 @@ class TrainPipeline(Pipeline):
             else:
                 step = self._setting['step']
                 finished_progress_number = progress + self._setting['step']
-            print("\n"+str(progress)+"/"+str(self._setting['progress_target']))
+            if self._setting['is_prompt_visible']:
+                print("\n"+str(progress)+"/"+str(self._setting['progress_target']))
             path = self.__get_whole_file_path(finished_progress_number)
             self._worker.train(step, self._setting['batch_size'],
                                   True, int(self._setting['is_verbose_visible']),path+'/log/')
             df = pd.DataFrame().from_dict(self._worker.result)
+            if self._setting['is_prompt_visible']:
+                print("Save metrics result to "+path+'.csv')
+                print("Save model result to "+path+'.h5')
             df.to_csv(path+'.csv',index =False)
             self._model.save(path+'.h5')
+        if self._setting['is_prompt_visible']:
+            print('End of training')

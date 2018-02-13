@@ -80,6 +80,12 @@ class ModelSettingParser(SettingParser):
         self._add_vector_of_int_values(setting_, key_ints_value)
 class TrainSettingParser(SettingParser):
     """The class provide method to parse training setting file"""
+    def __parse_save_settings(self):
+        """Parse setting of save"""
+        root = "save"
+        setting_ = self._config[root]
+        key_str_value = ['model_image_name', 'setting_record_name']
+        self._add_str_values(setting_,key_str_value)
     def __parse_show_settings(self):
         """Parse setting of showing"""
         root = "show"
@@ -91,6 +97,7 @@ class TrainSettingParser(SettingParser):
         self._setting = {}
         self.__parse_training_settings()
         self.__parse_show_settings()
+        self.__parse_save_settings()
     def __parse_training_settings(self):
         """Parse setting of training"""
         root = "training_settings"
