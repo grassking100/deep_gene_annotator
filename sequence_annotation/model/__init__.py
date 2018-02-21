@@ -5,7 +5,8 @@
 from ..data_handler.training_data_handler import removed_terminal_tensors
 from ..utils.builder import Builder
 from ..utils.validator import DataValidator, DictValidator, AttrValidator
-from ..utils.exception import ReturnNoneException
+from ..utils.exception import ReturnNoneException,NotPositiveException
+from .callback import ResultHistory
 from .model_worker import ModelWorker
 from .seq_ann_model import SeqAnnModel
 from .model_build_helper import CnnSettingBuilder

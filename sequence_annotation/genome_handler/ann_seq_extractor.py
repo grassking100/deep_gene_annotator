@@ -3,10 +3,10 @@ from . import AnnSeqContainer
 from . import validate_return
 class AnnSeqExtractor:
     def __init__(self,ann_seq_container,seq_info_container):
-        self._seq_info_container=seq_info_container
-        self._ann_seq_container=ann_seq_container
-        self._result=AnnSeqContainer()
-        self._result.ANN_TYPES=self._ann_seq_container.ANN_TYPES
+        self._seq_info_container = seq_info_container
+        self._ann_seq_container = ann_seq_container
+        self._result = AnnSeqContainer()
+        self._result.ANN_TYPES = self._ann_seq_container.ANN_TYPES
     def extract(self):
         self._extract_seqs()
     @property
@@ -15,9 +15,6 @@ class AnnSeqExtractor:
         return self._result
     def _validate(self):
         pass
-    @property
-    def selected_sequences_annotation(self):
-        return self.__selected_sequences_annotation
     def _get_extract_seq(self,seq_info):
         ann_seq = AnnSequence()
         ann_seq.ANN_TYPES = self._result.ANN_TYPES

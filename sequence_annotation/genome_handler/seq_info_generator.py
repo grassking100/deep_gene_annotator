@@ -3,7 +3,6 @@ import random
 from . import SeqInformation
 from . import SeqInfoContainer
 from . import DictValidator
-from . import ReturnNoneException
 from . import validate_return
 class SeqInfoGenerator:
     """Extract selected regions' annotation information"""
@@ -33,8 +32,7 @@ class SeqInfoGenerator:
                 'sample_number_per_region','half_length','max_diff']
     def _validate(self):
         """Validate required data"""
-        dict_validator = DictValidator(self._principle)
-        dict_validator.key_must_included = self.valid_data_keys
+        dict_validator = DictValidator(self._principle,self.valid_data_keys,[],[])
         dict_validator.validate()
     def generate(self):
         self._validate()
@@ -88,19 +86,18 @@ class SeqInfoGenerator:
         return clean_regions
     @property
     def mode_text(self):
-        return ['start', 'end', 'middle']
-    def _create_seed(self, region):
+        return ['start', 'middle']
+    def _create_seed(self, region, mode):
         """Create seed from region"""
-        mode = [region.start, region.end, 
-              int((region.start+region.end)/2)]
-        mode_selected_index = random.randint(0, len(mode)-1)
+        centers = [region.start, int((region.start+region.end)/2)]
+        center = centers[self.mode_text.index(mode)]
         seed = SeqInformation(region)
         seed.source = region.source+"_"+region.id
         seed.id = self._seed_id_prefix + "_" + str(self._seed_id)
         seed.type_ = region.ann_type
-        seed.ann_status = self.mode_text[mode_selected_index]
-        seed.extra_index_name = self.mode_text[mode_selected_index]
-        seed.extra_index = mode[mode_selected_index]
+        seed.ann_status = mode
+        seed.extra_index_name = mode
+        seed.extra_index = center
         self._seed_id += 1
         return seed
     def _create_seq_info(self, seed):
@@ -124,9 +121,16 @@ class SeqInfoGenerator:
     def _create_seeds(self, region_list):
         """Create seeds from regions"""
         seeds = SeqInfoContainer()
-        for region in region_list:
-            seed = self._create_seed(region)
-            seeds.add(seed)
+        if self._principle['with_random_choose']:
+            for region in region_list:
+                mode = self.mode_text[random.randint(0,len(self.mode_text)-1)]
+                seed = self._create_seed(region, mode)
+                seeds.add(seed)
+        else:
+            for region in region_list:
+                for mode in self.mode_text:
+                    seed = self._create_seed(region, mode)
+                    seeds.add(seed)
         return seeds
     def _create_seqs_info(self, seed):
         sequences_info = SeqInfoContainer()

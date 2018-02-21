@@ -1,7 +1,6 @@
 from abc import ABCMeta
-from abc import abstractmethod, abstractproperty
 import numpy as np
-from . import AttrValidator
+from . import AttrValidator, DictValidator
 from . import get_protected_attrs_names
 from . import ValueOutOfRange
 from . import UninitializedException
@@ -21,29 +20,22 @@ class Sequence(metaclass=ABCMeta):
             self._copy(object_,self._copied_attrs())
     def to_dict(self):
         dictionary = {}
-        dictionary['id'] = self._id
-        dictionary['source'] = self._source
-        dictionary['chromosome_id'] = self._chromosome_id
-        dictionary['strand'] = self._strand
-        dictionary['note'] = self._note
+        for attr in self._copied_attrs():
+            dictionary[attr]=getattr(self,"_"+attr)
         return dictionary
     def _validate_dict_keys(self, dict_):
         names = get_protected_attrs_names(dict_)
-        validator = DictValidator(dict_)
-        validator.keys_must_included = names
+        validator = DictValidator(dict_,names,[],[])
         validator.validate()
     def from_dict(self, dict_):
-        self._validate_dict_key(dict_)
-        for key, value in dict_.items():
-            setattr(self,key,value)
+        self._validate_dict_keys(dict_)
+        for attr in self._copied_attrs():
+            setattr(self,"_"+attr,dict_[attr])
     def _copied_attrs(self):
-        return ['_source','_chromosome_id','_strand','_id','_note']
+        return ['source','chromosome_id','strand','id','note']
     def _copy(self,source,attrs):
         for attr in attrs:
-            setattr(self,attr,getattr(source,attr))
-    @property
-    def data(self):
-        return self._data
+            setattr(self,"_"+attr,getattr(source,attr))
     @property
     def id(self):
         return self._id
@@ -79,12 +71,10 @@ class Sequence(metaclass=ABCMeta):
         if value not in self.valid_strand:
             raise InvalidStrandType(value)
         self._strand = value
-    @abstractproperty
     def length(self):
-        pass
+        return None
     def _validate(self):
-        attr_validator = AttrValidator(self)
-        attr_validator.is_protected_validated = True
+        attr_validator = AttrValidator(self,False,True,False,None)
         attr_validator.validate()
 class SeqInformation(Sequence):
     def __init__(self,object_=None):
@@ -96,19 +86,10 @@ class SeqInformation(Sequence):
         self._ann_status = None
         super().__init__(object_)
     def _copied_attrs(self):
-        return super()._copied_attrs()+['_start','_end',
-                                        '_ann_type','_ann_status',
-                                        '_extra_index',
-                                        '_extra_index_name']
-    def to_dict(self):
-        dictionary = super().to_dict()
-        dictionary['start'] = self._start
-        dictionary['end'] = self._end
-        dictionary['extra_index'] = self._extra_index
-        dictionary['extra_index_name'] = self._extra_index_name
-        dictionary['ann_type'] = self._ann_type
-        dictionary['ann_status'] = self._ann_status
-        return dictionary
+        return super()._copied_attrs()+['start','end',
+                                        'ann_type','ann_status',
+                                        'extra_index',
+                                        'extra_index_name']
     @property
     def ann_type(self):
         return self._ann_type
@@ -122,8 +103,7 @@ class SeqInformation(Sequence):
     def ann_status(self, value):
         self._ann_status = value
     def _validated_for_length(self):
-        attr_validator = AttrValidator(self)
-        attr_validator.validated_attr = ['_start','_end']
+        attr_validator = AttrValidator(self,False,False,False,['_start','_end'])
         attr_validator.validate()
     @property
     def length(self):
@@ -165,21 +145,18 @@ class AnnSequence(Sequence):
         self._has_space = False
         self._ANN_TYPES = None
         self._length = None
+        self._data = {}
         super().__init__(object_)
-        if object_ is not None:
-            self._data = {}
+        """if object_ is not None:
+            
             if self._has_space:
                 for type_ in self._ANN_TYPES:
-                    self._data[type_] = getattr(object_,'_data')[type_]
-    def to_dict(self):
-        dictionary = super().to_dict()
-        dictionary['ANN_TYPES'] = self._ANN_TYPES
-        dictionary['data'] = self._data
-        dictionary['length'] = self._length
-        dictionary['has_space'] = self._has_space
-        return dictionary
+                    self._data[type_] = getattr(object_,'_data')[type_]"""
     def _copied_attrs(self):
-        return super()._copied_attrs()+['_ANN_TYPES','_length','_has_space']
+        return super()._copied_attrs()+['ANN_TYPES','length','has_space','data']
+    @property
+    def data(self):
+        return self._data
     @property
     def ANN_TYPES(self):
         return self._ANN_TYPES

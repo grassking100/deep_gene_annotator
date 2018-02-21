@@ -1,42 +1,24 @@
 from abc import ABCMeta,abstractmethod
 from . import MissingExpectDictKey, InvalidValueInDict, AttrIsNoneException, LengthNotEqualException, DictKeyNotExistException
 from . import get_protected_attrs_names
+import numpy as np
+import pdb
 class IVaildable(metaclass=ABCMeta):
     @abstractmethod
     def validate(self):
         pass
 class AttrValidator(IVaildable):
     """A class provides API for chcking if passed object's attribute is None or not"""
-    def __init__(self, object_):
+    def __init__(self, object_,
+                 is_private_validated,
+                 is_protected_validated,
+                 is_public_validated,
+                 validate_attr_names=None):
         self._object= object_
-        self._is_private_validated = False
-        self._is_public_validated = False
-        self._is_protected_validated = False
-        self._validate_attr_names = []
-    @property
-    def validate_attr_names(self):
-        return self._validate_attr_names
-    @property
-    def is_private_validated(self):
-        return self._is_private_validated
-    @property
-    def is_public_validated(self):
-        return self._is_public_validated
-    @property
-    def is_protected_validated(self):
-        return self._is_protected_validated
-    @is_private_validated.setter
-    def is_private_validated(self, value):
-        self._is_private_validated = value
-    @is_public_validated.setter
-    def is_public_validated(self, value):
-        self._is_public_validated = value
-    @is_protected_validated.setter
-    def is_protected_validated(self, value):
-        self._is_protected_validated = value
-    @validate_attr_names.setter
-    def validate_attr_names(self, value):
-        self._validate_attr_names = value
+        self._is_private_validated = is_private_validated
+        self._is_public_validated = is_public_validated
+        self._is_protected_validated = is_protected_validated
+        self._validate_attr_names = validate_attr_names or []
     def validate(self):
         attrs = self._validate_attr_names.copy()
         if self._is_private_validated:
@@ -63,42 +45,25 @@ class AttrValidator(IVaildable):
         return attrs
 class DictValidator(IVaildable):
     """A class provides API for chcking if dictionay is Valid or not"""
-    def __init__(self,dictionay):
+    def __init__(self,dictionay,keys_must_included,keys_of_validated_value,invalid_values):
         self._dict = dictionay
-        self._keys_must_included = []
-        self._keys_of_validated_value = []
-        self._invalid_values = []
-    @property
-    def keys_of_validated_value(self):
-        return self._keys_of_validated_value
-    @keys_of_validated_value.setter
-    def keys_of_validated_value(self, key):
-        self._validate_key_exist(key)
-        self._keys_of_validated_value = key
-    @property
-    def keys_must_included(self):
-        return self._keys_must_included
-    @keys_must_included.setter
-    def key_must_included(self, value):
-        self._keys_must_included = value
-    @property
-    def invalid_values(self):
-        return self._invalid_values
+        self._keys_must_included = keys_must_included
+        for key in keys_of_validated_value:
+            self._validate_key_exist(key)
+        self._keys_of_validated_value = keys_of_validated_value
+        self._invalid_values = invalid_values
     def _validate_key_exist(self,key):
-        if key not in self._dict.keys():
+        if key not in list(self._dict.keys()):
             raise DictKeyNotExistException(key)
-    @invalid_values.setter
-    def invalid_values(self, value):
-        self._invalid_values = value
     def _validate_keys(self):
-        for key in self.keys_must_included:
+        for key in self._keys_must_included:
             if key not in self._dict.keys():
                 raise MissingExpectDictKey(key)
     def _validate_values(self):
         for key, value in self._dict.items():
-            if key in self.keys_of_validated_value:
-                for invalid_value in self.invalid_values:
-                    if value == invalid_value:
+            if key in self._keys_of_validated_value:
+                for invalid_value in self._invalid_values:
+                    if np.any(value==invalid_value):
                         raise InvalidValueInDict(key, invalid_value)
     def validate(self):
         self._validate_keys()

@@ -81,9 +81,7 @@ class SeqAnnModelBuilder(Builder):
         self.__custom_objects = custom_objects
         return self
     def _validate(self):
-        attr_validator = AttrValidator(self)
-        attr_validator.is_protected_validated = True
-        attr_validator.is_public_validated = True
+        attr_validator = AttrValidator(self,False,True,False,None)
         attr_validator.validate()
     def build(self):
         """Create and return model"""
@@ -133,6 +131,6 @@ class SeqAnnModelBuilder(Builder):
             if key not in not_include_keys:
                 custom_metrics.append(value)
         model.compile(optimizer=optimizer, loss=self.__custom_objects['loss'],
-                      metrics=custom_metrics)
+                      metrics=custom_metrics,sample_weight_mode="temporal")
         return model
     

@@ -6,8 +6,9 @@ from time import gmtime, strftime
 from keras.models import load_model
 from keras.utils import plot_model
 import pandas as pd
+import numpy as np
 from . import CustomObjectsFacade
-from . import ModelFacade
+from . import ModelBuildFacade
 from . import TrainDataLoader
 from . import TrainSettingParser
 from . import ModelSettingParser
@@ -39,15 +40,14 @@ class Pipeline(metaclass=ABCMeta):
     def execute(self):
         pass
     def _init_model(self):
-        model_facade = ModelFacade(self._setting,self._weights)
-        self._model = model_facade.model()
+        model_build_facade = ModelBuildFacade(self._setting)
+        self._model = model_build_facade.model()
     def _load_model(self):
         previous_status_root = self._setting['previous_status_root']
-        facade = CustomObjectsFacade(self._setting['ANN_TYPES'],
-                                     self._setting['output_dim'],
-                                     self._setting['terminal_signal'],
-                                     self._weights,
-                                     'accuracy','loss')
+        facade = CustomObjectsFacade(annotation_types = self._setting['ANN_TYPES'],
+                                     output_dim = self._setting['output_dim'],
+                                     terminal_signal = self._setting['terminal_signal'],
+                                     weights = self._weights)
         self._model = load_model(previous_status_root+'.h5', facade.custom_objects)
     def _calculate_weights(self,count):
         self._weights = []
@@ -57,7 +57,7 @@ class Pipeline(metaclass=ABCMeta):
             weights.append(1/count[key])
             total_count += count[key]
         sum_weight = sum(weights)
-        self._weights = [total_count*weight/sum_weight for weight in weights]
+        return [weight/sum_weight for weight in weights]
     def _create_folder(self,path):
         try:
             if not os.path.exists(path):
@@ -68,7 +68,7 @@ class Pipeline(metaclass=ABCMeta):
 class TrainPipeline(Pipeline):
     def __init__(self, setting_file, worker):
         super().__init__(setting_file, worker)
-        self.__folder_name = None
+        self._folder_name = None
         self._parse()
         self._init_folder_name()
         if self._setting['is_prompt_visible']:
@@ -86,7 +86,7 @@ class TrainPipeline(Pipeline):
             print("Initialize training worker")
         self._init_worker()
     def _init_folder_name(self):
-        self.__folder_name = (self._setting['outputfile_root']+'/'+
+        self._folder_name = (self._setting['outputfile_root']+'/'+
                               self._setting['train_id']+'/'+self._setting['mode_id'])
     def _parse(self):
         train_parser = TrainSettingParser(self._setting_file['training_setting_path'])
@@ -106,68 +106,56 @@ class TrainPipeline(Pipeline):
                                                 self._setting['validation_answers'],
                                                 self._setting['ANN_TYPES'])[0:2]
         if self._setting['use_weights']:
-            self._calculate_weights(train_x_count)
+            self._weights = np.multiply(self._calculate_weights(train_x_count),len(self._setting['ANN_TYPES']))
+        self._setting['weights'] = self._weights
         loader = TrainDataLoader()
         loader.load(self._worker, train_x, train_y,
                     val_x , val_y,self._setting['terminal_signal'])
     def _init_worker(self):
         self._worker.model = self._model
+        self._worker.settings = self._get_settings()
     def _validate_required(self):
         keys = ['_setting','_model']
         for key in keys:
             if getattr(self,key) is None:
                 raise Exception("TrainPipeline needs "+key+" to complete the quest")
-    def __get_whole_file_path(self,progress_number):
-        file_name = (self._setting['train_id']+'_'+self._setting['mode_id']+
-                     '_progress_'+str(progress_number)+'_')
-        date = strftime("%Y_%b_%d", gmtime())
-        whole_file_path=self.__folder_name+"/"+file_name+date
-        return whole_file_path
-    def __save_setting(self):
-        model_path=self.__get_whole_file_path(0)
-        self._model.save(model_path+'.h5')
+    def _save_setting(self):
         plot_model(self._model, show_shapes=True,
-                   to_file=self.__folder_name+"/"+self._setting['model_image_name'])
+                   to_file=self._folder_name+"/"+self._setting['model_image_name'])
         data = dict(self._setting)
-        data['folder_name'] = str(self.__folder_name)
+        data['folder_name'] = str(self._folder_name)
         data['save_time'] = strftime("%Y_%b_%d", gmtime())
         for type_, value in zip(self._setting['ANN_TYPES'],self._weights):
             data[type_+'_weight'] = value
         df = pd.DataFrame(list(data.items()),columns=['attribute','value'])
-        df.to_csv(self.__folder_name+"/"+self._setting['setting_record_name'],index =False)
-    def __load_previous_result(self):
+        df.to_csv(self._folder_name+"/"+self._setting['setting_record_name'],index=False)
+    def _load_previous_result(self):
         result = pd.read_csv(self._setting['previous_status_root']+".csv",
                              index_col=False, skiprows=None).to_dict(orient='list')
         return result
+    def _get_settings(self):
+        settings = {}
+        settings['initial_epoch'] = self._setting['previous_epoch']
+        settings['batch_size'] = self._setting['batch_size']
+        settings['shuffle'] = True
+        settings['epochs'] = self._setting['progress_target']
+        settings['is_prompt_visible'] = self._setting['is_prompt_visible']
+        settings['is_verbose_visible'] = self._setting['is_verbose_visible']
+        settings['period'] = self._setting['step']
+        settings['file_path_root'] = self._folder_name
+        settings['weights'] = self._weights
+        return settings
     def execute(self):
         self._validate_required()
         if self._setting['previous_epoch']==0:
             if self._setting['is_prompt_visible']:
-                print('Create record file:'+self.__folder_name+"/"+self._setting['setting_record_name'])
-            self._create_folder(self.__folder_name)
-            self.__save_setting()
+                print('Create record folder:'+self._folder_name+"/"+self._setting['setting_record_name'])
+            self._create_folder(self._folder_name)
+            self._save_setting()
         else:
             if self._setting['is_prompt_visible']:
                 print('Loading previous result')
-            self._worker.result = self.__load_previous_result()
-        for progress in range(self._setting['previous_epoch'],
-                              self._setting['progress_target'],self._setting['step']):
-            if progress+self._setting['step'] > self._setting['progress_target']:
-                step = self._setting['progress_target'] - progress
-                finished_progress_number = self._setting['progress_target']
-            else:
-                step = self._setting['step']
-                finished_progress_number = progress + self._setting['step']
-            if self._setting['is_prompt_visible']:
-                print("\n"+str(progress)+"/"+str(self._setting['progress_target']))
-            path = self.__get_whole_file_path(finished_progress_number)
-            self._worker.train(step, self._setting['batch_size'],
-                                  True, int(self._setting['is_verbose_visible']),path+'/log/')
-            df = pd.DataFrame().from_dict(self._worker.result)
-            if self._setting['is_prompt_visible']:
-                print("Save metrics result to "+path+'.csv')
-                print("Save model result to "+path+'.h5')
-            df.to_csv(path+'.csv',index =False)
-            self._model.save(path+'.h5')
+            self._worker.result = self._load_previous_result()
+        self._worker.train()
         if self._setting['is_prompt_visible']:
             print('End of training')

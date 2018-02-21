@@ -48,7 +48,7 @@ class CategoricalCrossEntropyFactory:
             warnings.warn(
                 "Dynamic categorical cross entrophy function hasn't complete build yet"
             )
-        return dynamic_cross_entropy
+            return dynamic_cross_entropy
 
 
 class CategoricalAccuracyFactory:

@@ -3,6 +3,7 @@ from abc import abstractmethod
 import pandas as pd
 from . import AttrValidator
 from . import InvalidAnnotation
+from . import AnnSequence,SeqInformation,Sequence
 class SeqContainer(metaclass=ABCMeta):
     def __init__(self):
         self._data = {}
@@ -47,11 +48,26 @@ class SeqContainer(metaclass=ABCMeta):
         for item in self.data:
             data.append(item.to_dict())
         return pd.DataFrame().from_dict(data)
+    def to_dict(self):
+        dict_ = {"data":[],"note":self._note}
+        for item in self.data:
+            dict_['data'] += [item.to_dict()]
+        return dict_
+    def _create_sequence(self):
+        return Sequence()
+    def from_dict(self, dict_):
+        for data in dict_['data']:
+            seq = self._create_sequence()
+            seq.from_dict(data)
+            self.add(seq)
+        self._note = dict_['note']
 class SeqInfoContainer(SeqContainer):
     def _validate(self):
         pass
     def _validate_seq(self,seq):
         pass
+    def _create_sequence(self):
+        return SeqInformation()
     def to_gtf(self):
         df = self.to_data_frame()
         selected_df = df[['id','source','strand']].copy()
@@ -61,7 +77,7 @@ class SeqInfoContainer(SeqContainer):
         selected_df['feature'] = df['id']
         selected_df['score'] = '.'
         selected_df['frame'] = '.'
-        selected_df['attribute'] = "seed_id="+df['ann_type']+"_"+df['ann_status']
+        selected_df['attribute'] = "seed_status="+df['ann_type']+"_"+df['ann_status']
         gtf_order = ['seqname','source','feature',
                      'start','end','score',
                      'strand','frame','attribute']
@@ -76,18 +92,26 @@ class AnnSeqContainer(SeqContainer):
     def ANN_TYPES(self):
         return self._ANN_TYPES
     @ANN_TYPES.setter
-    def ANN_TYPES(self, values):
+    def ANN_TYPES(self,values):
         self._ANN_TYPES = values
     def _validate_seq(self, seq):
         for ann_type in seq.ANN_TYPES:
             if ann_type not in self._ANN_TYPES:
                 raise InvalidAnnotation(ann_type)
     def _validate(self):
-        validator = AttrValidator(self)
-        validator.is_protected_validated = True
+        validator = AttrValidator(self,False,True,False,None)
         validator.validate()
+    def _create_sequence(self):
+        return AnnSequence()
+    def from_dict(self,dict_):
+        self.ANN_TYPES = dict_["type"]
+        super().from_dict(dict_)
     def to_dict(self):
+        dict_ = super().to_dict()
+        dict_["type"] = self.ANN_TYPES
+        return dict_
+    def data_to_dict(self):
         dict_ = {}
         for item in self.data:
-            dict_[item.id] = item.data
+            dict_[item.id]=item.data
         return dict_

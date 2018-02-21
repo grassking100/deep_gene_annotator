@@ -2,9 +2,10 @@
 from . import CustomObjectsFacade
 from . import SeqAnnModelBuilder
 from . import CnnSettingBuilder
-from . import AttrValidator
-class ModelFacade():
-    def __init__(self,setting,weights):
+from . import DictValidator
+class ModelBuildFacade():
+    def __init__(self,setting):
+        self._validate_dict(setting)
         self._total_convolution_layer_size = setting['total_convolution_layer_size']
         self._convolution_layer_numbers = setting['convolution_layer_numbers']
         self._convolution_layer_sizes = setting['convolution_layer_sizes']
@@ -15,25 +16,20 @@ class ModelFacade():
         self._add_batch_normalize = setting['add_batch_normalize']
         self._dropout = setting['dropout']
         self._learning_rate = setting['learning_rate']
-        self._weights = weights
+        self._weights = setting['weights']
         self._cnn_setting = None
         self._custom_objects = None
         self._build_cnn_setting()
         self._build_custom_objects()
-    def _validate_attrs(self,attrs):
-        attr_validator = AttrValidator(self)
-        attr_validator.validated_keys = attrs
-        attr_validator.invalid_values = [None]
-        attr_validator.validate()
-    def _validate(self):
+    def _keys_must_included(self):
+        return ['total_convolution_layer_size','convolution_layer_numbers','convolution_layer_sizes',
+               'terminal_signal','ANN_TYPES','output_dim','lstm_layer_number','add_batch_normalize',
+               'dropout','learning_rate','weights']
+    def _validate_dict(self,dict_):
         """Validate if all attribute is set correctly"""   
-        attr_validator = AttrValidator(self)
-        attr_validator.is_protected_validated = True
-        attr_validator.validate()
+        validator = DictValidator(dict_,self._keys_must_included(),[],[])
+        validator.validate()
     def _build_cnn_setting(self):
-        prefix = "_"+self.__class__.__name__+"__"
-        self._validate_attrs([prefix+'convolution_layer_numbers',
-                              prefix+'convolution_layer_sizes'])
         size = self._total_convolution_layer_size
         if not(size == len(self._convolution_layer_numbers) and size == len(self._convolution_layer_sizes)):
             raise Exception("Size is not consistent")
@@ -43,18 +39,13 @@ class ModelFacade():
                                           self._convolution_layer_sizes[i])
         self._cnn_setting = cnn_setting_builder.build()
     def _build_custom_objects(self):
-        prefix = "_"+self.__class__.__name__+"__"
-        self._validate_attrs([prefix+'annotation_types',
-                              prefix+'output_dim',
-                              prefix+'terminal_signal'])
         facade = CustomObjectsFacade(self._annotation_types,
-                                     self._output_dim,self._terminal_signal,
-                                     self._weights,
-                                     'accuracy','loss')
+                                     self._output_dim,
+                                     self._terminal_signal,
+                                     self._weights)
         self._custom_objects = facade.custom_objects
     def model(self):
         """Method to build model"""
-        self._validate()
         model_builder = SeqAnnModelBuilder()
         model_builder.cnn_setting = self._cnn_setting
         model_builder.lstm_layer_number = self._lstm_layer_number

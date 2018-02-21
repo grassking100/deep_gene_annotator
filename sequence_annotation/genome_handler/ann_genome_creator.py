@@ -1,13 +1,11 @@
 import numpy as np
 from . import AnnSeqContainer
 from . import AnnSequence
-from . import ReturnNoneException
 from . import InvalidStrandType
 from . import DictValidator
 from . import Creator
 from . import validate_return
 from . import NotPositiveException
-import pdb
 class AnnGenomeCreator(Creator):
     """Purpose:Make sequences of numeric value represent annotated region occupy or not"""
     def __init__(self,genome_information,uscu_data):
@@ -30,8 +28,7 @@ class AnnGenomeCreator(Creator):
         """Get data"""
         return self._result
     def _validate_genome_info(self):
-        validator = DictValidator(self._data_information)
-        validator.key_must_included = ['source','chromosome']
+        validator = DictValidator(self._data_information,['source','chromosome'],[],[])
         validator.validate()
     def _get_init_genome(self):
         """Get initialized genome"""        

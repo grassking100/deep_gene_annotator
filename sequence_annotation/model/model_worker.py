@@ -8,6 +8,17 @@ class ModelWorker(metaclass=ABCMeta):
         self._result = {}
         self._valid_data_keys = []
         self._data = {}
+        self._settings = None
+    @property
+    def settings(self):
+        """Get settings"""
+        if self._settings is None:
+            raise ReturnNoneException("settings")
+        return self._settings
+    @settings.setter
+    def settings(self, settings):
+        """Set result"""
+        self._settings = settings
     @property
     def result(self):
         """Get result"""
@@ -38,5 +49,13 @@ class ModelWorker(metaclass=ABCMeta):
         self._model = model
     @abstractmethod
     def _validate(self):
+        """Validate"""
+        pass
+    @abstractmethod
+    def _data_validate(self):
+        """Validate"""
+        pass
+    @abstractmethod
+    def _settings_validate(self):
         """Validate"""
         pass

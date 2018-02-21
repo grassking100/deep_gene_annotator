@@ -4,7 +4,7 @@ from abc import abstractmethod
 import numpy as np
 from . import AttrValidator
 from . import validate_return
-from . import NegativeNumberException,InvalidStrandType,ReturnNoneException
+from . import NegativeNumberException,InvalidStrandType
 class SeqInfoParser(metaclass=ABCMeta):
     def __init__(self,file_path):
         self._result = None
@@ -26,8 +26,7 @@ class SeqInfoParser(metaclass=ABCMeta):
 class USCUParser(SeqInfoParser):
     """Purpose:Parse file from USCU table and get data which stored infomration(zero-based)"""
     def _validate(self):
-        attr_validator = AttrValidator(self)
-        attr_validator.validate_attr_names = ['_raw_data']
+        attr_validator = AttrValidator(self,False,False,False,['_raw_data'])
         attr_validator.validate()
     def _read_file(self, file):
         self._raw_data = pd.read_csv(file, sep='\t')
