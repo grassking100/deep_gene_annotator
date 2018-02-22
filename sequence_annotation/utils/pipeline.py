@@ -19,7 +19,6 @@ class Pipeline(metaclass=ABCMeta):
         self._setting_file = setting_file
         self._worker = worker
         self._setting = None
-        self._weights = None
         self._model = None
     @abstractmethod
     def _validate_required(self):
@@ -47,10 +46,9 @@ class Pipeline(metaclass=ABCMeta):
         facade = CustomObjectsFacade(annotation_types = self._setting['ANN_TYPES'],
                                      output_dim = self._setting['output_dim'],
                                      terminal_signal = self._setting['terminal_signal'],
-                                     weights = self._weights)
+                                     weights = self._setting['weights'])
         self._model = load_model(previous_status_root+'.h5', facade.custom_objects)
     def _calculate_weights(self,count):
-        self._weights = []
         weights = []
         total_count = 0
         for key in self._setting['ANN_TYPES']:
@@ -105,15 +103,15 @@ class TrainPipeline(Pipeline):
         (val_x, val_y) = handle_alignment_files(self._setting['validation_files'],
                                                 self._setting['validation_answers'],
                                                 self._setting['ANN_TYPES'])[0:2]
+        self._setting['weights'] = None
         if self._setting['use_weights']:
-            self._weights = np.multiply(self._calculate_weights(train_x_count),len(self._setting['ANN_TYPES']))
-        self._setting['weights'] = self._weights
+            self._setting['weights'] = np.multiply(self._calculate_weights(train_x_count),len(self._setting['ANN_TYPES']))
         loader = TrainDataLoader()
         loader.load(self._worker, train_x, train_y,
                     val_x , val_y,self._setting['terminal_signal'])
     def _init_worker(self):
         self._worker.model = self._model
-        self._worker.settings = self._get_settings()
+        self._worker.settings = self._get_setting()
     def _validate_required(self):
         keys = ['_setting','_model']
         for key in keys:
@@ -125,7 +123,7 @@ class TrainPipeline(Pipeline):
         data = dict(self._setting)
         data['folder_name'] = str(self._folder_name)
         data['save_time'] = strftime("%Y_%b_%d", gmtime())
-        for type_, value in zip(self._setting['ANN_TYPES'],self._weights):
+        for type_, value in zip(self._setting['ANN_TYPES'],self._setting['weights']):
             data[type_+'_weight'] = value
         df = pd.DataFrame(list(data.items()),columns=['attribute','value'])
         df.to_csv(self._folder_name+"/"+self._setting['setting_record_name'],index=False)
@@ -133,18 +131,18 @@ class TrainPipeline(Pipeline):
         result = pd.read_csv(self._setting['previous_status_root']+".csv",
                              index_col=False, skiprows=None).to_dict(orient='list')
         return result
-    def _get_settings(self):
-        settings = {}
-        settings['initial_epoch'] = self._setting['previous_epoch']
-        settings['batch_size'] = self._setting['batch_size']
-        settings['shuffle'] = True
-        settings['epochs'] = self._setting['progress_target']
-        settings['is_prompt_visible'] = self._setting['is_prompt_visible']
-        settings['is_verbose_visible'] = self._setting['is_verbose_visible']
-        settings['period'] = self._setting['step']
-        settings['file_path_root'] = self._folder_name
-        settings['weights'] = self._weights
-        return settings
+    def _get_setting(self):
+        setting = {}
+        setting['initial_epoch'] = self._setting['previous_epoch']
+        setting['batch_size'] = self._setting['batch_size']
+        setting['shuffle'] = True
+        setting['epochs'] = self._setting['progress_target']
+        setting['is_prompt_visible'] = self._setting['is_prompt_visible']
+        setting['is_verbose_visible'] = self._setting['is_verbose_visible']
+        setting['period'] = self._setting['step']
+        setting['file_path_root'] = self._folder_name
+        setting['weights'] = self._setting['weights']
+        return setting
     def execute(self):
         self._validate_required()
         if self._setting['previous_epoch']==0:

@@ -9,27 +9,27 @@ from . import Builder
 class CategoricalCrossEntropyFactory:
     """This class create and return categorical cross entropy function"""
     def __init__(self, class_number, is_static, weights=None, terminal_signal=None):
-        self.class_number = class_number
-        self.terminal_signal = terminal_signal
-        self.weights = weights
-        self.is_static = is_static
+        self._class_number = class_number
+        self._terminal_signal = terminal_signal
+        self._weights = weights
+        self._is_static = is_static
     @property
     def cross_entropy(self):
         """return cross entropy function"""
         @rename("loss")
         def static_cross_entropy(y_true, y_pred):
             """calculate static categorical cross entropy between y_true and y_pred"""
-            if self.terminal_signal is not None:
+            if self._terminal_signal is not None:
                 (y_true, y_pred) = removed_terminal_tensors(y_true, y_pred,
-                                                            self.class_number,
-                                                            self.terminal_signal)
-            if self.weights is not None:
-                y_true = tf.multiply(y_true, self.weights)
+                                                            self._class_number,
+                                                            self._terminal_signal)
+            if self._weights is not None:
+                y_true = tf.multiply(y_true, self._weights)
             loss = tf.reduce_mean(categorical_crossentropy(y_true, y_pred))
             return loss
         @rename("loss")
         def dynamic_cross_entropy(y_true, y_pred):
-            """calculate dynamic categorical cross entropy between y_true and y_pred"""
+            """calculate dynamic categorical cross entropy between y_true and y_pred
             if self.terminal_signal is not None:
                 (y_true, y_pred) = removed_terminal_tensors(y_true, y_pred, self.class_number,
                                                             self.terminal_signal)
@@ -41,8 +41,9 @@ class CategoricalCrossEntropyFactory:
             weights = tf.divide(self.weights, sum_weights)
             y_true = tf.multiply(y_true, weights)
             loss = tf.reduce_mean(categorical_crossentropy(y_true, y_pred))
-            return loss
-        if self.is_static:
+            return loss"""
+            pass
+        if self._is_static:
             return static_cross_entropy
         else:
             warnings.warn(

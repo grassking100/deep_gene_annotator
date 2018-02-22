@@ -22,7 +22,7 @@ class NotPositiveException(ValueError):
 
 class DictKeyNotExistException(Exception):
     def __init__(self, key):
-        msg = ("Key,"+key+", doesn't exist in"
+        msg = ("Key,"+key+", doesn't exist in "
                "dictionary")
         super().__init__(msg)
 class MissingExpectDictKey(Exception):

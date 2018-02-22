@@ -16,9 +16,6 @@ class ModelTrainer(ModelWorker):
         return ['initial_epoch','batch_size','shuffle','epochs','is_prompt_visible',
                 'is_verbose_visible','period','file_path_root','weights']
     def _data_validate(self):
-        dict_validator = DictValidator(self._data,
-                                       self.valid_data_keys,self.valid_data_keys,[None])
-        dict_validator.validate()
         data_validator = DataValidator()
         data_validator.same_shape(self._data['train_x'],self._data['train_y'])
         data_validator.same_shape(self._data['validation_x'],self._data['validation_y'])
@@ -26,8 +23,10 @@ class ModelTrainer(ModelWorker):
         attr_validator = AttrValidator(self,False,True,False,None)
         attr_validator.validate()
     def _settings_validate(self):
+        keys = self.valid_setting_keys
+        keys.remove('weights')
         dict_validator = DictValidator(self._settings,
-                                       self.valid_setting_keys,self.valid_setting_keys,[None])
+                                       self.valid_setting_keys,keys,[None])
         dict_validator.validate()
     def _validate(self):
         """Validate required data"""
@@ -69,7 +68,7 @@ class ModelTrainer(ModelWorker):
                                  shuffle=self.settings['shuffle'],
                                  epochs=self.settings['epochs'],
                                  verbose=int(self.settings['is_verbose_visible']),
-                                 validation_data=(self._data['validation_x'],
-                                                  self._data['validation_y']),
+                                 validation_data=None,
                                  callbacks=self._get_call_backs())
+        """(self._data['validation_x'],self._data['validation_y'])"""
         self.result = history.history.items()
