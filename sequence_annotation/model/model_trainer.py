@@ -3,6 +3,7 @@ from keras.callbacks import TensorBoard
 from keras.callbacks import ModelCheckpoint
 import numpy as np
 import os
+from . import DataGenerator
 from . import ModelWorker
 from . import DataValidator, DictValidator, AttrValidator
 from . import ResultHistory
@@ -56,19 +57,37 @@ class ModelTrainer(ModelWorker):
             if not os.path.exists(path):
                 os.makedirs(path)
         self._model.save((root_path+'/model/epoch_{:0'+length+'d}.h5').format(0))
+    def _prepare_data(self,x_data,y_data,batch_size):
+        generator = DataGenerator(x_data,y_data,batch_size)
+        return generator
     def train(self):
         """Train model"""
         self._validate()
         self._before_train()
         #training and evaluating the model
-        history = self.model.fit(self._data['train_x'],
-                                 self._data['train_y'],
+        train_data = self._prepare_data(self._data['train_x'],
+                                        self._data['train_y'],
+                                        self.settings['batch_size'])
+        val_data = self._prepare_data(self._data['validation_x'],
+                                      self._data['validation_y'],
+                                      self.settings['batch_size'])
+        history = self.model.fit_generator(train_data,
+                                           epochs=self.settings['epochs'],
+                                           verbose=int(self.settings['is_verbose_visible']),
+                                           callbacks=self._get_call_backs(),
+                                           validation_data=val_data,
+                                           max_queue_size=10,
+                                           workers=1,
+                                           use_multiprocessing=False,
+                                           shuffle=self.settings['shuffle'],
+                                           initial_epoch=int(self.settings['initial_epoch']))
+        """history = self.model.fit(train_data,
                                  initial_epoch = self.settings['initial_epoch'],
                                  batch_size=self.settings['batch_size'],
                                  shuffle=self.settings['shuffle'],
                                  epochs=self.settings['epochs'],
                                  verbose=int(self.settings['is_verbose_visible']),
-                                 validation_data=None,
-                                 callbacks=self._get_call_backs())
+                                 validation_data=val_data,
+                                 callbacks=self._get_call_backs())"""
         """(self._data['validation_x'],self._data['validation_y'])"""
         self.result = history.history.items()

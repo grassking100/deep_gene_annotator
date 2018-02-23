@@ -2,7 +2,7 @@
 import os
 import errno
 from abc import ABCMeta, abstractmethod
-from time import gmtime, strftime
+from time import gmtime, strftime, time
 from keras.models import load_model
 from keras.utils import plot_model
 import pandas as pd
@@ -154,6 +154,12 @@ class TrainPipeline(Pipeline):
             if self._setting['is_prompt_visible']:
                 print('Loading previous result')
             self._worker.result = self._load_previous_result()
-        self._worker.train()
         if self._setting['is_prompt_visible']:
-            print('End of training')
+            print('Start training('+strftime("%Y-%m-%d %H:%M:%S",gmtime())+")")
+        start_time = time()
+        self._worker.train()
+        end_time = time()
+        time_spend = end_time - start_time
+        if self._setting['is_prompt_visible']:
+            print('End training('+strftime("%Y-%m-%d %H:%M:%S",gmtime())+")")
+            print("Spend time: "+time.strftime("%H:%M:%S", time.gmtime(time_spend)))
