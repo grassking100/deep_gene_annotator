@@ -4,7 +4,6 @@ import errno
 from abc import ABCMeta, abstractmethod
 from time import gmtime, strftime, time
 from keras.models import load_model
-from keras.utils import plot_model
 import pandas as pd
 import numpy as np
 from . import CustomObjectsFacade
@@ -118,8 +117,6 @@ class TrainPipeline(Pipeline):
             if getattr(self,key) is None:
                 raise Exception("TrainPipeline needs "+key+" to complete the quest")
     def _save_setting(self):
-        plot_model(self._model, show_shapes=True,
-                   to_file=self._folder_name+"/"+self._setting['model_image_name'])
         data = dict(self._setting)
         data['folder_name'] = str(self._folder_name)
         data['save_time'] = strftime("%Y_%b_%d", gmtime())
@@ -142,6 +139,7 @@ class TrainPipeline(Pipeline):
         setting['period'] = self._setting['step']
         setting['file_path_root'] = self._folder_name
         setting['weights'] = self._setting['weights']
+        setting['model_image_name'] = self._setting['model_image_name']
         return setting
     def execute(self):
         self._validate_required()

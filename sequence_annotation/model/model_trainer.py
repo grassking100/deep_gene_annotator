@@ -1,6 +1,13 @@
 """This submodule provides trainer to train model"""
+from keras import backend as K
+import tensorflow as tf
+config = tf.ConfigProto()
+config.gpu_options.allow_growth=True
+sess = tf.Session(config=config)
+K.set_session(sess)
 from keras.callbacks import TensorBoard
 from keras.callbacks import ModelCheckpoint
+from keras.utils import plot_model
 import numpy as np
 import os
 from . import DataGenerator
@@ -38,7 +45,7 @@ class ModelTrainer(ModelWorker):
         call_backs = []
         length = str(len(str(self.settings['epochs'])))
         root_path = './'+self.settings['file_path_root']
-        call_backs.append(TensorBoard(log_dir=root_path+"/log", histogram_freq=1,
+        call_backs.append(TensorBoard(log_dir=root_path+"/log", histogram_freq=0,
                                       write_graph=True, write_grads=True,
                                       write_images=True))
         call_backs.append(ModelCheckpoint(filepath=root_path+"/model/epoch_{epoch:0"+length+"d}.h5",
@@ -56,6 +63,8 @@ class ModelTrainer(ModelWorker):
             path = root_path+"/"+folder_name
             if not os.path.exists(path):
                 os.makedirs(path)
+        plot_model(self.model, show_shapes=True,
+                   to_file=root_path+"/"+self.settings['model_image_name'])
         self._model.save((root_path+'/model/epoch_{:0'+length+'d}.h5').format(0))
     def _prepare_data(self,x_data,y_data,batch_size):
         generator = DataGenerator(x_data,y_data,batch_size)
@@ -71,6 +80,7 @@ class ModelTrainer(ModelWorker):
         val_data = self._prepare_data(self._data['validation_x'],
                                       self._data['validation_y'],
                                       self.settings['batch_size'])
+                                      #len(self._data['validation_x']))
         history = self.model.fit_generator(train_data,
                                            epochs=self.settings['epochs'],
                                            verbose=int(self.settings['is_verbose_visible']),
@@ -81,13 +91,4 @@ class ModelTrainer(ModelWorker):
                                            use_multiprocessing=False,
                                            shuffle=self.settings['shuffle'],
                                            initial_epoch=int(self.settings['initial_epoch']))
-        """history = self.model.fit(train_data,
-                                 initial_epoch = self.settings['initial_epoch'],
-                                 batch_size=self.settings['batch_size'],
-                                 shuffle=self.settings['shuffle'],
-                                 epochs=self.settings['epochs'],
-                                 verbose=int(self.settings['is_verbose_visible']),
-                                 validation_data=val_data,
-                                 callbacks=self._get_call_backs())"""
-        """(self._data['validation_x'],self._data['validation_y'])"""
         self.result = history.history.items()

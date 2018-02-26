@@ -26,7 +26,7 @@ class ResultHistory(Callback):
         df.to_csv(log_dir,index=False)
     def on_epoch_end(self, epoch, logs={}):
         self._add_data(logs)
-        if (epoch+1)%self._period==0:
+        if (epoch)%self._period==0:
             if self._verbose:
-                print("Save result to "+self._filepath.format(epoch=epoch+1))
-            self._save_data(epoch+1)
+                print("Save result to "+self._filepath.format(epoch=epoch))
+            self._save_data(epoch)
