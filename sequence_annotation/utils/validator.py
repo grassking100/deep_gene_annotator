@@ -2,7 +2,6 @@ from abc import ABCMeta,abstractmethod
 from . import MissingExpectDictKey, InvalidValueInDict, AttrIsNoneException, LengthNotEqualException, DictKeyNotExistException
 from . import get_protected_attrs_names
 import numpy as np
-import pdb
 class IVaildable(metaclass=ABCMeta):
     @abstractmethod
     def validate(self):

@@ -16,66 +16,71 @@ def removed_terminal_tensors(true, pred, number_of_class, value_to_ignore):
 
 class SeqAnnAlignment():
     """Make data in fasta file can align with answer file"""
-    def __init__(self, annotation_types):
-        self.__names = []
-        self.__seqs = []
-        self.__anns = []
-        self.__seqs_vecs = []
-        self.__anns_count = {}
-        self.__ANN_TYPES = annotation_types
-        for ann_type in self.__ANN_TYPES:
-            self.__anns_count[ann_type] = 0
-    def add_file_to_parse(self, fasta_path, annotation_path, discard_dirty_sequence):
-        """read and align sequnece's one-hot-encoding vector and annotation data"""
+    def __init__(self):
+        self._names = []
+        self._seqs = []
+        self._anns = []
+        self._seqs_vecs = []
+        self._anns_count = {}
+        self._ann_data_path = []
+        self._ann_data = None
+    def _load_ann_data(self, ann_data_path):
+        if ann_data_path is not self._ann_data_path:
+            self._ann_data_path=ann_data_path
+            self._ann_data = np.load(ann_data_path).item()
+        return self._ann_data
+    def parse_file(self, fasta_path, annotation_path, discard_dirty_sequence):
+        """
+            read and align sequnece's one-hot-encoding vector 
+            and annotation data ,then it stores data
+        """
         (names, seqs) = fasta2seqs(fasta_path)
-        self.__names += names
-        self.__seqs += seqs
-        #read annotation file
-        ann_seqs = np.load(annotation_path).item()
+        self._names += names
+        self._seqs += seqs
         (valid_seqs_indice, seqs_vecs) = seqs2dnn_data(seqs, discard_dirty_sequence)
-        self.__seqs_vecs += seqs_vecs
+        self._seqs_vecs += seqs_vecs
+        #read annotation file
+        ann_seqs = self._load_ann_data(annotation_path)
         #for every name find corresponding sequnece and annotation
         #and convert sequnece to one-hot-encoding vector
+
         for index in valid_seqs_indice:
             name = names[index]
             ann_seq = ann_seqs[str(name)]
             ann = []
-            for ann_type in self.ANN_TYPES:
-                temp = ann_seq[ann_type]
-                self.__anns_count[ann_type] += np.sum(temp)
-                ann.append(temp)
+            for ann_type,value in ann_seq.items():
+                if ann_type not in self._anns_count.keys():
+                    self._anns_count[ann_type] = 0
+                self._anns_count[ann_type] += np.sum(value)
+                ann.append(value)
             #append corresponding annotation to array
-            self.__anns.append(np.transpose(ann))
+            self._anns.append(np.transpose(ann))
     @property
     def ANN_TYPES(self):
         """Get annotation type"""
-        return self.__ANN_TYPES
-    @ANN_TYPES.setter
-    def ANN_TYPES(self, ANN_TYPES):
-        """Set annotation type"""
-        self.__ANN_TYPES = ANN_TYPES
+        return self._anns_count.keys()
     @property
     def names(self):
         """Get names"""
-        return self.__names
+        return self._names
     @property
     def seqs_vecs(self):
         """Get seqeunces in vector format"""
-        return self.__seqs_vecs
+        return self._seqs_vecs
     @property
     def seqs_annotations(self):
         """Get seqeunces's annotation in vector format"""
-        return self.__anns
+        return self._anns
     @property
-    def seqs_annotations_count(self):
+    def seqs_ann_count(self):
         """Get annotation count"""
-        return self.__anns_count
-def handle_alignment_files(fasta_files_path, answer_file_path,ANNOTATION_TYPES):
+        return self._anns_count
+def handle_alignment_files(fasta_file_patha, answer_file_path):
     """Make data in many fasta files can align with answer file"""
-    alignment = SeqAnnAlignment(ANNOTATION_TYPES)
-    for file in fasta_files_path:
-        alignment.add_file_to_parse(file, answer_file_path, True)
-    return (alignment.seqs_vecs, alignment.seqs_annotations, alignment.seqs_annotations_count)
+    alignment = SeqAnnAlignment()
+    for file in fasta_file_patha:
+        alignment.parse_file(file, answer_file_path, True)
+    return (alignment.seqs_vecs, alignment.seqs_annotations, alignment.seqs_ann_count)
 
 def data_index_splitter(data_number, fraction_of_traning_validation,
                         number_of_cross_validation, shuffle=True):

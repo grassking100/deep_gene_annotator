@@ -31,7 +31,7 @@ def fasta2dnn_data(file_name, number=-1, safe=False):
     return seqs2dnn_data(seqs, safe)
 
 class FastaExtractor:
-    """Change data in fasta file into dictionary format"""
+    """Read data in fasta file and stored in list format"""
     def __init__(self, fasta_file):
         self.__records = []
         names, seqs = fasta2seqs(fasta_file)
@@ -42,7 +42,7 @@ class FastaExtractor:
         """Get record by index"""
         return [self.__records[i] for i in indice]
     def save_as_fasta(self, indice, file_path):
-        """Save dictionary format data into fasta file"""
+        """Save list format data into fasta file"""
         records = self.get_record(indice)
         with open(file_path, "w") as output_handle:
             for record in records:

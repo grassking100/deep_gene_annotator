@@ -9,3 +9,10 @@ def validate_return(solution):
         return validate
     return wrap
 
+def rename(newname):
+    """rename the function"""
+    def decorator(function):
+        """rename input function name"""
+        function.__name__ = newname
+        return function
+    return decorator

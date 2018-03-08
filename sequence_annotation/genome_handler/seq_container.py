@@ -95,9 +95,9 @@ class AnnSeqContainer(SeqContainer):
     def ANN_TYPES(self,values):
         self._ANN_TYPES = values
     def _validate_seq(self, seq):
-        for ann_type in seq.ANN_TYPES:
-            if ann_type not in self._ANN_TYPES:
-                raise InvalidAnnotation(ann_type)
+        diffs = set(seq.ANN_TYPES).symmetric_difference(self._ANN_TYPES)
+        if len(diffs) > 0:
+            raise InvalidAnnotation(str(diffs))
     def _validate(self):
         validator = AttrValidator(self,False,True,False,None)
         validator.validate()

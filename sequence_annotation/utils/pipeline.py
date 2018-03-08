@@ -97,11 +97,9 @@ class TrainPipeline(Pipeline):
         (train_x,
          train_y,
          train_x_count) = handle_alignment_files(self._setting['training_files'],
-                                                 self._setting['training_answers'],
-                                                 self._setting['ANN_TYPES'])
+                                                 self._setting['training_answers'])
         (val_x, val_y) = handle_alignment_files(self._setting['validation_files'],
-                                                self._setting['validation_answers'],
-                                                self._setting['ANN_TYPES'])[0:2]
+                                                self._setting['validation_answers'])[0:2]
         self._setting['weights'] = None
         if self._setting['use_weights']:
             self._setting['weights'] = np.multiply(self._calculate_weights(train_x_count),len(self._setting['ANN_TYPES']))
@@ -160,4 +158,4 @@ class TrainPipeline(Pipeline):
         time_spend = end_time - start_time
         if self._setting['is_prompt_visible']:
             print('End training('+strftime("%Y-%m-%d %H:%M:%S",gmtime())+")")
-            print("Spend time: "+time.strftime("%H:%M:%S", time.gmtime(time_spend)))
+            print("Spend time: "+strftime("%H:%M:%S", gmtime(time_spend)))

@@ -2,10 +2,11 @@
 from keras.losses import categorical_crossentropy
 from keras.metrics import categorical_accuracy
 import tensorflow as tf
-import warnings
-import numpy
 from . import removed_terminal_tensors
 from . import Builder
+from . import rename
+
+        
 class CategoricalCrossEntropyFactory:
     """This class create and return categorical cross entropy function"""
     def __init__(self, class_number, is_static, weights=None, terminal_signal=None):
@@ -27,29 +28,10 @@ class CategoricalCrossEntropyFactory:
                 y_true = tf.multiply(y_true, self._weights)
             loss = tf.reduce_mean(categorical_crossentropy(y_true, y_pred))
             return loss
-        @rename("loss")
-        def dynamic_cross_entropy(y_true, y_pred):
-            """calculate dynamic categorical cross entropy between y_true and y_pred
-            if self.terminal_signal is not None:
-                (y_true, y_pred) = removed_terminal_tensors(y_true, y_pred, self.class_number,
-                                                            self.terminal_signal)
-            weights = tf.divide(1, tf.reduce_sum(y_true, 0))
-            inf = tf.constant(numpy.float("inf"))
-            where_inf = tf.equal(weights, inf)
-            weights = tf.where(where_inf, tf.zeros_like(self.weights), self.weights)
-            sum_weights = tf.reduce_sum(self.weights)
-            weights = tf.divide(self.weights, sum_weights)
-            y_true = tf.multiply(y_true, weights)
-            loss = tf.reduce_mean(categorical_crossentropy(y_true, y_pred))
-            return loss"""
-            pass
         if self._is_static:
             return static_cross_entropy
         else:
-            warnings.warn(
-                "Dynamic categorical cross entrophy function hasn't complete build yet"
-            )
-            return dynamic_cross_entropy
+            raise Exception("Dynamic categorical cross entrophy function hasn't complete build yet")
 
 
 class CategoricalAccuracyFactory:
@@ -69,13 +51,6 @@ class CategoricalAccuracyFactory:
             accuracy = tf.reduce_mean(categorical_accuracy(y_true, y_pred))
             return accuracy
         return advanced_categorical_accuracy
-def rename(newname):
-    """rename the function"""
-    def decorator(function):
-        """rename input function name"""
-        function.__name__ = newname
-        return function
-    return decorator
 
 class PrecisionFactory:
     """This class create and return precision function"""
@@ -140,19 +115,19 @@ class CnnSettingBuilder(Builder):
     """A class which generate setting about multiple convolution layer"""
     def __init__(self):
         super().__init__()
-        self.__layers_settings = []
+        self._layers_settings = []
     def clean_layers(self):
         """reset setting"""
-        self.__layers_settings = []
+        self._layers_settings = []
         return self
     def add_layer(self, filter_num, filter_size):
         """Add a convolution layer setting"""
         setting = {'filter_num':filter_num, 'filter_size':filter_size}
-        self.__layers_settings.append(setting)
+        self._layers_settings.append(setting)
         return self
     def _validate(self):
         pass
     def build(self):
         """Get settings"""
         self._validate()
-        return self.__layers_settings
+        return self._layers_settings

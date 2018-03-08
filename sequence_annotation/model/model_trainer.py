@@ -2,7 +2,8 @@
 from keras import backend as K
 import tensorflow as tf
 config = tf.ConfigProto()
-config.gpu_options.allow_growth=True
+if hasattr(config,"gpu_options"):
+    config.gpu_options.allow_growth=True
 sess = tf.Session(config=config)
 K.set_session(sess)
 from keras.callbacks import TensorBoard

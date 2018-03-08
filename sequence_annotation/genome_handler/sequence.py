@@ -1,5 +1,6 @@
 from abc import ABCMeta
 import numpy as np
+from copy import deepcopy
 from . import AttrValidator, DictValidator
 from . import get_protected_attrs_names
 from . import ValueOutOfRange
@@ -35,7 +36,7 @@ class Sequence(metaclass=ABCMeta):
         return ['source','chromosome_id','strand','id','note']
     def _copy(self,source,attrs):
         for attr in attrs:
-            setattr(self,"_"+attr,getattr(source,attr))
+            setattr(self,"_"+attr,deepcopy(getattr(source,attr)))
     @property
     def id(self):
         return self._id

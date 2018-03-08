@@ -26,4 +26,4 @@ if __name__ == '__main__':
     end_time = time()
     time_spend = end_time - start_time
     print('Program end time: '+strftime("%Y-%m-%d %H:%M:%S",gmtime()))
-    print("Time spent: "+time.strftime("%H:%M:%S", time.gmtime(time_spend)))
+    print("Time spent: "+strftime("%H:%M:%S", gmtime(time_spend)))

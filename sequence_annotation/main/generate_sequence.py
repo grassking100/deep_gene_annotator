@@ -19,7 +19,7 @@ genome_information={'chromosome':{"1":22981688,"10":13272281,"11":11954808,"12":
                                   "5":13390619,"6":7024381,"7":11693588,"8":10512681,
                                   "9":10554956}
                     ,'source':'tertaodon_8_0'}
-file_path = "~/deep_learning/tetraodon_8_0.tsv"
+file_path = "~/deep_learning/tetraodon_8_0/raw_file/tetraodon_8_0.tsv"
 principle = {'remove_end_of_strand':True,
              'with_random_choose':False,
              'replaceable':False,
