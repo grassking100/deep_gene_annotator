@@ -1,38 +1,28 @@
-from . import TruePositive
-from . import TrueNegative
-from . import FalsePositive
-from . import FalseNegative
 from . import SeqAnnModel
-from . import SpecificTypeMetric
-from . import AttrValidator
 from . import CategoricalMetricFactory
+from . import MetricLayerFactory
 class CustomObjectsFacade:
-    def __init__(self, annotation_types, output_dim, terminal_signal,weights=None):
+    def __init__(self, annotation_types,terminal_signal,weights=None):
         self._annotation_types = annotation_types
-        self._output_dim = output_dim
         self._terminal_signal = terminal_signal
         self._weights = weights
-    def _create_metric(self,name,index):
-        metric = SpecificTypeMetric(name,self._output_dim,index,self._terminal_signal)
-        return metric
     @property
     def custom_objects(self):
         custom_objects = {}
+        categorical_metric_factory = CategoricalMetricFactory()
+        metric_layer_factory = MetricLayerFactory()
+        metric_types=['TP','TN','FP','FN']
         for index, ann_type in enumerate(self._annotation_types):
-            custom_objects[ann_type+"_TP"] = TruePositive(ann_type,
-                                                          self._create_metric(ann_type+"_TP",index))
-            custom_objects[ann_type+"_TN"] = TrueNegative(ann_type,
-                                                          self._create_metric(ann_type+"_TN",index))
-            custom_objects[ann_type+"_FP"] = FalsePositive(ann_type,
-                                                           self._create_metric(ann_type+"_FP",index))
-            custom_objects[ann_type+"_FN"] = FalseNegative(ann_type,
-                                                           self._create_metric(ann_type+"_FN",index))
-        class_number = len(self._annotation_types)
+            for metric_type in metric_types:
+                name = "{ann_type}_{status}".format(ann_type=ann_type,status=metric_type)
+                metric = categorical_metric_factory.create("specific_type",name,
+                                                           terminal_signal=self._terminal_signal,
+                                                           target_index=index)
+                custom_objects[name]= metric_layer_factory.create(metric_type,ann_type,metric)
         custom_objects['SeqAnnModel'] = SeqAnnModel
-        factory = CategoricalMetricFactory()
-        custom_objects["accuracy"] = factory.create("accuracy", "accuracy",class_number,
-                                                    terminal_signal=self._terminal_signal)
-        custom_objects["loss"] = factory.create("static_crossentropy", "loss",class_number,
-                                                weights=self._weights,
-                                                terminal_signal=self._terminal_signal)
+        custom_objects["accuracy"] = categorical_metric_factory.create("accuracy","accuracy",
+                                                                       terminal_signal=self._terminal_signal)
+        custom_objects["loss"] = categorical_metric_factory.create("static_crossentropy","loss",
+                                                                   weights=self._weights,
+                                                                   terminal_signal=self._terminal_signal)
         return custom_objects

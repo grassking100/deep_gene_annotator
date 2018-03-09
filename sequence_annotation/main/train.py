@@ -3,8 +3,8 @@ import os
 import argparse
 from time import gmtime, strftime, time
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__+'/..'))))
-from sequence_annotation.utils.pipeline import TrainPipeline
-from sequence_annotation.model.model_trainer import ModelTrainer
+from . import TrainPipeline
+from . import ModelTrainer
 __author__ = 'Ching-Tien Wang'
 ANNOTATION_TYPES = ['utr_5', 'utr_3', 'intron', 'cds', 'intergenic_region']
 if __name__ == '__main__':

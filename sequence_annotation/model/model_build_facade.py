@@ -40,7 +40,6 @@ class ModelBuildFacade():
         self._cnn_setting = cnn_setting_builder.build()
     def _build_custom_objects(self):
         facade = CustomObjectsFacade(self._annotation_types,
-                                     self._output_dim,
                                      self._terminal_signal,
                                      self._weights)
         self._custom_objects = facade.custom_objects

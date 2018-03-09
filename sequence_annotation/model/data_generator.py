@@ -1,6 +1,5 @@
 from keras.utils import Sequence
 import numpy as np
-from math import ceil
 class DataGenerator(Sequence):
     def __init__(self, x_set, y_set, batch_size):
         self.x, self.y = x_set, y_set

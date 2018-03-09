@@ -2,15 +2,14 @@
 from keras.losses import categorical_crossentropy
 from keras.metrics import categorical_accuracy
 import tensorflow as tf
-from . import removed_terminal_tensors
+from . import remove_terminal
 from . import Builder
 from . import rename
 
         
 class CategoricalCrossEntropyFactory:
     """This class create and return categorical cross entropy function"""
-    def __init__(self, class_number, is_static, weights=None, terminal_signal=None):
-        self._class_number = class_number
+    def __init__(self, is_static, weights=None, terminal_signal=None):
         self._terminal_signal = terminal_signal
         self._weights = weights
         self._is_static = is_static
@@ -21,9 +20,8 @@ class CategoricalCrossEntropyFactory:
         def static_cross_entropy(y_true, y_pred):
             """calculate static categorical cross entropy between y_true and y_pred"""
             if self._terminal_signal is not None:
-                (y_true, y_pred) = removed_terminal_tensors(y_true, y_pred,
-                                                            self._class_number,
-                                                            self._terminal_signal)
+                (y_true, y_pred) = remove_terminal(y_true, y_pred,
+                                                   self._terminal_signal)
             if self._weights is not None:
                 y_true = tf.multiply(y_true, self._weights)
             loss = tf.reduce_mean(categorical_crossentropy(y_true, y_pred))
@@ -36,8 +34,7 @@ class CategoricalCrossEntropyFactory:
 
 class CategoricalAccuracyFactory:
     """This class create and return categorical accuracy function"""
-    def __init__(self, class_number, terminal_signal=None):
-        self.class_number = class_number
+    def __init__(self,terminal_signal=None):
         self.terminal_signal = terminal_signal
     @property
     def accuracy(self):
@@ -45,9 +42,7 @@ class CategoricalAccuracyFactory:
         @rename("accuracy")
         def advanced_categorical_accuracy(y_true, y_pred):
             """calculate categorical accuracy"""
-            if self.terminal_signal is not None:
-                (y_true, y_pred) = removed_terminal_tensors(y_true, y_pred, self.class_number,
-                                                            self.terminal_signal)
+            (y_true, y_pred) = remove_terminal(y_true, y_pred,self.terminal_signal)
             accuracy = tf.reduce_mean(categorical_accuracy(y_true, y_pred))
             return accuracy
         return advanced_categorical_accuracy
@@ -65,13 +60,7 @@ class PrecisionFactory:
         @rename(self.function_name)
         def basic_precision(true, pred):
             """calculate the precision"""
-            if self.terminal_signal is not None:
-                clean_true, clean_pred = removed_terminal_tensors(true, pred,
-                                                                  self.number_of_class,
-                                                                  self.terminal_signal)
-            else:
-                clean_true = tf.reshape(true, [-1])
-                clean_pred = tf.reshape(pred, [-1])
+            clean_true, clean_pred = remove_terminal(true, pred,self.terminal_signal)
             numeric_true = tf.cast(tf.equal(tf.argmax(clean_true, 1), self.target_index), tf.int64)
             numeric_pred = tf.cast(tf.equal(tf.argmax(clean_pred, 1), self.target_index), tf.int64)
             true_positive = tf.reduce_sum(tf.multiply(numeric_true, numeric_pred))
@@ -94,13 +83,7 @@ class RecallFactory:
         @rename(self.function_name)
         def basic_recall(true, pred):
             """calculate the recall"""
-            if self.terminal_signal is not None:
-                clean_true, clean_pred = removed_terminal_tensors(true, pred,
-                                                                  self.number_of_class,
-                                                                  self.terminal_signal)
-            else:
-                clean_true = tf.reshape(true, [-1])
-                clean_pred = tf.reshape(pred, [-1])
+            clean_true, clean_pred = remove_terminal(true, pred,self.terminal_signal)
             numeric_true = tf.cast(tf.equal(tf.argmax(clean_true, 1),
                                             self.target_index),
                                    tf.int64)

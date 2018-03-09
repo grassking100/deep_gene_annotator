@@ -2,8 +2,8 @@
 from keras.layers.normalization import BatchNormalization
 from keras.layers import concatenate
 from keras.optimizers import Adam
-from keras.layers import Input, Dropout, Convolution1D, Flatten
-from keras.layers import MaxPooling1D, LSTM, Reshape, Activation
+from keras.layers import Input, Convolution1D
+from keras.layers import LSTM, Activation
 from . import SeqAnnModel
 from . import Builder
 from . import AttrValidator

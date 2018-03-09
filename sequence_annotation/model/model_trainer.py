@@ -81,8 +81,16 @@ class ModelTrainer(ModelWorker):
         val_data = self._prepare_data(self._data['validation_x'],
                                       self._data['validation_y'],
                                       self.settings['batch_size'])
-                                      #len(self._data['validation_x']))
-        history = self.model.fit_generator(train_data,
+        history = self.model.fit(x=self._data['train_x'],
+                                 y=self._data['train_y'],
+                                 epochs=self.settings['epochs'],
+                                 verbose=int(self.settings['is_verbose_visible']),
+                                 callbacks=self._get_call_backs(),
+                                 validation_data=(self._data['validation_x'],self._data['validation_y']),
+                                 batch_size=1,
+                                 shuffle=self.settings['shuffle'],
+                                 initial_epoch=int(self.settings['initial_epoch']))
+        """history = self.model.fit_generator(train_data,
                                            epochs=self.settings['epochs'],
                                            verbose=int(self.settings['is_verbose_visible']),
                                            callbacks=self._get_call_backs(),
@@ -91,5 +99,5 @@ class ModelTrainer(ModelWorker):
                                            workers=1,
                                            use_multiprocessing=False,
                                            shuffle=self.settings['shuffle'],
-                                           initial_epoch=int(self.settings['initial_epoch']))
+                                           initial_epoch=int(self.settings['initial_epoch']))"""
         self.result = history.history.items()

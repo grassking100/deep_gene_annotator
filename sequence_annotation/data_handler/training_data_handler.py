@@ -1,17 +1,20 @@
 """This submodule provides API to handle data for training"""
 import tensorflow as tf
 import numpy as np
-import deepdish
 import random
 from . import fasta2seqs
 from . import seqs2dnn_data
-def removed_terminal_tensors(true, pred, number_of_class, value_to_ignore):
+def remove_terminal(true, pred,value_to_ignore=None):
     """Remove specific terminal singal"""
-    reshape_pred = tf.reshape(pred, [-1])
-    reshape_true = tf.reshape(true, [-1])
-    index = tf.where(tf.not_equal(reshape_true, [value_to_ignore]))
-    clean_pred = tf.reshape(tf.gather(reshape_pred, index), [-1, number_of_class])
-    clean_true = tf.reshape(tf.gather(reshape_true, index), [-1, number_of_class])
+    if value_to_ignore is not None:
+        reshape_pred = tf.reshape(pred, [-1])
+        reshape_true = tf.reshape(true, [-1])
+        index = tf.where(tf.not_equal(reshape_true, [value_to_ignore]))
+        clean_pred = tf.reshape(tf.gather(reshape_pred, index), [-1, tf.shape(pred)[1]])
+        clean_true = tf.reshape(tf.gather(reshape_true, index), [-1, tf.shape(true)[1]])
+    else:
+        clean_pred = pred
+        clean_true = true
     return (clean_true, clean_pred)
 
 class SeqAnnAlignment():
