@@ -11,6 +11,7 @@ from keras.callbacks import ModelCheckpoint
 from keras.utils import plot_model
 import numpy as np
 import os
+import deepdish as dd
 from . import DataGenerator
 from . import ModelWorker
 from . import DataValidator, DictValidator, AttrValidator
@@ -52,20 +53,22 @@ class ModelTrainer(ModelWorker):
         call_backs.append(ModelCheckpoint(filepath=root_path+"/model/epoch_{epoch:0"+length+"d}.h5",
                                           verbose=int(self.settings['is_prompt_visible']),
                                           save_best_only=False,
-                                          period=self.settings['period']))
+                                          period=self.settings['period'],
+                                          save_weights_only=False))
         call_backs.append(ResultHistory(filepath=root_path+"/result/epoch_{epoch:0"+length+"d}.csv",
                                         verbose=int(self.settings['is_prompt_visible']),
                                         period=self.settings['period'],previous_results=self.result))
         return call_backs
     def _before_train(self):
         root_path = './'+self.settings['file_path_root']
-        length = str(len(str(self.settings['epochs'])))
+        
         for folder_name in ["model","log","result"]:
             path = root_path+"/"+folder_name
             if not os.path.exists(path):
                 os.makedirs(path)
         plot_model(self.model, show_shapes=True,
                    to_file=root_path+"/"+self.settings['model_image_name'])
+        length = str(len(str(self.settings['epochs'])))
         self._model.save((root_path+'/model/epoch_{:0'+length+'d}.h5').format(0))
     def _prepare_data(self,x_data,y_data,batch_size):
         generator = DataGenerator(x_data,y_data,batch_size)
@@ -87,7 +90,7 @@ class ModelTrainer(ModelWorker):
                                  verbose=int(self.settings['is_verbose_visible']),
                                  callbacks=self._get_call_backs(),
                                  validation_data=(self._data['validation_x'],self._data['validation_y']),
-                                 batch_size=1,
+                                 batch_size=self.settings['batch_size'],
                                  shuffle=self.settings['shuffle'],
                                  initial_epoch=int(self.settings['initial_epoch']))
         """history = self.model.fit_generator(train_data,

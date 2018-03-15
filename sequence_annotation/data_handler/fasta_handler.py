@@ -10,32 +10,30 @@ from Bio.Alphabet.IUPAC import IUPACAmbiguousDNA
 from .sequence_handler import seqs2dnn_data
 
 def fasta2seqs(file_name, number=-1):
-    """Change sequences in fasta file into array of seqeucnces """
+    """Change sequences in fasta file into dictionary of seqeucnces """
     fasta_sequences = SeqIO.parse(open(file_name), 'fasta')
-    names = []
-    seqs = []
+    data = {}
     counter = 0
     for fasta in fasta_sequences:
-        if (number <= 0)|(counter < number):
+        if (number <= 0) or (counter < number):
             name, seq = fasta.id, (str)(fasta.seq)
-            names.append(name)
-            seqs.append(seq)
+            data[name]=seq
             counter += 1
         else:
             break
-    return(names, seqs)
+    return data
 
 def fasta2dnn_data(file_name, number=-1, safe=False):
     """read fasta file and return the data format which tensorflow can input"""
-    seqs = fasta2seqs(file_name, number)[1]
+    seqs = fasta2seqs(file_name, number).values()
     return seqs2dnn_data(seqs, safe)
 
 class FastaExtractor:
     """Read data in fasta file and stored in list format"""
     def __init__(self, fasta_file):
         self.__records = []
-        names, seqs = fasta2seqs(fasta_file)
-        for name, seq in zip(names, seqs):
+        data = fasta2seqs(fasta_file)
+        for name, seq in data.items():
             temp = SeqRecord(Seq(seq, IUPACAmbiguousDNA), id=name)
             self.__records.append(temp)
     def get_record(self, indice):

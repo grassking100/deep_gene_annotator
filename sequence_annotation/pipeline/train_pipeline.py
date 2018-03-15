@@ -10,12 +10,15 @@ import numpy as np
 class TrainPipeline(Pipeline):
     def __init__(self, setting_file, worker):
         super().__init__(setting_file, worker)
+        self._weights = None
+        self._counts = None
         self._folder_name = None
         self._parse()
         self._init_folder_name()
         if self._setting['is_prompt_visible']:
             print("Loading data")
         self._load_data()
+        self._init_custom_objects()
         if self._setting['previous_epoch'] > 0:
             if self._setting['is_prompt_visible']:
                 print("Load previous model")
@@ -24,6 +27,9 @@ class TrainPipeline(Pipeline):
             if self._setting['is_prompt_visible']:
                 print("Initialize the model")
             self._init_model()
+        if self._setting['is_prompt_visible']:
+            print("Compile the model")
+        self._compile_model()
         if self._setting['is_prompt_visible']:
             print("Initialize training worker")
         self._init_worker()
@@ -39,15 +45,13 @@ class TrainPipeline(Pipeline):
         self._setting['train_id'] = self._setting_file['train_id']
         self._setting.update(model_parser.setting)
     def _load_data(self):
-        (train_x,
-         train_y,
-         train_x_count) = handle_alignment_files(self._setting['training_files'],
-                                                 self._setting['training_answers'])
+        (train_x,train_y,
+         self._counts) = handle_alignment_files(self._setting['training_files'],
+                                                self._setting['training_answers'])
         (val_x, val_y) = handle_alignment_files(self._setting['validation_files'],
                                                 self._setting['validation_answers'])[0:2]
-        self._setting['weights'] = None
         if self._setting['use_weights']:
-            self._setting['weights'] = np.multiply(self._calculate_weights(train_x_count),len(self._setting['ANN_TYPES']))
+            self._weights = np.multiply(self._calculate_weights(self._counts),len(self._setting['ANN_TYPES']))
         loader = TrainDataLoader()
         loader.load(self._worker, train_x, train_y,
                     val_x , val_y,self._setting['terminal_signal'])
@@ -63,14 +67,24 @@ class TrainPipeline(Pipeline):
         data = dict(self._setting)
         data['folder_name'] = str(self._folder_name)
         data['save_time'] = strftime("%Y_%b_%d", gmtime())
-        for type_, value in zip(self._setting['ANN_TYPES'],self._setting['weights']):
+        for type_, value in zip(self._setting['ANN_TYPES'],self._weights):
             data[type_+'_weight'] = value
+        for type_,number in self._counts.items():
+            data[type_+'_number'] = number
         df = pd.DataFrame(list(data.items()),columns=['attribute','value'])
         df.to_csv(self._folder_name+"/"+self._setting['setting_record_name'],index=False)
     def _load_previous_result(self):
-        result = pd.read_csv(self._setting['previous_status_root']+".csv",
-                             index_col=False, skiprows=None).to_dict(orient='list')
+        path = self._setting['previous_result_file']
+        result = pd.read_csv(path,index_col=False, skiprows=None).to_dict(orient='list')
         return result
+    def _calculate_weights(self,count):
+        weights = []
+        total_count = 0
+        for key in self._setting['ANN_TYPES']:
+            weights.append(1/count[key])
+            total_count += count[key]
+        sum_weight = sum(weights)
+        return [weight/sum_weight for weight in weights]
     def _get_setting(self):
         setting = {}
         setting['initial_epoch'] = self._setting['previous_epoch']
@@ -81,7 +95,7 @@ class TrainPipeline(Pipeline):
         setting['is_verbose_visible'] = self._setting['is_verbose_visible']
         setting['period'] = self._setting['step']
         setting['file_path_root'] = self._folder_name
-        setting['weights'] = self._setting['weights']
+        setting['weights'] = self._weights
         setting['model_image_name'] = self._setting['model_image_name']
         return setting
     def execute(self):

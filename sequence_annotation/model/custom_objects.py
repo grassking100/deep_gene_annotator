@@ -1,28 +1,41 @@
 from . import SeqAnnModel
-from . import CategoricalMetricFactory
+from . import MetricFactory
 from . import MetricLayerFactory
+from . import CategoricalCrossentropyFactory
+from . import CategoricalAccuracyFactory
+from keras.layers import Layer
+from abc import abstractmethod, ABCMeta
+from keras import backend as K
+import tensorflow as tf
+
 class CustomObjectsFacade:
-    def __init__(self, annotation_types,terminal_signal,weights=None):
+    def __init__(self, annotation_types,values_to_ignore=None,
+                 weights=None, metric_types=None):
         self._annotation_types = annotation_types
-        self._terminal_signal = terminal_signal
+        self._values_to_ignore = values_to_ignore
         self._weights = weights
+        self._metric_types = metric_types or ['TP','TN','FP','FN','RL','PL']
     @property
     def custom_objects(self):
         custom_objects = {}
-        categorical_metric_factory = CategoricalMetricFactory()
+        metric_factory = MetricFactory()
+        loss_factory = CategoricalCrossentropyFactory()
+        acc_factory = CategoricalAccuracyFactory()
         metric_layer_factory = MetricLayerFactory()
-        metric_types=['TP','TN','FP','FN']
+        metric = metric_factory.create(type_="dependent", name="constant")
+        custom_objects["Constant"] = metric_layer_factory.create("Constant", metric=metric)
         for index, ann_type in enumerate(self._annotation_types):
-            for metric_type in metric_types:
+            for metric_type in self._metric_types:
                 name = "{ann_type}_{status}".format(ann_type=ann_type,status=metric_type)
-                metric = categorical_metric_factory.create("specific_type",name,
-                                                           terminal_signal=self._terminal_signal,
-                                                           target_index=index)
-                custom_objects[name]= metric_layer_factory.create(metric_type,ann_type,metric)
-        custom_objects['SeqAnnModel'] = SeqAnnModel
-        custom_objects["accuracy"] = categorical_metric_factory.create("accuracy","accuracy",
-                                                                       terminal_signal=self._terminal_signal)
-        custom_objects["loss"] = categorical_metric_factory.create("static_crossentropy","loss",
-                                                                   weights=self._weights,
-                                                                   terminal_signal=self._terminal_signal)
+                metric = metric_factory.create("specific_type",name,
+                                               values_to_ignore=self._values_to_ignore,
+                                               target_index=index)
+                metric_layer= metric_layer_factory.create(metric_type,metric=metric,
+                                                          class_type=ann_type)
+                custom_objects[metric_layer.name]=metric_layer
+        acc = acc_factory.create(name="accuracy",values_to_ignore=self._values_to_ignore)
+        loss = loss_factory.create(name="loss",weights=self._weights,
+                                   values_to_ignore=self._values_to_ignore)
+        custom_objects["accuracy"]=acc
+        custom_objects["loss"]=loss
         return custom_objects

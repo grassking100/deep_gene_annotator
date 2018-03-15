@@ -4,17 +4,20 @@ import numpy as np
 import random
 from . import fasta2seqs
 from . import seqs2dnn_data
-def remove_terminal(true, pred,value_to_ignore=None):
-    """Remove specific terminal singal"""
-    if value_to_ignore is not None:
-        reshape_pred = tf.reshape(pred, [-1])
-        reshape_true = tf.reshape(true, [-1])
-        index = tf.where(tf.not_equal(reshape_true, [value_to_ignore]))
-        clean_pred = tf.reshape(tf.gather(reshape_pred, index), [-1, tf.shape(pred)[1]])
-        clean_true = tf.reshape(tf.gather(reshape_true, index), [-1, tf.shape(true)[1]])
+from . import LengthNotEqualException
+def process_tensor(true, pred,values_to_ignore=None):
+    """Remove specific terminal singal and concatenate them into a two dimension tensor"""
+    reshape_pred = tf.reshape(pred, [-1])
+    reshape_true = tf.reshape(true, [-1])
+    if values_to_ignore is not None:
+        if not isinstance(values_to_ignore,list):
+            values_to_ignore=[values_to_ignore]
+        index = tf.where(tf.not_equal(reshape_true, values_to_ignore))
+        clean_pred = tf.reshape(tf.gather(reshape_pred, index), [-1, tf.shape(pred)[2]])
+        clean_true = tf.reshape(tf.gather(reshape_true, index), [-1, tf.shape(true)[2]])
     else:
-        clean_pred = pred
-        clean_true = true
+        clean_pred = tf.reshape(pred, [-1, tf.shape(pred)[2]])
+        clean_true = tf.reshape(true, [-1, tf.shape(true)[2]])
     return (clean_true, clean_pred)
 
 class SeqAnnAlignment():
@@ -22,9 +25,9 @@ class SeqAnnAlignment():
     def __init__(self):
         self._names = []
         self._seqs = []
-        self._anns = []
+        self._ann_vecs = []
         self._seqs_vecs = []
-        self._anns_count = {}
+        self._ann_count = {}
         self._ann_data_path = []
         self._ann_data = None
     def _load_ann_data(self, ann_data_path):
@@ -37,27 +40,45 @@ class SeqAnnAlignment():
             read and align sequnece's one-hot-encoding vector 
             and annotation data ,then it stores data
         """
-        (names, seqs) = fasta2seqs(fasta_path)
-        self._names += names
-        self._seqs += seqs
-        (valid_seqs_indice, seqs_vecs) = seqs2dnn_data(seqs, discard_dirty_sequence)
-        self._seqs_vecs += seqs_vecs
+        seq_dict = fasta2seqs(fasta_path)    
+        seq_vec_dict = seqs2dnn_data(seq_dict,discard_dirty_sequence)
         #read annotation file
         ann_seqs = self._load_ann_data(annotation_path)
+        ann_count = {}
+        ann_vecs = []
+        seqs_vecs = []
+        names = []
+        seqs = []
         #for every name find corresponding sequnece and annotation
         #and convert sequnece to one-hot-encoding vector
-
-        for index in valid_seqs_indice:
-            name = names[index]
-            ann_seq = ann_seqs[str(name)]
+        for name,seq_vec in seq_vec_dict.items():
+            ann_seq = ann_seqs[name]
+            seq = seq_dict[name]
+            seqs_vecs.append(seq_vec_dict[name])
+            names.append(name)
+            seqs.append(seq)
             ann = []
             for ann_type,value in ann_seq.items():
-                if ann_type not in self._anns_count.keys():
-                    self._anns_count[ann_type] = 0
-                self._anns_count[ann_type] += np.sum(value)
+                if ann_type not in ann_count.keys():
+                    ann_count[ann_type] = 0
+                ann_count[ann_type] += np.sum(value)
                 ann.append(value)
             #append corresponding annotation to array
-            self._anns.append(np.transpose(ann))
+            transposed_ann = np.transpose(ann)
+            ann_length = np.shape(transposed_ann)[0]
+            seq_length = np.shape(seq_vec)[0]
+            if ann_length != seq_length:
+                print(index)
+                raise LengthNotEqualException(ann_length, seq_length)
+            ann_vecs.append(transposed_ann)
+        for ann_type, count in ann_count.items():
+            if ann_type not in self._ann_count.keys():
+                self._ann_count[ann_type] = 0
+            self._ann_count[ann_type] += ann_count[ann_type]
+        self._ann_vecs += ann_vecs
+        self._names += names
+        self._seqs += seqs
+        self._seqs_vecs += seqs_vecs
     @property
     def ANN_TYPES(self):
         """Get annotation type"""
@@ -71,19 +92,19 @@ class SeqAnnAlignment():
         """Get seqeunces in vector format"""
         return self._seqs_vecs
     @property
-    def seqs_annotations(self):
+    def seqs_ann_vecs(self):
         """Get seqeunces's annotation in vector format"""
-        return self._anns
+        return self._ann_vecs
     @property
     def seqs_ann_count(self):
         """Get annotation count"""
-        return self._anns_count
+        return self._ann_count
 def handle_alignment_files(fasta_file_patha, answer_file_path):
     """Make data in many fasta files can align with answer file"""
     alignment = SeqAnnAlignment()
     for file in fasta_file_patha:
         alignment.parse_file(file, answer_file_path, True)
-    return (alignment.seqs_vecs, alignment.seqs_annotations, alignment.seqs_ann_count)
+    return (alignment.seqs_vecs, alignment.seqs_ann_vecs, alignment.seqs_ann_count)
 
 def data_index_splitter(data_number, fraction_of_traning_validation,
                         number_of_cross_validation, shuffle=True):

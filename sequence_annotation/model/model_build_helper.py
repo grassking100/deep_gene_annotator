@@ -2,98 +2,37 @@
 from keras.losses import categorical_crossentropy
 from keras.metrics import categorical_accuracy
 import tensorflow as tf
-from . import remove_terminal
+from . import process_tensor
 from . import Builder
 from . import rename
 
-        
-class CategoricalCrossEntropyFactory:
+class CategoricalCrossentropyFactory:
     """This class create and return categorical cross entropy function"""
-    def __init__(self, is_static, weights=None, terminal_signal=None):
-        self._terminal_signal = terminal_signal
-        self._weights = weights
-        self._is_static = is_static
-    @property
-    def cross_entropy(self):
+    def create(self, weights=None, values_to_ignore=None, name="loss"):
         """return cross entropy function"""
-        @rename("loss")
-        def static_cross_entropy(y_true, y_pred):
+        @rename(name)
+        def crossentropy(y_true, y_pred):
             """calculate static categorical cross entropy between y_true and y_pred"""
-            if self._terminal_signal is not None:
-                (y_true, y_pred) = remove_terminal(y_true, y_pred,
-                                                   self._terminal_signal)
-            if self._weights is not None:
-                y_true = tf.multiply(y_true, self._weights)
+            if values_to_ignore is not None:
+                (y_true, y_pred) = process_tensor(y_true, y_pred,
+                                                  values_to_ignore)
+            if weights is not None:
+                y_true = tf.multiply(y_true, weights)
             loss = tf.reduce_mean(categorical_crossentropy(y_true, y_pred))
             return loss
-        if self._is_static:
-            return static_cross_entropy
-        else:
-            raise Exception("Dynamic categorical cross entrophy function hasn't complete build yet")
-
+        return crossentropy
 
 class CategoricalAccuracyFactory:
     """This class create and return categorical accuracy function"""
-    def __init__(self,terminal_signal=None):
-        self.terminal_signal = terminal_signal
-    @property
-    def accuracy(self):
+    def create(self, values_to_ignore=None, name="accuracy"):
         """return accuracy function"""
-        @rename("accuracy")
+        @rename(name)
         def advanced_categorical_accuracy(y_true, y_pred):
             """calculate categorical accuracy"""
-            (y_true, y_pred) = remove_terminal(y_true, y_pred,self.terminal_signal)
+            (y_true, y_pred) = process_tensor(y_true, y_pred,values_to_ignore)
             accuracy = tf.reduce_mean(categorical_accuracy(y_true, y_pred))
             return accuracy
         return advanced_categorical_accuracy
-
-class PrecisionFactory:
-    """This class create and return precision function"""
-    def __init__(self, function_name, number_of_class, target_index, terminal_signal=None):
-        self.function_name = function_name
-        self.number_of_class = number_of_class
-        self.target_index = target_index
-        self.terminal_signal = terminal_signal
-    @property
-    def precision(self):
-        """return precision function"""
-        @rename(self.function_name)
-        def basic_precision(true, pred):
-            """calculate the precision"""
-            clean_true, clean_pred = remove_terminal(true, pred,self.terminal_signal)
-            numeric_true = tf.cast(tf.equal(tf.argmax(clean_true, 1), self.target_index), tf.int64)
-            numeric_pred = tf.cast(tf.equal(tf.argmax(clean_pred, 1), self.target_index), tf.int64)
-            true_positive = tf.reduce_sum(tf.multiply(numeric_true, numeric_pred))
-            negative = tf.count_nonzero(1-numeric_true)
-            true_negative = tf.reduce_sum(tf.multiply(1-numeric_true, 1-numeric_pred))
-            false_positive = negative-true_negative
-            return  true_positive/(true_positive+false_positive)
-        return basic_precision
-
-class RecallFactory:
-    """This class create and return recall function"""
-    def __init__(self, function_name, number_of_class, target_index, terminal_signal=None):
-        self.function_name = function_name
-        self.number_of_class = number_of_class
-        self.target_index = target_index
-        self.terminal_signal = terminal_signal
-    @property
-    def recall(self):
-        """return recall function"""
-        @rename(self.function_name)
-        def basic_recall(true, pred):
-            """calculate the recall"""
-            clean_true, clean_pred = remove_terminal(true, pred,self.terminal_signal)
-            numeric_true = tf.cast(tf.equal(tf.argmax(clean_true, 1),
-                                            self.target_index),
-                                   tf.int64)
-            numeric_pred = tf.cast(tf.equal(tf.argmax(clean_pred, 1),
-                                            self. target_index),
-                                   tf.int64)
-            true_positive = tf.reduce_sum(tf.multiply(numeric_true, numeric_pred))
-            false_negative = tf.reduce_sum(tf.multiply(numeric_true, 1-numeric_pred))
-            return  true_positive/(true_positive+false_negative)
-        return basic_recall
 class CnnSettingBuilder(Builder):
     """A class which generate setting about multiple convolution layer"""
     def __init__(self):

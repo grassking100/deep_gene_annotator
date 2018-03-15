@@ -52,12 +52,12 @@ class InvalidStrandType(Exception):
                "is not expected")
         super().__init__(msg)
 class LengthNotEqualException(Exception):
-    def __init__(self, input_length,output_length):
-        msg = ("Input data must have same length of "
-               "output data, size of input data is"
-               " "+str(input_length)+","
-               "and size of output data is"
-               " "+str(output_length))
+    def __init__(self, first_length, second_length):
+        msg = ("Two data must have same length"
+               ", size of first data is"
+               " "+str(first_length)+","
+               "and size of second data is"
+               " "+str(second_length))
         super().__init__(msg)
 class ReturnNoneException(Exception):
     def __init__(self,attr_name,solution=None):

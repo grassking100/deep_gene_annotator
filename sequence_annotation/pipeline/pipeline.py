@@ -3,6 +3,7 @@ import os
 import errno
 from abc import ABCMeta, abstractmethod
 from keras.models import load_model
+from keras.optimizers import Adam
 from . import CustomObjectsFacade
 from . import ModelBuildFacade
 class Pipeline(metaclass=ABCMeta):
@@ -11,6 +12,7 @@ class Pipeline(metaclass=ABCMeta):
         self._worker = worker
         self._setting = None
         self._model = None
+        self._custom_objects = None
     @abstractmethod
     def _validate_required(self):
         pass
@@ -32,20 +34,23 @@ class Pipeline(metaclass=ABCMeta):
     def _init_model(self):
         model_build_facade = ModelBuildFacade(self._setting)
         self._model = model_build_facade.model()
-    def _load_model(self):
-        previous_status_root = self._setting['previous_status_root']
+    def _compile_model(self):
+        optimizer = Adam(lr=self._setting['learning_rate'])
+        custom_metrics = []
+        not_include_keys = ["loss"]
+        for key,value in self._custom_objects.items():
+            if key not in not_include_keys:
+                custom_metrics.append(value)
+        self._model.compile(optimizer=optimizer, loss=self._custom_objects['loss'],
+                            metrics=custom_metrics,sample_weight_mode="temporal")
+    def _init_custom_objects(self):
         facade = CustomObjectsFacade(annotation_types = self._setting['ANN_TYPES'],
-                                     terminal_signal = self._setting['terminal_signal'],
-                                     weights = self._setting['weights'])
-        self._model = load_model(previous_status_root+'.h5', facade.custom_objects)
-    def _calculate_weights(self,count):
-        weights = []
-        total_count = 0
-        for key in self._setting['ANN_TYPES']:
-            weights.append(1/count[key])
-            total_count += count[key]
-        sum_weight = sum(weights)
-        return [weight/sum_weight for weight in weights]
+                                     values_to_ignore = self._setting['terminal_signal'],
+                                     weights = self._weights)
+        self._custom_objects = facade.custom_objects
+    def _load_model(self):
+        previous_status_root = self._setting['previous_model_file']
+        self._model = load_model(previous_status_root+'.h5', self._custom_objects,compile=False)
     def _create_folder(self,path):
         try:
             if not os.path.exists(path):

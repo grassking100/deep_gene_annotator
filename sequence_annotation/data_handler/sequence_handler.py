@@ -54,17 +54,15 @@ def vec2codes(vector):
         except DNACodeException:
             raise DNASeqException('Sequence vector has invalid vector in it')
     return arr
-def seqs2dnn_data(seqs, discard_dirty_sequence):
-    """read and return valid indice and sequnece's one-hot-encoding vector"""
+def seqs2dnn_data(data, discard_dirty_sequence):
+    """read and return valid sequnece's one-hot-encoding vector"""
     code_dim = 4
-    vectors = []
-    valid_seqs_indice = []
-    for seq, index in zip(seqs, range(len(seqs))):
+    vec_data = {}
+    for name, seq in data.items():
         try:
             vec = codes2vec(seq)
-            vectors.append(numpy.array(vec).reshape(len(seq), code_dim))
-            valid_seqs_indice.append(index)
+            vec_data[name] = numpy.array(vec).reshape(len(seq), code_dim)
         except DNASeqException as exception:
             if not discard_dirty_sequence:
                 raise exception
-    return (valid_seqs_indice, vectors)
+    return vec_data

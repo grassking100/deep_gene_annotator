@@ -108,7 +108,8 @@ class TrainSettingParser(SettingParser):
         key_str_value = ['outputfile_root','mode_id',
                          'training_answers',
                          'validation_answers',
-                         'previous_status_root']
+                         'previous_model_file',
+                         'previous_result_file']
         self._add_str_values(setting_,key_str_value)
         self._add_int_values(setting_, key_int_value)
         self._add_bool_values(setting_, key_bool_value)

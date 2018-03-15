@@ -15,16 +15,13 @@ class ModelBuildFacade():
         self._lstm_layer_number = setting['lstm_layer_number']
         self._add_batch_normalize = setting['add_batch_normalize']
         self._dropout = setting['dropout']
-        self._learning_rate = setting['learning_rate']
-        self._weights = setting['weights']
         self._cnn_setting = None
         self._custom_objects = None
         self._build_cnn_setting()
-        self._build_custom_objects()
     def _keys_must_included(self):
         return ['total_convolution_layer_size','convolution_layer_numbers','convolution_layer_sizes',
                'terminal_signal','ANN_TYPES','output_dim','lstm_layer_number','add_batch_normalize',
-               'dropout','learning_rate','weights']
+               'dropout']
     def _validate_dict(self,dict_):
         """Validate if all attribute is set correctly"""   
         validator = DictValidator(dict_,self._keys_must_included(),[],[])
@@ -38,11 +35,6 @@ class ModelBuildFacade():
             cnn_setting_builder.add_layer(self._convolution_layer_numbers[i],
                                           self._convolution_layer_sizes[i])
         self._cnn_setting = cnn_setting_builder.build()
-    def _build_custom_objects(self):
-        facade = CustomObjectsFacade(self._annotation_types,
-                                     self._terminal_signal,
-                                     self._weights)
-        self._custom_objects = facade.custom_objects
     def model(self):
         """Method to build model"""
         model_builder = SeqAnnModelBuilder()
@@ -51,7 +43,5 @@ class ModelBuildFacade():
         model_builder.terminal_signal = self._terminal_signal
         model_builder.add_batch_normalize = self._add_batch_normalize
         model_builder.dropout = self._dropout
-        model_builder.learning_rate = self._learning_rate
         model_builder.output_dim = self._output_dim
-        model_builder.custom_objects = self._custom_objects
         return model_builder.build()
