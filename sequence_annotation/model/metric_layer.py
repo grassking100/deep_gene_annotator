@@ -26,7 +26,7 @@ class MetricLayer(Layer,metaclass=ABCMeta):
             Reset the state at the beginning of 
             training and evaluation for each epoch.
         """
-        print("Reset layer:"+self.name)
+        #print("Reset layer:"+self.name)
         K.set_value(self._data, 0)
     def _calculate(self, y_true, y_pred):
         """Calculate and return result of metric"""
@@ -69,7 +69,7 @@ class MetricLayerFactory(metaclass=ABCMeta):
         elif method_type=="Constant":
             metric_name = 'get_constant'
         else:
-            raise Exception(layer_type+" is not correct metric type")
+            raise Exception(method_type+" is not correct method")
         metric_method = self._get_method(metric,metric_name)
         metric = MetricLayer(metric=metric,
                              metric_method=metric_method,

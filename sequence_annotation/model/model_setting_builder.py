@@ -16,14 +16,14 @@ class ModelSettingBuilder(Builder):
         setting['dropout'] = dropout
         setting['batch_normalize'] = batch_normalize
         return setting
-    def add_CNN_(self,number,size,name=None,dropout=0,batch_normalize=False,layer_subtype="1D"):
+    def add_CNN_(self,number,shape,name=None,dropout=0,batch_normalize=False,layer_subtype="1D"):
         setting = self._add_layer(name=name,dropout=dropout,batch_normalize=batch_normalize)
         setting['number']=number
         setting['shape']=shape
         setting['layer_type']="CNN_"+layer_subtype
         self._setting['layer'].append(setting)
-    def add_RNN(self,number,name=None,dropout=0,batch_normalize=False):
-        setting = self._add_layer(name=name,dropout=dropout,batch_normalize=batch_normalize,layer_subtype="LSTM")
+    def add_RNN(self,number,name=None,dropout=0,batch_normalize=False,layer_subtype="LSTM"):
+        setting = self._add_layer(name=name,dropout=dropout,batch_normalize=batch_normalize)
         setting['number']=number
         setting['layer_type']="RNN_"+layer_subtype
         self._setting['layer'].append(setting)

@@ -72,4 +72,25 @@ class UninitializedException(Exception):
         super().__init__(msg)
 class SizeInconsistent(Exception):
     pass        
-   
+class CodeException(Exception):
+    """Raise when input code is not in in defined space"""
+    def __init__(self,invalid_code,valid_codes=None):
+        self._invalid_code = invalid_code
+        self._valid_codes = valid_codes
+        mess = str(invalid_code)+' is not in defined space'
+        if self._valid_codes is not None:
+            mess+=(",valid codes are "+str(self._valid_codes))
+        super().__init__(mess)
+    @property
+    def invalid_code(self):
+        return self._invalid_code
+    @property
+    def valid_codes(self):
+        return self._valid_codes
+class SeqException(Exception):
+    """Raise when input sequences has at least a code is not in in defined space"""
+    def __init__(self,invalid_code,valid_codes=None):
+        mess = "Seqeunce has a invalid code,"+str(invalid_code)
+        if valid_codes is not None:
+            mess+=(" ,valid codes are "+str(valid_codes))
+        super().__init__(mess)

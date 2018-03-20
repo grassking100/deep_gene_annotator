@@ -3,23 +3,27 @@ from keras.layers.normalization import BatchNormalization
 from keras.layers import concatenate
 from keras.engine.training import Model
 from keras.layers import Input, Convolution1D
-from keras.layers import LSTM, Activation
+from keras.layers import LSTM, Activation,Bidirectional
+from keras.layers import Conv2DTranspose
 from . import Builder
 from . import AttrValidator
 class ModelBuilder(Builder):
     """This class will create and return sequence annotation model"""
     def __init__(self,model_setting):
-        self._setting = model_setting
+        self.setting = model_setting
+        self._layer_index = 1
     def build(self):
         """Create and return model"""
         self._validate()
         input_layer = self._add_input()
         previous_layer = input_layer
-        for setting in self._setting['layer']:
-            layer_type = setting['layer_type']
+        for setting in self.setting['layer']:
+            layer_type = setting['type']
             if layer_type=='CNN_1D':
                 previous_layer = self._add_CNN_1D(previous_layer,setting)
             elif layer_type=='RNN_LSTM':
+                previous_layer = self._add_LSTM(previous_layer,setting)
+            elif layer_type=='RNN_Bi_LSTM':
                 previous_layer = self._add_LSTM(previous_layer,setting)
                 previous_layer = self.to_bidirectional(previous_layer)
             else:
@@ -27,40 +31,54 @@ class ModelBuilder(Builder):
         last_layer = self._add_output(previous_layer)
         model = Model(inputs=input_layer, outputs=last_layer)
         return model
+    def _add_CNN_2D_transpose(self,previous_layer,layer_setting):
+        layer = Conv2DTranspose(filters=layer_setting['number'],
+                                kernel_size=layer_setting['shape'],
+                                padding='same',name=self._get_new_name(layer_setting['name']))
+        next_layer = layer(previous_layer)
+        return next_layer
+    def _get_new_name(self,name):
+        new_name = name+"_"+str(self._layer_index)
+        self._layer_index += 1
+        return new_name
     def _validate(self):
         attr_validator = AttrValidator(self,False,True,False,None)
         attr_validator.validate()
     def _add_CNN_1D(self,previous_layer,layer_setting):
         next_layer = Convolution1D(filters=layer_setting['number'],
                                    kernel_size=layer_setting['shape'],
-                                   padding='same',name=layer_setting['name'],
-                                   input_shape=(None, self._setting['global']['input_dim']),
+                                   padding='same',
+                                   name=self._get_new_name(layer_setting['name']),
                                    use_bias=not layer_setting['batch_normalize'])(previous_layer)
         if layer_setting['batch_normalize']:
-            batch = BatchNormalization(name='BatchNormal'+(str)(index))(next_layer)
-            next_layer = Activation('relu',name='ReLu'+(str)(index))(batch)
+            batch = BatchNormalization(name=self._get_new_name('BatchNormal'))(next_layer)
+            next_layer = Activation('relu',name=self._get_new_name('ReLu'))(batch)
         return next_layer
-    def to_bidirectional(self,layers):
-        return Bidirectional(layers)
+    def to_bidirectional(self,layer):
+        return_layer = Bidirectional(layer,merge_mode='concat')
+        return_layer.name = "Bidirection_"+layer.name
+        return return_layer
     def _add_LSTM(self,previous_layer,layer_setting):
-        next_layer =LSTM(layer_setting['number'],
-                         return_sequences=True,
-                         activation='tanh',
-                         layer_setting['name'],
-                         layer_setting['dropout'])(previous_layer)
+        inner_layer =LSTM(layer_setting['number'],return_sequences=True,
+                         activation='tanh',name=self._get_new_name(layer_setting['name']),
+                         dropout = self.setting['global']['dropout'])
+        if layer_setting['bidirection']:
+            next_layer = self.to_bidirectional(inner_layer)(previous_layer)
+        else:
+            next_layer = inner_layer(previous_layer)
         return next_layer
     def _add_input(self):
-        seq_input_shape = (None, self._setting['global']['input_dim'])
+        seq_input_shape = (None, self.setting['global']['input_dimension'])
         next_layer = Input(shape=seq_input_shape, name='Input')
         return next_layer
     def _add_output(self,previous_layer):
-        dim = self._setting['global']['output_dim']
+        dim = self.setting['global']['output_dimension']
         if  dim== 1:
             last_activation = 'sigmoid'
         else:
             last_activation = 'softmax'
         next_layer = Convolution1D(activation=last_activation, filters=dim,
-                                   kernel_size=1, name='Onput')(previous_layer)
+                                   kernel_size=1, name='Output')(previous_layer)
         return next_layer
-    def _add_concatenate(self,previous_layers)
+    def _add_concatenate(self,previous_layers):
         return concatenate(inputs=previous_layers, name='Concatenate')

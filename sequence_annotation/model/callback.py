@@ -2,7 +2,7 @@ from keras.callbacks import Callback
 import pandas as pd
 from . import NotPositiveException
 class ResultHistory(Callback):
-    def __init__(self,filepath,verbose,period,previous_results):
+    def __init__(self,filepath, verbose, period, previous_results):
         super().__init__()
         self._filepath = filepath
         self._verbose = verbose
@@ -16,9 +16,9 @@ class ResultHistory(Callback):
         self._results = self._previous_results or {}
     def on_train_end(self, logs=None):
         """Check if data have been save or not.If it haven't then save it"""
-        if (self._done_epoch)%self._period!=0:
+        if (self._done_epoch) % self._period != 0:
             if self._verbose:
-                print("Save last result to "+self._filepath.format(epoch=self._done_epoch))
+                print("Save last result to " + self._filepath.format(epoch=self._done_epoch))
             self._save_data()
     def _add_data(self, logs):
         for key,value in logs.items():
@@ -33,7 +33,7 @@ class ResultHistory(Callback):
         logs = logs or {}
         self._done_epoch = epoch + 1
         self._add_data(logs)
-        if (self._done_epoch)%self._period==0:
+        if (self._done_epoch % self._period) == 0:
             if self._verbose:
                 print("Save result to "+self._filepath.format(epoch=self._done_epoch))
             self._save_data()

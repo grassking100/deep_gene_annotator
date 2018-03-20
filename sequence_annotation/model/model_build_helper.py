@@ -2,20 +2,21 @@
 from keras.losses import categorical_crossentropy
 from keras.metrics import categorical_accuracy
 import tensorflow as tf
-from . import process_tensor
+from . import SeqAnnDataHandler
 from . import Builder
 from . import rename
-
+from . import SeqAnnDataHandler
 class CategoricalCrossentropyFactory:
     """This class create and return categorical cross entropy function"""
     def create(self, weights=None, values_to_ignore=None, name="loss"):
         """return cross entropy function"""
+        print(weights)
         @rename(name)
         def crossentropy(y_true, y_pred):
             """calculate static categorical cross entropy between y_true and y_pred"""
             if values_to_ignore is not None:
-                (y_true, y_pred) = process_tensor(y_true, y_pred,
-                                                  values_to_ignore)
+                (y_true, y_pred) = SeqAnnDataHandler.process_tensor(y_true, y_pred,
+                                                                    values_to_ignore=values_to_ignore)
             if weights is not None:
                 y_true = tf.multiply(y_true, weights)
             loss = tf.reduce_mean(categorical_crossentropy(y_true, y_pred))
@@ -29,7 +30,7 @@ class CategoricalAccuracyFactory:
         @rename(name)
         def advanced_categorical_accuracy(y_true, y_pred):
             """calculate categorical accuracy"""
-            (y_true, y_pred) = process_tensor(y_true, y_pred,values_to_ignore)
+            (y_true, y_pred) = SeqAnnDataHandler.process_tensor(y_true, y_pred,values_to_ignore=values_to_ignore)
             accuracy = tf.reduce_mean(categorical_accuracy(y_true, y_pred))
             return accuracy
         return advanced_categorical_accuracy

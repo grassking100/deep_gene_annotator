@@ -21,7 +21,7 @@ if __name__ == '__main__':
     print('Program start time: '+strftime("%Y-%m-%d %H:%M:%S",gmtime()))
     print("User input:"+str(user_setting))
     start_time = time()
-    train_pipeline = TrainPipeline(user_setting, ModelTrainer())
+    train_pipeline = TrainPipeline(args.training_setting_path,args.model_setting_path)
     train_pipeline.execute()
     end_time = time()
     time_spend = end_time - start_time

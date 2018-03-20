@@ -1,5 +1,5 @@
 """A submodule about metric"""
-from . import process_tensor
+from . import SeqAnnDataHandler
 from . import LengthNotEqualException
 from abc import ABCMeta,abstractmethod
 from keras.losses import categorical_crossentropy
@@ -38,8 +38,7 @@ class CategoricalMetric(Metric):
         self._pred = None
         self._true = None
     def _get_preprocessed(self, true, pred):
-        clean_true, clean_pred = process_tensor(true, pred,
-                                                values_to_ignore=self._values_to_ignore)  
+        clean_true, clean_pred = SeqAnnDataHandler.process_tensor(true, pred,values_to_ignore=self._values_to_ignore)  
         return (clean_true,clean_pred)
     def _validate_input(self, true, pred):
         true_shape = K.int_shape(true)[0:2]
@@ -59,10 +58,6 @@ class SpecificTypeMetric(CategoricalMetric):
     def __init__(self, name, target_index, values_to_ignore=None):
         super().__init__(name=name, values_to_ignore=values_to_ignore)
         self._target_index = target_index
-    def get_config(self):
-        config = super().get_config()
-        config['target_index'] = self._target_index
-        return config
     def get_true_positive(self):
         return tf.cast(tf.reduce_sum(tf.multiply(self._true, self._pred)), tf.int64)
     def get_true_negative(self):
@@ -138,12 +133,6 @@ class MetricFactory(metaclass=ABCMeta):
         elif type_ == "specific_type":
             metric = SpecificTypeMetric(name=name, target_index=target_index,
                                         values_to_ignore=values_to_ignore)
-        elif type_ == "precision":
-            metric = CategoricalPrecision(name=name, target_index=target_index,
-                                          values_to_ignore=values_to_ignore)
-        elif type_ == "recall":
-            metric = CategoricalRecall(name=name, target_index=target_index,
-                                       values_to_ignore=values_to_ignore)
         elif type_ == "dependent":
             metric = DependentMetric(name=name)
         else:

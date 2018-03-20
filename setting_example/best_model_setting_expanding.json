@@ -1,0 +1,15 @@
+{
+    "layer":[
+                {"type":"CNN_1D","shape":105,"number":35,"batch_normalize":false,"name":"CNN"},
+                {"type":"CNN_1D","shape":132,"number":175,"batch_normalize":false,"name":"CNN"},
+                {"type":"CNN_1D","shape":175,"number":25,"batch_normalize":false,"name":"CNN"},
+                {"type":"RNN_LSTM","number":12,"name":"LSTM","bidirection":true}
+    ],
+    "global":{
+        "learning_rate":0.001,
+        "dropout":0,
+        "output_dimension":5,
+        "input_dimension":4
+    },
+    "annotation_type":["utr_5","utr_3","intron","cds","intergenic_region"]
+}

@@ -6,12 +6,12 @@ import numpy as np
 import pandas as pd
 from time import gmtime, strftime
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__+'/../..'))))
-from sequence_annotation.sequence_annotation.genome_handler.seq_info_parser import USCUParser
-from sequence_annotation.sequence_annotation.genome_handler.ann_genome_creator import AnnGenomeCreator
-from sequence_annotation.sequence_annotation.genome_handler.region_extractor import RegionExtractor
-from sequence_annotation.sequence_annotation.genome_handler.seq_info_generator import SeqInfoGenerator
-from sequence_annotation.sequence_annotation.genome_handler.seq_container import SeqInfoContainer, AnnSeqContainer
-from sequence_annotation.sequence_annotation.genome_handler.ann_seq_extractor import AnnSeqExtractor
+from sequence_annotation.genome_handler.seq_info_parser import USCUParser
+from sequence_annotation.genome_handler.ann_genome_creator import AnnGenomeCreator
+from sequence_annotation.genome_handler.region_extractor import RegionExtractor
+from sequence_annotation.genome_handler.seq_info_generator import SeqInfoGenerator
+from sequence_annotation.genome_handler.seq_container import SeqInfoContainer, AnnSeqContainer
+from sequence_annotation.genome_handler.ann_seq_extractor import AnnSeqExtractor
 genome_information={'chromosome':{"1":22981688,"10":13272281,"11":11954808,"12":12622881,
                                   "13":13302670,"14":10246949,"15":7320470,"16":9031048,
                                   "17":12136232,"18":11077504,"19":7272499,"2":21591555,
