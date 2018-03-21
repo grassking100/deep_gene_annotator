@@ -5,7 +5,6 @@ import tensorflow as tf
 from . import SeqAnnDataHandler
 from . import Builder
 from . import rename
-from . import SeqAnnDataHandler
 class CategoricalCrossentropyFactory:
     """This class create and return categorical cross entropy function"""
     def create(self, weights=None, values_to_ignore=None, name="loss"):

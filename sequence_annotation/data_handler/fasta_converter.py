@@ -4,10 +4,6 @@
     otherwirse read part of sequneces, the number indicate how many to read
 """
 from Bio import SeqIO
-from Bio.Seq import Seq
-from Bio.SeqRecord import SeqRecord
-from Bio.Alphabet.IUPAC import IUPACAmbiguousDNA
-import numpy as np
 from . import SeqConverter
 from . import SeqException
 class FastaConverter():
@@ -26,7 +22,7 @@ class FastaConverter():
             else:
                 break
         return data
-    def to_vec_dict(self,seq_dict, discard_invalid_seq, number=-1):
+    def to_vec_dict(self,seq_dict, discard_invalid_seq):
         """convert dictionary of seqeucnces to dictionary of one-hot encoding vector"""
         data = {}
         for name,seq in seq_dict.items():
@@ -34,5 +30,5 @@ class FastaConverter():
                 data[name] = self._seq_converter.seq2vecs(seq)
             except SeqException as exp:
                 if not discard_invalid_seq:
-                       raise exp
+                    raise exp
         return data

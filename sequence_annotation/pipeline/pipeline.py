@@ -2,14 +2,10 @@
 import os
 import errno
 from abc import ABCMeta, abstractmethod
-from keras.models import load_model
-from keras.optimizers import Adam
 from time import strftime, gmtime, time
-from . import CustomObjectsFacade
-from . import ModelHandler
 from . import SettingParser
+from . import ModelHandler
 import json
-from pandas.io.json import json_normalize
 class Pipeline(metaclass=ABCMeta):
     def __init__(self, id_, work_setting_path,model_setting_path,is_prompt_visible=True):
         self._id= id_
@@ -21,9 +17,12 @@ class Pipeline(metaclass=ABCMeta):
         self._work_setting_parser = SettingParser()
         self._model_setting_parser = SettingParser()
         self._model_handler = ModelHandler()
+        self._work_setting = None
+        self._model_setting = None
         self._preprocessed_data = None
         self._processed_data = None
         self._weighted = None
+        self._model = None
     def print_prompt(self,value):
         if self._is_prompt_visible:
             print(value)
@@ -68,7 +67,7 @@ class Pipeline(metaclass=ABCMeta):
     def _load_data(self):
         self._preprocessed_data = {}
         data_path = self._work_setting['data_path']
-        ann_types=self._model_setting['annotation_type']
+        ann_types=self._model_setting['annotation_types']
         for name,path in data_path.items():
             temp = self._data_handler.get_data(path['inputs'],
                                                path['answers'],
@@ -94,12 +93,12 @@ class Pipeline(metaclass=ABCMeta):
             else:
                 raise Exception(preprocess['type']+" has not been implemented yet")
     def _compile_model(self):
-        ann_type=self._model_setting['annotation_type']
+        ann_types=self._model_setting['annotation_types']
         learning_rate=self._model_setting['global']['learning_rate']
         values_to_ignore=self._work_setting['values_to_ignore']
         self._model_handler.compile_model(self._model,
                                           learning_rate=learning_rate,
-                                          ann_type=ann_type,
+                                          ann_types=ann_types,
                                           values_to_ignore=values_to_ignore,
                                           weights=self._weighted)
     def _init_worker(self):

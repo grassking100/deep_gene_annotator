@@ -1,6 +1,6 @@
 """A submodule about metric layer"""
 from keras.engine.topology import Layer
-from abc import abstractmethod, ABCMeta
+from abc import ABCMeta
 from keras import backend as K
 import tensorflow as tf
 class MetricLayer(Layer,metaclass=ABCMeta):

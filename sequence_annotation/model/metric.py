@@ -1,7 +1,7 @@
 """A submodule about metric"""
 from . import SeqAnnDataHandler
 from . import LengthNotEqualException
-from abc import ABCMeta,abstractmethod
+from abc import ABCMeta
 from keras.losses import categorical_crossentropy
 from keras.metrics import categorical_accuracy
 import tensorflow as tf
@@ -106,22 +106,6 @@ class CategoricalAccuracy(CategoricalMetric):
     def __call__(self, y_true, y_pred):
         self.set_data(y_true, y_pred)
         return self.get_result()
-"""class CategoricalPrecision(SpecificTypeMetric):
-    def get_result(self):
-        true_positive = self.get_true_positive()
-        false_positive = self.get_false_positive()
-        return  true_positive/(true_positive+false_positive)
-    def __call__(self, y_true, y_pred):
-        self.set_data(y_true, y_pred)
-        return self.get_result()
-class CategoricalRecall(SpecificTypeMetric):
-    def get_result(self):
-        true_positive = self.get_true_positive()
-        false_negative = self.get_false_negative()
-        return  true_positive / (true_positive + false_negative)
-    def __call__(self, y_true, y_pred):
-        self.set_data(y_true, y_pred)
-        return self.get_result()"""
 class MetricFactory(metaclass=ABCMeta):
     """A factory creates metric"""
     def create(self, type_, name, weights=None, values_to_ignore=None, target_index=None):

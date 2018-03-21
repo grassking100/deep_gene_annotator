@@ -11,5 +11,5 @@
         "output_dimension":5,
         "input_dimension":4
     },
-    "annotation_type":["utr_5","utr_3","intron","cds","intergenic_region"]
+    "annotation_types":["utr_5","utr_3","intron","cds","intergenic_region"]
 }

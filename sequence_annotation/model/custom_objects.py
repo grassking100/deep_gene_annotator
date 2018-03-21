@@ -1,12 +1,7 @@
-
 from . import MetricFactory
 from . import MetricLayerFactory
 from . import CategoricalCrossentropyFactory
 from . import CategoricalAccuracyFactory
-from keras.layers import Layer
-from abc import abstractmethod, ABCMeta
-from keras import backend as K
-import tensorflow as tf
 
 class CustomObjectsFacade:
     def __init__(self, annotation_types,values_to_ignore=None,

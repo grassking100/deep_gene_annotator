@@ -1,4 +1,4 @@
-from ..utils.exception import ReturnNoneException
+from ..utils import ReturnNoneException
 from ..model import DataGenerator
 from ..model import ResultHistory
 from .model_worker import ModelWorker

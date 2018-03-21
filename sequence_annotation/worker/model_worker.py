@@ -6,8 +6,11 @@ class ModelWorker(metaclass=ABCMeta):
     """The class hold model and handle with data input, model pedict and model result"""
     def __init__(self):
         self.model = None
-        self.result = {}
+        self.result = None
         self.data = {}
+        self._path_root = None
+        self._is_verbose_visible = None
+        self._is_prompt_visible = None
     def init_worker(self, path_root, is_verbose_visible=True, is_prompt_visible=True):
         self._path_root = path_root
         self._is_verbose_visible = is_verbose_visible

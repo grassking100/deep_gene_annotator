@@ -33,14 +33,14 @@ class ModelHandler:
             weights[type_] = scale * count / sum_raw_weights
         return weights
     @staticmethod
-    def compile_model(model,learning_rate,ann_type,values_to_ignore=None,
+    def compile_model(model,learning_rate,ann_types,values_to_ignore=None,
                       weights=None,metric_types=None):
         weight_vec = None
         if weights is not None:
             weight_vec = []
-            for type_ in ann_type:
+            for type_ in ann_types:
                 weight_vec.append(weights[type_])
-        facade = CustomObjectsFacade(annotation_types = ann_type,
+        facade = CustomObjectsFacade(annotation_types = ann_types,
                                      values_to_ignore = values_to_ignore,
                                      weights = weight_vec)
         custom_objects = facade.custom_objects
@@ -50,5 +50,4 @@ class ModelHandler:
         for key,value in custom_objects.items():
             if key not in not_include_keys:
                 custom_metrics.append(value)
-
         model.compile(optimizer=optimizer, loss=custom_objects['loss'],metrics=custom_metrics)

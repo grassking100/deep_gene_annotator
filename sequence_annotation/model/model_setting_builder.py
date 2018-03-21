@@ -27,5 +27,8 @@ class ModelSettingBuilder(Builder):
         setting['number']=number
         setting['layer_type']="RNN_"+layer_subtype
         self._setting['layer'].append(setting)
+    def _validate(self):
+        pass
     def build(self):
+        self._validate()
         return self._setting

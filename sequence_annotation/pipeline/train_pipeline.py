@@ -1,5 +1,5 @@
 """This submodule provides class to defined training pipeline"""
-from abc import ABCMeta, abstractmethod
+import pandas as pd
 from . import SeqAnnDataHandler
 from . import Pipeline
 from . import ModelTrainer

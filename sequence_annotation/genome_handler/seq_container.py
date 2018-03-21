@@ -7,13 +7,7 @@ from . import AnnSequence,SeqInformation,Sequence
 class SeqContainer(metaclass=ABCMeta):
     def __init__(self):
         self._data = {}
-        self._note = ""
-    @property
-    def note(self):
-        return self._note
-    @note.setter
-    def note(self, value):
-        self._note = value
+        self.note = ""
     @property
     def data(self):
         """Return sequences in order based on their id"""
@@ -49,7 +43,7 @@ class SeqContainer(metaclass=ABCMeta):
             data.append(item.to_dict())
         return pd.DataFrame().from_dict(data)
     def to_dict(self):
-        dict_ = {"data":[],"note":self._note}
+        dict_ = {"data":[],"note":self.note}
         for item in self.data:
             dict_['data'] += [item.to_dict()]
         return dict_
@@ -60,7 +54,7 @@ class SeqContainer(metaclass=ABCMeta):
             seq = self._create_sequence()
             seq.from_dict(data)
             self.add(seq)
-        self._note = dict_['note']
+        self.note = dict_['note']
 class SeqInfoContainer(SeqContainer):
     def _validate(self):
         pass
@@ -87,15 +81,9 @@ class SeqInfoContainer(SeqContainer):
 class AnnSeqContainer(SeqContainer):
     def __init__(self):
         super().__init__()
-        self._ANN_TYPES = None
-    @property
-    def ANN_TYPES(self):
-        return self._ANN_TYPES
-    @ANN_TYPES.setter
-    def ANN_TYPES(self,values):
-        self._ANN_TYPES = values
+        self.ANN_TYPES = None
     def _validate_seq(self, seq):
-        diffs = set(seq.ANN_TYPES).symmetric_difference(self._ANN_TYPES)
+        diffs = set(seq.ANN_TYPES).symmetric_difference(self.ANN_TYPES)
         if len(diffs) > 0:
             raise InvalidAnnotation(str(diffs))
     def _validate(self):
