@@ -9,7 +9,7 @@ K.set_session(sess)
 from keras.callbacks import TensorBoard
 from keras.callbacks import ModelCheckpoint
 from keras.utils import plot_model
-#from . import DataGenerator
+from . import DataGenerator
 from . import ModelWorker
 from . import ResultHistory
 class ModelTrainer(ModelWorker):
@@ -22,10 +22,6 @@ class ModelTrainer(ModelWorker):
         self._batch_size = None
         self._shuffle = None
         self._initial_epoch = None
-        self._train_input = []
-        self._train_answer = []
-        self._val_input = []
-        self._val_answer = []
         self.callbacks = []
         super().__init__()
     def init_worker(self,path_root, epoch,
@@ -49,9 +45,9 @@ class ModelTrainer(ModelWorker):
         callbacks = []
         length = str(len(str(self._epoch)))
         root_path = './'+self._path_root
-        callbacks.append(TensorBoard(log_dir=root_path+"/log", histogram_freq=0,
+        """callbacks.append(TensorBoard(log_dir=root_path+"/log", histogram_freq=0,
                                      write_graph=True, write_grads=True,
-                                     write_images=True))
+                                     write_images=True))"""
         callbacks.append(ModelCheckpoint(filepath=root_path+"/model/epoch_{epoch:0"+length+"d}.h5",
                                          verbose=int(self._is_prompt_visible),
                                          save_best_only=False,
@@ -68,41 +64,42 @@ class ModelTrainer(ModelWorker):
         plot_model(self.model, show_shapes=True,to_file=root_path+"/model_image.png")
         length = str(len(str(self._epoch)))
         self.model.save((root_path+'/model/epoch_{:0'+length+'d}.h5').format(0))
-    """def _prepare_data(self,x_data,y_data,batch_size):
+    def _prepare_data(self,x_data,y_data,batch_size):
         generator = DataGenerator(x_data,y_data,batch_size)
-        return generator"""
-    """def _fit(self):
-        train_data = self._prepare_data(self._train_input,
-                                        self._train_answer,
+        return generator
+    def _train_by_generator(self):
+        train_data = self._prepare_data(self.data['training']['inputs'],
+                                        self.data['training']['answers'],
                                         self._batch_size)
-        val_data = self._prepare_data(self._val_input,
-                                      self._val_answer,
+        val_data = self._prepare_data(self.data['validation']['inputs'],
+                                      self.data['validation']['answers'],
                                       self._batch_size)
-        self._model.fit_generator(train_data,
-                                  verbose=int(self._is_verbose_visible),
-                                  callbacks=self._get_call_backs(),
-                                  validation_data=val_data,
-                                  max_queue_size=10,
-                                  workers=1,
-                                  use_multiprocessing=False,
-                                  shuffle=self._shuffle,
-                                  initial_epoch=self._initial_epoch)"""
-        
+        return self.model.fit_generator(train_data,
+                                        epochs=self._epoch,
+                                        verbose=int(self._is_verbose_visible),
+                                        callbacks=self._get_addition_callbacks()+self.callbacks,
+                                        validation_data=val_data,
+                                        max_queue_size=10,
+                                        workers=1,
+                                        use_multiprocessing=False,
+                                        shuffle=self._shuffle,
+                                        initial_epoch=self._initial_epoch)
+    def _train_by_fit(self):
+        return self.model.fit(x=self.data['training']['inputs'],
+                              y=self.data['training']['answers'],
+                              epochs=self._epoch,
+                              verbose=int(self._is_verbose_visible),
+                              callbacks=self._get_addition_callbacks()+self.callbacks,
+                              validation_data=(self.data['validation']['inputs'],
+                                               self.data['validation']['answers']),
+                              batch_size=self._batch_size,
+                              shuffle=self._shuffle,
+                              initial_epoch=self._initial_epoch)
     def after_work(self):
         pass
     def work(self):
         """Train model"""
         self._validate()
         #training and evaluating the model
-        history = self.model.fit(x=self.data['training']['inputs'],
-                                 y=self.data['training']['answers'],
-                                 epochs=self._epoch,
-                                 verbose=int(self._is_verbose_visible),
-                                 callbacks=self._get_addition_callbacks()+self.callbacks,
-                                 validation_data=(self.data['validation']['inputs'],
-                                                  self.data['validation']['answers']),
-                                 batch_size=self._batch_size,
-                                 shuffle=self._shuffle,
-                                 initial_epoch=self._initial_epoch)
-        """history = """
+        history = self._train_by_generator()
         self.result = history.history.items()
