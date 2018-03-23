@@ -2,6 +2,7 @@ from . import FastaConverter
 from . import LengthNotEqualException
 import os
 import numpy as np
+import pandas as pd
 import keras.backend as K
 import tensorflow as tf
 from abc import ABCMeta, abstractmethod
@@ -10,7 +11,6 @@ class DataHandler(metaclass=ABCMeta):
     @abstractmethod
     def get_data(self,data_path,answer_path):
         pass
-class SeqAnnDataHandler(DataHandler):
     @staticmethod
     def to_vecs(data_pair_list):
         inputs = []
@@ -21,6 +21,40 @@ class SeqAnnDataHandler(DataHandler):
         inputs = np.array(inputs)
         answers = np.array(answers)
         return (inputs,answers)
+class SimpleDataHandler(DataHandler):
+    @staticmethod
+    def _to_dict(inputs_,answer):
+        dict_ = {'data_pair':{},'cell_types':answer[1]}
+        answer_vecs = answer[0]
+        for name,input_ in inputs_.items():
+            answer_vec = answer_vecs[name]
+            dict_['data_pair'][name]={'input':input_,'answer':answer_vec}
+        return dict_
+    @classmethod
+    def get_data(cls,data_path,answer_path):
+        bulk_expression = cls.get_bulk_expression(data_path)
+        proportion = cls.get_proportion(answer_path)
+        return cls._to_dict(bulk_expression,proportion)
+    @staticmethod
+    def get_bulk_expression(path):
+        path = os.path.abspath(path)
+        raw_data = pd.read_csv(path,sep='\t',index_col=0)
+        bulk_ids = list(raw_data)
+        data = {}
+        for id_ in bulk_ids:
+            data[id_] = list(raw_data[id_])[:-1]
+        return data
+    @staticmethod
+    def get_proportion(path):
+        path = os.path.abspath(path)
+        raw_data = pd.read_csv(path,sep='\t',index_col=0)
+        cell_types = list(raw_data.index)[:-1]
+        bulk_ids = list(raw_data)
+        data = {}
+        for id_ in bulk_ids:
+            data[id_] = list(raw_data[id_])[:-1]
+        return (data,cell_types)
+class SeqAnnDataHandler(DataHandler):
     @staticmethod
     def padding(inputs, answers, padding_signal):
         align_inputs = pad_sequences(inputs, padding='post',value=0)

@@ -34,7 +34,7 @@ class ModelHandler:
         return weights
     @staticmethod
     def compile_model(model,learning_rate,ann_types,values_to_ignore=None,
-                      weights=None,metric_types=None):
+                      weights=None,metric_types=None,loss_type=None):
         weight_vec = None
         if weights is not None:
             weight_vec = []
@@ -42,7 +42,9 @@ class ModelHandler:
                 weight_vec.append(weights[type_])
         facade = CustomObjectsFacade(annotation_types = ann_types,
                                      values_to_ignore = values_to_ignore,
-                                     weights = weight_vec)
+                                     weights = weight_vec,
+                                     loss_type=loss_type,
+                                     metric_types=metric_types)
         custom_objects = facade.custom_objects
         optimizer = Adam(lr=learning_rate)
         custom_metrics = []

@@ -12,7 +12,7 @@ from .callback import ResultHistory
 from .metric import MetricFactory
 from .metric_layer import MetricLayerFactory
 from .model_build_helper import CategoricalAccuracyFactory
-from .model_build_helper import CategoricalCrossentropyFactory
+from .model_build_helper import LossFactory
 from .custom_objects import CustomObjectsFacade
 from .metric import CategoricalMetric
 from .model_builder import ModelBuilder

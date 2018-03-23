@@ -2,7 +2,7 @@
 from keras.layers.normalization import BatchNormalization
 from keras.layers import concatenate
 from keras.engine.training import Model
-from keras.layers import Input, Convolution1D
+from keras.layers import Input, Convolution1D, Dense
 from keras.layers import LSTM, Activation,Bidirectional
 from keras.layers import Conv2DTranspose
 from . import Builder
@@ -15,22 +15,32 @@ class ModelBuilder(Builder):
     def build(self):
         """Create and return model"""
         self._validate()
-        input_layer = self._add_input()
-        previous_layer = input_layer
+        
         for setting in self.setting['layer']:
             layer_type = setting['type']
             if layer_type=='CNN_1D':
                 previous_layer = self._add_CNN_1D(previous_layer,setting)
+            elif layer_type=='Dense':
+                previous_layer = self._add_Dense(previous_layer,setting)
             elif layer_type=='RNN_LSTM':
                 previous_layer = self._add_LSTM(previous_layer,setting)
             elif layer_type=='RNN_Bi_LSTM':
                 previous_layer = self._add_LSTM(previous_layer,setting)
                 previous_layer = self.to_bidirectional(previous_layer)
+            elif layer_type=='Input':
+                input_layer = self._add_input(setting)
+                previous_layer = input_layer
             else:
                 raise Exception("Layer,{layer},has not implment yet".format(layer=layer_type))
-        last_layer = self._add_output(previous_layer)
-        model = Model(inputs=input_layer, outputs=last_layer)
+        #last_layer = self._add_output(previous_layer)
+        model = Model(inputs=input_layer, outputs=previous_layer)
         return model
+    def _add_Dense(self,previous_layer,layer_setting):
+        layer = Dense(units=layer_setting['number'],
+                      activation=layer_setting['activation'],
+                      name=self._get_new_name(layer_setting['name']))
+        next_layer = layer(previous_layer)
+        return next_layer
     def _add_CNN_2D_transpose(self,previous_layer,layer_setting):
         layer = Conv2DTranspose(filters=layer_setting['number'],
                                 kernel_size=layer_setting['shape'],
@@ -67,18 +77,19 @@ class ModelBuilder(Builder):
         else:
             next_layer = inner_layer(previous_layer)
         return next_layer
-    def _add_input(self):
-        seq_input_shape = (None, self.setting['global']['input_dimension'])
-        next_layer = Input(shape=seq_input_shape, name='Input')
+    def _add_input(self,layer_setting):
+        input_shape = tuple(layer_setting['number'])
+        print(input_shape)
+        next_layer = Input(shape=input_shape, name=layer_setting['name'])
         return next_layer
-    def _add_output(self,previous_layer):
-        dim = self.setting['global']['output_dimension']
+    """def _add_output(self,previous_layer):
+        dim = tuple(self.setting['global']['output_dimension'])
         if  dim== 1:
             last_activation = 'sigmoid'
         else:
             last_activation = 'softmax'
         next_layer = Convolution1D(activation=last_activation, filters=dim,
                                    kernel_size=1, name='Output')(previous_layer)
-        return next_layer
+        return next_layer"""
     def _add_concatenate(self,previous_layers):
         return concatenate(inputs=previous_layers, name='Concatenate')

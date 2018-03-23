@@ -3,6 +3,7 @@ import os
 import errno
 from abc import ABCMeta, abstractmethod
 from time import strftime, gmtime, time
+from shutil import copyfile
 from . import SettingParser
 from . import ModelHandler
 import json
@@ -64,16 +65,7 @@ class Pipeline(metaclass=ABCMeta):
         else:
             self.print_prompt("\tBuilding model...")
             self._model = self._model_handler.build_model(self._model_setting)
-    def _load_data(self):
-        self._preprocessed_data = {}
-        data_path = self._work_setting['data_path']
-        ann_types=self._model_setting['annotation_types']
-        for name,path in data_path.items():
-            temp = self._data_handler.get_data(path['inputs'],
-                                               path['answers'],
-                                               ann_types=ann_types,
-                                               discard_invalid_seq=True)
-            self._preprocessed_data[name] = temp
+
     def _padding(self, data_dict, value):
         padded = {}
         for data_kind, data in data_dict.items():
@@ -93,23 +85,32 @@ class Pipeline(metaclass=ABCMeta):
             else:
                 raise Exception(preprocess['type']+" has not been implemented yet")
     def _compile_model(self):
-        ann_types=self._model_setting['annotation_types']
+        if 'annotation_types' in self._model_setting.keys():
+            ann_types = self._model_setting['annotation_types']
+        else:
+            ann_types = None
+        metric_types = self._model_setting['global']['metric_types']
+        loss = self._model_setting['global']['loss']
         learning_rate=self._model_setting['global']['learning_rate']
         values_to_ignore=self._work_setting['values_to_ignore']
         self._model_handler.compile_model(self._model,
                                           learning_rate=learning_rate,
                                           ann_types=ann_types,
                                           values_to_ignore=values_to_ignore,
-                                          weights=self._weighted)
+                                          weights=self._weighted,
+                                          metric_types=metric_types,
+                                          loss_type=loss)
     def _init_worker(self):
         mode_id=self._work_setting['mode_id']
         path_root=self._work_setting['path_root']+"/"+str(self._id)+"/"+mode_id
         batch_size=self._work_setting['batch_size']
         initial_epoch=self._work_setting['initial_epoch']
+        validation_split=self._work_setting['validation_split']
         period=self._work_setting['period']
         self._worker.init_worker(path_root,self._work_setting['epoch'],batch_size,
                                  initial_epoch=initial_epoch,
-                                 period=period)
+                                 period=period,
+                                 validation_split=validation_split)
         self._worker.data = self._processed_data
         self._worker.model = self._model
     def _before_execute(self):
@@ -143,12 +144,13 @@ class Pipeline(metaclass=ABCMeta):
         saved['is_prompt_visible'] = self._is_prompt_visible
         saved['work_setting_path'] = self._work_setting_path
         saved['model_setting_path'] = self._model_setting_path
-        saved['annotation_count'] = self._preprocessed_data['training']['annotation_count']
         return saved
     def _save_setting(self):
         data =  self._setting_to_saved()
         mode_id=self._work_setting['mode_id']
         data['save_time'] = strftime("%Y_%b_%d", gmtime())
         path_root=self._work_setting['path_root']+"/"+str(self._id)+"/"+mode_id
+        copyfile(self._work_setting_path, path_root+"/work_setting.json")
+        copyfile(self._model_setting_path, path_root+"/model_setting.json")
         with open(path_root+'/setting.json', 'w') as outfile:  
             json.dump(data, outfile)

@@ -1,5 +1,6 @@
 """This submodule provides trainer to train model"""
 from keras import backend as K
+import numpy as np
 import tensorflow as tf
 config = tf.ConfigProto()
 if hasattr(config,"gpu_options"):
@@ -31,6 +32,7 @@ class ModelTrainer(ModelWorker):
     def init_worker(self,path_root, epoch,
                     batch_size,shuffle=True,
                     initial_epoch=0,period=1,
+                    validation_split=0.0,
                     previous_result=None,
                     is_verbose_visible=True,
                     is_prompt_visible=True):
@@ -41,7 +43,9 @@ class ModelTrainer(ModelWorker):
         self._batch_size =int(batch_size)
         self._shuffle =bool(shuffle)
         self._initial_epoch = initial_epoch
+        self._validation_split=validation_split
         self.result = previous_result
+        
     def _validate(self):
         """Validate required data"""
         pass
@@ -94,13 +98,20 @@ class ModelTrainer(ModelWorker):
         """Train model"""
         self._validate()
         #training and evaluating the model
-        history = self.model.fit(x=self.data['training']['inputs'],
-                                 y=self.data['training']['answers'],
+        train_x = self.data['training']['inputs']
+        train_y = self.data['training']['answers']
+        if 'validation' in self.data.keys():
+            val_x = self.data['validation']['inputs']
+            val_y = self.data['validation']['answers']
+            val = (val_x,val_y)
+        else:
+            val = None
+        history = self.model.fit(x=train_x,y=train_y,
                                  epochs=self._epoch,
                                  verbose=int(self._is_verbose_visible),
                                  callbacks=self._get_addition_callbacks()+self.callbacks,
-                                 validation_data=(self.data['validation']['inputs'],
-                                                  self.data['validation']['answers']),
+                                 validation_data=val,
+                                 validation_split=self._validation_split,
                                  batch_size=self._batch_size,
                                  shuffle=self._shuffle,
                                  initial_epoch=self._initial_epoch)

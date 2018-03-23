@@ -1,13 +1,12 @@
 """This submodule help user to create metric function,or customize objects or cnn setting"""
-from keras.losses import categorical_crossentropy
 from keras.metrics import categorical_accuracy
 import tensorflow as tf
 from . import SeqAnnDataHandler
 from . import Builder
 from . import rename
-class CategoricalCrossentropyFactory:
-    """This class create and return categorical cross entropy function"""
-    def create(self, weights=None, values_to_ignore=None, name="loss"):
+class LossFactory:
+    """This class create and return loss function"""
+    def create(self, weights=None, values_to_ignore=None, name="loss",loss_type="categorical_crossentropy"):
         """return cross entropy function"""
         print(weights)
         @rename(name)
@@ -18,8 +17,13 @@ class CategoricalCrossentropyFactory:
                                                                     values_to_ignore=values_to_ignore)
             if weights is not None:
                 y_true = tf.multiply(y_true, weights)
-            loss = tf.reduce_mean(categorical_crossentropy(y_true, y_pred))
-            return loss
+            try:
+                exec('from keras.losses import {loss_type}'.format(loss_type=loss_type))
+                exec('self._loss_function={loss_type}'.format(loss_type=loss_type))
+                loss = tf.reduce_mean(self._loss_function(y_true, y_pred))
+                return loss
+            except ImportError as e:
+                print('metric_type cannot be found in keras.losses')
         return crossentropy
 
 class CategoricalAccuracyFactory:
