@@ -9,7 +9,7 @@ class CustomObjectsFacade:
         self._annotation_types = annotation_types
         self._values_to_ignore = values_to_ignore
         self._weights = weights
-        self._metric_types = metric_types or ['TP','TN','FP','FN','accuracy']
+        self._metric_types = metric_types or ['TP','TN','FP','FN','accuracy','constant']
         self._metric_types.append("loss")
         self._loss_type = loss_type
     @property
@@ -19,8 +19,9 @@ class CustomObjectsFacade:
         loss_factory = LossFactory()
         acc_factory = CategoricalAccuracyFactory()
         metric_layer_factory = MetricLayerFactory()
-        #metric = metric_factory.create(type_="dependent", name="constant")
-        #custom_objects["Constant"] = metric_layer_factory.create("Constant", metric=metric)
+		if 'constant' in self._metric_types:
+			metric = metric_factory.create(type_="dependent", name="constant")
+			custom_objects["Constant"] = metric_layer_factory.create("Constant", metric=metric)
         if self._annotation_types is not None:
             for index, ann_type in enumerate(self._annotation_types):
                 for metric_type in self._metric_types:

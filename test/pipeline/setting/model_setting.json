@@ -1,8 +1,6 @@
 {
     "layer":[
-                {"type":"CNN_1D","shape":105,"number":35,"batch_normalize":false,"name":"CNN"},
-                {"type":"CNN_1D","shape":32,"number":116,"batch_normalize":false,"name":"CNN"},
-                {"type":"CNN_1D","shape":175,"number":25,"batch_normalize":false,"name":"CNN"},
+                {"type":"CNN_1D","shape":3,"number":12,"batch_normalize":false,"name":"CNN"},
                 {"type":"RNN_LSTM","number":12,"name":"LSTM","bidirection":true}
     ],
     "global":{
