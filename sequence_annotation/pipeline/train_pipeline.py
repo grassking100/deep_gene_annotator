@@ -51,7 +51,6 @@ class TrainSimplePipeline(TrainPipeline):
         super().__init__(id_, work_setting_path,model_setting_path,is_prompt_visible)
         self._data_handler = SimpleDataHandler
         self._worker = ModelTrainer()
-
     def _load_data(self):
         self._preprocessed_data = {}
         data_path = self._work_setting['data_path']

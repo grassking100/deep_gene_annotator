@@ -29,6 +29,7 @@ class ModelTrainer(ModelWorker):
                     batch_size,shuffle=True,
                     initial_epoch=0,period=1,
                     validation_split=0.0,
+                    use_fit_generator=False,
                     previous_result=None,
                     is_verbose_visible=True,
                     is_prompt_visible=True):
@@ -41,7 +42,7 @@ class ModelTrainer(ModelWorker):
         self._initial_epoch = initial_epoch
         self._validation_split = validation_split
         self.result = previous_result
-        
+        self._use_fit_generator = use_fit_generator
     def _validate(self):
         """Validate required data"""
         pass
@@ -74,13 +75,19 @@ class ModelTrainer(ModelWorker):
     def _train_by_generator(self):
         train_x = self.data['training']['inputs']
         train_y = self.data['training']['answers']
-        train_data = self._prepare_data(train_x,train_y,self._batch_size)
         if 'validation' in self.data.keys():
             val_x = self.data['validation']['inputs']
             val_y = self.data['validation']['answers']
-            val_data = self._prepare_data(val_x,val_y,self._batch_size)
         else:
-            val_data = None
+            shuffled_train_x = np.random.shuffle(train_x)
+            shuffled_train_y = np.random.shuffle(train_y)
+            index = len(shuffled_train_x)(1-self._validation_split)
+            train_x = train_x[:index]
+            train_y = train_y[:index]
+            val_x = train_x[index:]
+            val_y = train_y[index:]
+        val_data = self._prepare_data(val_x,val_y,self._batch_size)
+        train_data = self._prepare_data(train_x,train_y,self._batch_size)
         callbacks = self._get_addition_callbacks()+self.callbacks
         history = self.model.fit_generator(train_data,
                                            epochs=self._epoch,
@@ -107,6 +114,7 @@ class ModelTrainer(ModelWorker):
                                  validation_data=val,
                                  batch_size=self._batch_size,
                                  shuffle=self._shuffle,
+                                 validation_split = self._validation_split,
                                  initial_epoch=self._initial_epoch)
         return history
     def after_work(self):
@@ -115,5 +123,8 @@ class ModelTrainer(ModelWorker):
         """Train model"""
         self._validate()
         #training and evaluating the model
-        history = self._train_by_generator()
+        if self._use_fit_generator:
+            history = self._train_by_generator()
+        else:
+            history = self._train_by_fit()
         self.result = history.history.items()
