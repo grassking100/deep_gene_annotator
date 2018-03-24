@@ -72,16 +72,16 @@ class ModelTrainer(ModelWorker):
         generator = DataGenerator(x_data,y_data,batch_size)
         return generator
     def _train_by_generator(self):
-		train_x = self.data['training']['inputs']
+        train_x = self.data['training']['inputs']
         train_y = self.data['training']['answers']
-		train_data = self._prepare_data(train_x,train_y,self._batch_size)
+        train_data = self._prepare_data(train_x,train_y,self._batch_size)
         if 'validation' in self.data.keys():
             val_x = self.data['validation']['inputs']
             val_y = self.data['validation']['answers']
-			val_data = self._prepare_data(val_x,val_y,self._batch_size)
-		else:
-			val_data = None
-		callbacks = self._get_addition_callbacks()+self.callbacks
+            val_data = self._prepare_data(val_x,val_y,self._batch_size)
+        else:
+            val_data = None
+        callbacks = self._get_addition_callbacks()+self.callbacks
         history = self.model.fit_generator(train_data,
                                            epochs=self._epoch,
                                            verbose=int(self._is_verbose_visible),
@@ -89,9 +89,9 @@ class ModelTrainer(ModelWorker):
                                            validation_data=val_data,
                                            shuffle=self._shuffle,
                                            initial_epoch=self._initial_epoch)
-		return history
+        return history
     def _train_by_fit(self):
-		train_x = self.data['training']['inputs']
+        train_x = self.data['training']['inputs']
         train_y = self.data['training']['answers']
         if 'validation' in self.data.keys():
             val_x = self.data['validation']['inputs']
@@ -99,16 +99,16 @@ class ModelTrainer(ModelWorker):
             val = (val_x,val_y)
         else:
             val = None
-		callbacks = self._get_addition_callbacks()+self.callbacks			
+        callbacks = self._get_addition_callbacks()+self.callbacks            
         history = self.model.fit(x=train_x,y=train_y,
                                  epochs=self._epoch,
-								 verbose=int(self._is_verbose_visible),
-								 callbacks=callbacks,
-								 validation_data=val,
-								 batch_size=self._batch_size,
-								 shuffle=self._shuffle,
-								 initial_epoch=self._initial_epoch)
-		return history
+                                 verbose=int(self._is_verbose_visible),
+                                 callbacks=callbacks,
+                                 validation_data=val,
+                                 batch_size=self._batch_size,
+                                 shuffle=self._shuffle,
+                                 initial_epoch=self._initial_epoch)
+        return history
     def after_work(self):
         pass
     def work(self):

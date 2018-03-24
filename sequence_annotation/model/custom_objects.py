@@ -19,9 +19,9 @@ class CustomObjectsFacade:
         loss_factory = LossFactory()
         acc_factory = CategoricalAccuracyFactory()
         metric_layer_factory = MetricLayerFactory()
-		if 'constant' in self._metric_types:
-			metric = metric_factory.create(type_="dependent", name="constant")
-			custom_objects["Constant"] = metric_layer_factory.create("Constant", metric=metric)
+        if 'constant' in self._metric_types:
+            metric = metric_factory.create(type_="dependent", name="constant")
+            custom_objects["Constant"] = metric_layer_factory.create("Constant", metric=metric)
         if self._annotation_types is not None:
             for index, ann_type in enumerate(self._annotation_types):
                 for metric_type in self._metric_types:

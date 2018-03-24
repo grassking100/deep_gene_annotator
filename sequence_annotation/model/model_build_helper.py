@@ -8,7 +8,7 @@ class LossFactory:
     """This class create and return loss function"""
     def create(self, weights=None, values_to_ignore=None, name="loss",loss_type="categorical_crossentropy"):
         """return cross entropy function"""
-        print(weights)
+        print("Use weights:"+str(weights))
         @rename(name)
         def crossentropy(y_true, y_pred):
             """calculate static categorical cross entropy between y_true and y_pred"""

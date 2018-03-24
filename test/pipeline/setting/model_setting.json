@@ -1,13 +1,19 @@
 {
-    "layer":[
-                {"type":"CNN_1D","shape":3,"number":12,"batch_normalize":false,"name":"CNN"},
-                {"type":"RNN_LSTM","number":12,"name":"LSTM","bidirection":true}
-    ],
+    "layer":{
+                "Input":{"type":"Input","shape":[null,4],"is_output":false,"previous_layer":null},
+                "CNN":{"type":"CNN_1D","shape":3,"number":12,"batch_normalize":false,
+                       "previous_layer":"Input","is_output":false,"activation":"relu"},
+                "LSTM":{"type":"RNN_LSTM","number":12,"bidirection":true,
+                        "previous_layer":"CNN","is_output":false,"activation":"tanh"},
+                "Output":{"type":"CNN_1D","shape":1,"number":5,"batch_normalize":false,
+                          "activation":"softmax","previous_layer":"LSTM","is_output":true}
+    
+    },
     "global":{
         "learning_rate":0.001,
         "dropout":0,
-        "output_dimension":5,
-        "input_dimension":4
+        "metric_types":["loss","constant"],
+        "loss":"mse"
     },
     "annotation_types":["utr_5","utr_3","intron","cds","intergenic_region"]
 }
