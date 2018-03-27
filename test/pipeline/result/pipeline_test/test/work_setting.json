@@ -1,0 +1,25 @@
+{
+    "mode_id":"test",
+    "period":1,
+    "epoch":3,
+    "initial_epoch":0,
+    "batch_size":1,
+    "data_path":{
+                    "training":{
+                                    "inputs":"~/deep_learning/sequence_annotation/test/pipeline/data/seqs.fasta",
+                                    "answers":"~/deep_learning/sequence_annotation/test/pipeline/data/seqs.npy"
+                               },
+                    "validation":{
+                                    "inputs":"~/deep_learning/sequence_annotation/test/pipeline/data/seqs.fasta",
+                                    "answers":"~/deep_learning/sequence_annotation/test/pipeline/data/seqs.npy"
+                                 }
+                },
+    "previous_result_path":null,
+    "trained_model_path":null,
+    "path_root":"result",
+    "weight_setting":{"use_weights":false},
+    "preprocess":[{"type":"padding","value":-1}],
+    "values_to_ignore":[-1],
+    "validation_split":0.4,
+    "use_fit_generator":true
+}

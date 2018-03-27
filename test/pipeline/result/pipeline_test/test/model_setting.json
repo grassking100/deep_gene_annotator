@@ -1,0 +1,32 @@
+{
+    "layer":{
+                "Input":{"type":"Input",
+                         "keras_setting":{"shape":[null,4],"name":"Input"},
+                         "previous_layer":null,
+                         "is_output":false
+                        },
+                "CNN":{"type":"CNN_1D",
+                       "keras_setting":{"kernel_size":3,"filters":12,"use_bias":true,
+                                        "activation":"relu","padding":"same"},
+                       "is_output":false,
+                       "previous_layer":"Input"
+                      },
+                "LSTM":{"type":"RNN_Bi_LSTM",
+                        "keras_setting":{"units":12,"activation":"tanh","return_sequences":true},
+                        "is_output":false,
+                        "previous_layer":"CNN"
+                       },
+                "Output":{"type":"CNN_1D",
+                          "keras_setting":{"kernel_size":1,"filters":5,"use_bias":true,"activation":"softmax"},
+                          "is_output":true,
+                          "previous_layer":"LSTM"
+                         }
+    
+    },
+    "compile":{
+        "learning_rate":0.001,
+        "metric_types":["loss","constant"],
+        "loss":"mse"
+    },
+    "annotation_types":["utr_5","utr_3","intron","cds","intergenic_region"]
+}
