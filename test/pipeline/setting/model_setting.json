@@ -1,17 +1,30 @@
 {
     "layer":{
-                "Input":{"type":"Input","shape":[null,4],"is_output":false,"previous_layer":null},
-                "CNN":{"type":"CNN_1D","shape":3,"number":12,"batch_normalize":false,
-                       "previous_layer":"Input","is_output":false,"activation":"relu"},
-                "LSTM":{"type":"RNN_LSTM","number":12,"bidirection":true,
-                        "previous_layer":"CNN","is_output":false,"activation":"tanh"},
-                "Output":{"type":"CNN_1D","shape":1,"number":5,"batch_normalize":false,
-                          "activation":"softmax","previous_layer":"LSTM","is_output":true}
+                "Input":{"type":"Input",
+                         "keras_setting":{"shape":[null,4],"name":"Input"},
+                         "previous_layer":null,
+                         "is_output":false
+                        },
+                "CNN":{"type":"CNN_1D",
+                       "keras_setting":{"kernel_size":3,"filters":12,"use_bias":true,
+                                        "activation":"relu","padding":"same"},
+                       "is_output":false,
+                       "previous_layer":"Input"
+                      },
+                "LSTM":{"type":"RNN_Bi_LSTM",
+                        "keras_setting":{"units":12,"activation":"tanh","return_sequences":true},
+                        "is_output":false,
+                        "previous_layer":"CNN"
+                       },
+                "Output":{"type":"CNN_1D",
+                          "keras_setting":{"kernel_size":1,"filters":5,"use_bias":true,"activation":"softmax"},
+                          "is_output":true,
+                          "previous_layer":"LSTM"
+                         }
     
     },
-    "global":{
+    "compile":{
         "learning_rate":0.001,
-        "dropout":0,
         "metric_types":["loss","constant"],
         "loss":"mse"
     },

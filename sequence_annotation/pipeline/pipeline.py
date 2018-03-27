@@ -11,8 +11,8 @@ class Pipeline(metaclass=ABCMeta):
     def __init__(self, id_, work_setting_path,model_setting_path,is_prompt_visible=True):
         self._id= id_
         self._is_prompt_visible = is_prompt_visible
-        self._work_setting_path = work_setting_path
-        self._model_setting_path = model_setting_path
+        self._work_setting_path = os.path.expanduser(work_setting_path)
+        self._model_setting_path = os.path.expanduser(model_setting_path)
         self._data_handler= None
         self._worker = None
         self._work_setting_parser = SettingParser()
@@ -89,9 +89,9 @@ class Pipeline(metaclass=ABCMeta):
             ann_types = self._model_setting['annotation_types']
         else:
             ann_types = None
-        metric_types = self._model_setting['global']['metric_types']
-        loss = self._model_setting['global']['loss']
-        learning_rate=self._model_setting['global']['learning_rate']
+        metric_types = self._model_setting['compile']['metric_types']
+        loss = self._model_setting['compile']['loss']
+        learning_rate=self._model_setting['compile']['learning_rate']
         values_to_ignore=self._work_setting['values_to_ignore']
         self._model_handler.compile_model(self._model,
                                           learning_rate=learning_rate,
@@ -108,9 +108,10 @@ class Pipeline(metaclass=ABCMeta):
         validation_split=self._work_setting['validation_split']
         period=self._work_setting['period']
         self._worker.init_worker(path_root,self._work_setting['epoch'],batch_size,
-                                 initial_epoch=initial_epoch,
-                                 period=period,
-                                 validation_split=validation_split)
+                                 initial_epoch=initial_epoch,period=period,
+                                 validation_split=validation_split,
+                                 is_verbose_visible=self._is_prompt_visible,
+                                 is_prompt_visible=self._is_prompt_visible)
         self._worker.data = self._processed_data
         self._worker.model = self._model
     def _before_execute(self):
@@ -124,8 +125,8 @@ class Pipeline(metaclass=ABCMeta):
         end_time = time()
         time_spend = end_time - start_time
         if self._is_prompt_visible:
-            print('End working('+strftime("%Y-%m-%d %H:%M:%S",gmtime())+")")
-            print("Spend time: "+strftime("%H:%M:%S", gmtime(time_spend)))
+            print('End working(' + strftime("%Y-%m-%d %H:%M:%S",gmtime()) + ")")
+            print("Spend time: " + strftime("%H:%M:%S", gmtime(time_spend)))
     def _after_execute(self):
         self._worker.after_work()
     def _create_folder(self,path):
@@ -149,8 +150,8 @@ class Pipeline(metaclass=ABCMeta):
         data =  self._setting_to_saved()
         mode_id=self._work_setting['mode_id']
         data['save_time'] = strftime("%Y_%b_%d", gmtime())
-        path_root=self._work_setting['path_root']+"/"+str(self._id)+"/"+mode_id
-        copyfile(self._work_setting_path, path_root+"/work_setting.json")
-        copyfile(self._model_setting_path, path_root+"/model_setting.json")
-        with open(path_root+'/setting.json', 'w') as outfile:  
+        path_root=self._work_setting['path_root'] + "/" + str(self._id) + "/" + mode_id
+        copyfile(self._work_setting_path, path_root + "/work_setting.json")
+        copyfile(self._model_setting_path, path_root + "/model_setting.json")
+        with open(path_root + '/setting.json', 'w') as outfile:  
             json.dump(data, outfile)

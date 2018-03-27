@@ -18,11 +18,14 @@ class Sequence(metaclass=ABCMeta):
         self.chromosome_id = None
         self._strand = None
         if object_ is not None:
-            self._copy(object_,self._copied_attrs())
+            copied_attrs = self._copied_public_attrs()+self._copied_protected_attrs()
+            self._copy(object_,copied_attrs)
     def to_dict(self):
         dictionary = {}
-        for attr in self._copied_attrs():
+        for attr in self._copied_public_attrs():
             dictionary[attr]=getattr(self,attr)
+        for attr in self._copied_protected_attrs():
+            dictionary[attr[1:]]=getattr(self,attr)
         return dictionary
     def _validate_dict_keys(self, dict_):
         names = get_protected_attrs_names(dict_)
@@ -30,10 +33,14 @@ class Sequence(metaclass=ABCMeta):
         validator.validate()
     def from_dict(self, dict_):
         self._validate_dict_keys(dict_)
-        for attr in self._copied_attrs():
+        for attr in self._copied_public_attrs():
             setattr(self,attr,dict_[attr])
-    def _copied_attrs(self):
-        return ['source','chromosome_id','_strand','id','note']
+        for attr in self._copied_protected_attrs():
+            setattr(self,attr,dict_[attr[1:]])
+    def _copied_public_attrs(self):
+        return ['source','chromosome_id','id','note']
+    def _copied_protected_attrs(self):
+        return ['_strand']
     def _copy(self,source,attrs):
         for attr in attrs:
             setattr(self,attr,deepcopy(getattr(source,attr)))
@@ -60,13 +67,13 @@ class SeqInformation(Sequence):
         self._end = None
         self._extra_index = None
         self.extra_index_name = None
-        #self._ann_status = None
+        self.ann_status = None
+        self.ann_type = None
         super().__init__(object_)
-    def _copied_attrs(self):
-        return super()._copied_attrs()+['_start','_end',
-                                        #'ann_type','ann_status',
-                                        '_extra_index',
-                                        'extra_index_name']
+    def _copied_public_attrs(self):
+        return super()._copied_public_attrs()+['ann_type','ann_status','extra_index_name']
+    def _copied_protected_attrs(self):
+        return super()._copied_protected_attrs()+['_start','_end','_extra_index']
     def _validated_for_length(self):
         attr_validator = AttrValidator(self,False,False,False,['_start','_end'])
         attr_validator.validate()
@@ -106,8 +113,10 @@ class AnnSequence(Sequence):
         self._length = None
         self.data = {}
         super().__init__(object_)
-    def _copied_attrs(self):
-        return super()._copied_attrs()+['ANN_TYPES','length','_has_space','data']
+    def _copied_public_attrs(self):
+        return super()._copied_public_attrs()+['ANN_TYPES','length','data']
+    def _copied_protected_attrs(self):
+        return super()._copied_protected_attrs()+['_has_space']
     @property
     def length(self):
         return self._length

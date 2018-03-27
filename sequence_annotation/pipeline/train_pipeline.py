@@ -1,5 +1,6 @@
 """This submodule provides class to defined training pipeline"""
 import pandas as pd
+import os
 from . import SeqAnnDataHandler
 from . import SimpleDataHandler
 from . import Pipeline
@@ -34,11 +35,11 @@ class TrainSeqAnnPipeline(TrainPipeline):
         self._worker = ModelTrainer()
     def _load_data(self):
         self._preprocessed_data = {}
-        data_path = self._work_setting['data_path']
-        ann_types=self._model_setting['annotation_types']
+        data_path =  self._work_setting['data_path']
+        ann_types =  self._model_setting['annotation_types']
         for name,path in data_path.items():
-            temp = self._data_handler.get_data(path['inputs'],
-                                               path['answers'],
+            temp = self._data_handler.get_data(os.path.expanduser(path['inputs']),
+                                               os.path.expanduser(path['answers']),
                                                ann_types=ann_types,
                                                discard_invalid_seq=True)
             self._preprocessed_data[name] = temp

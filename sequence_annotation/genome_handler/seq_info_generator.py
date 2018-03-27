@@ -71,15 +71,16 @@ class SeqInfoGenerator:
     def _remove_end_regions(self, regions):
         clean_regions = []
         not_used_regions = []
+        max_length = (self._principle['max_diff']+self._principle['half_length']) * 2 + 1
         for item in regions:
             chrom_length = self._chroms_info[item.chromosome_id]
-            if not (item.start == 0 or item.end == 0 or
-                    item.start == chrom_length-1 or
-                    item.end == chrom_length-1):
+            if not (item.start < max_length or item.end < max_length or
+                    item.start >= chrom_length-max_length or
+                    item.end >= chrom_length-max_length):
                 clean_regions.append(item)
             else:
                 not_used_regions.append(item)
-        if len(not_used_regions)>0:
+        if len(not_used_regions) > 0:
             print("Following regions won't be used to generate data:")
             for item in not_used_regions:
                 print(item.to_dict())
@@ -92,7 +93,7 @@ class SeqInfoGenerator:
         centers = [region.start, int((region.start+region.end)/2)]
         center = centers[self.mode_text.index(mode)]
         seed = SeqInformation(region)
-        seed.source = region.source+"_"+region.id
+        seed.source = region.source + "_" + region.id
         seed.id = self._seed_id_prefix + "_" + str(self._seed_id)
         seed.type_ = region.ann_type
         seed.ann_status = mode
@@ -103,19 +104,19 @@ class SeqInfoGenerator:
     def _create_seq_info(self, seed):
         length = self._chroms_info[seed.chromosome_id]
         sequence_info = SeqInformation(seed)
-        sequence_info.source = seed.source+"_"+seed.id
+        sequence_info.source = seed.source + "_" + seed.id
         half_length = self._principle['half_length']
         max_diff = self._principle['max_diff']
         index = sequence_info.extra_index
-        new_start = index-(half_length+random.randint(0, max_diff))
-        new_end = index+(half_length+random.randint(0, max_diff))
+        new_start = index - (half_length + random.randint(0, max_diff))
+        new_end = index + (half_length + random.randint(0, max_diff))
         if new_end >=  length:
             new_end = length - 1
         if new_start < 0:
             new_start = 0
         sequence_info.start = new_start
         sequence_info.end = new_end
-        sequence_info.id = self._seq_id_prefix+"_"+str(self._seq_id)
+        sequence_info.id = self._seq_id_prefix + "_" + str(self._seq_id)
         self._seq_id += 1
         return sequence_info
     def _create_seeds(self, region_list):

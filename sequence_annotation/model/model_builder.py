@@ -27,6 +27,7 @@ class ModelBuilder(Builder):
             layer = self._build_LSTM(setting)
         elif layer_type=='RNN_Bi_LSTM':
             layer = self._build_LSTM(setting)
+            layer = self._to_bidirectional(layer)
         elif layer_type=='Input':
             layer = self._build_input(setting)
         else:
@@ -75,34 +76,28 @@ class ModelBuilder(Builder):
         self._link_layers()
         return self._build_model()
     def _build_Dense(self,setting):
-        return_layer = Dense(units=setting['number'],activation=setting['activation'],
-                             name=setting['name'])
+        return_layer = Dense(**setting['keras_setting'])
         return return_layer
     def _validate(self):
         pass
     def _build_CNN_1D(self,setting):
-        return_layer = Convolution1D(filters=setting['number'],
-                                     kernel_size=setting['shape'],padding='same',
-                                     activation=setting['activation'],
-                                     name=setting['name'],
-                                     use_bias=not setting['batch_normalize'])
+        return_layer = Convolution1D(**setting['keras_setting'])
         return return_layer
-    def _build_BatchNormalization(self,setting):
-        return BatchNormalization(name=setting['name'])
+    def _build_BatchNormalization(self,setting):  
+        return BatchNormalization(**setting['keras_setting'])
     def _build_Activation(self,setting):
-        return Activation(setting['activation'],name=setting['name'])
-    def to_bidirectional(self,inner_layers):
+        return Activation(**setting['keras_setting'])
+    def _to_bidirectional(self,inner_layers):
         return_layer = Bidirectional(inner_layers,merge_mode='concat')
         return_layer.name = inner_layers.name
         return return_layer
     def _build_LSTM(self,setting):
-        return_layer =LSTM(setting['number'],return_sequences=True,
-                           activation='tanh',name=setting['name'],
-                           dropout = self.setting['global']['dropout'])
+        return_layer =LSTM(**setting['keras_setting'])
         return return_layer
     def _build_input(self,setting):
-        input_shape = tuple(setting['shape'])
-        return_layer = Input(shape=input_shape, name=setting['name'])
+        setting = setting['keras_setting']
+        setting['shape'] = tuple(setting['shape'])
+        return_layer = Input(**setting)
         return return_layer
     """def _build_concatenate(self,previous_layers):
         return concatenate(inputs=previous_layers, name='Concatenate')"""

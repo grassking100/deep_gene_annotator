@@ -37,7 +37,6 @@ class SimpleDataHandler(DataHandler):
         return cls._to_dict(bulk_expression,proportion)
     @staticmethod
     def get_bulk_expression(path):
-        path = os.path.abspath(path)
         raw_data = pd.read_csv(path,sep='\t',index_col=0)
         bulk_ids = list(raw_data)
         data = {}
@@ -46,7 +45,6 @@ class SimpleDataHandler(DataHandler):
         return data
     @staticmethod
     def get_proportion(path):
-        path = os.path.abspath(path)
         raw_data = pd.read_csv(path,sep='\t',index_col=0)
         cell_types = list(raw_data.index)[:-1]
         bulk_ids = list(raw_data)
@@ -62,13 +60,11 @@ class SeqAnnDataHandler(DataHandler):
         return (align_inputs, align_answers)
     @staticmethod
     def get_seq_vecs(fasta_path,discard_invalid_seq):
-        fasta_path = os.path.abspath(fasta_path)
         fasta_converter = FastaConverter()
         seq_dict = fasta_converter.to_seq_dict(fasta_path)
         return fasta_converter.to_vec_dict(seq_dict = seq_dict,discard_invalid_seq=discard_invalid_seq)
     @staticmethod
     def get_ann_vecs(path,ann_types):
-        path = os.path.abspath(path)
         ann_count = {}
         ann_data = np.load(path).item()
         dict_ = {}

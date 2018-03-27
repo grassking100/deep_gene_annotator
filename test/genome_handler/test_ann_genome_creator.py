@@ -86,7 +86,6 @@ class TestAnnGenomeCreator(unittest.TestCase):
         real_genome = TestAnnGenomeCreator.real_genome.multiple_utr_intron_cds(False)  
         parser = USCUParser(file_path)
         parser.parse()
-        print(parser.result)
         creator = AnnGenomeCreator(RealGenome.genome_information,parser.result)
         creator.create()
         test_genome = creator.result

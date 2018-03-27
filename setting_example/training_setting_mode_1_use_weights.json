@@ -6,16 +6,16 @@
     "batch_size":100,
     "data_path":{
                     "training":{
-                                    "inputs":"tetraodon_8_0/2018_03_07/fake2.fasta",
-                                    "answers":"tetraodon_8_0/2018_03_07/small_answers.npy"
+                                    "inputs":"~deep_learning/tetraodon_8_0/2018_03_07/fake2.fasta",
+                                    "answers":"~deep_learning/tetraodon_8_0/2018_03_07/small_answers.npy"
                                },
                     "validation":{
-                                    "inputs":"tetraodon_8_0/2018_03_07/fake2.fasta",
-                                    "answers":"tetraodon_8_0/2018_03_07/small_answers.npy"
+                                    "inputs":"~deep_learning/tetraodon_8_0/2018_03_07/fake2.fasta",
+                                    "answers":"~deep_learning/tetraodon_8_0/2018_03_07/small_answers.npy"
                                  }
                 },
-    "previous_result_path":"try/try_03/test/result/epoch_05.csv",
-    "trained_model_path":"try/try_03/test/model/epoch_05.h5",
+    "previous_result_path":null,
+    "trained_model_path":null,
     "path_root":"try",
     "weight_setting":{"use_weights":true,"method":"reverse_counts"},
     "preprocess":[{"type":"padding","value":-1}],

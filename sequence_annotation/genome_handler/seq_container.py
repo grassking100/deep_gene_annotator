@@ -14,18 +14,23 @@ class SeqContainer(metaclass=ABCMeta):
         unsorted_seqs = list(self._data.values())
         sorted_seqs = sorted(unsorted_seqs, key=lambda seq: seq.id)
         return sorted_seqs
+    def to_list(self):
+        return self.data
     @abstractmethod
     def _validate_seq(self,seq):
         pass
     @abstractmethod
     def _validate(self):
         pass
-    def add(self,seq_seqs):
-        if type(seq_seqs) == list:
-            for seq in seq_seqs:
+    def add(self,seq_or_seqs):
+        if type(seq_or_seqs) == list:
+            for seq in seq_or_seqs:
+                self._add(seq)
+        elif hasattr(seq_or_seqs,'to_list'):
+            for seq in seq_or_seqs.to_list():
                 self._add(seq)
         else:
-            self._add(seq_seqs)
+            self._add(seq_or_seqs)
     def _add(self, seq):
         self._validate()
         self._validate_seq(seq)

@@ -16,7 +16,7 @@ class SettingParser:
             raise FileNotFoundError(path)
     def parse(self,path):
         """Parse setting"""
-        path = os.path.abspath(path)
+        path = os.path.expanduser(path)
         setting = ""
         self._validate_file_exist(path)
         with open(path) as file:    
