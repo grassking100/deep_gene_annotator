@@ -110,6 +110,7 @@ class Pipeline(metaclass=ABCMeta):
         self._worker.init_worker(path_root,self._work_setting['epoch'],batch_size,
                                  initial_epoch=initial_epoch,period=period,
                                  validation_split=validation_split,
+                                 use_fit_generator=True,
                                  is_verbose_visible=self._is_prompt_visible,
                                  is_prompt_visible=self._is_prompt_visible)
         self._worker.data = self._processed_data

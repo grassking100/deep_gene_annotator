@@ -6,12 +6,12 @@
     "batch_size":1,
     "data_path":{
                     "training":{
-                                    "inputs":"~/deep_learning/sequence_annotation/test/pipeline/data/seqs.fasta",
-                                    "answers":"~/deep_learning/sequence_annotation/test/pipeline/data/seqs.npy"
+                                    "inputs":"~/sequence_annotation/test/pipeline/data/seqs.fasta",
+                                    "answers":"~/sequence_annotation/test/pipeline/data/seqs.npy"
                                },
                     "validation":{
-                                    "inputs":"~/deep_learning/sequence_annotation/test/pipeline/data/seqs.fasta",
-                                    "answers":"~/deep_learning/sequence_annotation/test/pipeline/data/seqs.npy"
+                                    "inputs":"~/sequence_annotation/test/pipeline/data/seqs.fasta",
+                                    "answers":"~/sequence_annotation/test/pipeline/data/seqs.npy"
                                  }
                 },
     "previous_result_path":null,

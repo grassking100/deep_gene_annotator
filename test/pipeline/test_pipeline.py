@@ -10,8 +10,8 @@ from sequence_annotation.worker.model_trainer import ModelTrainer
 class TestPipeline(unittest.TestCase):
     def test_runable(self):
         user_setting = {}
-        user_setting['work_setting_path']='~/deep_learning/sequence_annotation/test/pipeline/setting/training_setting.json'
-        user_setting['model_setting_path']='~/deep_learning/sequence_annotation/test/pipeline/setting/model_setting.json'
+        user_setting['work_setting_path']='~/sequence_annotation/test/pipeline/setting/training_setting.json'
+        user_setting['model_setting_path']='~/sequence_annotation/test/pipeline/setting/model_setting.json'
         user_setting['train_id']='test_runable'
         try:
             train_pipeline = TrainSeqAnnPipeline(user_setting['train_id'],user_setting['work_setting_path'],
@@ -25,8 +25,8 @@ class TestPipeline(unittest.TestCase):
                 shutil.rmtree('result/'+user_setting['train_id'])
     def test_constant(self):
         user_setting = {}
-        user_setting['work_setting_path']='~/deep_learning/sequence_annotation/test/pipeline/setting/training_setting.json'
-        user_setting['model_setting_path']='~/deep_learning/sequence_annotation/test/pipeline/setting/model_setting.json'
+        user_setting['work_setting_path']='~/sequence_annotation/test/pipeline/setting/training_setting.json'
+        user_setting['model_setting_path']='~/sequence_annotation/test/pipeline/setting/model_setting.json'
         user_setting['train_id']='test_constant'
         try:
             train_pipeline = TrainSeqAnnPipeline(user_setting['train_id'],user_setting['work_setting_path'],
