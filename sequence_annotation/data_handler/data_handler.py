@@ -65,19 +65,15 @@ class SeqAnnDataHandler(DataHandler):
         return fasta_converter.to_vec_dict(seq_dict = seq_dict,discard_invalid_seq=discard_invalid_seq)
     @staticmethod
     def get_ann_vecs(path,ann_types):
-        ann_count = {}
         ann_data = np.load(path).item()
         dict_ = {}
         for name,data in ann_data.items():
             ann = []
             for type_ in ann_types:
                 value = data[type_]
-                if type_ not in ann_count.keys():
-                    ann_count[type_] = 0
-                ann_count[type_] += np.sum(value)
                 ann.append(value)
             dict_[name] = np.transpose(ann)
-        return dict_,ann_count
+        return dict_
     @staticmethod
     def process_tensor(answer, prediction,values_to_ignore=None):
         """Remove specific ignored singal and concatenate them into a two dimension tensor"""
@@ -96,19 +92,26 @@ class SeqAnnDataHandler(DataHandler):
             clean_answer = K.reshape(answer, [-1, K.shape(answer)[2]])
         return (clean_answer, clean_prediction)
     @staticmethod
-    def _to_dict(seqs,answer):
-        dict_ = {'data_pair':{},'annotation_count':answer[1]}
-        ann_vecs = answer[0]
+    def _to_dict(seqs,answer,ann_types):
+        ann_count = {}
+        data_pair = {}
+        ann_vecs = answer
         for name,seq in seqs.items():
             ann_vec = ann_vecs[name]
+            transposed_ann_vec = np.transpose(ann_vec)
             ann_length = np.shape(ann_vec)[0]
             seq_length = np.shape(seq)[0]
+            for index, type_ in enumerate(ann_types):
+                if type_ not in ann_count.keys():
+                    ann_count[type_] = 0
+                ann_count[type_] += np.sum(transposed_ann_vec[index])
             if ann_length != seq_length:
                 raise LengthNotEqualException(ann_length, seq_length)
-            dict_['data_pair'][name]={'input':seq,'answer':ann_vec}
+            data_pair[name]={'input':seq,'answer':ann_vec}
+        dict_ = {'data_pair':data_pair,'annotation_count':ann_count}
         return dict_
     @classmethod
     def get_data(cls,seq_path,answer_path,ann_types,discard_invalid_seq):
         seqs = cls.get_seq_vecs(seq_path,discard_invalid_seq)
         answer = cls.get_ann_vecs(answer_path,ann_types)
-        return cls._to_dict(seqs,answer)
+        return cls._to_dict(seqs,answer,ann_types)
