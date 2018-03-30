@@ -17,6 +17,7 @@
     "previous_result_path":null,
     "trained_model_path":null,
     "path_root":"try",
+    "use_generator":true
     "weight_setting":{"use_weights":true,"method":"reverse_counts"},
     "preprocess":[{"type":"padding","value":-1}],
     "values_to_ignore":[-1]

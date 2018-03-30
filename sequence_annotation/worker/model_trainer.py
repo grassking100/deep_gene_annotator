@@ -15,34 +15,18 @@ from . import ModelWorker
 from . import ResultHistory
 class ModelTrainer(ModelWorker):
     """a trainer which will train and evaluate the model"""
-    def __init__(self):
-        self.data = None
-        self.model = None
-        self._period = None
-        self._epoch = None
-        self._batch_size = None
-        self._shuffle = None
-        self._initial_epoch = None
-        self.callbacks = []
-        super().__init__()
-    def init_worker(self,path_root, epoch,
-                    batch_size,shuffle=True,
-                    initial_epoch=0,period=1,
-                    validation_split=0.0,
-                    use_fit_generator=False,
-                    previous_result=None,
-                    is_verbose_visible=True,
-                    is_prompt_visible=True):
-        super().init_worker(path_root,is_verbose_visible=is_verbose_visible,
-                            is_prompt_visible=is_prompt_visible)
+    def __init__(self, path_root, epoch, batch_size, shuffle=True,
+                 initial_epoch=0, period=1,validation_split=0.0,
+                 use_generator=False):
+        super().__init__(path_root)
         self._period = period
         self._epoch = epoch
         self._batch_size = batch_size
         self._shuffle = shuffle
         self._initial_epoch = initial_epoch
         self._validation_split = validation_split
-        self.result = previous_result
-        self._use_fit_generator = use_fit_generator
+        self._use_generator = use_generator
+        self.callbacks = []
     def _validate(self):
         """Validate required data"""
         pass
@@ -54,12 +38,12 @@ class ModelTrainer(ModelWorker):
                                      write_graph=True, write_grads=True,
                                      write_images=True))"""
         callbacks.append(ModelCheckpoint(filepath=root_path+"/model/epoch_{epoch:0"+length+"d}.h5",
-                                         verbose=int(self._is_prompt_visible),
+                                         verbose=int(self.is_prompt_visible),
                                          save_best_only=False,
                                          period=self._period,
                                          save_weights_only=False))
         callbacks.append(ResultHistory(filepath=root_path+"/result/epoch_{epoch:0"+length+"d}.csv",
-                                       verbose=int(self._is_prompt_visible),
+                                       verbose=int(self.is_prompt_visible),
                                        period=self._period,previous_results=self.result))
         return callbacks
     def before_work(self):
@@ -91,7 +75,7 @@ class ModelTrainer(ModelWorker):
         callbacks = self._get_addition_callbacks()+self.callbacks
         history = self.model.fit_generator(train_data,
                                            epochs=self._epoch,
-                                           verbose=int(self._is_verbose_visible),
+                                           verbose=int(self.is_verbose_visible),
                                            callbacks=callbacks,
                                            validation_data=val_data,
                                            shuffle=self._shuffle,
@@ -109,7 +93,7 @@ class ModelTrainer(ModelWorker):
         callbacks = self._get_addition_callbacks()+self.callbacks            
         history = self.model.fit(x=train_x,y=train_y,
                                  epochs=self._epoch,
-                                 verbose=int(self._is_verbose_visible),
+                                 verbose=int(self.is_verbose_visible),
                                  callbacks=callbacks,
                                  validation_data=val,
                                  batch_size=self._batch_size,
@@ -123,7 +107,7 @@ class ModelTrainer(ModelWorker):
         """Train model"""
         self._validate()
         #training and evaluating the model
-        if self._use_fit_generator:
+        if self._use_generator:
             history = self._train_by_generator()
         else:
             history = self._train_by_fit()

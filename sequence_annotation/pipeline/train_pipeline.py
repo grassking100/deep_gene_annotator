@@ -28,11 +28,23 @@ class TrainPipeline(Pipeline):
             if self._is_prompt_visible:
                 print('Loading previous result')
             self._worker.result = self._load_previous_result()
+    def _init_worker(self):
+        mode_id=self._work_setting['mode_id']
+        path_root=self._work_setting['path_root']+"/"+str(self._id)+"/"+mode_id
+        self._worker.ModelTrainer(path_root,self._work_setting['epoch'],
+                                  self._work_setting['batch_size'],
+                                  initial_epoch=self._work_setting['initial_epoch'],
+                                  period=self._work_setting['period'],
+                                  validation_split=self._work_setting['validation_split'],
+                                  use_generator=self._work_setting['use_generator'])
+        self._worker.is_verbose_visible=self._is_prompt_visible
+        self._worker.is_prompt_visible=self._is_prompt_visible
+        self._worker.data = self._processed_data
+        self._worker.model = self._model
 class TrainSeqAnnPipeline(TrainPipeline):
     def __init__(self,id_,work_setting_path,model_setting_path,is_prompt_visible=True):
         super().__init__(id_, work_setting_path,model_setting_path,is_prompt_visible)
         self._data_handler = SeqAnnDataHandler
-        self._worker = ModelTrainer()
     def _load_data(self):
         self._preprocessed_data = {}
         data_path =  self._work_setting['data_path']
@@ -51,7 +63,6 @@ class TrainSimplePipeline(TrainPipeline):
     def __init__(self,id_,work_setting_path,model_setting_path,is_prompt_visible=True):
         super().__init__(id_, work_setting_path,model_setting_path,is_prompt_visible)
         self._data_handler = SimpleDataHandler
-        self._worker = ModelTrainer()
     def _load_data(self):
         self._preprocessed_data = {}
         data_path = self._work_setting['data_path']

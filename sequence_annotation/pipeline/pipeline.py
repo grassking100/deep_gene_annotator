@@ -100,21 +100,9 @@ class Pipeline(metaclass=ABCMeta):
                                           weights=self._weighted,
                                           metric_types=metric_types,
                                           loss_type=loss)
+    @abstractmethod
     def _init_worker(self):
-        mode_id=self._work_setting['mode_id']
-        path_root=self._work_setting['path_root']+"/"+str(self._id)+"/"+mode_id
-        batch_size=self._work_setting['batch_size']
-        initial_epoch=self._work_setting['initial_epoch']
-        validation_split=self._work_setting['validation_split']
-        period=self._work_setting['period']
-        self._worker.init_worker(path_root,self._work_setting['epoch'],batch_size,
-                                 initial_epoch=initial_epoch,period=period,
-                                 validation_split=validation_split,
-                                 use_fit_generator=True,
-                                 is_verbose_visible=self._is_prompt_visible,
-                                 is_prompt_visible=self._is_prompt_visible)
-        self._worker.data = self._processed_data
-        self._worker.model = self._model
+        pass
     def _before_execute(self):
         self._worker.before_work()
         self._save_setting()
