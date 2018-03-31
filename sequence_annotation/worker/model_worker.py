@@ -5,15 +5,12 @@ from . import ReturnNoneException
 class ModelWorker(metaclass=ABCMeta):
     """The class hold model and handle with data input, model pedict and model result"""
     def __init__(self, path_root):
-        self.model = None
-        self.result = None
-        self.data = {}
+        self._model = None
+        self._result = {}
+        self._data = None
         self.is_verbose_visible = True
         self.is_prompt_visible = True
         self._path_root = path_root
-    def clean_result(self):
-        """clean result"""
-        self.result = {}
     @abstractmethod
     def work(self):
         """Work"""
@@ -22,6 +19,7 @@ class ModelWorker(metaclass=ABCMeta):
     def after_work(self):
         """Do something after worker work"""
         pass
+	@abstractmethod
     def before_work(self):
         """Do something before worker work"""
         pass

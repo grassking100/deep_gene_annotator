@@ -1,11 +1,13 @@
 """This submodule provides class to defined training pipeline"""
 import pandas as pd
-import os
+from os.path import expanduser
 from . import SeqAnnDataHandler
 from . import SimpleDataHandler
 from . import Pipeline
 from . import ModelTrainer
+
 class TrainPipeline(Pipeline):
+    """a pipeline about training model"""
     def _prepare_for_compile(self):
         weight_setting = self._work_setting['weight_setting']
         if weight_setting['use_weights']:
@@ -29,29 +31,36 @@ class TrainPipeline(Pipeline):
                 print('Loading previous result')
             self._worker.result = self._load_previous_result()
     def _init_worker(self):
-        mode_id=self._work_setting['mode_id']
-        path_root=self._work_setting['path_root']+"/"+str(self._id)+"/"+mode_id
-        self._worker.ModelTrainer(path_root,self._work_setting['epoch'],
-                                  self._work_setting['batch_size'],
-                                  initial_epoch=self._work_setting['initial_epoch'],
-                                  period=self._work_setting['period'],
-                                  validation_split=self._work_setting['validation_split'],
-                                  use_generator=self._work_setting['use_generator'])
+	    setting = self._work_setting
+        mode_id=setting['mode_id']
+        path_root=setting['path_root']+"/"+str(self._id)+"/"+mode_id
+        self._worker.ModelTrainer(path_root,setting['epoch'],
+                                  setting['batch_size'],
+								  self._model,
+								  self._processed_data
+                                  initial_epoch=setting['initial_epoch'],
+                                  period=setting['period'],
+                                  validation_split=setting['validation_split'],
+                                  use_generator=setting['use_generator'])
         self._worker.is_verbose_visible=self._is_prompt_visible
         self._worker.is_prompt_visible=self._is_prompt_visible
-        self._worker.data = self._processed_data
-        self._worker.model = self._model
+
 class TrainSeqAnnPipeline(TrainPipeline):
-    def __init__(self,id_,work_setting_path,model_setting_path,is_prompt_visible=True):
-        super().__init__(id_, work_setting_path,model_setting_path,is_prompt_visible)
+    """a pipeline about training sequence annotation model"""
+    def __init__(self,id_,work_setting_path,
+				 model_setting_path,
+				 is_prompt_visible=True):
+        super().__init__(id_, work_setting_path,
+		                 model_setting_path,
+						 is_prompt_visible)
         self._data_handler = SeqAnnDataHandler
     def _load_data(self):
         self._preprocessed_data = {}
         data_path =  self._work_setting['data_path']
         ann_types =  self._model_setting['annotation_types']
         for name,path in data_path.items():
-            temp = self._data_handler.get_data(os.path.expanduser(path['inputs']),
-                                               os.path.expanduser(path['answers']),
+            temp = self._data_handler.get_data(expanduser(path['inputs']),
+                                               expanduser(path['answers']),
                                                ann_types=ann_types,
                                                discard_invalid_seq=True)
             self._preprocessed_data[name] = temp
@@ -59,9 +68,15 @@ class TrainSeqAnnPipeline(TrainPipeline):
         saved = super()._setting_to_saved()
         saved['annotation_count'] = self._preprocessed_data['training']['annotation_count']
         return saved
+
 class TrainSimplePipeline(TrainPipeline):
-    def __init__(self,id_,work_setting_path,model_setting_path,is_prompt_visible=True):
-        super().__init__(id_, work_setting_path,model_setting_path,is_prompt_visible)
+	"""a pipeline about training simaple data model"""
+    def __init__(self,id_,work_setting_path,
+				 model_setting_path,
+				 is_prompt_visible=True):
+        super().__init__(id_, work_setting_path,
+						 model_setting_path,
+						 is_prompt_visible)
         self._data_handler = SimpleDataHandler
     def _load_data(self):
         self._preprocessed_data = {}
