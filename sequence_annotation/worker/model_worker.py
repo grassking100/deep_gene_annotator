@@ -19,7 +19,7 @@ class ModelWorker(metaclass=ABCMeta):
     def after_work(self):
         """Do something after worker work"""
         pass
-	@abstractmethod
+    @abstractmethod
     def before_work(self):
         """Do something before worker work"""
         pass

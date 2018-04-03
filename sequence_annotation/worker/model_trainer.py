@@ -17,16 +17,16 @@ from . import ResultHistory
 class ModelTrainer(ModelWorker):
     """a worker which will train and evaluate the model"""
     def __init__(self, path_root, epoch,
-				 batch_size,model,data,
-				 previous_result=None,
-				 shuffle=True,
-				 initial_epoch=0,
-				 period=1,
-				 validation_split=0.0,
+                 batch_size,model,data,
+                 previous_result=None,
+                 shuffle=True,
+                 initial_epoch=0,
+                 period=1,
+                 validation_split=0.0,
                  use_generator=False):
         super().__init__(path_root)
-		self._model = model
-		self._data = data
+        self._model = model
+        self._data = data
         self._result = previous_result or {}
         self._epoch = epoch
         self._batch_size = batch_size
@@ -34,12 +34,13 @@ class ModelTrainer(ModelWorker):
         self._initial_epoch = initial_epoch
         self._validation_split = validation_split
         self._use_generator = use_generator
+        self._period = period
         self.callbacks = []
-		
+          
     def _validate(self):
         """Validate required data"""
         pass
-		
+        
     def _get_addition_callbacks(self):
         callbacks = []
         length = str(len(str(self._epoch)))
@@ -47,36 +48,36 @@ class ModelTrainer(ModelWorker):
         """callbacks.append(TensorBoard(log_dir=root_path+"/log", histogram_freq=0,
                                      write_graph=True, write_grads=True,
                                      write_images=True))"""
-		model_saved_path = root_path+"/model/epoch_{epoch:0"+length+"d}.h5"
+        model_saved_path = root_path+"/model/epoch_{epoch:0"+length+"d}.h5"
         callbacks.append(ModelCheckpoint(filepath=model_saved_path,
                                          verbose=int(self.is_prompt_visible),
                                          save_best_only=False,
                                          period=self._period,
                                          save_weights_only=False))
-		result_saved_path = root_path+"/result/epoch_{epoch:0"+length+"d}.csv"
+        result_saved_path = root_path+"/result/epoch_{epoch:0"+length+"d}.csv"
         callbacks.append(ResultHistory(filepath=result_saved_path,
                                        verbose=int(self.is_prompt_visible),
                                        period=self._period,
-									   previous_results=self._result))
+                                       previous_results=self._result))
         return callbacks
-		
+        
     def before_work(self):
         super().before_work()
         root_path = './'+self._path_root
         self._create_folder(["model","log","result"])
-		plot_saved_path = root_path+"/model_image.png"
+        plot_saved_path = root_path+"/model_image.png"
         plot_model(self._model,
-				   show_shapes=True,
-		           to_file=plot_saved_path)
+                   show_shapes=True,
+                   to_file=plot_saved_path)
         length = str(len(str(self._epoch)))
-		model_saved_path = root_path+'/model/epoch_{:0'+length+'d}.h5'.
-		model_saved_path = model_saved_path.format(0)
+        model_saved_path = root_path+'/model/epoch_{:0'+length+'d}.h5'
+        model_saved_path = model_saved_path.format(0)
         self._model.save(model_saved_path)
-		
+        
     def _prepare_data(self,x_data,y_data,batch_size):
         generator = DataGenerator(x_data,y_data,batch_size)
         return generator
-		
+        
     def _train_by_generator(self):
         train_x = self._data['training']['inputs']
         train_y = self._data['training']['answers']
@@ -102,7 +103,7 @@ class ModelTrainer(ModelWorker):
                                            shuffle=self._shuffle,
                                            initial_epoch=self._initial_epoch)
         return history
-		
+        
     def _train_by_fit(self):
         train_x = self._data['training']['inputs']
         train_y = self._data['training']['answers']
@@ -123,10 +124,10 @@ class ModelTrainer(ModelWorker):
                                   validation_split=self._validation_split,
                                   initial_epoch=self._initial_epoch)
         return history
-		
+        
     def after_work(self):
         pass
-		
+        
     def work(self):
         """Train model"""
         self._validate()

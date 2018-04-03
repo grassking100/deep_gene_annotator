@@ -31,13 +31,13 @@ class TrainPipeline(Pipeline):
                 print('Loading previous result')
             self._worker.result = self._load_previous_result()
     def _init_worker(self):
-	    setting = self._work_setting
+        setting = self._work_setting
         mode_id=setting['mode_id']
         path_root=setting['path_root']+"/"+str(self._id)+"/"+mode_id
-        self._worker.ModelTrainer(path_root,setting['epoch'],
+        self._worker=ModelTrainer(path_root,setting['epoch'],
                                   setting['batch_size'],
-								  self._model,
-								  self._processed_data
+                                  self._model,
+                                  self._processed_data,
                                   initial_epoch=setting['initial_epoch'],
                                   period=setting['period'],
                                   validation_split=setting['validation_split'],
@@ -48,11 +48,11 @@ class TrainPipeline(Pipeline):
 class TrainSeqAnnPipeline(TrainPipeline):
     """a pipeline about training sequence annotation model"""
     def __init__(self,id_,work_setting_path,
-				 model_setting_path,
-				 is_prompt_visible=True):
+         model_setting_path,
+         is_prompt_visible=True):
         super().__init__(id_, work_setting_path,
-		                 model_setting_path,
-						 is_prompt_visible)
+         model_setting_path,
+             is_prompt_visible)
         self._data_handler = SeqAnnDataHandler
     def _load_data(self):
         self._preprocessed_data = {}
@@ -70,13 +70,9 @@ class TrainSeqAnnPipeline(TrainPipeline):
         return saved
 
 class TrainSimplePipeline(TrainPipeline):
-	"""a pipeline about training simaple data model"""
-    def __init__(self,id_,work_setting_path,
-				 model_setting_path,
-				 is_prompt_visible=True):
-        super().__init__(id_, work_setting_path,
-						 model_setting_path,
-						 is_prompt_visible)
+    """a pipeline about training simaple data model"""
+    def __init__(self,id_,work_setting_path,model_setting_path,is_prompt_visible=True):
+        super().__init__(id_, work_setting_path,model_setting_path,is_prompt_visible)
         self._data_handler = SimpleDataHandler
     def _load_data(self):
         self._preprocessed_data = {}
