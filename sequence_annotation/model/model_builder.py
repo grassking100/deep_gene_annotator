@@ -15,7 +15,7 @@ class ModelBuilder(Builder):
         self._output_layer_ids =[]
     def _build_layers(self):
         for name,setting in self.setting['layer'].items():
-            setting['name'] = name
+            setting['keras_setting']['name'] = name
             self._build_layer(setting)
     def _build_layer(self,setting):
         layer_type = setting['type']
@@ -32,7 +32,7 @@ class ModelBuilder(Builder):
             layer = self._build_input(setting)
         else:
             raise Exception("Layer,{layer},has not implment yet".format(layer=layer_type))
-        layer_name = setting['name']
+        layer_name = setting['keras_setting']['name']
         if not layer_name in self._layers.keys():
             self._layers[layer_name] = {}
             self._layers[layer_name]['layer'] = layer
@@ -51,7 +51,7 @@ class ModelBuilder(Builder):
             setting['name'] = name
             self._link_layer(setting)
     def _link_layer(self, setting):
-        present_layer_status = self._layers[setting['name']]
+        present_layer_status = self._layers[setting['keras_setting']['name']]
         if not present_layer_status['is_linked']:
             if setting['previous_layer'] is not None:
                 previous_layer_status = self._layers[setting['previous_layer']]

@@ -9,7 +9,7 @@ from abc import ABCMeta, abstractmethod
 from keras.preprocessing.sequence import pad_sequences
 class DataHandler(metaclass=ABCMeta):
     @abstractmethod
-    def get_data(self,data_path,answer_path):
+    def get_data(self,data_path,answer_path,class_types):
         pass
     @staticmethod
     def to_vecs(data_pair_list):
@@ -31,7 +31,7 @@ class SimpleDataHandler(DataHandler):
             dict_['data_pair'][name]={'input':input_,'answer':answer_vec}
         return dict_
     @classmethod
-    def get_data(cls,data_path,answer_path):
+    def get_data(cls,data_path,answer_path,class_types):
         bulk_expression = cls.get_bulk_expression(data_path)
         proportion = cls.get_proportion(answer_path)
         return cls._to_dict(bulk_expression,proportion)
@@ -59,10 +59,10 @@ class SeqAnnDataHandler(DataHandler):
         align_answers = pad_sequences(answers, padding='post',value=padding_signal)
         return (align_inputs, align_answers)
     @staticmethod
-    def get_seq_vecs(fasta_path,discard_invalid_seq):
+    def get_seq_vecs(fasta_path):
         fasta_converter = FastaConverter()
         seq_dict = fasta_converter.to_seq_dict(fasta_path)
-        return fasta_converter.to_vec_dict(seq_dict = seq_dict,discard_invalid_seq=discard_invalid_seq)
+        return fasta_converter.to_vec_dict(seq_dict = seq_dict,discard_invalid_seq=True)
     @staticmethod
     def get_ann_vecs(path,ann_types):
         ann_data = np.load(path).item()
@@ -111,7 +111,7 @@ class SeqAnnDataHandler(DataHandler):
         dict_ = {'data_pair':data_pair,'annotation_count':ann_count}
         return dict_
     @classmethod
-    def get_data(cls,seq_path,answer_path,ann_types,discard_invalid_seq):
-        seqs = cls.get_seq_vecs(seq_path,discard_invalid_seq)
-        answer = cls.get_ann_vecs(answer_path,ann_types)
-        return cls._to_dict(seqs,answer,ann_types)
+    def get_data(cls,seq_path,answer_path,class_types):
+        seqs = cls.get_seq_vecs(seq_path)
+        answer = cls.get_ann_vecs(answer_path,class_types)
+        return cls._to_dict(seqs,answer,class_types)

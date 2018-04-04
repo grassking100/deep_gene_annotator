@@ -11,10 +11,10 @@ from keras.callbacks import TensorBoard
 from keras.callbacks import ModelCheckpoint
 from keras.utils import plot_model
 from . import DataGenerator
-from . import ModelWorker
+from . import Worker
 from . import ResultHistory
 
-class ModelTrainer(ModelWorker):
+class TrainWorker(Worker):
     """a worker which will train and evaluate the model"""
     def __init__(self, path_root, epoch,
                  batch_size,model,data,
@@ -62,7 +62,6 @@ class ModelTrainer(ModelWorker):
         return callbacks
         
     def before_work(self):
-        super().before_work()
         root_path = './'+self._path_root
         self._create_folder(["model","log","result"])
         plot_saved_path = root_path+"/model_image.png"
@@ -77,7 +76,7 @@ class ModelTrainer(ModelWorker):
     def _prepare_data(self,x_data,y_data,batch_size):
         generator = DataGenerator(x_data,y_data,batch_size)
         return generator
-        
+    
     def _train_by_generator(self):
         train_x = self._data['training']['inputs']
         train_y = self._data['training']['answers']

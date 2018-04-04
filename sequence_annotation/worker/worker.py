@@ -2,7 +2,7 @@
 from abc import ABCMeta, abstractmethod
 import os
 from . import ReturnNoneException
-class ModelWorker(metaclass=ABCMeta):
+class Worker(metaclass=ABCMeta):
     """The class hold model and handle with data input, model pedict and model result"""
     def __init__(self, path_root):
         self._model = None

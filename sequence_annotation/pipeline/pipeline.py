@@ -3,7 +3,7 @@ import os
 import errno
 from abc import ABCMeta, abstractmethod
 from time import strftime, gmtime, time
-from shutil import copyfile
+from os.path import expanduser
 from . import SettingParser
 from . import ModelHandler
 import json
@@ -53,13 +53,13 @@ class Pipeline(metaclass=ABCMeta):
         self._work_setting = self._work_setting_parser.parse(self._work_setting_path)
         self._model_setting = self._model_setting_parser.parse(self._model_setting_path)
     def _init_model(self):
-        build_model = True
-        if 'initial_epoch' in self._work_setting.keys():
+        """if 'initial_epoch' in self._work_setting.keys():
             if int(self._work_setting['initial_epoch']) > 0:
-                build_model = False
+                build_model = False"""
+        build_model = not self._work_setting['load_model']
         if not build_model: 
             self.print_prompt("\tLoading model...")
-            model_path = self._work_setting['trained_model_path']
+            model_path = expanduser(self._work_setting['trained_model_path'])
             self._model = self._model_handler.load_model(model_path)
             self._model.load_weights(model_path, by_name=True)
         else:
@@ -125,6 +125,15 @@ class Pipeline(metaclass=ABCMeta):
         except OSError as erro:
             if erro.errno != errno.EEXIST:
                 raise
+    def _load_data(self):
+        self._preprocessed_data = {}
+        data_path =  self._work_setting['data_path']
+        ann_types =  self._model_setting['annotation_types']
+        for name,path in data_path.items():
+            temp = self._data_handler.get_data(expanduser(path['inputs']),
+                                               expanduser(path['answers']),
+                                               class_types=ann_types)
+            self._preprocessed_data[name] = temp
     def _setting_to_saved(self):
         saved = {}
         saved['work_setting'] = self._work_setting
@@ -140,7 +149,7 @@ class Pipeline(metaclass=ABCMeta):
         mode_id=self._work_setting['mode_id']
         data['save_time'] = strftime("%Y_%b_%d", gmtime())
         path_root=self._work_setting['path_root'] + "/" + str(self._id) + "/" + mode_id
-        copyfile(self._work_setting_path, path_root + "/work_setting.json")
-        copyfile(self._model_setting_path, path_root + "/model_setting.json")
+        if not os.path.exists(path_root):
+            os.makedirs(path_root)
         with open(path_root + '/setting.json', 'w') as outfile:  
             json.dump(data, outfile)
