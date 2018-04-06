@@ -7,6 +7,7 @@ import keras.backend as K
 import tensorflow as tf
 from abc import ABCMeta, abstractmethod
 from keras.preprocessing.sequence import pad_sequences
+from os.path import expanduser,abspath
 class DataHandler(metaclass=ABCMeta):
     @abstractmethod
     def get_data(self,data_path,answer_path,class_types):
@@ -32,8 +33,8 @@ class SimpleDataHandler(DataHandler):
         return dict_
     @classmethod
     def get_data(cls,data_path,answer_path,class_types):
-        bulk_expression = cls.get_bulk_expression(data_path)
-        proportion = cls.get_proportion(answer_path)
+        bulk_expression = cls.get_bulk_expression(abspath(expanduser(data_path)))
+        proportion = cls.get_proportion(abspath(expanduser(answer_path)))
         return cls._to_dict(bulk_expression,proportion)
     @staticmethod
     def get_bulk_expression(path):
@@ -112,6 +113,6 @@ class SeqAnnDataHandler(DataHandler):
         return dict_
     @classmethod
     def get_data(cls,seq_path,answer_path,class_types):
-        seqs = cls.get_seq_vecs(seq_path)
-        answer = cls.get_ann_vecs(answer_path,class_types)
+        seqs = cls.get_seq_vecs(abspath(expanduser(seq_path)))
+        answer = cls.get_ann_vecs(abspath(expanduser(answer_path)),class_types)
         return cls._to_dict(seqs,answer,class_types)

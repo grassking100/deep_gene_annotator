@@ -11,6 +11,9 @@ class Worker(metaclass=ABCMeta):
         self.is_verbose_visible = True
         self.is_prompt_visible = True
         self._path_root = path_root
+    @property
+    def result(self):
+        return self._result
     @abstractmethod
     def work(self):
         """Work"""

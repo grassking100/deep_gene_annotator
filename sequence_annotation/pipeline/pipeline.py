@@ -3,7 +3,7 @@ import os
 import errno
 from abc import ABCMeta, abstractmethod
 from time import strftime, gmtime, time
-from os.path import expanduser
+from os.path import expanduser,abspath
 from . import SettingParser
 from . import ModelHandler
 import json
@@ -11,8 +11,8 @@ class Pipeline(metaclass=ABCMeta):
     def __init__(self, id_, work_setting_path,model_setting_path,is_prompt_visible=True):
         self._id= id_
         self._is_prompt_visible = is_prompt_visible
-        self._work_setting_path = os.path.expanduser(work_setting_path)
-        self._model_setting_path = os.path.expanduser(model_setting_path)
+        self._work_setting_path = abspath(expanduser(work_setting_path))
+        self._model_setting_path = abspath(expanduser(model_setting_path))
         self._data_handler= None
         self._worker = None
         self._work_setting_parser = SettingParser()
@@ -24,6 +24,9 @@ class Pipeline(metaclass=ABCMeta):
         self._processed_data = None
         self._weighted = None
         self._model = None
+    @property
+    def worker(self):
+        return self._worker
     def print_prompt(self,value):
         if self._is_prompt_visible:
             print(value)
@@ -130,8 +133,8 @@ class Pipeline(metaclass=ABCMeta):
         data_path =  self._work_setting['data_path']
         ann_types =  self._model_setting['annotation_types']
         for name,path in data_path.items():
-            temp = self._data_handler.get_data(expanduser(path['inputs']),
-                                               expanduser(path['answers']),
+            temp = self._data_handler.get_data(path['inputs'],
+                                               path['answers'],
                                                class_types=ann_types)
             self._preprocessed_data[name] = temp
     def _setting_to_saved(self):
@@ -152,4 +155,4 @@ class Pipeline(metaclass=ABCMeta):
         if not os.path.exists(path_root):
             os.makedirs(path_root)
         with open(path_root + '/setting.json', 'w') as outfile:  
-            json.dump(data, outfile)
+            json.dump(data, outfile,indent=4)
