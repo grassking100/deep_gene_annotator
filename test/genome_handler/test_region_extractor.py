@@ -16,7 +16,7 @@ class TestRegionExtractor(unittest.TestCase):
         chrom.id = chrom_id+"_"+strand
         chrom.ANN_TYPES = TestRegionExtractor.ANN_TYPES
         chrom.source = TestRegionExtractor.source
-        chrom.initSpace()
+        chrom.init_space()
         return chrom
     def _add_seq1(self,chrom):
         chrom.add_ann("utr_5",1,1,1).add_ann("cds",1,2,4).add_ann("intron",1,5,5)

@@ -43,7 +43,7 @@ class AnnGenomeCreator(Creator):
                 ann_seq.source = self._data_information['source']
                 ann_seq.id = id_+"_"+strand
                 ann_seq.ANN_TYPES = self._ANN_TYPES
-                ann_seq.initSpace()
+                ann_seq.init_space()
                 genome.add(ann_seq)
         return genome
     def _add_seq_to_genome(self, ann_seq, start_index, end_index):
@@ -76,7 +76,7 @@ class AnnGenomeCreator(Creator):
         ann_seq.chromosome_id = chrom_id
         ann_seq.strand = strand
         ann_seq.source = self._data_information['source']
-        ann_seq.initSpace()
+        ann_seq.init_space()
         return ann_seq
     def __get_template_ann_seq(self,length):
         """Get template container"""
@@ -88,7 +88,7 @@ class AnnGenomeCreator(Creator):
         ann_seq.id = 'template'
         ann_seq.ANN_TYPES = self._ANN_TYPES+['exon','ORF','utr',
                                              'utr_5_potential','utr_3_potential','gene']
-        ann_seq.initSpace()
+        ann_seq.init_space()
         return ann_seq
     def __annotate_genome(self):
         """Annotate genome"""

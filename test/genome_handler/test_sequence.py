@@ -15,7 +15,7 @@ class TestSequence(unittest.TestCase):
         chrom.id = chrom_id+"_"+strand
         chrom.ANN_TYPES = TestSequence.ANN_TYPES
         chrom.source = TestSequence.source
-        chrom.initSpace()
+        chrom.init_space()
         return chrom
     def _test_seq(self, real_seq, test_seq):
         self.assertEqual(real_seq.id, test_seq.id)

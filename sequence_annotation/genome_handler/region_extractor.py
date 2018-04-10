@@ -4,10 +4,12 @@ from . import validate_return
 class RegionExtractor:
     """#Get annotated region information"""
     def __init__(self,ann_seq,frontground_types,background_type):
+        print("Getting one-hot encoding")
         self._data = ann_seq.get_one_hot(frontground_types,background_type)
         self._seq_info_genome = None
         self._region_id = None
     def extract(self):
+        print("Start extract")
         self._region_id = 0
         self._seq_info_genome = SeqInfoContainer()
         self._parse_regions(self._data)

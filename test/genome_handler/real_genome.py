@@ -13,7 +13,7 @@ class RealGenome:
         ann_seq.id = seq_id+"_"+strand_type
         ann_seq.strand = strand_type
         ann_seq.source = RealGenome.genome_information['source']
-        ann_seq.initSpace()
+        ann_seq.init_space()
         return ann_seq
     def _create_genome(self):
         container = AnnSeqContainer()

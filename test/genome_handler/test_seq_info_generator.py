@@ -10,7 +10,8 @@ class TestSeqInfoGenerator(unittest.TestCase):
                  "each_region_number":{'intergenic_region':10,'cds':100},
                  'sample_number_per_region':6,
                  'half_length':4,
-                  'max_diff':3}
+                 'max_diff':3,
+                 'length_constant':False}
     chroms_info = {'chr1':120,'chr2':35}
     ANN_TYPES = ['cds','intron','utr_5','utr_3','intergenic_region']
     frontground_types = ['cds','intron','utr_5','utr_3']
@@ -24,7 +25,7 @@ class TestSeqInfoGenerator(unittest.TestCase):
         chrom.id = chrom_id+"_"+strand
         chrom.ANN_TYPES = TestSeqInfoGenerator.ANN_TYPES
         chrom.source = TestSeqInfoGenerator.source
-        chrom.initSpace()
+        chrom.init_space()
         return chrom
     def _add_seq1(self,chrom):
         chrom.add_ann("utr_5",1,101,101).add_ann("cds",1,102,104)

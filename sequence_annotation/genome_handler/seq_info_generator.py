@@ -4,12 +4,14 @@ from . import SeqInformation
 from . import SeqInfoContainer
 from . import DictValidator
 from . import validate_return
+from . import NegativeNumberException
 class SeqInfoGenerator:
     """Extract selected regions' annotation information"""
     def __init__(self, region_container, principle, chroms_info,
                  seed_id_prefix, seq_id_prefix):
         self._region_container = region_container
         self._principle = principle
+        self._validate_principle()
         self._chroms_info = chroms_info
         self._seeds = None
         self._seqs_info = None
@@ -17,6 +19,18 @@ class SeqInfoGenerator:
         self._seq_id = 0
         self._seed_id_prefix = seed_id_prefix
         self._seq_id_prefix = seq_id_prefix
+    def _validate_principle(self):
+        half_length = self._principle['half_length']
+        if self._principle['length_constant']:
+            total_length = self._principle['total_length']
+            max_diff = total_length - (2*half_length+1)
+            if max_diff < 0:
+                raise NegativeNumberException('total_length-(2*half_length+1)',
+                                              max_diff)
+        else:
+            max_diff = self._principle['max_diff']
+            if max_diff < 0:
+                raise NegativeNumberException('max_diff',max_diff)
     @property
     @validate_return("use method generate before access the data")
     def seqs_info(self):
@@ -71,7 +85,10 @@ class SeqInfoGenerator:
     def _remove_end_regions(self, regions):
         clean_regions = []
         not_used_regions = []
-        max_length = (self._principle['max_diff']+self._principle['half_length']) * 2 + 1
+        if self._principle['length_constant']:
+            max_length = self._principle['total_length']
+        else:
+            max_length = (self._principle['max_diff']+self._principle['half_length']) * 2 + 1
         for item in regions:
             chrom_length = self._chroms_info[item.chromosome_id]
             if not (item.start < max_length or item.end < max_length or
@@ -92,7 +109,7 @@ class SeqInfoGenerator:
         """Create seed from region"""
         centers = [region.start, int((region.start+region.end)/2)]
         center = centers[self.mode_text.index(mode)]
-        seed = SeqInformation(region)
+        seed = SeqInformation().from_dict(region.to_dict())
         seed.source = region.source + "_" + region.id
         seed.id = self._seed_id_prefix + "_" + str(self._seed_id)
         seed.type_ = region.ann_type
@@ -103,17 +120,26 @@ class SeqInfoGenerator:
         return seed
     def _create_seq_info(self, seed):
         length = self._chroms_info[seed.chromosome_id]
-        sequence_info = SeqInformation(seed)
+        sequence_info = SeqInformation().from_dict(seed.to_dict())
         sequence_info.source = seed.source + "_" + seed.id
         half_length = self._principle['half_length']
-        max_diff = self._principle['max_diff']
         index = sequence_info.extra_index
-        new_start = index - (half_length + random.randint(0, max_diff))
-        new_end = index + (half_length + random.randint(0, max_diff))
+        if self._principle['length_constant']:
+            total_length = self._principle['total_length']
+            max_diff = total_length - (2*half_length+1)
+            diff = random.randint(0, max_diff)
+            new_start = index - half_length + diff
+            new_end = index + half_length + diff
+        else:
+            max_diff = self._principle['max_diff']
+            new_start = index - (half_length + random.randint(0, max_diff))
+            new_end = index + (half_length + random.randint(0, max_diff))
         if new_end >=  length:
-            new_end = length - 1
+            raise Exception("index out of range")
+            #new_end = length - 1
         if new_start < 0:
-            new_start = 0
+            #new_start = 0
+            raise Exception("index out of range")
         sequence_info.start = new_start
         sequence_info.end = new_end
         sequence_info.id = self._seq_id_prefix + "_" + str(self._seq_id)

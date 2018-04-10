@@ -1,6 +1,8 @@
 from abc import ABCMeta,abstractmethod
 import numpy as np
 from copy import deepcopy
+from tempfile import mkdtemp
+import os.path as path
 from . import AttrValidator, DictValidator
 from . import get_protected_attrs_names
 from . import ValueOutOfRange
@@ -11,15 +13,12 @@ from . import InvalidAnnotation
 def logical_not(lhs, rhs):
     return np.logical_and(lhs,np.logical_not(rhs))
 class Sequence(metaclass=ABCMeta):
-    def __init__(self,object_=None):
+    def __init__(self):
         self.note = ""
         self.id = None
         self.source = None
         self.chromosome_id = None
         self._strand = None
-        if object_ is not None:
-            copied_attrs = self._copied_public_attrs()+self._copied_protected_attrs()
-            self._copy(object_,copied_attrs)
     def to_dict(self):
         dictionary = {}
         for attr in self._copied_public_attrs():
@@ -37,6 +36,7 @@ class Sequence(metaclass=ABCMeta):
             setattr(self,attr,dict_[attr])
         for attr in self._copied_protected_attrs():
             setattr(self,attr,dict_[attr[1:]])
+        return self
     def _copied_public_attrs(self):
         return ['source','chromosome_id','id','note']
     def _copied_protected_attrs(self):
@@ -62,14 +62,14 @@ class Sequence(metaclass=ABCMeta):
         attr_validator = AttrValidator(self,False,True,False,None)
         attr_validator.validate()
 class SeqInformation(Sequence):
-    def __init__(self,object_=None):
+    def __init__(self):
         self._start = None
         self._end = None
         self._extra_index = None
         self.extra_index_name = None
         self.ann_status = None
         self.ann_type = None
-        super().__init__(object_)
+        super().__init__()
     def _copied_public_attrs(self):
         return super()._copied_public_attrs()+['ann_type','ann_status','extra_index_name']
     def _copied_protected_attrs(self):
@@ -106,17 +106,39 @@ class SeqInformation(Sequence):
             raise NegativeNumberException("extra_index",value)
         self._extra_index = value
 class AnnSequence(Sequence):
-    def __init__(self,object_=None):
-        self.data = None
+    def __init__(self):
         self._has_space = False
         self.ANN_TYPES = None
         self._length = None
-        self.data = {}
-        super().__init__(object_)
+        self._data = {}
+        self._use_memmap = False
+        super().__init__()
+    def to_dict(self,only_data=False):
+        if only_data:
+            return self._data
+        else:
+            return super().to_dict()
     def _copied_public_attrs(self):
-        return super()._copied_public_attrs()+['ANN_TYPES','length','data']
+        return super()._copied_public_attrs()+['ANN_TYPES','length']
     def _copied_protected_attrs(self):
-        return super()._copied_protected_attrs()+['_has_space']
+        return super()._copied_protected_attrs()+['_has_space','_data']
+    def from_dict(self, dict_):
+        self._validate_dict_keys(dict_)
+        for attr in self._copied_public_attrs():
+            setattr(self,attr,dict_[attr])
+        protected_attrs = list(self._copied_protected_attrs())
+        protected_attrs.remove('_data')
+        for attr in protected_attrs:
+            setattr(self,attr,dict_[attr[1:]])
+        if self._has_space:
+            if self._use_memmap:
+                memmap_id = self.id
+            else:
+                memmap_id = None
+            self.init_space()
+            for type_ in self.ANN_TYPES:
+                self.set_ann(type_, dict_['data'][type_])
+        return self
     @property
     def length(self):
         return self._length
@@ -128,12 +150,18 @@ class AnnSequence(Sequence):
     @property
     def has_space(self):
         return self._has_space
-    def initSpace(self):
-        self.data = {}
+    def init_space(self, memmap_id=None):
+        self._use_memmap = (memmap_id is not None)
+        self._data = {}
         self._validate()
         self._has_space = True
         for ann_type in self.ANN_TYPES:
-            self.data[ann_type] = np.array([0.0]*self._length)
+            if self._use_memmap:
+                filename = path.join(mkdtemp(),str(memmap_id))
+                self._data[ann_type] = np.memmap(filename, dtype='float16',
+                                                 mode='w+',shape=(self._length))
+            else:
+                self._data[ann_type] = np.array([0.0]*self._length,dtype='float16')
         return self
     def _validate_input_index(self, start_index, end_index):
         if start_index < 0:
@@ -187,20 +215,22 @@ class AnnSequence(Sequence):
         self._validate_is_init()
         self._validate_input_ann_type(ann_type)
         self._validate_input_index(start_index, end_index)
-        self.data[ann_type][start_index : end_index+1]=value
+        self._data[ann_type][start_index : end_index+1] = value
+        if self._use_memmap:      
+            self._data[ann_type].flush()
         return self
     def get_ann(self,ann_type, start_index=None, end_index=None):
         if start_index is None:
             start_index = 0
         if end_index is None:
-            end_index = self._length -1
+            end_index = self._length - 1
         self._validate_is_init()
         self._validate_input_ann_type(ann_type)
         self._validate_input_index(start_index, end_index)
-        return self.data[ann_type][start_index : end_index+1].copy()
+        return self._data[ann_type][start_index : end_index+1].copy()
     def get_normalized(self, frontground_types, background_type):
         self._validate_is_init()
-        ann_seq = AnnSequence(self)
+        ann_seq = AnnSequence().from_dict(self.to_dict())
         values = []
         frontground_seq = self._get_frontground(ann_seq,frontground_types)
         background_seq = self._get_background(ann_seq,frontground_types)
