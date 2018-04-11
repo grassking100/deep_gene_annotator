@@ -22,11 +22,11 @@ class TestWorker(Worker):
         self._batch_size = batch_size
         self._use_generator = use_generator
     def before_work(self):
-        pass
+        root_path = './'+self._path_root
+        self._create_folder(["test"])
     def after_work(self):
-
         data = json.loads(pd.Series(self._result).to_json(orient='index'))
-        with open(self._path_root + '/result.json', 'w') as outfile:  
+        with open(self._path_root + '/test/evaluate.json', 'w') as outfile:  
             json.dump(data, outfile,indent=4)
     def work(self):
         train_x = self._data['testing']['inputs']
