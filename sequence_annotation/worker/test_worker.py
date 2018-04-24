@@ -24,7 +24,6 @@ class TestWorker(Worker):
     def before_work(self):
         pass
     def after_work(self):
-
         data = json.loads(pd.Series(self._result).to_json(orient='index'))
         with open(self._path_root + '/result.json', 'w') as outfile:  
             json.dump(data, outfile,indent=4)
@@ -44,4 +43,3 @@ class TestWorker(Worker):
                                            verbose=verbose)
         history=np.transpose(history)
         self._result = dict(zip(self._model.metrics_names, history))
-        

@@ -99,10 +99,10 @@ class Pipeline(metaclass=ABCMeta):
         self._model_handler.compile_model(self._model,
                                           learning_rate=learning_rate,
                                           ann_types=ann_types,
+                                          loss_type=loss,
                                           values_to_ignore=values_to_ignore,
                                           weights=self._weighted,
-                                          metric_types=metric_types,
-                                          loss_type=loss)
+                                          metric_types=metric_types)
     @abstractmethod
     def _init_worker(self):
         pass

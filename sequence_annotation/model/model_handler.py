@@ -33,8 +33,8 @@ class ModelHandler:
             weights[type_] = scale * count / sum_raw_weights
         return weights
     @staticmethod
-    def compile_model(model,learning_rate,ann_types,values_to_ignore=None,
-                      weights=None,metric_types=None,loss_type=None):
+    def compile_model(model,learning_rate,ann_types,loss_type,
+                      values_to_ignore=None,weights=None,metric_types=None):
         weight_vec = None
         if weights is not None:
             weight_vec = []
