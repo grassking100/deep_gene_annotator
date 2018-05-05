@@ -4,15 +4,17 @@ import deepdish
 import numpy as np
 from time import gmtime, strftime
 sys.path.append(os.path.abspath(__file__+'/../..'))
-from sequence_annotation.genome_handler.seq_info_parser import USCUParser
+from sequence_annotation.genome_handler.seq_info_parser import UscuInfoParser,EnsemblInfoParser
 from sequence_annotation.genome_handler.ann_genome_creator import AnnGenomeCreator
 from sequence_annotation.genome_handler.region_extractor import RegionExtractor
 from sequence_annotation.genome_handler.seq_info_generator import SeqInfoGenerator
 from sequence_annotation.genome_handler.seq_container import SeqInfoContainer, AnnSeqContainer
 from sequence_annotation.genome_handler.ann_seq_extractor import AnnSeqExtractor
+from sequence_annotation.genome_handler.ann_seq_converter import UscuSeqConverter,EnsemblSeqConverter
 import json
+import pandas as pd
 frontground_types = ['cds','intron','utr_5','utr_3']
-background_type = 'intergenic_region'
+background_type = 'other'
 def get_seqinfos(chroms):
     print("Prepare seqinfos")
     generator = SeqInfoGenerator(chroms,principle,
@@ -41,8 +43,7 @@ def prepare_chromosome(parser_result,chrom_id):
     chrom_info['chromosome'] = {chrom_id:genome_info['chromosome'][chrom_id]}
     if not os.path.isfile(chrom_file):
         creator = AnnGenomeCreator(chrom_info,region_data)
-        creator.create()
-        chromosome=creator.result
+        chromosome=creator.create()
         print("Save file to "+chrom_file)
         deepdish.io.save(chrom_file, chromosome.to_dict(),('zlib',9))
         print("Save file done")
@@ -131,11 +132,7 @@ if __name__ == "__main__":
         principle['replaceable'] = get_bool(input('replaceable (T/F):'))
         principle['each_region_number'] = {}
         print("Input each region number:")
-        regions = {'utr_5':'5\' UTR',
-                   'utr_3':'3\' UTR',
-                   'cds':'CDS',
-                   'intron':'intron',
-                   'intergenic_region':'intergenic region'}
+        regions = {'utr_5':'5\' UTR','utr_3':'3\' UTR','cds':'CDS','intron':'intron','other':'other'}
         for key,value in regions.items():
             principle['each_region_number'][key] = int(input('\t'+value+':'))
     principle['sample_number_per_region'] = int(input('sample number per annotation region:'))
@@ -145,16 +142,28 @@ if __name__ == "__main__":
     else:
         principle['max_diff'] = int(input('max expand length per end:'))
     principle['half_length'] = int(input('core\'s half length:'))
-    UCSC_file_path = os.path.expanduser(input("UCSC table path:"))
+    data_source = int(input('core\'s half length:'))
+    file_path = os.path.expanduser(input("Table path:"))
     genome_info_path = os.path.expanduser(input('Genome infomration data path:'))
     with open(genome_info_path) as data_file:    
         genome_info = json.load(data_file)
     setting = {'principle':principle,
                'genome_info_path':genome_info_path,
-               'UCSC_file_path':UCSC_file_path}
+               'UCSC_file_path':file_path,
+               'data_source':data_source}
     with open(root+'/setting.json', 'w') as handle:
         json.dump(setting,handle,sort_keys=True ,indent=4)
-    parser = USCUParser(UCSC_file_path)
-    parser.parse()
-    prepare_annseq(parser.result)
+    data = pd.read_csv(file_path,sep='\t').to_dict('record')
+    if data_source=='uscu':
+        parser = UscuInfoParser()
+        gene_converter = UscuSeqConverter()
+    elif data_source=='ensembl':
+        parser = UscuInfoParser()
+        gene_converter = EnsemblSeqConverter()
+        parser = EnsemblInfoParser()
+    converted_data = []
+    for seq in parser.parse(data):
+        converted_seq = gene_converter.convert(seq)
+        converted_data.append(converted_seq)
+    prepare_annseq(parser.parse(converted_uscu_data))
     print("End of program")

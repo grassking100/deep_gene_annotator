@@ -1,7 +1,7 @@
 """This submodule provide API for helpingother submodule"""
 from .exception import MissingExpectDictKey, InvalidValueInDict, DictKeyNotExistException
 from .exception import AttrIsNoneException, LengthNotEqualException, CodeException
-from .exception import NotPositiveException, ReturnNoneException, SeqException
+from .exception import NotPositiveException, ReturnNoneException, SeqException, ChangeConstValException
 from .python_decorator import validate_return
 from .creator import Creator
 from .helper import get_protected_attrs_names

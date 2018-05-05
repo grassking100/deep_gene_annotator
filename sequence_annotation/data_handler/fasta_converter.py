@@ -11,17 +11,18 @@ class FastaConverter():
         self._seq_converter = seq_converter or SeqConverter()
     def to_seq_dict(self,fasta_path,number=-1):
         """Change sequences in fasta file into dictionary of seqeucnces """
-        fasta_sequences = SeqIO.parse(open(fasta_path), 'fasta')
-        data = {}
-        counter = 0
-        for fasta in fasta_sequences:
-            if (number <= 0) or (counter < number):
-                name, seq = fasta.id, (str)(fasta.seq)
-                data[name]=seq
-                counter += 1
-            else:
-                break
-        return data
+        with open(fasta_path,"r") as file:
+            fasta_sequences = SeqIO.parse(file, 'fasta')
+            data = {}
+            counter = 0
+            for fasta in fasta_sequences:
+                if (number <= 0) or (counter < number):
+                    name, seq = fasta.id, (str)(fasta.seq)
+                    data[name]=seq
+                    counter += 1
+                else:
+                    break
+            return data
     def to_vec_dict(self,seq_dict, discard_invalid_seq):
         """convert dictionary of seqeucnces to dictionary of one-hot encoding vector"""
         data = {}

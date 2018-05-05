@@ -10,6 +10,7 @@ from . import UninitializedException
 from . import NegativeNumberException
 from . import InvalidStrandType
 from . import InvalidAnnotation
+from . import ChangeConstValException
 def logical_not(lhs, rhs):
     return np.logical_and(lhs,np.logical_not(rhs))
 class Sequence(metaclass=ABCMeta):
@@ -108,11 +109,20 @@ class SeqInformation(Sequence):
 class AnnSequence(Sequence):
     def __init__(self):
         self._has_space = False
-        self.ANN_TYPES = None
+        self._ANN_TYPES = None
         self._length = None
         self._data = {}
         self._use_memmap = False
         super().__init__()
+    @property
+    def ANN_TYPES(self):
+        return self._ANN_TYPES
+    @ANN_TYPES.setter
+    def ANN_TYPES(self,value):
+        if self._ANN_TYPES is None:
+            self._ANN_TYPES = value
+        else:
+            raise ChangeConstValException('ANN_TYPES')
     def to_dict(self,only_data=False):
         if only_data:
             return self._data
@@ -200,9 +210,8 @@ class AnnSequence(Sequence):
                      logical_function, start_index=None, end_index=None):
         masked_ann = self.get_ann(masked_ann_type, start_index, end_index)
         mask_ann = self.get_ann(mask_ann_type, start_index, end_index)
-        mask = logical_function(masked_ann,mask_ann)
-        masked_ann[np.logical_not(mask)] = 0
-        self.set_ann(stored_ann_type, masked_ann, start_index, end_index)
+        return_ann = logical_function(masked_ann,mask_ann)
+        self.set_ann(stored_ann_type, return_ann, start_index, end_index)
     def add_ann(self, ann_type, value, start_index=None, end_index=None):
         ann = self.get_ann(ann_type, start_index, end_index)
         self.set_ann(ann_type, ann + value, start_index, end_index)

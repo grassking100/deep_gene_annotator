@@ -4,7 +4,7 @@ from . import AnnSeqContainer
 from . import AnnSequence
 class RealGenome:
     genome_information={'chromosome':{'chr1':30,'chr2':35},'source':'unit_test'}
-    ANN_TYPES = ['intergenic_region','cds','intron','utr_5','utr_3']
+    ANN_TYPES = ['other','cds','intron','utr_5','utr_3']
     def _create_seq(self,chrom_id,strand_type,seq_id):
         ann_seq = AnnSequence()
         ann_seq.chromosome_id=chrom_id
@@ -57,8 +57,8 @@ class RealGenome:
         ann_seq = self._create_seq('chr2','plus','seq_2')
         ann_seq.set_ann('utr_5',1,5,19)
         if has_intergenic_region:
-            ann_seq.set_ann('intergenic_region',1,0,4)
-            ann_seq.set_ann('intergenic_region',1,20,29)
+            ann_seq.set_ann('other',1,0,4)
+            ann_seq.set_ann('other',1,20,29)
         return ann_seq
     def _seq6(self, has_intergenic_region):
         ann_seq = self._create_seq('chr2','plus','seq_6')
@@ -73,8 +73,8 @@ class RealGenome:
         ann_seq.set_ann('intron',1,19,19)
         ann_seq.set_ann('utr_3',1,20,20)
         if has_intergenic_region:
-            ann_seq.set_ann('intergenic_region',1,0,4)
-            ann_seq.set_ann('intergenic_region',1,21,29)
+            ann_seq.set_ann('other',1,0,4)
+            ann_seq.set_ann('other',1,21,29)
         return ann_seq
     def _seq3(self, has_intergenic_region):
         ann_seq = self._create_seq('chr1','plus','seq_3')
@@ -84,8 +84,8 @@ class RealGenome:
         ann_seq.set_ann('cds',1,15,16)
         ann_seq.set_ann('intron',1,10,14)
         if has_intergenic_region:
-            ann_seq.set_ann('intergenic_region',1,0,4)
-            ann_seq.set_ann('intergenic_region',1,18,29)
+            ann_seq.set_ann('other',1,0,4)
+            ann_seq.set_ann('other',1,18,29)
         return ann_seq
     def _seq1(self, has_intergenic_region):
         ann_seq = self._create_seq('chr1','plus','seq_1')
@@ -95,8 +95,8 @@ class RealGenome:
         ann_seq.set_ann('cds',1,15,17)
         ann_seq.set_ann('intron',1,11,14)
         if has_intergenic_region:
-            ann_seq.set_ann('intergenic_region',1,0,3)
-            ann_seq.set_ann('intergenic_region',1,20,29)
+            ann_seq.set_ann('other',1,0,3)
+            ann_seq.set_ann('other',1,20,29)
         return ann_seq
     def _seq4(self, has_intergenic_region):
         ann_seq = self._create_seq('chr1','minus','seq_4')
@@ -106,6 +106,6 @@ class RealGenome:
         ann_seq.set_ann('cds',1,29-17,29-15)
         ann_seq.set_ann('intron',1,29-14,29-11)
         if has_intergenic_region:
-            ann_seq.set_ann('intergenic_region',1,29-3,29-0)
-            ann_seq.set_ann('intergenic_region',1,29-29,29-20)
+            ann_seq.set_ann('other',1,29-3,29-0)
+            ann_seq.set_ann('other',1,29-29,29-20)
         return ann_seq

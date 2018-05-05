@@ -9,8 +9,5 @@ class Creator(metaclass=ABCMeta):
         pass
     @abstractmethod
     def create(self):
-        """Method to build object"""
-        pass
-    @abstractproperty
-    def result(self):
+        """Method to build object and return it"""
         pass
