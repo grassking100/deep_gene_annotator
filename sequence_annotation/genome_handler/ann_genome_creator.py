@@ -6,61 +6,43 @@ from . import DictValidator
 from . import Creator
 from . import NotPositiveException
 from . import UscuSeqConverter
-class AnnGenomeCreator(Creator):
-    """Purpose:Make sequences of numeric value represent annotated region occupy or not"""
-    def __init__(self,genome_information,data,converter=UscuSeqConverter):
-        super().__init__()
-        self._data_information = genome_information
-        self._data = data
-        self._converter = converter()
-        self._ANN_TYPES = self._converter.ANN_TYPES+['other']
+class AnnChromCreator(Creator):
     def _validate(self):
         pass
-    def create(self):
+    def create(self,seqs,chrom_id,length,source):
         self._validate()
-        self._validate_genome_info()
-        self._result = self._get_init_genome()
-        self._annotate_genome()
-        return self._result
-    def _validate_genome_info(self):
-        validator = DictValidator(self._data_information,['source','chromosome'],[],[])
-        validator.validate()
-    def _get_init_genome(self):
-        """Get initialized genome"""        
-        genome = AnnSeqContainer()
-        genome.ANN_TYPES = self._ANN_TYPES
-        for id_, length in self._data_information['chromosome'].items():
-            for strand in ['plus','minus']:
-                ann_seq = AnnSequence()
-                ann_seq.length = length
-                ann_seq.chromosome_id = str(id_)
-                ann_seq.strand = strand
-                ann_seq.source = self._data_information['source']
-                ann_seq.id = id_+"_"+strand
-                ann_seq.ANN_TYPES = self._ANN_TYPES
-                ann_seq.init_space()
-                genome.add(ann_seq)
-        return genome
-    def _add_seq_to_genome(self, ann_seq, start_index, end_index):
-        chrom_id = ann_seq.chromosome_id
+        for seq in seqs:
+            if str(chrom_id)!=str(seq.chromosome_id):
+                err = "Chromosome id and sequence id are not the same"
+                raise Exception(err)
+        ann_types = seqs.ANN_TYPES+['other']
+        chrom = self._get_init_chrom(chrom_id,ann_types,length,source)
+        self._add_seqs(chrom,seqs,length,source)
+        return chrom
+    def _get_init_chrom(self,chrom_id,ann_types,length,source):
+        """Get initialized chromosome"""      
+        chrom = AnnSeqContainer()
+        chrom.ANN_TYPES = ann_types
+        for strand in ['plus','minus']:
+            ann_seq = AnnSequence()
+            ann_seq.length = length
+            ann_seq.chromosome_id = str(chrom_id)
+            ann_seq.strand = strand
+            ann_seq.source = source
+            ann_seq.id = chrom_id+"_"+strand
+            ann_seq.ANN_TYPES = ann_types
+            ann_seq.init_space()
+            chrom.add(ann_seq)
+        return chrom
+    def _add_seqs(self,chrom,seqs,length,source):
+        for seq in seqs:
+            one_strand_chrom = chrom.get(str(seq.chromosome_id)+"_"+seq.strand)
+            self._add_seq(one_strand_chrom,seq,length,source)
+    def _add_seq(self,one_strand_chrom,ann_seq,chrom_length,source):
+        txStart = ann_seq.abosolute_index
+        txEnd = ann_seq.abosolute_index+ann_seq.length - 1
         strand = ann_seq.strand
-        chrom = self._result.get(chrom_id+"_"+strand)
-        for type_ in ann_seq.ANN_TYPES:
-            seq = ann_seq.get_ann(type_)
-            if strand=='minus':
-                seq = np.flip(seq, 0)
-            chrom.add_ann(type_,seq,start_index,end_index)
-    def _annotate_genome(self):
-        """Annotate genome"""
-        for seq_data in self._data:
-            self._annotate_seq(seq_data)
-    def _annotate_seq(self,seq_data):
-        txStart = seq_data['txStart']
-        txEnd = seq_data['txEnd']
-        #calculate for template container
-        strand = seq_data['strand']
-        chrom_length = self._data_information['chromosome'][seq_data['chrom']]
-        if strand== 'plus':
+        if strand == 'plus':
             gene_start_index = txStart
             gene_end_index = txEnd
         elif strand == 'minus':
@@ -68,6 +50,33 @@ class AnnGenomeCreator(Creator):
             gene_end_index = chrom_length-1-txStart
         else:
             raise InvalidStrandType(strand)
-        ann_seq = self._converter.convert(seq_data)
-        ann_seq.source = self._data_information['source']
-        self._add_seq_to_genome(ann_seq,gene_start_index,gene_end_index)
+        ann_seq.source = source
+        for type_ in ann_seq.ANN_TYPES:
+            seq = ann_seq.get_ann(type_)
+            if strand=='minus':
+                seq = np.flip(seq, 0)
+            one_strand_chrom.add_ann(type_,seq,gene_start_index,gene_end_index)
+class AnnGenomeCreator(Creator):
+    def __init__(self):
+        self._chrom_creator = AnnChromCreator()
+    def _validate(self):
+        pass
+    def create(self,seqs,genome_information):
+        validator = DictValidator(genome_information,['source','chromosome'],[],[])
+        validator.validate()
+        seqs_collect = {}
+        genome = AnnSeqContainer()
+        genome.ANN_TYPES = seqs.ANN_TYPES+['other']
+        for chrom_id in genome_information['chromosome'].keys():
+            container = AnnSeqContainer()
+            container.ANN_TYPES = seqs.ANN_TYPES
+            seqs_collect[chrom_id] = container
+        for seq in seqs:
+            chrom_id = str(seq.chromosome_id)
+            seqs_collect[chrom_id].add(seq)
+        source = genome_information['source']
+        for chrom_id,length in genome_information['chromosome'].items():
+            seqs = seqs_collect[chrom_id]
+            chrom = self._chrom_creator.create(seqs,chrom_id,length,source)
+            genome.add(chrom)
+        return genome

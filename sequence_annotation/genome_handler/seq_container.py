@@ -8,6 +8,17 @@ class SeqContainer(metaclass=ABCMeta):
     def __init__(self):
         self._data = {}
         self.note = ""
+    def __iter__(self):
+        self._index = 0
+        return self  
+    def __next__(self):
+        if self._index >= len(self._data):
+            self._index = 0
+            raise StopIteration  
+        else:
+            key = list(self._data.keys())[self._index]
+            self._index += 1  
+            return self._data[key]
     @property
     def data(self):
         """Return sequences in order based on their id"""
@@ -102,9 +113,4 @@ class AnnSeqContainer(SeqContainer):
     def to_dict(self):
         dict_ = super().to_dict()
         dict_["type"] = self.ANN_TYPES
-        return dict_
-    def data_to_dict(self):
-        dict_ = {}
-        for item in self.data:
-            dict_[item.id]=item.data
         return dict_

@@ -2,6 +2,7 @@ import unittest
 import numpy as np
 from . import AnnSequence
 from . import RegionExtractor
+from . import AnnSeqProcessor
 class TestRegionExtractor(unittest.TestCase):
     ANN_TYPES = ['cds','intron','utr_5','utr_3','intergenic_region',]
     frontground_types = ['cds','intron','utr_5','utr_3']
@@ -28,9 +29,12 @@ class TestRegionExtractor(unittest.TestCase):
         #Create sequence to test
         chrom = self._create_chrom("chrom1","plus")
         self._add_seq2(chrom)
-        extractor = RegionExtractor(chrom,TestRegionExtractor.frontground_types,TestRegionExtractor.background_type)
-        extractor.extract()
-        regions = extractor.result
+        processor = AnnSeqProcessor()
+        norm_chrom = processor.get_one_hot(chrom,
+                                              TestRegionExtractor.frontground_types,
+                                              TestRegionExtractor.background_type)
+        extractor = RegionExtractor()
+        regions = extractor.extract(norm_chrom)
         test = []
         for region in regions.data:
             test.append({'type':region.ann_type, 'start':region.start,
@@ -51,9 +55,12 @@ class TestRegionExtractor(unittest.TestCase):
         #Create sequence to test
         chrom = self._create_chrom("chrom1","plus")
         self._add_seq1(chrom)
-        extractor = RegionExtractor(chrom,TestRegionExtractor.frontground_types,TestRegionExtractor.background_type)
-        extractor.extract()
-        regions = extractor.result
+        processor = AnnSeqProcessor()
+        norm_chrom = processor.get_one_hot(chrom,
+                                              TestRegionExtractor.frontground_types,
+                                              TestRegionExtractor.background_type)
+        extractor = RegionExtractor()
+        regions = extractor.extract(norm_chrom)
         test = []
         for region in regions.data:
             test.append({'type':region.ann_type, 'start':region.start,

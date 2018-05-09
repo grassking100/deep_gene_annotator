@@ -142,7 +142,7 @@ if __name__ == "__main__":
     else:
         principle['max_diff'] = int(input('max expand length per end:'))
     principle['half_length'] = int(input('core\'s half length:'))
-    data_source = int(input('core\'s half length:'))
+    data_source = int(input('Data source:'))
     file_path = os.path.expanduser(input("Table path:"))
     genome_info_path = os.path.expanduser(input('Genome infomration data path:'))
     with open(genome_info_path) as data_file:    
@@ -165,5 +165,5 @@ if __name__ == "__main__":
     for seq in parser.parse(data):
         converted_seq = gene_converter.convert(seq)
         converted_data.append(converted_seq)
-    prepare_annseq(parser.parse(converted_uscu_data))
+    prepare_annseq(parser.parse(converted_data))
     print("End of program")

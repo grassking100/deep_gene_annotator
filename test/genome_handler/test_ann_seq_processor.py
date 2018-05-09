@@ -1,7 +1,8 @@
 import unittest
 import numpy as np
 from . import AnnSequence
-class TestSequence(unittest.TestCase):
+from . import AnnSeqProcessor
+class TestAnnSeqProcessor(unittest.TestCase):
     ANN_TYPES = ['cds','intron','utr_5','utr_3','intergenic_region',]
     frontground_types = ['cds','intron','utr_5','utr_3']
     background_type = 'intergenic_region'
@@ -11,10 +12,10 @@ class TestSequence(unittest.TestCase):
         chrom = AnnSequence()
         chrom.chromosome_id = chrom_id
         chrom.strand = strand
-        chrom.length = TestSequence.data[chrom_id]
+        chrom.length = TestAnnSeqProcessor.data[chrom_id]
         chrom.id = chrom_id+"_"+strand
-        chrom.ANN_TYPES = TestSequence.ANN_TYPES
-        chrom.source = TestSequence.source
+        chrom.ANN_TYPES = TestAnnSeqProcessor.ANN_TYPES
+        chrom.source = TestAnnSeqProcessor.source
         chrom.init_space()
         return chrom
     def _test_seq(self, real_seq, test_seq):
@@ -44,7 +45,10 @@ class TestSequence(unittest.TestCase):
         self._add_seq1(chrom)
         self._add_seq2(chrom)
         self._add_seq4(chrom)
-        norm_chrom = chrom.get_normalized(TestSequence.frontground_types, TestSequence.background_type)
+        processor = AnnSeqProcessor()
+        norm_chrom = processor.get_normalized(chrom,
+                                              TestAnnSeqProcessor.frontground_types,
+                                              TestAnnSeqProcessor.background_type)
         #Create answer
         answer = self._create_chrom("chrom1","plus")
         answer.add_ann("utr_5",1,1,1).add_ann("utr_5",1/3,2,2)
@@ -64,7 +68,10 @@ class TestSequence(unittest.TestCase):
         self._add_seq1(chrom)
         self._add_seq2(chrom)
         self._add_seq3(chrom)
-        norm_chrom = chrom.get_normalized(TestSequence.frontground_types, TestSequence.background_type)
+        processor = AnnSeqProcessor()
+        norm_chrom = processor.get_normalized(chrom,
+                                              TestAnnSeqProcessor.frontground_types,
+                                              TestAnnSeqProcessor.background_type)
         #Create answer
         answer = self._create_chrom("chrom1","plus")
         answer.add_ann("utr_5",1,1,1).add_ann("cds",1,2,4).add_ann("intron",1,5,5)
@@ -81,7 +88,10 @@ class TestSequence(unittest.TestCase):
         chrom = self._create_chrom("chrom1","plus")
         self._add_seq1(chrom)
         self._add_seq2(chrom)
-        norm_chrom = chrom.get_normalized(TestSequence.frontground_types, TestSequence.background_type)
+        processor = AnnSeqProcessor()
+        norm_chrom = processor.get_normalized(chrom,
+                                              TestAnnSeqProcessor.frontground_types,
+                                              TestAnnSeqProcessor.background_type)
         #Create answer
         answer = self._create_chrom("chrom1","plus")
         answer.add_ann("utr_5",1,1,1).add_ann("cds",1,2,4).add_ann("intron",1,5,5)
@@ -100,7 +110,10 @@ class TestSequence(unittest.TestCase):
         #Create sequence to test
         chrom = self._create_chrom("chrom1","plus")
         self._add_seq1(chrom)
-        norm_chrom = chrom.get_normalized(TestSequence.frontground_types, TestSequence.background_type)
+        processor = AnnSeqProcessor()
+        norm_chrom = processor.get_normalized(chrom,
+                                              TestAnnSeqProcessor.frontground_types,
+                                              TestAnnSeqProcessor.background_type)
         #Test equality
         self._test_seq(answer,norm_chrom)
     def test_two_plus_one_seq_one_hot(self):
@@ -109,7 +122,10 @@ class TestSequence(unittest.TestCase):
         self._add_seq1(chrom)
         self._add_seq2(chrom)
         self._add_seq3(chrom)
-        one_hot_chrom = chrom.get_one_hot(TestSequence.frontground_types, TestSequence.background_type)
+        processor = AnnSeqProcessor()
+        one_hot_chrom = processor.get_one_hot(chrom,
+                                              TestAnnSeqProcessor.frontground_types,
+                                              TestAnnSeqProcessor.background_type)
         #Create answer
         answer = self._create_chrom("chrom1","plus")
         answer.add_ann("utr_5",1,1,1).add_ann("cds",1,2,4).add_ann("intron",1,5,5)
@@ -126,7 +142,10 @@ class TestSequence(unittest.TestCase):
         chrom = self._create_chrom("chrom1","plus")
         self._add_seq1(chrom)
         self._add_seq2(chrom)
-        one_hot_chrom = chrom.get_one_hot(TestSequence.frontground_types, TestSequence.background_type)
+        processor = AnnSeqProcessor()
+        one_hot_chrom = processor.get_one_hot(chrom,
+                                              TestAnnSeqProcessor.frontground_types,
+                                              TestAnnSeqProcessor.background_type)
         #Create answer
         answer = self._create_chrom("chrom1","plus")
         answer.add_ann("utr_5",1,1,1).add_ann("cds",1,2,4).add_ann("intron",1,5,5)
@@ -145,7 +164,10 @@ class TestSequence(unittest.TestCase):
         #Create sequence to test
         chrom = self._create_chrom("chrom1","plus")
         self._add_seq1(chrom)
-        one_hot_chrom = chrom.get_one_hot(TestSequence.frontground_types, TestSequence.background_type)
+        processor = AnnSeqProcessor()
+        one_hot_chrom = processor.get_one_hot(chrom,
+                                              TestAnnSeqProcessor.frontground_types,
+                                              TestAnnSeqProcessor.background_type)
         #Test equality
         self._test_seq(answer,one_hot_chrom)
     def test_three_seq_one_hot(self):
@@ -155,7 +177,10 @@ class TestSequence(unittest.TestCase):
         self._add_seq1(chrom)
         self._add_seq2(chrom)
         self._add_seq4(chrom)
-        one_hot_chrom = chrom.get_one_hot(TestSequence.frontground_types, TestSequence.background_type)
+        processor = AnnSeqProcessor()
+        one_hot_chrom = processor.get_one_hot(chrom,
+                                              TestAnnSeqProcessor.frontground_types,
+                                              TestAnnSeqProcessor.background_type)
         #Create answer
         answer = self._create_chrom("chrom1","plus")
         answer.add_ann("utr_5",1,1,1)
@@ -169,5 +194,5 @@ class TestSequence(unittest.TestCase):
         self._test_seq(answer,one_hot_chrom)
 if __name__=="__main__":    
     unittest.TestSuite()
-    unittest.TestLoader().loadTestsFromTestCase(TestSequence)
+    unittest.TestLoader().loadTestsFromTestCase(TestAnnSeqProcessor)
     unittest.main()

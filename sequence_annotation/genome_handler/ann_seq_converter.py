@@ -4,11 +4,7 @@ from abc import abstractmethod
 from . import AnnSeqContainer
 from . import AnnSequence
 class AnnSeqConverter(metaclass=ABCMeta):
-    def __init__(self):
-        self._ANN_TYPES = ['cds','intron','utr_5','utr_3']
-    @property
-    def ANN_TYPES(self):
-        return self._ANN_TYPES
+    ANN_TYPES = ['cds','intron','utr_5','utr_3']
     @abstractmethod
     def convert(self,data):
         pass    
@@ -21,17 +17,17 @@ class AnnSeqConverter(metaclass=ABCMeta):
         ann_seq.source = 'template'
         ann_seq.id = 'template'
         extra_type = ['exon','ORF','utr','utr_5_potential','utr_3_potential','gene']
-        ann_seq.ANN_TYPES = self._ANN_TYPES + extra_type
+        ann_seq.ANN_TYPES = self.ANN_TYPES + extra_type
         ann_seq.init_space()
         return ann_seq
     def _create_seq(self,name,chrom_id,strand,tx_start,tx_end):
         length = tx_end-tx_start+1
-
         nt_number = length
         ann_seq = AnnSequence()
+        ann_seq.abosolute_index = tx_start
         ann_seq.id = name
         ann_seq.length = nt_number
-        ann_seq.ANN_TYPES = self._ANN_TYPES
+        ann_seq.ANN_TYPES = self.ANN_TYPES
         ann_seq.chromosome_id = chrom_id
         ann_seq.strand = strand
         ann_seq.init_space()
@@ -44,7 +40,6 @@ class AnnSeqConverter(metaclass=ABCMeta):
         if total != ann_seq.length:
             error = "Sequence annotation is not filled completely: "+str(total)+"/"+str(ann_seq.length)
             raise Exception(error)
-
 class UscuSeqConverter(AnnSeqConverter):
     def convert(self,data):
         tx_start = data['txStart']
@@ -100,7 +95,7 @@ class UscuSeqConverter(AnnSeqConverter):
         self._validate(ann_seq)
         return ann_seq
 
-class EnsemblSeqonverter(AnnSeqConverter):
+class EnsemblSeqConverter(AnnSeqConverter):
     def convert(self,data):
         """Transcription information"""
         tx_start = data['tx_start']

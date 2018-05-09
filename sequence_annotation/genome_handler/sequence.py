@@ -23,9 +23,9 @@ class Sequence(metaclass=ABCMeta):
     def to_dict(self):
         dictionary = {}
         for attr in self._copied_public_attrs():
-            dictionary[attr]=getattr(self,attr)
+            dictionary[attr]=deepcopy(getattr(self,attr))
         for attr in self._copied_protected_attrs():
-            dictionary[attr[1:]]=getattr(self,attr)
+            dictionary[attr[1:]]=deepcopy(getattr(self,attr))
         return dictionary
     def _validate_dict_keys(self, dict_):
         names = get_protected_attrs_names(dict_)
@@ -34,17 +34,14 @@ class Sequence(metaclass=ABCMeta):
     def from_dict(self, dict_):
         self._validate_dict_keys(dict_)
         for attr in self._copied_public_attrs():
-            setattr(self,attr,dict_[attr])
+            setattr(self,attr,deepcopy(dict_[attr]))
         for attr in self._copied_protected_attrs():
-            setattr(self,attr,dict_[attr[1:]])
+            setattr(self,attr,deepcopy(dict_[attr[1:]]))
         return self
     def _copied_public_attrs(self):
         return ['source','chromosome_id','id','note']
     def _copied_protected_attrs(self):
         return ['_strand']
-    def _copy(self,source,attrs):
-        for attr in attrs:
-            setattr(self,attr,deepcopy(getattr(source,attr)))
     @property
     def strand(self):
         return self._strand
@@ -59,8 +56,10 @@ class Sequence(metaclass=ABCMeta):
     @abstractmethod
     def length(self):
         pass
+    def _checked_attr(self):
+        return ['id','_strand','chromosome_id']
     def _validate(self):
-        attr_validator = AttrValidator(self,False,True,False,None)
+        attr_validator = AttrValidator(self,False,False,False,self._checked_attr())
         attr_validator.validate()
 class SeqInformation(Sequence):
     def __init__(self):
@@ -113,33 +112,49 @@ class AnnSequence(Sequence):
         self._length = None
         self._data = {}
         self._use_memmap = False
+        self._abosolute_index = None
+        self.processed_status = None
         super().__init__()
+    def _checked_attr(self):
+        return super()._checked_attr()+['_ANN_TYPES','_length']
+    @property
+    def abosolute_index(self):
+        return self._abosolute_index
+    @abosolute_index.setter
+    def abosolute_index(self, value):
+        if value < 0:
+            raise NegativeNumberException("abosolute_index",value)
+        self._abosolute_index = value
     @property
     def ANN_TYPES(self):
         return self._ANN_TYPES
     @ANN_TYPES.setter
     def ANN_TYPES(self,value):
-        if self._ANN_TYPES is None:
+        if self._ANN_TYPES is None or not self._has_space:
             self._ANN_TYPES = value
         else:
             raise ChangeConstValException('ANN_TYPES')
-    def to_dict(self,only_data=False):
+    def _copied_public_attrs(self):
+        return super()._copied_public_attrs()+['ANN_TYPES','length','processed_status']
+    def _copied_protected_attrs(self):
+        return super()._copied_protected_attrs()+['_has_space','_abosolute_index']
+    def to_dict(self,only_data=False,without_data=False):
         if only_data:
             return self._data
         else:
-            return super().to_dict()
-    def _copied_public_attrs(self):
-        return super()._copied_public_attrs()+['ANN_TYPES','length']
-    def _copied_protected_attrs(self):
-        return super()._copied_protected_attrs()+['_has_space','_data']
+            dict_ = super().to_dict()
+            if not without_data:
+                protected_attrs = list(self._copied_protected_attrs())
+                protected_attrs.append('_data')
+                for attr in protected_attrs:
+                    dict_[attr[1:]]=deepcopy(getattr(self,attr))
+            else:
+                dict_['data'] = {}
+                dict_['has_space']=False
+            return dict_
     def from_dict(self, dict_):
         self._validate_dict_keys(dict_)
-        for attr in self._copied_public_attrs():
-            setattr(self,attr,dict_[attr])
-        protected_attrs = list(self._copied_protected_attrs())
-        protected_attrs.remove('_data')
-        for attr in protected_attrs:
-            setattr(self,attr,dict_[attr[1:]])
+        super().from_dict(dict_)
         if self._has_space:
             if self._use_memmap:
                 memmap_id = self.id
@@ -147,7 +162,8 @@ class AnnSequence(Sequence):
                 memmap_id = None
             self.init_space()
             for type_ in self.ANN_TYPES:
-                self.set_ann(type_, dict_['data'][type_])
+                value = deepcopy(dict_['data'][type_])
+                self.set_ann(type_, value)
         return self
     @property
     def length(self):
@@ -156,7 +172,13 @@ class AnnSequence(Sequence):
     def length(self, value):
         if value < 0:
             raise NegativeNumberException("length",value)
-        self._length = value
+        if not self._has_space:
+            self._length = value
+        else:
+            raise ChangeConstValException('length')
+    def clean_space(self):
+        self._has_space = False
+        self._data = {}
     @property
     def has_space(self):
         return self._has_space
@@ -190,7 +212,7 @@ class AnnSequence(Sequence):
     def _validate_is_init(self):
         if not self._has_space:
             name = self.__class__.__name__
-            raise UninitializedException(name,"Please use method,initSpace")
+            raise UninitializedException(name,"Please use method,init_space")
     def op_and_ann(self, stored_ann_type, masked_ann_type, mask_ann_type,
                    start_index=None, end_index=None):
         self._logical_ann(stored_ann_type, masked_ann_type, mask_ann_type,
@@ -237,43 +259,3 @@ class AnnSequence(Sequence):
         self._validate_input_ann_type(ann_type)
         self._validate_input_index(start_index, end_index)
         return self._data[ann_type][start_index : end_index+1].copy()
-    def get_normalized(self, frontground_types, background_type):
-        self._validate_is_init()
-        ann_seq = AnnSequence().from_dict(self.to_dict())
-        values = []
-        frontground_seq = self._get_frontground(ann_seq,frontground_types)
-        background_seq = self._get_background(ann_seq,frontground_types)
-        for type_ in frontground_types:
-            values.append(ann_seq.get_ann(type_))
-        sum_values = np.array(values).sum(0)
-        for type_ in frontground_types:
-            numerator = self.get_ann(type_)
-            denominator = sum_values
-            with np.errstate(divide='ignore', invalid='ignore'):
-                result = numerator / denominator
-                result[denominator == 0] = 0
-                result[np.logical_not(frontground_seq)] = 0
-                ann_seq.set_ann(type_,result)
-        ann_seq.set_ann(background_type,background_seq)
-        return ann_seq
-    def get_one_hot(self, frontground_types,background_type):
-        ann_seq = self.get_normalized(frontground_types,background_type)
-        values = []
-        one_hot_value = {}
-        for type_ in ann_seq.ANN_TYPES:
-            values.append(ann_seq.get_ann(type_))
-            one_hot_value[type_] =[0]*ann_seq.length
-        one_hot_indice = np.argmax(values,0)
-        for index,one_hot_index in enumerate(one_hot_indice):
-            one_hot_type = ann_seq.ANN_TYPES[one_hot_index]
-            one_hot_value[one_hot_type][index]=1
-        for type_ in frontground_types:
-            ann_seq.set_ann(type_,one_hot_value[type_])
-        return ann_seq
-    def _get_background(self,ann_seq,frontground_types):
-        return  np.logical_not(self._get_frontground(ann_seq,frontground_types))
-    def _get_frontground(self,ann_seq,frontground_types):
-        frontground_seq = np.array([0]*ann_seq.length)
-        for type_ in frontground_types:
-            frontground_seq = np.logical_or(frontground_seq,ann_seq.get_ann(type_))
-        return frontground_seq
