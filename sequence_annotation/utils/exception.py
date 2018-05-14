@@ -1,3 +1,9 @@
+class ProcessedStatusNotSatisfied(Exception):
+    def __init__(self,get_status,predict_status):
+        msg = ("Get "+str(get_status)+""
+               ",but it is expect to be "
+               ""+str(predict_status))
+        super().__init__(msg)
 class ChangeConstValException(Exception):
     def __init__(self, name = None):
         type_=""
@@ -26,7 +32,6 @@ class NotPositiveException(ValueError):
     def __init__(self, value_name, value):
         msg =(value_name+","+str(value)+", must be positive")
         super().__init__(msg)
-
 class DictKeyNotExistException(Exception):
     def __init__(self, key):
         msg = ("Key,"+str(key)+", doesn't exist in "

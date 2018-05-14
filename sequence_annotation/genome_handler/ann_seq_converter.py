@@ -4,7 +4,13 @@ from abc import abstractmethod
 from . import AnnSeqContainer
 from . import AnnSequence
 class AnnSeqConverter(metaclass=ABCMeta):
-    ANN_TYPES = ['cds','intron','utr_5','utr_3']
+    def __init__(self,foucus_type=None,extra_types=None):
+        self._foucus_type = foucus_type or ['cds','intron','utr_5','utr_3']
+        self._extra_types = extra_types or []
+        self._ANN_TYPES = list(set(self._foucus_type).union(set(self._extra_types)))
+    @property
+    def ANN_TYPES(self):
+        return self._ANN_TYPES
     @abstractmethod
     def convert(self,data):
         pass    
@@ -32,13 +38,15 @@ class AnnSeqConverter(metaclass=ABCMeta):
         ann_seq.strand = strand
         ann_seq.init_space()
         return ann_seq
-    def _validate(self,ann_seq):
+    def _validate(self,ann_seq,focus_types=None):
         total = 0
-        for type_ in ann_seq.ANN_TYPES:
-            data =ann_seq.get_ann(type_)
+        focus_types = focus_types or ann_seq.ANN_TYPES
+        for type_ in focus_types:
+            data = ann_seq.get_ann(type_)
             total += sum(data)
         if total != ann_seq.length:
-            error = "Sequence annotation is not filled completely: "+str(total)+"/"+str(ann_seq.length)
+            error = ("Sequence annotation is not filled correctly.\n\t"
+                     "Annotation count/sequence length:"+str(total)+"/"+str(ann_seq.length))
             raise Exception(error)
 class UscuSeqConverter(AnnSeqConverter):
     def convert(self,data):
@@ -92,7 +100,7 @@ class UscuSeqConverter(AnnSeqConverter):
         for type_ in ann_seq.ANN_TYPES:
             data = template_ann_seq.get_ann(type_)
             ann_seq.set_ann(type_,data)
-        self._validate(ann_seq)
+        self._validate(ann_seq,self._foucus_type)
         return ann_seq
 
 class EnsemblSeqConverter(AnnSeqConverter):
@@ -112,16 +120,15 @@ class EnsemblSeqConverter(AnnSeqConverter):
         for type_,sites in site_info.items():
             starts,ends = sites
             for (start,end) in zip(starts,ends):
-                if start!="Null" and end!="Null":
+                if start != "Null" and end != "Null":
                     template_ann_seq.set_ann(type_,1,start-tx_start,end-tx_start)
                 elif (start!="Null") != (end!="Null"):
                     raise Exception("Start and end sites number is not same")
         template_ann_seq.op_not_ann("intron","gene","exon")
-        ann_seq = self._create_seq(data['protein_id'],
-                                   data['chrom'],
+        ann_seq = self._create_seq(data['protein_id'],data['chrom'],
                                    data['strand'],tx_start,tx_end)
         for type_ in ann_seq.ANN_TYPES:
             data = template_ann_seq.get_ann(type_)
             ann_seq.set_ann(type_,data)
-        self._validate(ann_seq)
+        self._validate(ann_seq,self._foucus_type)
         return ann_seq

@@ -1,197 +1,176 @@
-import unittest
+from . import AnnSeqTestCase
 import numpy as np
+from . import ProcessedStatusNotSatisfied
 from . import AnnSequence
 from . import AnnSeqProcessor
-class TestAnnSeqProcessor(unittest.TestCase):
-    ANN_TYPES = ['cds','intron','utr_5','utr_3','intergenic_region',]
-    frontground_types = ['cds','intron','utr_5','utr_3']
-    background_type = 'intergenic_region'
-    source = "template"
-    data = {"chrom1":30}
-    def _create_chrom(self,chrom_id,strand):
-        chrom = AnnSequence()
-        chrom.chromosome_id = chrom_id
-        chrom.strand = strand
-        chrom.length = TestAnnSeqProcessor.data[chrom_id]
-        chrom.id = chrom_id+"_"+strand
-        chrom.ANN_TYPES = TestAnnSeqProcessor.ANN_TYPES
-        chrom.source = TestAnnSeqProcessor.source
-        chrom.init_space()
-        return chrom
-    def _test_seq(self, real_seq, test_seq):
-        self.assertEqual(real_seq.id, test_seq.id)
-        self.assertEqual(real_seq.strand, test_seq.strand)
-        self.assertEqual(real_seq.length, test_seq.length)
-        self.assertEqual(real_seq.source, test_seq.source)
-        for type_ in real_seq.ANN_TYPES:
-            np.testing.assert_array_equal(real_seq.get_ann(type_),
-                                          test_seq.get_ann(type_),
-                                          err_msg="Wrong type:"+type_+"("+str(real_seq.id)+")")
-    def _add_seq1(self,chrom):
-        chrom.add_ann("utr_5",1,1,1).add_ann("cds",1,2,4).add_ann("intron",1,5,5)
-        chrom.add_ann("cds",1,6,9).add_ann("utr_3",1,10,11)
-    def _add_seq2(self,chrom):
-        chrom.add_ann("utr_5",1,1,1).add_ann("cds",1,2,4).add_ann("intron",1,5,6)
-        chrom.add_ann("cds",1,7,9).add_ann("utr_3",1,10,14)
-    def _add_seq3(self,chrom):
-        chrom.add_ann("utr_5",1,17,20)
-    def _add_seq4(self,chrom):
-        chrom.add_ann("utr_5",1,1,2).add_ann("cds",1,3,4).add_ann("intron",1,5,5)
-        chrom.add_ann("cds",1,6,9).add_ann("utr_3",1,10,11)
-    def test_three_seq_normalized(self):
-        """Three sequence are overlapped"""
-        #Create sequence to test
-        chrom = self._create_chrom("chrom1","plus")
-        self._add_seq1(chrom)
-        self._add_seq2(chrom)
-        self._add_seq4(chrom)
-        processor = AnnSeqProcessor()
-        norm_chrom = processor.get_normalized(chrom,
-                                              TestAnnSeqProcessor.frontground_types,
-                                              TestAnnSeqProcessor.background_type)
-        #Create answer
-        answer = self._create_chrom("chrom1","plus")
-        answer.add_ann("utr_5",1,1,1).add_ann("utr_5",1/3,2,2)
-        answer.add_ann("cds",2/3,2,2).add_ann("cds",1,3,4)
-        answer.add_ann("intron",1,5,5).add_ann("intron",1/3,6,6)
-        answer.add_ann("cds",2/3,6,6).add_ann("cds",1,7,9)
-        answer.add_ann("utr_3",1,10,14)
-        answer.add_ann("intergenic_region",1,0,0)
-        answer.add_ann("intergenic_region",1,15,29)
-        #Test equality
-        self._test_seq(answer,norm_chrom)
-
-    def test_two_plus_one_seq_normalized(self):
-        """Two sequence are overlapped and one is not"""
-        #Create sequence to test
-        chrom = self._create_chrom("chrom1","plus")
-        self._add_seq1(chrom)
-        self._add_seq2(chrom)
-        self._add_seq3(chrom)
-        processor = AnnSeqProcessor()
-        norm_chrom = processor.get_normalized(chrom,
-                                              TestAnnSeqProcessor.frontground_types,
-                                              TestAnnSeqProcessor.background_type)
-        #Create answer
-        answer = self._create_chrom("chrom1","plus")
-        answer.add_ann("utr_5",1,1,1).add_ann("cds",1,2,4).add_ann("intron",1,5,5)
-        answer.add_ann("cds",1,7,9).add_ann("utr_3",1,10,14)
-        answer.add_ann("intron",0.5,6,6).add_ann("cds",0.5,6,6)
-        answer.add_ann("utr_5",1,17,20)
-        answer.add_ann("intergenic_region",1,0,0)
-        answer.add_ann("intergenic_region",1,15,16)
-        answer.add_ann("intergenic_region",1,21,29)
-        #Test equality
-        self._test_seq(answer,norm_chrom)
-    def test_two_seq_normalized(self):
-        #Create sequence to test
-        chrom = self._create_chrom("chrom1","plus")
-        self._add_seq1(chrom)
-        self._add_seq2(chrom)
-        processor = AnnSeqProcessor()
-        norm_chrom = processor.get_normalized(chrom,
-                                              TestAnnSeqProcessor.frontground_types,
-                                              TestAnnSeqProcessor.background_type)
-        #Create answer
-        answer = self._create_chrom("chrom1","plus")
-        answer.add_ann("utr_5",1,1,1).add_ann("cds",1,2,4).add_ann("intron",1,5,5)
-        answer.add_ann("intron",0.5,6,6).add_ann("cds",0.5,6,6)
-        answer.add_ann("cds",1,7,9).add_ann("utr_3",1,10,14)
-        answer.add_ann("intergenic_region",1,0,0)
-        answer.add_ann("intergenic_region",1,15,29)
-        #Test equality
-        self._test_seq(answer,norm_chrom)
-    def test_one_seq_normalized(self):
-        #Create answer
-        answer = self._create_chrom("chrom1","plus")
-        self._add_seq1(answer)
-        answer.add_ann("intergenic_region",1,0,0)
-        answer.add_ann("intergenic_region",1,12,29)
-        #Create sequence to test
-        chrom = self._create_chrom("chrom1","plus")
-        self._add_seq1(chrom)
-        processor = AnnSeqProcessor()
-        norm_chrom = processor.get_normalized(chrom,
-                                              TestAnnSeqProcessor.frontground_types,
-                                              TestAnnSeqProcessor.background_type)
-        #Test equality
-        self._test_seq(answer,norm_chrom)
-    def test_two_plus_one_seq_one_hot(self):
-        #Create sequence to test
-        chrom = self._create_chrom("chrom1","plus")
-        self._add_seq1(chrom)
-        self._add_seq2(chrom)
-        self._add_seq3(chrom)
-        processor = AnnSeqProcessor()
-        one_hot_chrom = processor.get_one_hot(chrom,
-                                              TestAnnSeqProcessor.frontground_types,
-                                              TestAnnSeqProcessor.background_type)
-        #Create answer
-        answer = self._create_chrom("chrom1","plus")
-        answer.add_ann("utr_5",1,1,1).add_ann("cds",1,2,4).add_ann("intron",1,5,5)
-        answer.add_ann("cds",1,7,9).add_ann("utr_3",1,10,14)
-        answer.add_ann("cds",1,6,6)
-        answer.add_ann("utr_5",1,17,20)
-        answer.add_ann("intergenic_region",1,0,0)
-        answer.add_ann("intergenic_region",1,15,16)
-        answer.add_ann("intergenic_region",1,21,29)
-        #Test equality
-        self._test_seq(answer,one_hot_chrom)
-    def test_two_seq_one_hot(self):
-        #Create sequence to test
-        chrom = self._create_chrom("chrom1","plus")
-        self._add_seq1(chrom)
-        self._add_seq2(chrom)
-        processor = AnnSeqProcessor()
-        one_hot_chrom = processor.get_one_hot(chrom,
-                                              TestAnnSeqProcessor.frontground_types,
-                                              TestAnnSeqProcessor.background_type)
-        #Create answer
-        answer = self._create_chrom("chrom1","plus")
-        answer.add_ann("utr_5",1,1,1).add_ann("cds",1,2,4).add_ann("intron",1,5,5)
-        answer.add_ann("cds",1,6,6)
-        answer.add_ann("cds",1,7,9).add_ann("utr_3",1,10,14)
-        answer.add_ann("intergenic_region",1,0,0)
-        answer.add_ann("intergenic_region",1,15,29)
-        #Test equality
-        self._test_seq(answer,one_hot_chrom)
-    def test_one_seq_one_hot(self):
-        #Create answer
-        answer = self._create_chrom("chrom1","plus")
-        self._add_seq1(answer)
-        answer.add_ann("intergenic_region",1,0,0)
-        answer.add_ann("intergenic_region",1,12,29)
-        #Create sequence to test
-        chrom = self._create_chrom("chrom1","plus")
-        self._add_seq1(chrom)
-        processor = AnnSeqProcessor()
-        one_hot_chrom = processor.get_one_hot(chrom,
-                                              TestAnnSeqProcessor.frontground_types,
-                                              TestAnnSeqProcessor.background_type)
-        #Test equality
-        self._test_seq(answer,one_hot_chrom)
-    def test_three_seq_one_hot(self):
-        """Three sequence are overlapped"""
-        #Create sequence to test
-        chrom = self._create_chrom("chrom1","plus")
-        self._add_seq1(chrom)
-        self._add_seq2(chrom)
-        self._add_seq4(chrom)
-        processor = AnnSeqProcessor()
-        one_hot_chrom = processor.get_one_hot(chrom,
-                                              TestAnnSeqProcessor.frontground_types,
-                                              TestAnnSeqProcessor.background_type)
-        #Create answer
-        answer = self._create_chrom("chrom1","plus")
-        answer.add_ann("utr_5",1,1,1)
-        answer.add_ann("cds",1,2,2).add_ann("cds",1,3,4)
-        answer.add_ann("intron",1,5,5)
-        answer.add_ann("cds",1,6,6).add_ann("cds",1,7,9)
-        answer.add_ann("utr_3",1,10,14)
-        answer.add_ann("intergenic_region",1,0,0)
-        answer.add_ann("intergenic_region",1,15,29)
-        #Test equality
-        self._test_seq(answer,one_hot_chrom)
+class TestAnnSeqProcessor(AnnSeqTestCase):
+    def test_normalized_all_types(self):
+        ann = AnnSequence()
+        ann.length = 8
+        ann.strand='plus'
+        ann.chromosome_id='1'
+        ann.id=1
+        ann.ANN_TYPES = ['exon','intron','other']
+        real = AnnSequence().from_dict(ann.to_dict())
+        real.init_space()
+        ann.init_space()
+        ann.set_ann('exon',1,0,1).set_ann('intron',1,1,3).set_ann('other',1,3,5)
+        ann.set_ann('other',2,6,6).set_ann('exon',1,5,7)
+        normalized = AnnSeqProcessor().get_normalized(ann)
+        real.set_ann('exon',1,0,0).set_ann('exon',.5,1,1)
+        real.set_ann('intron',.5,1,1).set_ann('intron',1,2,2).set_ann('intron',.5,3,3)
+        real.set_ann('other',.5,3,3).set_ann('other',1,4,4)
+        real.set_ann('other',.5,5,5).set_ann('other',2/3,6,6)
+        real.set_ann('exon',.5,5,5).set_ann('exon',1/3,6,6).set_ann('exon',1,7,7)
+        self.assert_seq_equal(real,normalized)
+    def test_normalized_some_type(self):
+        ann = AnnSequence()
+        ann.length = 8
+        ann.strand='plus'
+        ann.chromosome_id='1'
+        ann.id=1
+        ann.ANN_TYPES = ['exon','intron','other']
+        real = AnnSequence().from_dict(ann.to_dict())
+        real.init_space()
+        ann.init_space()
+        ann.set_ann('exon',1,0,1).set_ann('intron',1,1,3).set_ann('other',1,3,5)
+        ann.set_ann('other',2,6,6).set_ann('exon',1,5,7)
+        #Make position 4 to intron
+        ann.set_ann('intron',1,4,4)
+        normalized = AnnSeqProcessor().get_normalized(ann,['exon','intron'])
+        real.set_ann('exon',1,0,0).set_ann('exon',.5,1,1)
+        real.set_ann('intron',.5,1,1).set_ann('intron',1,2,3)
+        real.set_ann('other',1,3,5).set_ann('other',2,6,6)
+        real.set_ann('exon',1,5,7).set_ann('intron',1,4,4)
+        self.assert_seq_equal(real,normalized)
+    def test_max_one_hot_all_types(self):
+        ann = AnnSequence()
+        ann.length = 8
+        ann.strand='plus'
+        ann.chromosome_id='1'
+        ann.id=1
+        ann.ANN_TYPES = ['exon','intron','other']
+        real = AnnSequence().from_dict(ann.to_dict())
+        real.init_space()
+        ann.init_space()
+        ann.set_ann('exon',1,0,1).set_ann('intron',1,1,3).set_ann('other',1,3,5)
+        ann.set_ann('other',2,6,6).set_ann('exon',1,5,7)
+        normalized = AnnSeqProcessor().get_one_hot(ann)
+        real.set_ann('exon',1,0,1)
+        real.set_ann('intron',1,2,3)
+        real.set_ann('other',1,4,4).set_ann('exon',1,5,5)
+        real.set_ann('other',1,6,6).set_ann('exon',1,7,7)
+        self.assert_seq_equal(real,normalized)
+    def test_max_one_hot_all_types_by_specific_order(self):
+        ann = AnnSequence()
+        ann.length = 8
+        ann.strand='plus'
+        ann.chromosome_id='1'
+        ann.id=1
+        ann.ANN_TYPES = ['exon','intron','other']
+        real = AnnSequence().from_dict(ann.to_dict())
+        real.init_space()
+        ann.init_space()
+        ann.set_ann('exon',1,0,1).set_ann('intron',1,1,3).set_ann('other',1,3,5)
+        ann.set_ann('other',2,6,6).set_ann('exon',1,5,7)
+        normalized = AnnSeqProcessor().get_one_hot(ann,['intron','exon','other'])
+        real.set_ann('exon',1,0,0)
+        real.set_ann('intron',1,1,3)
+        real.set_ann('other',1,4,4).set_ann('exon',1,5,5)
+        real.set_ann('other',1,6,6).set_ann('exon',1,7,7)
+        self.assert_seq_equal(real,normalized)
+    def test_max_one_hot_some_types_by_specific_order(self):
+        ann = AnnSequence()
+        ann.length = 8
+        ann.strand='plus'
+        ann.chromosome_id='1'
+        ann.id=1
+        ann.ANN_TYPES = ['exon','intron','other']
+        real = AnnSequence().from_dict(ann.to_dict())
+        real.init_space()
+        ann.init_space()
+        ann.set_ann('exon',1,0,1).set_ann('intron',1,1,3).set_ann('other',1,3,5)
+        ann.set_ann('other',2,6,6).set_ann('exon',1,5,7)
+        #Make position 4 to intron
+        ann.set_ann('intron',1,4,4)
+        normalized = AnnSeqProcessor().get_one_hot(ann,['intron','exon'])
+        real.set_ann('exon',1,0,0).set_ann('intron',1,1,4)
+        real.set_ann('other',1,3,5).set_ann('other',2,6,6)
+        real.set_ann('exon',1,5,7)
+        self.assert_seq_equal(real,normalized)
+    def test_is_full_annotated_all_types(self):
+        ann = AnnSequence()
+        ann.length = 4
+        ann.strand='plus'
+        ann.chromosome_id='1'
+        ann.id=1
+        ann.ANN_TYPES = ['exon','intron','other']
+        ann.init_space()
+        ann.set_ann('intron',1,0,0).set_ann('exon',1,0,1).set_ann('other',1,2,3)
+        status = AnnSeqProcessor().is_full_annotated(ann)
+        self.assertTrue(status)
+    def test_is_not_full_annotated_all_types(self):
+        ann = AnnSequence()
+        ann.length = 4
+        ann.strand='plus'
+        ann.chromosome_id='1'
+        ann.id=1
+        ann.ANN_TYPES = ['exon','intron','other']
+        ann.init_space()
+        ann.set_ann('intron',1,0,0).set_ann('exon',1,0,1).set_ann('other',1,2,2)
+        status = AnnSeqProcessor().is_full_annotated(ann)
+        self.assertFalse(status)
+    def test_is_not_full_annotated_some_types(self):
+        ann = AnnSequence()
+        ann.length = 4
+        ann.strand='plus'
+        ann.chromosome_id='1'
+        ann.id=1
+        ann.ANN_TYPES = ['exon','intron','other']
+        ann.init_space()
+        ann.set_ann('intron',1,0,0).set_ann('exon',1,0,1).set_ann('other',1,2,3)
+        status = AnnSeqProcessor().is_full_annotated(ann,['exon','intron'])
+        self.assertFalse(status)
+    def test_order_one_hot_all_types(self):
+        ann = AnnSequence()
+        ann.length = 8
+        ann.strand='plus'
+        ann.chromosome_id='1'
+        ann.id=1
+        ann.ANN_TYPES = ['exon','intron','other']
+        real = AnnSequence().from_dict(ann.to_dict())
+        real.init_space()
+        ann.init_space()
+        ann.set_ann('exon',1,0,1).set_ann('intron',1,1,3).set_ann('other',1,3,5)
+        ann.set_ann('other',2,6,6).set_ann('exon',1,5,7)
+        normalized = AnnSeqProcessor().get_one_hot(ann,method='order')
+        real.set_ann('exon',1,0,1).set_ann('intron',1,2,3)
+        real.set_ann('other',1,4,4).set_ann('exon',1,5,7)
+        self.assert_seq_equal(real,normalized)
+    def test_get_certain_status(self):
+        ann = AnnSequence()
+        ann.length = 9
+        ann.strand='plus'
+        ann.chromosome_id='1'
+        ann.id=1
+        ann.ANN_TYPES = ['exon','intron','other']
+        ann.init_space()
+        ann.set_ann('exon',1,0,2).set_ann('intron',1,3,5)
+        ann.set_ann('intron',0.4,7,7).set_ann('exon',1,8,8)
+        ann.processed_status='normalized'
+        certain_status = AnnSeqProcessor().get_certain_status(ann)
+        real_status = [True,True,True,True,True,True,False,False,True]
+    def test_unnormalized_seq_certain_status(self):
+        ann = AnnSequence()
+        ann.length = 9
+        ann.strand='plus'
+        ann.chromosome_id='1'
+        ann.id=1
+        ann.ANN_TYPES = ['exon','intron','other']
+        ann.init_space()
+        ann.set_ann('exon',1,0,2).set_ann('intron',1,3,5)
+        with self.assertRaises(ProcessedStatusNotSatisfied):
+            certain_status = AnnSeqProcessor().get_certain_status(ann)
 if __name__=="__main__":    
     unittest.TestSuite()
     unittest.TestLoader().loadTestsFromTestCase(TestAnnSeqProcessor)

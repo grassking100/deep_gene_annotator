@@ -2,7 +2,7 @@ import os
 import sys
 ucsc_file_prefix = os.path.abspath(__file__+"../../data/ucsc/")+"/"
 ensembl_file_prefix = os.path.abspath(__file__+"../../data/ensembl/")+"/"
-from sequence_annotation.utils.exception import ReturnNoneException
+from sequence_annotation.utils.exception import ReturnNoneException, ProcessedStatusNotSatisfied
 from sequence_annotation.utils.exception import InvalidStrandType,NegativeNumberException
 from sequence_annotation.genome_handler.sequence import AnnSequence
 from sequence_annotation.genome_handler.region_extractor import RegionExtractor
@@ -14,4 +14,8 @@ from sequence_annotation.genome_handler.ann_genome_creator import AnnGenomeCreat
 from sequence_annotation.genome_handler.ann_seq_processor import AnnSeqProcessor
 from sequence_annotation.genome_handler.ann_seq_converter import UscuSeqConverter
 from sequence_annotation.genome_handler.ann_seq_extractor import AnnSeqExtractor
+from sequence_annotation.genome_handler.ann_seq_converter import AnnSeqConverter, UscuSeqConverter
+from sequence_annotation.genome_handler.ann_seq_converter import EnsemblSeqConverter
 from .real_genome import RealGenome
+from ..ann_seq_test_case import AnnSeqTestCase
+from ..seq_info_test_case import SeqInfoTestCase

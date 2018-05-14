@@ -1,4 +1,4 @@
-from abc import ABCMeta,abstractmethod
+from abc import ABCMeta,abstractmethod,abstractproperty
 import numpy as np
 from copy import deepcopy
 from tempfile import mkdtemp
@@ -53,7 +53,7 @@ class Sequence(metaclass=ABCMeta):
         if value not in self.valid_strand:
             raise InvalidStrandType(value)
         self._strand = value
-    @abstractmethod
+    @abstractproperty
     def length(self):
         pass
     def _checked_attr(self):

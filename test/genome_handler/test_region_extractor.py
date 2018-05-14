@@ -1,84 +1,52 @@
-import unittest
+from . import SeqInfoTestCase
 import numpy as np
 from . import AnnSequence
+from . import SeqInformation
+from . import SeqInfoContainer
 from . import RegionExtractor
-from . import AnnSeqProcessor
-class TestRegionExtractor(unittest.TestCase):
-    ANN_TYPES = ['cds','intron','utr_5','utr_3','intergenic_region',]
-    frontground_types = ['cds','intron','utr_5','utr_3']
-    background_type = 'intergenic_region'
-    source = "template"
-    data = {"chrom1":30}
-    def _create_chrom(self,chrom_id,strand):
+class TestRegionExtractor(SeqInfoTestCase):
+    def test_region_extract(self):
+        #Create sequence to test
         chrom = AnnSequence()
-        chrom.chromosome_id = chrom_id
-        chrom.strand = strand
-        chrom.length = TestRegionExtractor.data[chrom_id]
-        chrom.id = chrom_id+"_"+strand
-        chrom.ANN_TYPES = TestRegionExtractor.ANN_TYPES
-        chrom.source = TestRegionExtractor.source
+        chrom.chromosome_id = '1'
+        chrom.strand = 'plus'
+        chrom.length = 7
+        chrom.id = 1
+        chrom.ANN_TYPES = ['exon','intron','other']
+        answer = AnnSequence().from_dict(chrom.to_dict())
+        answer.init_space()
         chrom.init_space()
-        return chrom
-    def _add_seq1(self,chrom):
-        chrom.add_ann("utr_5",1,1,1).add_ann("cds",1,2,4).add_ann("intron",1,5,5)
-        chrom.add_ann("cds",1,6,9).add_ann("utr_3",1,10,11)
-    def _add_seq2(self,chrom):
-        chrom.add_ann("utr_5",1,0,1).add_ann("cds",1,2,4).add_ann("intron",1,5,6)
-        chrom.add_ann("cds",1,7,9).add_ann("utr_3",1,10,29)
-    def test_seq2(self):
-        #Create sequence to test
-        chrom = self._create_chrom("chrom1","plus")
-        self._add_seq2(chrom)
-        processor = AnnSeqProcessor()
-        norm_chrom = processor.get_one_hot(chrom,
-                                              TestRegionExtractor.frontground_types,
-                                              TestRegionExtractor.background_type)
+        chrom.add_ann("exon",1,0,1).add_ann("intron",1,2,4).add_ann("other",1,5,6)
+        chrom.processed_status = 'one_hot'
         extractor = RegionExtractor()
-        regions = extractor.extract(norm_chrom)
-        test = []
-        for region in regions.data:
-            test.append({'type':region.ann_type, 'start':region.start,
-                         'end':region.end, 'strand':region.strand,
-                         'chrom_id':region.chromosome_id})
-        answers = [
-            {"type":"cds","start":2,"end":4},
-            {"type":"cds","start":7,"end":9},
-            {"type":"intron","start":5,"end":6},
-            {"type":"utr_5","start":0,"end":1},
-            {"type":"utr_3","start":10,"end":29}
-        ]
-        for answer in answers:
-            answer['strand'] = 'plus'
-            answer['chrom_id'] = 'chrom1'
-        self.assertEqual(answers,test)
-    def test_seq1(self):
-        #Create sequence to test
-        chrom = self._create_chrom("chrom1","plus")
-        self._add_seq1(chrom)
-        processor = AnnSeqProcessor()
-        norm_chrom = processor.get_one_hot(chrom,
-                                              TestRegionExtractor.frontground_types,
-                                              TestRegionExtractor.background_type)
-        extractor = RegionExtractor()
-        regions = extractor.extract(norm_chrom)
-        test = []
-        for region in regions.data:
-            test.append({'type':region.ann_type, 'start':region.start,
-                         'end':region.end, 'strand':region.strand,
-                         'chrom_id':region.chromosome_id})
-        answers = [
-            {"type":"cds","start":2,"end":4},
-            {"type":"cds","start":6,"end":9},
-            {"type":"intron","start":5,"end":5},
-            {"type":"utr_5","start":1,"end":1},
-            {"type":"utr_3","start":10,"end":11},
-            {"type":"intergenic_region","start":0,"end":0},
-            {"type":"intergenic_region","start":12,"end":29}
-        ]
-        for answer in answers:
-            answer['strand'] = 'plus'
-            answer['chrom_id'] = 'chrom1'
-        self.assertEqual(answers,test)
+        regions = extractor.extract(chrom)
+        seqinfos = SeqInfoContainer()
+        for i in range(0,3):
+            seqinfo = SeqInformation()
+            seqinfo.chromosome_id = '1'
+            seqinfo.strand = 'plus'
+            seqinfo.start = 0
+            seqinfo.end = 4
+            seqinfo.id = 'region_1_plus_'+str(i)
+            seqinfos.add(seqinfo)
+        seq = seqinfos.get('region_1_plus_0')
+        seq.start = 0
+        seq.end = 1
+        seq.ann_type = 'exon'
+        seq.ann_status = 'whole'
+        seq = seqinfos.get('region_1_plus_1')
+        seq.start = 2
+        seq.end = 4
+        seq.ann_type = 'intron'
+        seq.ann_status = 'whole'
+        seq = seqinfos.get('region_1_plus_2')
+        seq.start = 5
+        seq.end = 6
+        seq.ann_type = 'other'
+        seq.ann_status = 'whole'
+        for region in regions:
+            seqinfo = seqinfos.get(region.id)
+            self.assert_seq_equal(seqinfo,region)
 if __name__=="__main__":    
     unittest.TestSuite()
     unittest.TestLoader().loadTestsFromTestCase(TestRegionExtractor)

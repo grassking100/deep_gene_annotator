@@ -6,7 +6,11 @@ from . import DictValidator
 from . import Creator
 from . import NotPositiveException
 from . import UscuSeqConverter
+from . import AnnSeqProcessor
 class AnnChromCreator(Creator):
+    def __init__(self):
+        super().__init__()
+        self._ann_seq_processor = AnnSeqProcessor()
     def _validate(self):
         pass
     def create(self,seqs,chrom_id,length,source):
@@ -15,7 +19,7 @@ class AnnChromCreator(Creator):
             if str(chrom_id)!=str(seq.chromosome_id):
                 err = "Chromosome id and sequence id are not the same"
                 raise Exception(err)
-        ann_types = seqs.ANN_TYPES+['other']
+        ann_types = seqs.ANN_TYPES
         chrom = self._get_init_chrom(chrom_id,ann_types,length,source)
         self._add_seqs(chrom,seqs,length,source)
         return chrom
@@ -58,6 +62,7 @@ class AnnChromCreator(Creator):
             one_strand_chrom.add_ann(type_,seq,gene_start_index,gene_end_index)
 class AnnGenomeCreator(Creator):
     def __init__(self):
+        super().__init__()
         self._chrom_creator = AnnChromCreator()
     def _validate(self):
         pass
@@ -66,10 +71,11 @@ class AnnGenomeCreator(Creator):
         validator.validate()
         seqs_collect = {}
         genome = AnnSeqContainer()
-        genome.ANN_TYPES = seqs.ANN_TYPES+['other']
+        ann_types = list(seqs.ANN_TYPES)
+        genome.ANN_TYPES = ann_types
         for chrom_id in genome_information['chromosome'].keys():
             container = AnnSeqContainer()
-            container.ANN_TYPES = seqs.ANN_TYPES
+            container.ANN_TYPES = ann_types
             seqs_collect[chrom_id] = container
         for seq in seqs:
             chrom_id = str(seq.chromosome_id)

@@ -10,7 +10,7 @@ class TestDNAVector(unittest.TestCase):
     def test_code2vec_exception(self):
         converter = SeqConverter()
         codes=['i']
-        with self.assertRaises(CodeException) as context:
+        with self.assertRaises(CodeException):
             converter.code2vec(codes[0])
     def test_vec2code(self):
         converter = SeqConverter()
@@ -23,7 +23,6 @@ class TestDNAVector(unittest.TestCase):
         invalid_vec=[1,1,0,0]
         with self.assertRaises(CodeException) as context:
             converter.vec2code(invalid_vec)
-        #self.assertEqual(str(invalid_vec)+" is not in space",str(context.exception))
     def test_vecs2seq(self):
         codes=['A','T','C','G']
         vectors=[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]
@@ -38,16 +37,14 @@ class TestDNAVector(unittest.TestCase):
         invalid_vec=[1,0,0,1]
         vectors=[[1,0,0,0],[0,1,0,0],[0,0,1,0],[1,0,0,0],invalid_vec]
         converter = SeqConverter()
-        with self.assertRaises(SeqException) as context:
+        with self.assertRaises(SeqException):
             converter.vecs2seq(vectors)
-        #self.assertEqual(str(invalid_vec)+" is not in space",str(context.exception))
     def test_seq2vecs_exception(self):
         invalid_code='I'
         converter = SeqConverter()
         codes=['A','T','C','G',invalid_code]
-        with self.assertRaises(SeqException) as context:
+        with self.assertRaises(SeqException):
             converter.seq2vecs(codes)
-        #self.assertEqual(str(invalid_code)+" is not in space",str(context.exception))
 if __name__=="__main__":
     unittest.TestSuite()
     unittest.TestLoader().loadTestsFromTestCase(TestDNAVector)

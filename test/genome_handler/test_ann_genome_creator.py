@@ -18,7 +18,7 @@ class TestAnnGenomeCreator(unittest.TestCase):
             ann_seq = converter.convert(parsed_seq)
             ann_seqs.append(ann_seq)
         container = AnnSeqContainer()
-        container.ANN_TYPES = UscuSeqConverter.ANN_TYPES
+        container.ANN_TYPES = ann_seqs[0].ANN_TYPES
         container.add(ann_seqs)
         creator = AnnGenomeCreator()
         result = creator.create(container,RealGenome.genome_information)

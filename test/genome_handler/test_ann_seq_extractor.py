@@ -1,20 +1,11 @@
-import unittest
+from . import AnnSeqTestCase
 import numpy as np
 from . import AnnSeqContainer
 from . import SeqInfoContainer
 from . import AnnSeqExtractor
 from . import SeqInformation
 from . import AnnSequence
-class TestAnnSeqExtractor(unittest.TestCase):
-    def _test_seq(self, real_seq, test_seq):
-        self.assertEqual(real_seq.id, test_seq.id)
-        self.assertEqual(real_seq.strand, test_seq.strand)
-        self.assertEqual(real_seq.length, test_seq.length)
-        self.assertEqual(real_seq.source, test_seq.source)
-        for type_ in real_seq.ANN_TYPES:
-            np.testing.assert_array_equal(real_seq.get_ann(type_),
-                                          test_seq.get_ann(type_),
-                                          err_msg="Wrong type:"+type_+"("+str(real_seq.id)+")")
+class TestAnnSeqExtractor(AnnSeqTestCase):
     def test_extract_success(self):
         ann_seq_container = AnnSeqContainer()
         ann_seq_container.ANN_TYPES = ['exon','intron']
@@ -50,7 +41,7 @@ class TestAnnSeqExtractor(unittest.TestCase):
         extracted_seqs = AnnSeqExtractor().extract(ann_seq_container,seq_info_container)
         extracted_seq = extracted_seqs.get('extract')
         """Test"""
-        self._test_seq(extracted_seq,real_seq)
+        self.assert_seq_equal(extracted_seq,real_seq)
 if __name__=="__main__":    
     unittest.TestSuite()
     unittest.TestLoader().loadTestsFromTestCase(TestAnnSeqExtractor)

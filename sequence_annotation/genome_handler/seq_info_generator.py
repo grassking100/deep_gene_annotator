@@ -42,9 +42,11 @@ class SeqInfoGenerator:
                     max_length = principle['total_length']
                 else:
                     max_length = (principle['max_diff']+principle['half_length']) * 2 + 1
-                clean_regions= self._remove_end_regions(regions[type_],chroms_info,max_length)
+                temp= self._remove_end_regions(regions[type_],chroms_info,max_length)
             else:
-                clean_regions = regions[type_]
+                temp = regions[type_]
+            clean_regions = SeqInfoContainer()
+            clean_regions.add(temp)
             selected_region_list += self._selected_region_list(clean_regions,
                                                                number,
                                                                principle['replaceable'],
@@ -59,7 +61,7 @@ class SeqInfoGenerator:
         return seeds,seqs_info
     def _group_by_type(self, seqs_info):
         tree = {}
-        for seq_info in seqs_info.data:
+        for seq_info in seqs_info:
             key = seq_info.ann_type
             if key not in tree.keys():
                 tree[key] = []
@@ -68,9 +70,9 @@ class SeqInfoGenerator:
     def _selected_region_list(self,regions,number,replaceable,with_random_choose):
         """Selected regions based on principle"""
         if not with_random_choose:
-            region_list = regions
+            region_list = regions.data
         else:
-            region_list = list(np.random.choice(regions,number,replace=replaceable))
+            region_list = list(np.random.choice(regions.data,number,replace=replaceable))
         return region_list
     def _remove_end_regions(self, regions,chroms_info,max_length):
         clean_regions = []
