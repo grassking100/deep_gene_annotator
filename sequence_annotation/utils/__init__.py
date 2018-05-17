@@ -6,7 +6,7 @@ from .python_decorator import validate_return
 from .creator import Creator
 from .helper import get_protected_attrs_names
 from .data_loader import TrainDataLoader
-from .setting_parser import SettingParser
+from .json_reader import JsonReader
 from .builder import Builder
 from .validator import DataValidator, DictValidator, AttrValidator
 from .python_decorator import rename

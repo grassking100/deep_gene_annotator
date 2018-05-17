@@ -1,6 +1,5 @@
 import os
 import sys
-#sys.path.append(os.path.abspath(__file__+"/../../../../"))
 file_prefix = os.path.abspath(__file__+"../../data/ucsc/")+"/"
 from sequence_annotation.utils.exception import ReturnNoneException
 from sequence_annotation.utils.exception import InvalidStrandType,NegativeNumberException

@@ -1,22 +1,23 @@
 {
     "mode_id":"test",
-    "period":1,
-    "epoch":10,
-    "initial_epoch":0,
-    "batch_size":3,
+    "batch_size":1,
     "data_path":{
                     "testing":{
-                                    "inputs":"test/pipeline/data/seqs.fasta",
+                                    "inputs":["test/pipeline/data/seqs.fasta"],
                                     "answers":"test/pipeline/data/seqs.npy"
                                }
                 },
     "previous_result_path":null,
     "trained_model_path":"test/pipeline/result/test_train_test/train/model/epoch_30.h5",
     "path_root":"test/pipeline/result",
-    "weight_setting":{"use_weights":false},
-    "preprocess":[{"type":"padding","value":-1}],
-    "values_to_ignore":[-1],
-    "validation_split":0.4,
+    "class_weight_setting":{"use_weight":false,"is_static":false,"method":"reversed_count_weight"},
+    "preprocess":[],
+    "values_to_ignore":null,
     "use_generator":true,
-    "load_model":true
+    "load_model":true,
+    "compile":{
+        "learning_rate":0.001,
+        "metric_types":["loss","constant"],
+        "loss":"mse"
+    }
 }

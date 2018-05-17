@@ -72,11 +72,9 @@ class TrainWorker(Worker):
         model_saved_path = root_path+'/model/epoch_{:0'+length+'d}.h5'
         model_saved_path = model_saved_path.format(0)
         self._model.save(model_saved_path)
-        
     def _prepare_data(self,x_data,y_data,batch_size):
         generator = DataGenerator(x_data,y_data,batch_size)
         return generator
-    
     def _train_by_generator(self):
         train_x = self._data['training']['inputs']
         train_y = self._data['training']['answers']
@@ -95,12 +93,12 @@ class TrainWorker(Worker):
         train_data = self._prepare_data(train_x,train_y,self._batch_size)
         callbacks = self._get_addition_callbacks()+self.callbacks
         history = self._model.fit_generator(train_data,
-                                           epochs=self._epoch,
-                                           verbose=int(self.is_verbose_visible),
-                                           callbacks=callbacks,
-                                           validation_data=val_data,
-                                           shuffle=self._shuffle,
-                                           initial_epoch=self._initial_epoch)
+                                            epochs=self._epoch,
+                                            verbose=int(self.is_verbose_visible),
+                                            callbacks=callbacks,
+                                            validation_data=val_data,
+                                            shuffle=self._shuffle,
+                                            initial_epoch=self._initial_epoch)
         return history
         
     def _train_by_fit(self):
@@ -130,7 +128,6 @@ class TrainWorker(Worker):
     def work(self):
         """Train model"""
         self._validate()
-        #training and evaluating the model
         if self._use_generator:
             history = self._train_by_generator()
         else:

@@ -1,0 +1,27 @@
+{
+    "period":1,
+    "epoch":10,
+    "initial_epoch":0,
+    "batch_size":1,
+    "data_path":{
+                    "training_validation":{
+                                    "inputs":["test/pipeline/data/seqs.fasta","test/pipeline/data/seqs2.fasta"],
+                                    "answers":"test/pipeline/data/seqs.npy"
+                               },
+                    "testing":{
+                                    "inputs":["test/pipeline/data/seqs3.fasta"],
+                                    "answers":"test/pipeline/data/seqs.npy"
+                                 }
+                },
+    "previous_result_path":null,
+    "path_root":"test/pipeline/batch_result",
+    "class_weight_setting":{"use_weight":true,"is_static":false,"method":"reversed_count_weight"},
+    "use_generator":true,
+    "values_to_ignore":null,
+    "preprocess":[],
+    "compile":{
+        "learning_rate":0.001,
+        "metric_types":["loss","constant"],
+        "loss":"categorical_crossentropy"
+    }
+}

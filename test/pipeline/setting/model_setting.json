@@ -11,9 +11,10 @@
                        "is_output":false,
                        "previous_layer":"Input"
                       },
-                "LSTM":{"type":"RNN_Bi_LSTM",
+                "LSTM":{"type":"LSTM",
                         "keras_setting":{"units":12,"activation":"tanh","return_sequences":true},
                         "is_output":false,
+                        "bidirection_setting":{"merge_mode":"concat"},
                         "previous_layer":"CNN"
                        },
                 "Output":{"type":"CNN_1D",
@@ -22,11 +23,6 @@
                           "previous_layer":"LSTM"
                          }
     
-    },
-    "compile":{
-        "learning_rate":0.001,
-        "metric_types":["loss","constant"],
-        "loss":"mse"
     },
     "annotation_types":["utr_5","utr_3","intron","cds","intergenic_region"]
 }

@@ -1,19 +1,18 @@
 """This submodule provides class to defined training pipeline"""
+import os
+import json
 import pandas as pd
+from time import strftime, gmtime
 from os.path import expanduser
-from . import SeqAnnDataHandler
-from . import SimpleDataHandler
-from . import Pipeline
+from . import BasicPipeline
 from . import TrainWorker
-
-class TrainPipeline(Pipeline):
+class TrainPipeline(BasicPipeline):
     """a pipeline about training model"""
-    def _prepare_for_compile(self):
-        weight_setting = self._work_setting['weight_setting']
-        if weight_setting['use_weights']:
-            class_counts = self._preprocessed_data['training']['annotation_count']
-            self._weighted=self._model_handler.get_weights(class_counts=class_counts,
-                                                           method_name=weight_setting['method'])
+    def _get_class_count(self):
+        return self._preprocessed_data['training']['annotation_count']
+    @property
+    def _setting_saved_name(self):
+        return '/train_setting.json'
     def _load_previous_result(self):
         path = self._work_setting['previous_result_file']
         result = pd.read_csv(path,index_col=False, skiprows=None).to_dict(orient='list')
@@ -44,19 +43,9 @@ class TrainPipeline(Pipeline):
                                  use_generator=setting['use_generator'])
         self._worker.is_verbose_visible=self._is_prompt_visible
         self._worker.is_prompt_visible=self._is_prompt_visible
-
-class TrainSeqAnnPipeline(TrainPipeline):
-    """a pipeline about training sequence annotation model"""
-    def __init__(self,id_,work_setting_path,model_setting_path,is_prompt_visible=True):
-        super().__init__(id_, work_setting_path,model_setting_path,is_prompt_visible)
-        self._data_handler = SeqAnnDataHandler
     def _setting_to_saved(self):
         saved = super()._setting_to_saved()
-        saved['annotation_count'] = self._preprocessed_data['training']['annotation_count']
+        training = self._preprocessed_data['training']
+        if 'annotation_count' in training.keys():
+            saved['annotation_count'] = training['annotation_count']
         return saved
-
-class TrainSimplePipeline(TrainPipeline):
-    """a pipeline about training simaple data model"""
-    def __init__(self,id_,work_setting_path,model_setting_path,is_prompt_visible=True):
-        super().__init__(id_, work_setting_path,model_setting_path,is_prompt_visible)
-        self._data_handler = SimpleDataHandler

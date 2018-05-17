@@ -4,6 +4,7 @@ import keras.backend as K
 import json
 import numpy as np
 import pandas as pd
+from . import DataGenerator
 from . import Worker
 config = tf.ConfigProto()
 if hasattr(config,"gpu_options"):
@@ -28,20 +29,33 @@ class TestWorker(Worker):
         data = json.loads(pd.Series(self._result).to_json(orient='index'))
         with open(self._path_root + '/test/evaluate.json', 'w') as outfile:  
             json.dump(data, outfile,indent=4)
+    def _prepare_data(self,x_data,y_data,batch_size):
+        generator = DataGenerator(x_data,y_data,batch_size)
+        return generator
+    def _evaluate_by_generator(self):
+        test_x = self._data['testing']['inputs']
+        test_y = self._data['testing']['answers']
+        test_data = self._prepare_data(test_x,test_y,self._batch_size)
+        history = self._model.evaluate_generator(test_data,
+                                                 verbose=int(self.is_verbose_visible))
+        return history
+    def _evaluate_by_fit(self):
+        test_x = self._data['testing']['inputs']
+        test_y = self._data['testing']['answers']          
+        history = self._model.evaluate(x=test_x,y=test_y,
+                                       verbose=int(self.is_verbose_visible),
+                                       batch_size=self._batch_size)
+        return history
     def work(self):
-        train_x = self._data['testing']['inputs']
-        train_y = self._data['testing']['answers']
+        test_x = self._data['testing']['inputs']
+        test_y = self._data['testing']['answers']
         history = []
-        verbose =int(self.is_verbose_visible)
-        if self._batch_size==1:
-            for x,y in zip(train_x,train_y):
-                history.append(self._model.evaluate(np.array([x]),np.array([y]),
-                                                    batch_size=1,
-                                                    verbose=verbose))
+        if self._use_generator:
+            history.append(self._evaluate_by_generator())
         else:
-            history = self._model.evaluate(train_x,train_y,
-                                           batch_size=self._batch_size,
-                                           verbose=verbose)
+            if sample_weight_setting is not None:
+                raise Exception("Only generator can use sample weight")
+            history = self._evaluate_by_fit()
         history=np.transpose(history)
         self._result = dict(zip(self._model.metrics_names, history))
         

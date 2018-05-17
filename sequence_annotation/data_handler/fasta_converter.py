@@ -9,18 +9,22 @@ from . import SeqException
 class FastaConverter():
     def __init__(self,seq_converter=None):
         self._seq_converter = seq_converter or SeqConverter()
-    def to_seq_dict(self,fasta_path,number=-1):
+    def to_seq_dict(self,fasta_paths,number=-1):
         """Change sequences in fasta file into dictionary of seqeucnces """
-        fasta_sequences = SeqIO.parse(open(fasta_path), 'fasta')
+        if not isinstance(fasta_paths,list):
+            fasta_paths = [fasta_paths]
         data = {}
         counter = 0
-        for fasta in fasta_sequences:
-            if (number <= 0) or (counter < number):
-                name, seq = fasta.id, (str)(fasta.seq)
-                data[name]=seq
-                counter += 1
-            else:
-                break
+        for fasta_path in fasta_paths:
+            with open(fasta_path) as file:
+                fasta_sequences = SeqIO.parse(file, 'fasta')
+                for fasta in fasta_sequences:
+                    if (number <= 0) or (counter < number):
+                        name, seq = fasta.id, (str)(fasta.seq)
+                        data[name]=seq
+                        counter += 1
+                    else:
+                        break
         return data
     def to_vec_dict(self,seq_dict, discard_invalid_seq):
         """convert dictionary of seqeucnces to dictionary of one-hot encoding vector"""

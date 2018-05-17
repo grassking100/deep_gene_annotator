@@ -28,10 +28,5 @@
                           "is_output":true,
                           "previous_layer":"LSTM"}
     },
-    "compile":{
-        "learning_rate":0.001,
-        "metric_types":["loss","constant"],
-        "loss":"mse"
-    },
-    "annotation_types":["utr_5","utr_3","intron","cds","intergenic_region"]
+    "annotation_types":["utr_5","utr_3","intron","cds","other"]
 }

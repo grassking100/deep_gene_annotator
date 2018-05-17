@@ -9,6 +9,28 @@ from abc import ABCMeta, abstractmethod
 from keras.preprocessing.sequence import pad_sequences
 from os.path import expanduser,abspath
 class DataHandler(metaclass=ABCMeta):
+    @classmethod
+    def get_weight(cls,class_counts, method_name):
+        if method_name=="reversed_count_weight":
+            return cls._reversed_count_weight(class_counts)
+        else:
+            mess = method_name+" is not implement yet."
+            raise Exception(mess)
+    @classmethod
+    def _reversed_count_weight(cls,class_counts):
+        scale = len(class_counts.keys())
+        raw_weights = {}
+        weights = {}
+        for type_,count in class_counts.items():
+            if count > 0:
+                weight = 1 / count
+            else:
+                raise Exception("Some of class has zero count,so it cannot get reversed count weight")
+            raw_weights[type_] = weight
+        sum_raw_weights = sum(raw_weights.values())
+        for type_,weight in raw_weights.items():
+            weights[type_] = scale*weight / (sum_raw_weights )
+        return weights
     @abstractmethod
     def get_data(self,data_path,answer_path,class_types):
         pass
@@ -60,9 +82,9 @@ class SeqAnnDataHandler(DataHandler):
         align_answers = pad_sequences(answers, padding='post',value=padding_signal)
         return (align_inputs, align_answers)
     @staticmethod
-    def get_seq_vecs(fasta_path):
+    def get_seq_vecs(fasta_paths):
         fasta_converter = FastaConverter()
-        seq_dict = fasta_converter.to_seq_dict(fasta_path)
+        seq_dict = fasta_converter.to_seq_dict(fasta_paths)
         return fasta_converter.to_vec_dict(seq_dict = seq_dict,discard_invalid_seq=True)
     @staticmethod
     def get_ann_vecs(path,ann_types):
@@ -112,7 +134,10 @@ class SeqAnnDataHandler(DataHandler):
         dict_ = {'data_pair':data_pair,'annotation_count':ann_count}
         return dict_
     @classmethod
-    def get_data(cls,seq_path,answer_path,class_types):
-        seqs = cls.get_seq_vecs(abspath(expanduser(seq_path)))
-        answer = cls.get_ann_vecs(abspath(expanduser(answer_path)),class_types)
+    def get_data(cls,seq_paths,answer_path,class_types):
+        if not isinstance(seq_paths,list):
+            seq_paths = [seq_paths]
+        seq_paths = [abspath(expanduser(seq_path)) for seq_path in seq_paths]
+        seqs = cls.get_seq_vecs(seq_paths)
+        answer = cls.get_ann_vecs(answer_path,class_types)
         return cls._to_dict(seqs,answer,class_types)

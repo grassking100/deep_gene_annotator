@@ -9,14 +9,13 @@ def str2bool(value):
         return False
     else:
         raise Exception((str)(value)+" is neithor True of False")
-class SettingParser:
-    """The class provide method to parse ini format file"""
+class JsonReader:
+    """The class provide method to parse json format file"""
     def _validate_file_exist(self, path):
         if not Path(path).exists():
             raise FileNotFoundError(path)
-    def parse(self,path):
-        """Parse setting"""
-        path = os.path.expanduser(path)
+    def read(self,path):
+        """Read file and parse to json format"""
         setting = ""
         self._validate_file_exist(path)
         with open(path) as file:    

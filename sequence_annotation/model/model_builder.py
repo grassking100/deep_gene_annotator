@@ -2,7 +2,7 @@
 from keras.layers.normalization import BatchNormalization
 from keras.layers import concatenate
 from keras.engine.training import Model
-from keras.layers import Input, Convolution1D, Dense
+from keras.layers import RNN,Input, Convolution1D, Dense
 from keras.layers import LSTM, Activation,Bidirectional
 from keras.layers import Conv2DTranspose
 from . import Builder
@@ -21,17 +21,17 @@ class ModelBuilder(Builder):
         layer_type = setting['type']
         if layer_type=='CNN_1D':
             layer = self._build_CNN_1D(setting)
-        elif layer_type=='Dense':
-            layer = self._build_Dense(setting)
-        elif layer_type=='RNN_LSTM':
-            layer = self._build_LSTM(setting)
-        elif layer_type=='RNN_Bi_LSTM':
-            layer = self._build_LSTM(setting)
-            layer = self._to_bidirectional(layer)
         elif layer_type=='Input':
             layer = self._build_input(setting)
         else:
-            raise Exception("Layer,{layer},has not implment yet".format(layer=layer_type))
+            try:
+                exec('from keras.layers import {layer_type}'.format(layer_type=layer_type))
+                exec('self._temp_layer_class={layer_type}'.format(layer_type=layer_type))
+                layer = self._temp_layer_class(**setting['keras_setting'])
+                if isinstance(self._temp_layer_class,RNN) and setting['bidirection_setting']!=None:
+                    layer = self._to_bidirectional(layer,setting)                    
+            except ImportError as e:
+                raise Exception("Layer,{layer},has not implement yet".format(layer=layer_type))
         layer_name = setting['keras_setting']['name']
         if not layer_name in self._layers.keys():
             self._layers[layer_name] = {}
@@ -75,24 +75,14 @@ class ModelBuilder(Builder):
         self._build_layers()
         self._link_layers()
         return self._build_model()
-    def _build_Dense(self,setting):
-        return_layer = Dense(**setting['keras_setting'])
-        return return_layer
     def _validate(self):
         pass
     def _build_CNN_1D(self,setting):
         return_layer = Convolution1D(**setting['keras_setting'])
         return return_layer
-    def _build_BatchNormalization(self,setting):  
-        return BatchNormalization(**setting['keras_setting'])
-    def _build_Activation(self,setting):
-        return Activation(**setting['keras_setting'])
-    def _to_bidirectional(self,inner_layers):
-        return_layer = Bidirectional(inner_layers,merge_mode='concat')
+    def _to_bidirectional(self,inner_layers,setting):
+        return_layer = Bidirectional(inner_layers,**setting['bidirection_setting'])
         return_layer.name = inner_layers.name
-        return return_layer
-    def _build_LSTM(self,setting):
-        return_layer =LSTM(**setting['keras_setting'])
         return return_layer
     def _build_input(self,setting):
         setting = setting['keras_setting']

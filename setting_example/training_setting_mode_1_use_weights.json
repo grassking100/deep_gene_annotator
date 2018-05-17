@@ -22,5 +22,10 @@
     "preprocess":[{"type":"padding","value":-1}],
     "values_to_ignore":[-1],
     "validation_split":0,
-    "load_model":true
+    "load_model":true,
+    "compile":{
+        "learning_rate":0.001,
+        "metric_types":["loss","constant"],
+        "loss":"mse"
+    }
 }

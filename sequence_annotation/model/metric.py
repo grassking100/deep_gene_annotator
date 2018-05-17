@@ -50,10 +50,6 @@ class CategoricalMetric(Metric):
         true, pred = self._get_preprocessed(true, pred)
         self._true = true
         self._pred = pred
-    """def get_config(self):
-        config = super().get_config()
-        config['values_to_ignore'] = self._values_to_ignore
-        return config"""
 class SpecificTypeMetric(CategoricalMetric):
     def __init__(self, name, target_index, values_to_ignore=None):
         super().__init__(name=name, values_to_ignore=values_to_ignore)

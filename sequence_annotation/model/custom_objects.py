@@ -5,10 +5,12 @@ from . import CategoricalAccuracyFactory
 
 class CustomObjectsFacade:
     def __init__(self, annotation_types,values_to_ignore=None,
-                 weights=None, metric_types=None,loss_type=None):
+                 weight=None, metric_types=None,loss_type=None,
+                 dynamic_weight_method=None):
         self._annotation_types = annotation_types
+        self._dynamic_weight_method = dynamic_weight_method
         self._values_to_ignore = values_to_ignore
-        self._weights = weights
+        self._weight = weight
         self._metric_types = metric_types or ['TP','TN','FP','FN','accuracy','constant']
         self._metric_types.append("loss")
         self._loss_type = loss_type
@@ -36,8 +38,9 @@ class CustomObjectsFacade:
         if 'accuracy' in self._metric_types:
             acc = acc_factory.create(name="accuracy",values_to_ignore=self._values_to_ignore)
             custom_objects["accuracy"]=acc
-        loss = loss_factory.create(name="loss",weights=self._weights,
+        loss = loss_factory.create(name="loss",weight=self._weight,
                                    values_to_ignore=self._values_to_ignore,
-                                   loss_type=self._loss_type)
+                                   loss_type=self._loss_type,
+                                   dynamic_weight_method=self._dynamic_weight_method)
         custom_objects["loss"]=loss
         return custom_objects

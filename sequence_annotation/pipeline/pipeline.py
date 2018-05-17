@@ -1,36 +1,36 @@
 """This submodule provides class to defined Pipeline"""
 import os
 import errno
+import json
 from abc import ABCMeta, abstractmethod
 from time import strftime, gmtime, time
 from os.path import expanduser,abspath
-from . import SettingParser
 from . import ModelHandler
-import json
+from . import SimpleDataHandler
 class Pipeline(metaclass=ABCMeta):
-    def __init__(self, id_, work_setting_path,model_setting_path,is_prompt_visible=True):
-        self._id= id_
+    def __init__(self, is_prompt_visible=True):
+        self._id = None
         self._is_prompt_visible = is_prompt_visible
-        self._work_setting_path = abspath(expanduser(work_setting_path))
-        self._model_setting_path = abspath(expanduser(model_setting_path))
-        self._data_handler= None
         self._worker = None
-        self._work_setting_parser = SettingParser()
-        self._model_setting_parser = SettingParser()
-        self._model_handler = ModelHandler()
         self._work_setting = None
         self._model_setting = None
         self._preprocessed_data = None
         self._processed_data = None
-        self._weighted = None
+        self._class_weight = None
         self._model = None
+        self._dynamic_weight_method = None
+        self.data_handler = SimpleDataHandler()
+        self.model_handler = ModelHandler()
     @property
     def worker(self):
         return self._worker
     def print_prompt(self,value):
         if self._is_prompt_visible:
             print(value)
-    def execute(self):
+    def execute(self,id_, work_setting,model_setting):
+        self._id = id_
+        self._work_setting = work_setting
+        self._model_setting = model_setting
         self.print_prompt("Parsing setting...")
         self._parse_setting()
         self.print_prompt("Initializing model..")
@@ -53,8 +53,7 @@ class Pipeline(metaclass=ABCMeta):
     def _prepare_for_compile(self):
         pass
     def _parse_setting(self):
-        self._work_setting = self._work_setting_parser.parse(self._work_setting_path)
-        self._model_setting = self._model_setting_parser.parse(self._model_setting_path)
+        pass
     def _init_model(self):
         """if 'initial_epoch' in self._work_setting.keys():
             if int(self._work_setting['initial_epoch']) > 0:
@@ -63,24 +62,23 @@ class Pipeline(metaclass=ABCMeta):
         if not build_model: 
             self.print_prompt("\tLoading model...")
             model_path = expanduser(self._work_setting['trained_model_path'])
-            self._model = self._model_handler.load_model(model_path)
+            self._model = self.model_handler.load_model(model_path)
             self._model.load_weights(model_path, by_name=True)
         else:
             self.print_prompt("\tBuilding model...")
-            self._model = self._model_handler.build_model(self._model_setting)
-
+            self._model = self.model_handler.build_model(self._model_setting)
     def _padding(self, data_dict, value):
         padded = {}
         for data_kind, data in data_dict.items():
             inputs = data['inputs']
             answers = data['answers']
-            inputs, answers = self._data_handler.padding(inputs,answers,value)
+            inputs, answers = self.data_handler.padding(inputs,answers,value)
             padded[data_kind]= {"inputs":inputs,"answers":answers}
         return padded
     def _process_data(self):
         self._processed_data = {}
         for data_kind,data in self._preprocessed_data.items():
-            inputs,answers = self._data_handler.to_vecs(data['data_pair'].values())
+            inputs,answers = self.data_handler.to_vecs(data['data_pair'].values())
             self._processed_data[data_kind] = {"inputs":inputs,"answers":answers}
         for preprocess in self._work_setting['preprocess']:
             if preprocess['type']=="padding":
@@ -92,17 +90,16 @@ class Pipeline(metaclass=ABCMeta):
             ann_types = self._model_setting['annotation_types']
         else:
             ann_types = None
-        metric_types = self._model_setting['compile']['metric_types']
-        loss = self._model_setting['compile']['loss']
-        learning_rate=self._model_setting['compile']['learning_rate']
+        metric_types = self._work_setting['compile']['metric_types']
+        loss = self._work_setting['compile']['loss']
+        learning_rate=self._work_setting['compile']['learning_rate']
         values_to_ignore=self._work_setting['values_to_ignore']
-        self._model_handler.compile_model(self._model,
-                                          learning_rate=learning_rate,
-                                          ann_types=ann_types,
-                                          values_to_ignore=values_to_ignore,
-                                          weights=self._weighted,
-                                          metric_types=metric_types,
-                                          loss_type=loss)
+        self.model_handler.compile_model(self._model,learning_rate=learning_rate,
+                                         ann_types=ann_types,
+                                         values_to_ignore=values_to_ignore,
+                                         class_weight=self._class_weight,
+                                         metric_types=metric_types,loss_type=loss,
+                                         dynamic_weight_method=self._dynamic_weight_method)
     @abstractmethod
     def _init_worker(self):
         pass
@@ -133,26 +130,18 @@ class Pipeline(metaclass=ABCMeta):
         data_path =  self._work_setting['data_path']
         ann_types =  self._model_setting['annotation_types']
         for name,path in data_path.items():
-            temp = self._data_handler.get_data(path['inputs'],
-                                               path['answers'],
-                                               class_types=ann_types)
+            temp = self.data_handler.get_data(path['inputs'],
+                                              path['answers'],
+                                              class_types=ann_types)
             self._preprocessed_data[name] = temp
     def _setting_to_saved(self):
         saved = {}
         saved['work_setting'] = self._work_setting
         saved['model_setting'] = self._model_setting
-        saved['weighted'] = self._weighted
+        saved['class_weight'] = self._class_weight
         saved['id'] = self._id
         saved['is_prompt_visible'] = self._is_prompt_visible
-        saved['work_setting_path'] = self._work_setting_path
-        saved['model_setting_path'] = self._model_setting_path
         return saved
+    @abstractmethod
     def _save_setting(self):
-        data =  self._setting_to_saved()
-        mode_id=self._work_setting['mode_id']
-        data['save_time'] = strftime("%Y_%b_%d", gmtime())
-        path_root=self._work_setting['path_root'] + "/" + str(self._id) + "/" + mode_id
-        if not os.path.exists(path_root):
-            os.makedirs(path_root)
-        with open(path_root + '/setting.json', 'w') as outfile:  
-            json.dump(data, outfile,indent=4)
+        pass
