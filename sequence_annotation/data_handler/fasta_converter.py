@@ -26,6 +26,7 @@ class FastaConverter():
                     else:
                         break
         return data
+
     def to_vec_dict(self,seq_dict, discard_invalid_seq):
         """convert dictionary of seqeucnces to dictionary of one-hot encoding vector"""
         data = {}

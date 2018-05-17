@@ -1,55 +1,47 @@
 import unittest
 import numpy as np
-from . import AnnSequence
-from . import RegionExtractor
+from . import SeqInformation
+from . import SeqInfoContainer
 from . import SeqInfoGenerator
 class TestSeqInfoGenerator(unittest.TestCase):
-    principle = {'remove_end_of_strand':True,
-                 'with_random_choose':True,
-                 'replaceable':True,
-                 "each_region_number":{'intergenic_region':10,'cds':100},
-                 'sample_number_per_region':6,
-                 'half_length':4,
-                  'max_diff':3}
-    chroms_info = {'chr1':120,'chr2':35}
-    ANN_TYPES = ['cds','intron','utr_5','utr_3','intergenic_region']
-    frontground_types = ['cds','intron','utr_5','utr_3']
-    background_type = 'intergenic_region'
-    source = "template"
-    def _create_chrom(self,chrom_id,strand):
-        chrom = AnnSequence()
-        chrom.chromosome_id = chrom_id
-        chrom.strand = strand
-        chrom.length = TestSeqInfoGenerator.chroms_info[chrom_id]
-        chrom.id = chrom_id+"_"+strand
-        chrom.ANN_TYPES = TestSeqInfoGenerator.ANN_TYPES
-        chrom.source = TestSeqInfoGenerator.source
-        chrom.initSpace()
-        return chrom
-    def _add_seq1(self,chrom):
-        chrom.add_ann("utr_5",1,101,101).add_ann("cds",1,102,104)
-        chrom.add_ann("intron",1,105,105)
-        chrom.add_ann("cds",1,106,109).add_ann("utr_3",1,100,111)
-        chrom.add_ann("utr_5",1,10,20)
-    def test_number(self):
+    def test_total_number(self):
+        principle = {'remove_end_of_strand':True,'with_random_choose':True,
+                     'replaceable':True,
+                     "each_region_number":{'intron':10,'exon':20},
+                     'sample_number_per_region':6,'half_length':4,
+                     'max_diff':3,'length_constant':False}
+        chroms_info = {'chr1':100,'chr2':35}
         #Create sequence to test
-        chrom = self._create_chrom("chr1","plus")
-        self._add_seq1(chrom)
-        extractor = RegionExtractor(chrom,
-                                    TestSeqInfoGenerator.frontground_types,
-                                    TestSeqInfoGenerator.background_type)
-        extractor.extract()
-        regions = extractor.result
-        generator = SeqInfoGenerator(regions,
-                                     TestSeqInfoGenerator.principle,
-                                     TestSeqInfoGenerator.chroms_info,
-                                     "seed","seq")
-        generator.generate()
-        seed_number = sum(TestSeqInfoGenerator.principle['each_region_number'].values())
-        self.assertEqual(seed_number,len(generator.seeds.data))
-        seq_number = seed_number*TestSeqInfoGenerator.principle['sample_number_per_region']
-        self.assertEqual(seq_number,len(generator.seqs_info.data))
-        
+        regions = SeqInfoContainer()
+        for i in range(4):
+            region = SeqInformation()
+            region.chromosome_id = 'chr1'
+            region.strand = 'plus'
+            region.id = str(i)
+            region.source = 'test'
+            regions.add(region)
+        region = regions.get('0')
+        region.start = 0
+        region.end = 20
+        region.ann_type = 'intron'
+        region = regions.get('1')
+        region.start = 21
+        region.end = 30
+        region.ann_type = 'exon'
+        region = regions.get('2')
+        region.start = 31
+        region.end = 50
+        region.ann_type = 'intron'
+        region = regions.get('3')
+        region.start = 51
+        region.end = 99
+        region.ann_type = 'exon'
+        generator = SeqInfoGenerator()
+        seeds,seqs_info = generator.generate(regions,principle,chroms_info,"seed","seq")
+        seed_number = sum(principle['each_region_number'].values())
+        self.assertEqual(seed_number,len(seeds.data))
+        seq_number = seed_number*principle['sample_number_per_region']
+        self.assertEqual(seq_number,len(seqs_info.data))        
 if __name__=="__main__":    
     unittest.TestSuite()
     unittest.TestLoader().loadTestsFromTestCase(TestSeqInfoGenerator)
