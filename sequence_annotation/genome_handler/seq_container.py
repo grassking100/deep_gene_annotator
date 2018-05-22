@@ -8,6 +8,8 @@ class SeqContainer(metaclass=ABCMeta):
     def __init__(self):
         self._data = {}
         self.note = ""
+    def __len__(self):
+        return len(self._data)
     def __iter__(self):
         self._index = 0
         return self  

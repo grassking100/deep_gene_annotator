@@ -6,7 +6,7 @@ from time import gmtime, strftime, time
 from sequence_annotation.pipeline.pipeline_factory import PipelineFactory
 from sequence_annotation.utils.json_reader import JsonReader
 if __name__ == '__main__':
-    prompt = 'train.py --setting=<setting_file>'
+    prompt = 'train.py -t training_setting_path -m model_setting_path -i train_id'
     parser = argparse.ArgumentParser(description=prompt)
     parser.add_argument('-t','--training_setting_path',help='Train setting file path', required=True)
     parser.add_argument('-m','--model_setting_path',help='Model setting file path', required=True)

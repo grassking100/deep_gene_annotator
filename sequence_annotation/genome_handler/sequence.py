@@ -20,6 +20,8 @@ class Sequence(metaclass=ABCMeta):
         self.source = None
         self.chromosome_id = None
         self._strand = None
+    def __len__(self):
+        return self._length
     def to_dict(self):
         dictionary = {}
         for attr in self._copied_public_attrs():

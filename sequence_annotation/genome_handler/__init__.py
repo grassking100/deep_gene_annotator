@@ -9,5 +9,6 @@ from .sequence import Sequence, AnnSequence, SeqInformation
 from .seq_container import SeqContainer, AnnSeqContainer, SeqInfoContainer
 from .ann_seq_converter import UscuSeqConverter
 from .ann_seq_processor import AnnSeqProcessor
+from .region_extractor import RegionExtractor
 
 

@@ -22,7 +22,7 @@ class AnnSeqExtractor(metaclass=ABCMeta):
         result = AnnSeqContainer()
         result.ANN_TYPES = ann_seq_container.ANN_TYPES
         for seq_info in seq_info_container.data:
-            one_strand_chromosome = ann_seq_container.get(seq_info.chromosome_id+"_"+seq_info.strand)
+            one_strand_chromosome = ann_seq_container.get(str(seq_info.chromosome_id)+"_"+seq_info.strand)
             seq_ann=self._extract_seq(seq_info,one_strand_chromosome)
             result.add(seq_ann)
         return result

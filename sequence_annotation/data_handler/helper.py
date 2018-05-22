@@ -1,6 +1,6 @@
 import random
 def data_index_splitter(data_number, fraction_of_traning_validation,
-                            number_of_cross_validation, shuffle=True):
+                        number_of_cross_validation, shuffle=True):
     """get the index of cross validation data indice and testing data index"""
     data_index = list(range(data_number))
     if shuffle:

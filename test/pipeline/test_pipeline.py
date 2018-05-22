@@ -5,8 +5,6 @@ sys.path.append(abspath(expanduser(__file__+"/../..")))
 import unittest
 import shutil
 import pandas as pd
-import argparse
-from time import strftime, gmtime, time
 from . import PipelineFactory
 from . import JsonReader
 

@@ -129,10 +129,12 @@ class Pipeline(metaclass=ABCMeta):
         self._preprocessed_data = {}
         data_path =  self._work_setting['data_path']
         ann_types =  self._model_setting['annotation_types']
+        input_setting =  self._model_setting['input_setting']
         for name,path in data_path.items():
             temp = self.data_handler.get_data(path['inputs'],
                                               path['answers'],
-                                              class_types=ann_types)
+                                              ann_types=ann_types,
+                                              setting = input_setting)
             self._preprocessed_data[name] = temp
     def _setting_to_saved(self):
         saved = {}

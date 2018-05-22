@@ -1,7 +1,7 @@
 {
     "layer":{
                 "Input":{"type":"Input",
-                         "keras_setting":{"shape":[null,4],"name":"Input"},
+                         "keras_setting":{"shape":[null,6],"name":"Input"},
                          "previous_layer":null,
                          "is_output":false
                         },
@@ -24,5 +24,9 @@
                          }
     
     },
+    "input_setting":{"valid_codes":"ATCGN",
+                     "soft_masked":true,
+                     "discard_invalid_sequence":false
+                    },
     "annotation_types":["utr_5","utr_3","intron","cds","intergenic_region"]
 }

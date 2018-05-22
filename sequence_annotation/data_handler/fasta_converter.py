@@ -1,5 +1,5 @@
 """
-    read fasta file and return array of sequnece and name
+    Read fasta file and return array of sequnece and name
     if number is negative, then all the sequneces will be read
     otherwirse read part of sequneces, the number indicate how many to read
 """

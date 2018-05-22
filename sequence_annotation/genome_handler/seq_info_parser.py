@@ -58,8 +58,8 @@ class EnsemblInfoParser(SeqInfoParser):
     """Purpose:Parse file from Ensembl table and get data which stored infomration(zero-based)"""
     def _parse(self,data):
         temp_data = {}
-        temp_data['tx_start'] = int(data['Transcript start (bp)']) -1
-        temp_data['tx_end'] = int(data['Transcript end (bp)']) -1
+        temp_data['tx_start'] = int(data['Transcript start (bp)']) - 1
+        temp_data['tx_end'] = int(data['Transcript end (bp)']) - 1
         """Convert type"""
         convert_name = {'Exon region start (bp)':'exons_start',
                         'Exon region end (bp)':'exons_end',
@@ -70,7 +70,7 @@ class EnsemblInfoParser(SeqInfoParser):
                         '5\' UTR end':'utrs_5_end',
                         '3\' UTR end':'utrs_3_end'}
         for origin,new_name in convert_name.items():
-            temp = np.array(data[origin].split(','))
+            temp = np.array(str(data[origin]).split(','))
             temp_list=[]
             for value in temp:
                 if value != "Null":

@@ -2,7 +2,8 @@
 from . import CodeException, SeqException
 import numpy as np
 class SeqConverter():
-    def __init__(self,code_vec_dictionay=None,codes=None,is_case_sensitivity=False):
+    def __init__(self,code_vec_dictionay=None,codes=None,
+                 is_case_sensitivity=False,with_soft_masked_status=False):
         if code_vec_dictionay is not None:
             if self._is_dict_inversible(code_vec_dictionay):
                 if is_case_sensitivity:
@@ -18,20 +19,30 @@ class SeqConverter():
             else:
                 raise Exception("Diciotnary is not inversible")
         else:
-            self._codes=codes or self._default_code()
+            self._codes=codes or list('ATCG')
             if self._is_values_unique(self._codes):
                 self._code_vec_dictionary = self._codes_to_vecs_dictionay(self._codes)
             else:
                 raise Exception("Codes is not unique")
         self._vec_code_dictionary = {str(v):k for k,v in self._code_vec_dictionary.items()}
         self._is_case_sensitivity = is_case_sensitivity
+        self._with_soft_masked_status = with_soft_masked_status
+    def _add_soft_masked(self,seq,vecs):
+        soft_mask = self._soft_masked_status(seq)
+        vecs = np.array(vecs)
+        num,length = vecs.shape
+        temp = np.zeros((num,length+1))
+        temp[:num,:length] = temp[:num,:length] + vecs
+        temp.T[length] = soft_mask
+        return temp
+    def _soft_masked_status(self,seq):
+        soft_masked_status = [char.islower() for char in seq]
+        return soft_masked_status
     def _is_values_unique(self, values):
         return len(values)==len(set(values))
     def _is_dict_inversible(self, dict_):
         dict_values = list(dict_.values())
         return self._is_values_unique(dict_values)
-    def _default_code(self):
-        return ['A', 'T', 'C', 'G']
     def _codes_to_vecs_dictionay(self, codes):
         dict_ = {}
         for index,code in enumerate(codes):
@@ -70,11 +81,20 @@ class SeqConverter():
         return self._element_convert(vec,self._vec_code_dictionary)
     def seq2vecs(self,seq):
         """convert sequence to one hot encoding sequence"""
-        return self._array_convert(seq,self.code2vec)
+        vecs = self._array_convert(seq,self.code2vec)
+        if self._with_soft_masked_status:
+            vecs = self._add_soft_masked(seq,vecs)
+        return vecs
     def vecs2seq(self,vecs,join=True):
         """convert vector of vectir to converted result"""
-        result = self._array_convert(vecs,self.vec2code)
-        if join:
-            return "".join(result)
+        if self._with_soft_masked_status:
+            vecs = np.array(vecs,dtype='int')
+            num,length = vecs.shape
+            seq = self._array_convert(vecs[:num,:length-1].tolist(),self.vec2code)
+            seq = self._mark_soft_masked(seq,vecs)
         else:
-            return result
+            seq = self._array_convert(vecs,self.vec2code)
+        if join:
+            return "".join(seq)
+        else:
+            return seq

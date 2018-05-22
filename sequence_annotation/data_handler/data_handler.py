@@ -1,4 +1,5 @@
 from . import FastaConverter
+from . import SeqConverter
 from . import LengthNotEqualException
 import os
 import numpy as np
@@ -29,10 +30,10 @@ class DataHandler(metaclass=ABCMeta):
             raw_weights[type_] = weight
         sum_raw_weights = sum(raw_weights.values())
         for type_,weight in raw_weights.items():
-            weights[type_] = scale*weight / (sum_raw_weights )
+            weights[type_] = scale * weight / (sum_raw_weights )
         return weights
     @abstractmethod
-    def get_data(self,data_path,answer_path,class_types):
+    def get_data(self,data_path,answer_path,ann_types,setting=None):
         pass
     @staticmethod
     def to_vecs(data_pair_list):
@@ -54,7 +55,7 @@ class SimpleDataHandler(DataHandler):
             dict_['data_pair'][name]={'input':input_,'answer':answer_vec}
         return dict_
     @classmethod
-    def get_data(cls,data_path,answer_path,class_types):
+    def get_data(cls,data_path,answer_path,ann_types,setting=None):
         bulk_expression = cls.get_bulk_expression(abspath(expanduser(data_path)))
         proportion = cls.get_proportion(abspath(expanduser(answer_path)))
         return cls._to_dict(bulk_expression,proportion)
@@ -82,10 +83,16 @@ class SeqAnnDataHandler(DataHandler):
         align_answers = pad_sequences(answers, padding='post',value=padding_signal)
         return (align_inputs, align_answers)
     @staticmethod
-    def get_seq_vecs(fasta_paths):
-        fasta_converter = FastaConverter()
+    def get_seq_vecs(fasta_paths,setting=None):
+        seq_converter = None
+        discard_invalid_seq = False
+        if setting is not None:
+            discard_invalid_seq = setting['discard_invalid_sequence']
+            seq_converter = SeqConverter(codes=setting['valid_codes'],
+                                         with_soft_masked_status=setting['soft_masked'])
+        fasta_converter = FastaConverter(seq_converter)
         seq_dict = fasta_converter.to_seq_dict(fasta_paths)
-        return fasta_converter.to_vec_dict(seq_dict = seq_dict,discard_invalid_seq=True)
+        return fasta_converter.to_vec_dict(seq_dict = seq_dict,discard_invalid_seq=discard_invalid_seq)
     @staticmethod
     def get_ann_vecs(path,ann_types):
         ann_data = np.load(path).item()
@@ -134,10 +141,10 @@ class SeqAnnDataHandler(DataHandler):
         dict_ = {'data_pair':data_pair,'annotation_count':ann_count}
         return dict_
     @classmethod
-    def get_data(cls,seq_paths,answer_path,class_types):
+    def get_data(cls,seq_paths,answer_path,ann_types,setting=None):
         if not isinstance(seq_paths,list):
             seq_paths = [seq_paths]
         seq_paths = [abspath(expanduser(seq_path)) for seq_path in seq_paths]
-        seqs = cls.get_seq_vecs(seq_paths)
-        answer = cls.get_ann_vecs(answer_path,class_types)
-        return cls._to_dict(seqs,answer,class_types)
+        seqs = cls.get_seq_vecs(seq_paths,setting)
+        answer = cls.get_ann_vecs(answer_path,ann_types)
+        return cls._to_dict(seqs,answer,ann_types)
