@@ -25,6 +25,7 @@ from sequence_annotation.genome_handler.seq_status_detector import SeqStatusDete
 from sequence_annotation.genome_handler.sequence import SeqInformation
 non_conflict_type = ['cds','utr_5','utr_3','intron','other']
 def get_wanted_seq(chrom):
+    exon_handler = ExonHandler()
     ann_seq_processor = AnnSeqProcessor()
     background = ann_seq_processor.get_background(chrom)
     complete = ann_seq_processor.combine_status(chrom,{'other':background})
@@ -58,7 +59,6 @@ if __name__=="__main__":
         gene_converter = EnsemblSeqConverter(extra_types=['exon'])
         ann_genome_creator = AnnGenomeCreator()
         converted_data = AnnSeqContainer()
-        exon_handler = ExonHandler()
         #Read data
         data = pd.read_csv(ensembl_path,sep='\t').to_dict('record')
         #Create Annotated Genoome
@@ -80,9 +80,9 @@ if __name__=="__main__":
                 info.chromosome_id = chrom.chromosome_id
                 info.strand = chrom.strand
                 info.start = index*length
-                info.end = (index+1)*length
+                info.end = (index+1)*length -1
                 info.source = chrom_source
-                info.note = '2018_5_21'
+                info.note = '2018_5_23'
                 if info.end >= chrom.length:
                     info.end = chrom.length - 1
                     info.start = info.end - length + 1
@@ -98,10 +98,10 @@ if __name__=="__main__":
             answer[item['id']]=data
         gtf_path = abspath(expanduser("raw_data_"+saved_path+".gtf"))
         tsv_path = abspath(expanduser("raw_data_"+saved_path+".tsv"))
-        npy_path = abspath(expanduser(saved_path+".npy"))
+        h5_path = abspath(expanduser(saved_path+".h5"))
         info_container.to_data_frame().to_csv(tsv_path,index=None,sep='\t')
         info_container.to_gtf().to_csv(gtf_path,index=None,sep='\t',header=None)
-        deepdish.io.save(npy_path, answer,('zlib',9))
+        deepdish.io.save(h5_path, answer,('zlib',9))
         command = ("bedtools getfasta -s -name -fi Tetraodon_nigroviridis.TETRAODON8.dna_sm."
                    "chromosome."+chrom_id+".fa -bed "+gtf_path + " -fo " 
                    "TETRAODON8_sm_chrom_"+chrom_id+"_selected_region.fasta")

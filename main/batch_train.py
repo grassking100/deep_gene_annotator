@@ -2,6 +2,7 @@ import os
 import sys
 sys.path.append(os.path.abspath(__file__+"/../.."))
 import argparse
+from time import gmtime, strftime, time
 from sequence_annotation.utils.json_reader import JsonReader
 from sequence_annotation.pipeline.pipeline_factory import PipelineFactory
 from sequence_annotation.pipeline.batch_pipeline import BatchPipeline
@@ -18,8 +19,8 @@ if __name__ == '__main__':
     print('Program start time: '+strftime("%Y-%m-%d %H:%M:%S",gmtime()))
     start_time = time()  
     user_setting = {}
-    work_setting_path=parser.training_setting_path
-    model_setting_path=parser.model_setting_path
+    work_setting_path=args.training_setting_path
+    model_setting_path=args.model_setting_path
     train_id=args.train_id
     pipeline = BatchPipeline(data_type='sequence_annotation')
     work_setting = JsonReader().read(work_setting_path)

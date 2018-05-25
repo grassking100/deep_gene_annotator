@@ -121,6 +121,7 @@ class Pipeline(metaclass=ABCMeta):
     def _create_folder(self,path):
         try:
             if not os.path.exists(path):
+                print_prompt("Create folder:"+path)
                 os.makedirs(path)
         except OSError as erro:
             if erro.errno != errno.EEXIST:

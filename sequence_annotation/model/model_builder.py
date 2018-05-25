@@ -28,8 +28,9 @@ class ModelBuilder(Builder):
                 exec('from keras.layers import {layer_type}'.format(layer_type=layer_type))
                 exec('self._temp_layer_class={layer_type}'.format(layer_type=layer_type))
                 layer = self._temp_layer_class(**setting['keras_setting'])
-                if isinstance(self._temp_layer_class,RNN) and setting['bidirection_setting']!=None:
-                    layer = self._to_bidirectional(layer,setting)                    
+                is_RNN = isinstance(self._temp_layer_class.__class__,RNN.__class__)
+                if  is_RNN and 'bidirection_setting' in setting.keys():
+                    layer = self._to_bidirectional(layer,setting)
             except ImportError as e:
                 raise Exception("Layer,{layer},has not implement yet".format(layer=layer_type))
         layer_name = setting['keras_setting']['name']
@@ -54,12 +55,21 @@ class ModelBuilder(Builder):
         present_layer_status = self._layers[setting['keras_setting']['name']]
         if not present_layer_status['is_linked']:
             if setting['previous_layer'] is not None:
-                previous_layer_status = self._layers[setting['previous_layer']]
-                if not previous_layer_status['is_linked']:
-                    self._link_layer(previous_layer_status['setting'])
                 present_layer = present_layer_status['layer']
-                previous_layer = previous_layer_status['layer']
-                present_layer_status['layer'] = present_layer(previous_layer)
+                previous_layers = []
+                previous_layer_ids = setting['previous_layer']
+                if not isinstance(previous_layer_ids,list):
+                    previous_layer_statuses = [self._layers[previous_layer_ids]]
+                else:
+                    previous_layer_statuses = [self._layers[id_] for id_ in previous_layer_ids]
+                for previous_layer_status in previous_layer_statuses:
+                    if not previous_layer_status['is_linked']:
+                        self._link_layer(previous_layer_status['setting'])
+                    previous_layers.append(previous_layer_status['layer'])
+                if len(previous_layers)==1:
+                    present_layer_status['layer'] = present_layer(previous_layers[0])
+                else:
+                    present_layer_status['layer'] = present_layer(previous_layers)
                 present_layer_status['is_linked'] = True
     def _build_model(self):
         input_layers = []

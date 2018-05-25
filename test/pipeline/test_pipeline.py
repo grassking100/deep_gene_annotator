@@ -25,7 +25,7 @@ class TestPipeline(unittest.TestCase):
         finally:
             path = abspath(expanduser(__file__+'/../result/'+train_id))
             if os.path.exists(path):
-                shutil.rmtree(path)
+                pass#shutil.rmtree(path)
     def test_constant_metric(self):
         user_setting = {}
         work_setting_path = abspath(expanduser(__file__+'/../setting/train_setting.json'))

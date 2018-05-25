@@ -1,0 +1,167 @@
+{
+    "class_weight": null,
+    "id": "test_runable",
+    "model_setting": {
+        "layer": {
+            "Output": {
+                "is_output": true,
+                "name": "Output",
+                "keras_setting": {
+                    "use_bias": true,
+                    "name": "Output",
+                    "kernel_size": 1,
+                    "activation": "softmax",
+                    "filters": 5
+                },
+                "type": "CNN_1D",
+                "previous_layer": "LSTM"
+            },
+            "LSTM": {
+                "name": "LSTM",
+                "type": "LSTM",
+                "is_output": false,
+                "keras_setting": {
+                    "activation": "tanh",
+                    "return_sequences": true,
+                    "name": "LSTM",
+                    "units": 12
+                },
+                "previous_layer": "Concatenate",
+                "bidirection_setting": {
+                    "merge_mode": "concat"
+                }
+            },
+            "Input": {
+                "is_output": false,
+                "name": "Input",
+                "keras_setting": {
+                    "shape": [
+                        null,
+                        6
+                    ],
+                    "name": "Input"
+                },
+                "type": "Input",
+                "previous_layer": null
+            },
+            "Concatenate": {
+                "is_output": false,
+                "name": "Concatenate",
+                "keras_setting": {
+                    "name": "Concatenate"
+                },
+                "type": "Add",
+                "previous_layer": [
+                    "CNN",
+                    "CNN3"
+                ]
+            },
+            "CNN": {
+                "is_output": false,
+                "name": "CNN",
+                "keras_setting": {
+                    "use_bias": true,
+                    "name": "CNN",
+                    "padding": "same",
+                    "activation": "relu",
+                    "filters": 12,
+                    "kernel_size": 3
+                },
+                "type": "CNN_1D",
+                "previous_layer": "Input"
+            },
+            "CNN2": {
+                "is_output": false,
+                "name": "CNN2",
+                "keras_setting": {
+                    "use_bias": true,
+                    "name": "CNN2",
+                    "padding": "same",
+                    "activation": "relu",
+                    "filters": 2,
+                    "kernel_size": 5
+                },
+                "type": "CNN_1D",
+                "previous_layer": "CNN"
+            },
+            "CNN3": {
+                "is_output": false,
+                "name": "CNN3",
+                "keras_setting": {
+                    "use_bias": true,
+                    "name": "CNN3",
+                    "padding": "same",
+                    "activation": "relu",
+                    "filters": 12,
+                    "kernel_size": 50
+                },
+                "type": "CNN_1D",
+                "previous_layer": "CNN2"
+            }
+        },
+        "annotation_types": [
+            "utr_5",
+            "utr_3",
+            "intron",
+            "cds",
+            "intergenic_region"
+        ],
+        "input_setting": {
+            "valid_codes": "ATCGN",
+            "soft_masked": true,
+            "discard_invalid_sequence": false
+        }
+    },
+    "work_setting": {
+        "compile": {
+            "loss": "mse",
+            "learning_rate": 0.001,
+            "metric_types": [
+                "loss",
+                "constant",
+                "loss"
+            ]
+        },
+        "load_model": false,
+        "data_path": {
+            "training": {
+                "inputs": [
+                    "test/pipeline/data/seqs.fasta"
+                ],
+                "answers": "test/pipeline/data/seqs.npy"
+            },
+            "validation": {
+                "inputs": [
+                    "test/pipeline/data/seqs.fasta"
+                ],
+                "answers": "test/pipeline/data/seqs.npy"
+            }
+        },
+        "preprocess": [],
+        "values_to_ignore": null,
+        "validation_split": 0.4,
+        "previous_result_path": null,
+        "mode_id": "train",
+        "path_root": "test/pipeline/result",
+        "class_weight_setting": {
+            "is_static": false,
+            "use_weight": false,
+            "method": "reversed_count_weight"
+        },
+        "epoch": 30,
+        "initial_epoch": 0,
+        "period": 1,
+        "batch_size": 1,
+        "use_generator": true,
+        "trained_model_path": null
+    },
+    "is_prompt_visible": false,
+    "save_time": "2018_May_25",
+    "annotation_count": {
+        "intron": 2.25,
+        "utr_5": 2.25,
+        "intergenic_region": 21.0,
+        "utr_3": 2.25,
+        "cds": 2.25
+    }
+}
