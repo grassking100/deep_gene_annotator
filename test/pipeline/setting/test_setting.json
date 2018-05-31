@@ -15,6 +15,7 @@
     "values_to_ignore":null,
     "use_generator":true,
     "load_model":true,
+    "test_per_batch":false,
     "compile":{
         "learning_rate":0.001,
         "metric_types":["loss","constant"],

@@ -65,10 +65,22 @@ class AnnSeqProcessor(metaclass=ABCMeta):
         values = []
         for type_ in focus_types:
             values.append(seq.get_ann(type_))
-        sum_ = np.array(values).sum()
         status = not np.any(np.array(values).sum(0)==0) 
-        #status = status and (sum_==seq.length)
         return status
+    def is_value_sum_to_length(self, seq, focus_types=None):
+        focus_types = focus_types or seq.ANN_TYPES
+        values = []
+        for type_ in focus_types:
+            values.append(seq.get_ann(type_))
+        sum_ = np.array(values).sum()
+        return sum_==seq.length and self.is_full_annotated(seq, focus_types)
+    def is_one_hot(self, seq, focus_types=None):
+        focus_types = focus_types or seq.ANN_TYPES
+        values = []
+        for type_ in focus_types:
+            values.append(seq.get_ann(type_))
+            
+        return np.all(np.isin(np.array(values), [0,1])) and self.is_full_annotated(seq, focus_types)
     def _get_one_hot_by_max(self, seq, focus_types=None):
         focus_types = focus_types or seq.ANN_TYPES
         one_hot_seq = self.get_normalized(seq,focus_types)

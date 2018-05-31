@@ -2,9 +2,9 @@
 from keras.layers.normalization import BatchNormalization
 from keras.layers import concatenate
 from keras.engine.training import Model
-from keras.layers import RNN,Input, Convolution1D, Dense
-from keras.layers import LSTM, Activation,Bidirectional
-from keras.layers import Conv2DTranspose
+from keras.layers import RNN,Input, Convolution1D
+from keras.layers import Bidirectional
+import copy
 from . import Builder
 class ModelBuilder(Builder):
     """This class will create and return sequence annotation model"""
@@ -18,22 +18,27 @@ class ModelBuilder(Builder):
             setting['keras_setting']['name'] = name
             self._build_layer(setting)
     def _build_layer(self,setting):
-        layer_type = setting['type']
+        setting_ = copy.deepcopy(setting)
+        layer_type = setting_['type']
+        keras_setting = setting_['keras_setting']
+        if 'kernel_regularizer' in keras_setting.keys():
+            exec('from keras.regularizers import {regularizer}'.format(regularizer=keras_setting['kernel_regularizer'][:2]))
+            exec('keras_setting[\'kernel_regularizer\']={regularizer}'.format(regularizer=keras_setting['kernel_regularizer']))
         if layer_type=='CNN_1D':
-            layer = self._build_CNN_1D(setting)
+            layer = self._build_CNN_1D(setting_)
         elif layer_type=='Input':
-            layer = self._build_input(setting)
+            layer = self._build_input(setting_)
         else:
             try:
                 exec('from keras.layers import {layer_type}'.format(layer_type=layer_type))
                 exec('self._temp_layer_class={layer_type}'.format(layer_type=layer_type))
-                layer = self._temp_layer_class(**setting['keras_setting'])
+                layer = self._temp_layer_class(**keras_setting)
                 is_RNN = isinstance(self._temp_layer_class.__class__,RNN.__class__)
                 if  is_RNN and 'bidirection_setting' in setting.keys():
-                    layer = self._to_bidirectional(layer,setting)
+                    layer = self._to_bidirectional(layer,setting_)
             except ImportError as e:
                 raise Exception("Layer,{layer},has not implement yet".format(layer=layer_type))
-        layer_name = setting['keras_setting']['name']
+        layer_name = keras_setting['name']
         if not layer_name in self._layers.keys():
             self._layers[layer_name] = {}
             self._layers[layer_name]['layer'] = layer
@@ -84,7 +89,8 @@ class ModelBuilder(Builder):
         self._validate()
         self._build_layers()
         self._link_layers()
-        return self._build_model()
+        model = self._build_model()
+        return model
     def _validate(self):
         pass
     def _build_CNN_1D(self,setting):

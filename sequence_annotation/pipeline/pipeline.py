@@ -139,6 +139,7 @@ class Pipeline(metaclass=ABCMeta):
             self._preprocessed_data[name] = temp
     def _setting_to_saved(self):
         saved = {}
+        saved['model_parameter_numer'] = self._model.count_params()
         saved['work_setting'] = self._work_setting
         saved['model_setting'] = self._model_setting
         saved['class_weight'] = self._class_weight

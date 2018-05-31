@@ -42,7 +42,12 @@ class TestGenomeHandlePipeline(unittest.TestCase):
             converted_data.ANN_TYPES = gene_converter.ANN_TYPES
             for seq in EnsemblInfoParser().parse(data):
                 converted_seq = gene_converter.convert(seq)
-                converted_data.add(converted_seq)
+                converted_seq.processed_status = "one_hot"
+                further_seq = exon_handler.further_division(converted_seq)
+                internal_seq = exon_handler.discard_external(further_seq)
+                simple_seq = exon_handler.simplify_exon_name(internal_seq)
+
+                converted_data.add(simple_seq)
             genome=ann_genome_creator.create(converted_data,seq_info)
             #Get one strand
             for chrom in genome.data:
@@ -50,12 +55,8 @@ class TestGenomeHandlePipeline(unittest.TestCase):
                 background = ann_seq_processor.get_background(chrom)
                 complete = ann_seq_processor.combine_status(chrom,{'other':background})
                 one_hot = ann_seq_processor.get_one_hot(complete,non_conflict_type,method='order')
-                further_seq = exon_handler.further_division(one_hot)
-                internal_seq = exon_handler.discard_external(further_seq)
-                simple_seq = exon_handler.simplify_exon_name(internal_seq)
-                simple_seq.add_ann('other',ann_seq_processor.get_background(simple_seq))
-                ann_seq_container.add(simple_seq)
-                #print(ann_seq_processor.is_full_annotated(simple_seq,non_conflict_type))
+                one_hot.add_ann('other',ann_seq_processor.get_background(one_hot))
+                ann_seq_container.add(one_hot)
                 #Create regions for extraction
                 for index in range(math.ceil(simple_seq.length/length)):
                     info = SeqInformation()
@@ -64,7 +65,7 @@ class TestGenomeHandlePipeline(unittest.TestCase):
                     info.chromosome_id = chrom.chromosome_id
                     info.strand = chrom.strand
                     info.start = index*length
-                    info.end = (index+1)*length
+                    info.end = (index+1)*length -1
                     if info.end >= simple_seq.length:
                         info.end = simple_seq.length - 1
                         info.start = info.end - length + 1

@@ -18,6 +18,7 @@
     "class_weight_setting":{"use_weight":true,"is_static":false,"method":"reversed_count_weight"},
     "use_generator":true,
     "values_to_ignore":null,
+    "test_per_batch":true,
     "preprocess":[],
     "compile":{
         "learning_rate":0.001,

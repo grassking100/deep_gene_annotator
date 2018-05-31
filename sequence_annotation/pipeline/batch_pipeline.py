@@ -11,14 +11,16 @@ class BatchPipeline(metaclass=ABCMeta):
         self.data_type = data_type
         self._id = None
         self._model_setting = None
+        self._do_testing = False
     def print_prompt(self,value):
         if self._is_prompt_visible:
             print(value)
     def _create_pipeline(self):
         self._train_val_pipeline = PipelineFactory().create('train',self.data_type,
                                                             self._is_prompt_visible)
-        self._test_pipeline = PipelineFactory().create('test',self.data_type,
-                                                       self._is_prompt_visible)
+        if self._do_testing:
+            self._test_pipeline = PipelineFactory().create('test',self.data_type,
+                                                           self._is_prompt_visible)
     def _batch_train_val_execute(self):
         for mode_id in range(1,self._cross_val_number+1):
             work_setting = copy.deepcopy(self._work_settings[str(mode_id)])
@@ -37,6 +39,7 @@ class BatchPipeline(metaclass=ABCMeta):
             work_setting["load_model"]=True
             self._test_pipeline.execute(self._id,work_setting,self._model_setting)
     def _parse_work_setting(self,work_setting):
+        self._do_testing = "testing" in list(work_setting["data_path"].keys())
         training_val_input = work_setting["data_path"]["training_validation"]['inputs']
         training_val_answer = work_setting["data_path"]["training_validation"]['answers']
         testing_input = work_setting["data_path"]["testing"]['inputs']
@@ -56,13 +59,14 @@ class BatchPipeline(metaclass=ABCMeta):
             temp['trained_model_path']=path
             temp['data_path']['training']={}
             temp['data_path']['validation']={}
-            temp['data_path']['testing']={}
             temp['data_path']['training']['inputs'] = inputs
             temp['data_path']['training']['answers'] = training_val_answer
             temp['data_path']['validation']['inputs'] = training_val_input[mode_id-1]
             temp['data_path']['validation']['answers'] = training_val_answer
-            temp['data_path']['testing']['inputs'] = testing_input
-            temp['data_path']['testing']['answers'] = testing_answer
+            if self._do_testing:
+                temp['data_path']['testing']={}
+                temp['data_path']['testing']['inputs'] = testing_input
+                temp['data_path']['testing']['answers'] = testing_answer
             self._work_settings[str(mode_id)] = temp
     def execute(self,id_,work_setting,model_setting):
         self._id = id_
@@ -70,4 +74,5 @@ class BatchPipeline(metaclass=ABCMeta):
         self._parse_work_setting(work_setting)
         self._create_pipeline()
         self._batch_train_val_execute()
-        self._batch_test_execute()
+        if self._do_testing:
+            self._batch_test_execute()

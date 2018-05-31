@@ -19,6 +19,7 @@ class TestPipeline(BasicPipeline):
         path_root=setting['path_root']+"/"+str(self._id)+"/"+mode_id
         self._worker=TestWorker(path_root,setting['batch_size'],
                                 self._model,self._processed_data,
-                                use_generator=setting['use_generator'])
+                                use_generator=setting['use_generator'],
+                                test_per_batch=setting['test_per_batch'])
         self._worker.is_verbose_visible=self._is_prompt_visible
         self._worker.is_prompt_visible=self._is_prompt_visible

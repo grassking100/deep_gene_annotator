@@ -192,10 +192,10 @@ class AnnSequence(Sequence):
         for ann_type in self.ANN_TYPES:
             if self._use_memmap:
                 filename = path.join(mkdtemp(),str(memmap_id))
-                self._data[ann_type] = np.memmap(filename, dtype='float16',
+                self._data[ann_type] = np.memmap(filename, dtype='float32',
                                                  mode='w+',shape=(self._length))
             else:
-                self._data[ann_type] = np.array([0.0]*self._length,dtype='float16')
+                self._data[ann_type] = np.array([0.0]*self._length,dtype='float32')
         return self
     def _validate_input_index(self, start_index, end_index):
         if start_index < 0:
