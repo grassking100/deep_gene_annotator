@@ -42,8 +42,6 @@ class BatchPipeline(metaclass=ABCMeta):
         self._do_testing = "testing" in list(work_setting["data_path"].keys())
         training_val_input = work_setting["data_path"]["training_validation"]['inputs']
         training_val_answer = work_setting["data_path"]["training_validation"]['answers']
-        testing_input = work_setting["data_path"]["testing"]['inputs']
-        testing_answer = work_setting["data_path"]["testing"]['answers']
         self._cross_val_number = len(training_val_input)
         path_root = work_setting['path_root']
         epoch = work_setting['epoch']
@@ -65,8 +63,8 @@ class BatchPipeline(metaclass=ABCMeta):
             temp['data_path']['validation']['answers'] = training_val_answer
             if self._do_testing:
                 temp['data_path']['testing']={}
-                temp['data_path']['testing']['inputs'] = testing_input
-                temp['data_path']['testing']['answers'] = testing_answer
+                temp['data_path']['testing']['inputs'] = work_setting["data_path"]["testing"]['inputs']
+                temp['data_path']['testing']['answers'] = work_setting["data_path"]["testing"]['answers']
             self._work_settings[str(mode_id)] = temp
     def execute(self,id_,work_setting,model_setting):
         self._id = id_
