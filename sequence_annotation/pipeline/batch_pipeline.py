@@ -25,7 +25,8 @@ class BatchPipeline(metaclass=ABCMeta):
         for mode_id in range(1,self._cross_val_number+1):
             work_setting = copy.deepcopy(self._work_settings[str(mode_id)])
             del work_setting["data_path"]["training_validation"]
-            del work_setting['data_path']['testing']
+            if self._do_testing:
+                del work_setting['data_path']['testing']
             del work_setting["trained_model_path"]
             work_setting["load_model"]=False
             work_setting["validation_split"]=None
