@@ -2,6 +2,8 @@ import pandas as pd
 from abc import ABCMeta
 from abc import abstractmethod
 import numpy as np
+import math
+import ast
 from . import NegativeNumberException,InvalidStrandType,NotPositiveException
 class SeqInfoParser(metaclass=ABCMeta):
     def parse(self,data_list):
@@ -70,11 +72,10 @@ class EnsemblInfoParser(SeqInfoParser):
                         '5\' UTR end':'utrs_5_end',
                         '3\' UTR end':'utrs_3_end'}
         for origin,new_name in convert_name.items():
-            temp = np.array(str(data[origin]).split(','))
-            temp_list=[]
-            for value in temp:
-                if value != "Null":
-                    temp_list.append(int(float(value))-1)
+            val_list = ast.literal_eval(str(data[origin]))
+            if not isinstance(val_list,list):
+                val_list = [val_list]
+            temp_list=[int(val)-1 for val in val_list]
             temp_data[new_name]=np.array(sorted(temp_list))
         """Other"""
         temp_data['protein_id'] = data['Protein stable ID']
@@ -91,7 +92,8 @@ class EnsemblInfoParser(SeqInfoParser):
     def _validate(self,data):
         value_int = ['tx_start','tx_end']
         value_int_list = ['cdss_start','cdss_end','utrs_5_start',
-                          'utrs_3_start','utrs_5_end','utrs_3_end']
+                          'utrs_3_start','utrs_5_end','utrs_3_end',
+                          'exons_start','exons_end']
         for key in value_int:
             if data[key] < 0:
                 raise NegativeNumberException(key,data[key])

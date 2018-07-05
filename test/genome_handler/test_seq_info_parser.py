@@ -31,7 +31,7 @@ class TestSeqInfoParser(unittest.TestCase):
         with self.assertRaises(InvalidStrandType):
             parser.parse(data)
     def test_ensembl_test_ENSTNIP00000005172(self):
-        file_path = ensembl_file_prefix + 'ENSTNIP00000005172.tsv'
+        file_path = ensembl_file_prefix + 'sorted_merged_ensembl_tetraodon_8_0_ENSTNIP00000005172.tsv'
         data = pd.read_csv(file_path,sep='\t').to_dict('record')
         parser = EnsemblInfoParser()
         result = parser.parse(data)
@@ -41,6 +41,12 @@ class TestSeqInfoParser(unittest.TestCase):
         data = pd.read_csv(file_path,sep='\t').to_dict('record')
         parser = EnsemblInfoParser()
         with self.assertRaises(NegativeNumberException):
+            parser.parse(data)
+    def test_ensembl_invalid_strand(self):
+        file_path = ensembl_file_prefix + 'invalid_strand_ENSTNIP00000005172.tsv'
+        data = pd.read_csv(file_path,sep='\t').to_dict('record')
+        parser = EnsemblInfoParser()
+        with self.assertRaises(InvalidStrandType):
             parser.parse(data)
     def test_ensembl_invalid_strand(self):
         file_path = ensembl_file_prefix + 'invalid_strand_ENSTNIP00000005172.tsv'

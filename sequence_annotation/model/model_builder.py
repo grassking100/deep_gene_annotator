@@ -105,5 +105,3 @@ class ModelBuilder(Builder):
         setting['shape'] = tuple(setting['shape'])
         return_layer = Input(**setting)
         return return_layer
-    """def _build_concatenate(self,previous_layers):
-        return concatenate(inputs=previous_layers, name='Concatenate')"""

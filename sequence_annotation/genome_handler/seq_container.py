@@ -4,6 +4,7 @@ import pandas as pd
 from . import AttrValidator
 from . import InvalidAnnotation
 from . import AnnSequence,SeqInformation,Sequence
+from . import IdNotFoundException,DuplicateIdException
 class SeqContainer(metaclass=ABCMeta):
     def __init__(self):
         self._data = {}
@@ -12,13 +13,15 @@ class SeqContainer(metaclass=ABCMeta):
         return len(self._data)
     def __iter__(self):
         self._index = 0
+        self._keys = list(self._data.keys())
         return self  
     def __next__(self):
         if self._index >= len(self._data):
             self._index = 0
+            self._keys = list(self._data.keys())
             raise StopIteration  
         else:
-            key = list(self._data.keys())[self._index]
+            key = self._keys[self._index]
             self._index += 1  
             return self._data[key]
     @property
@@ -36,24 +39,26 @@ class SeqContainer(metaclass=ABCMeta):
     def _validate(self):
         pass
     def add(self,seq_or_seqs):
-        if type(seq_or_seqs) == list:
+        try:
+            iterator = iter(seq_or_seqs)
             for seq in seq_or_seqs:
                 self._add(seq)
-        elif hasattr(seq_or_seqs,'to_list'):
-            for seq in seq_or_seqs.to_list():
-                self._add(seq)
-        else:
-            self._add(seq_or_seqs)
+        except Exception as exp:    
+            if hasattr(seq_or_seqs,'to_list'):
+                for seq in seq_or_seqs.to_list():
+                    self._add(seq)
+            else:
+                self._add(seq_or_seqs)
     def _add(self, seq):
         self._validate()
         self._validate_seq(seq)
         id_ = seq.id
         if id_ in self._data.keys():
-            raise Exception("ID," + str(id_) + ", is duplicated")
+            raise DuplicateIdException(id_)
         self._data[id_] = seq
     def get(self, id_):
         if id_ not in self._data.keys():
-            raise Exception("There is no sequence about " + id_)  
+            raise IdNotFoundException(id_)  
         return self._data[id_]
     def to_data_frame(self):
         data = []
@@ -73,6 +78,7 @@ class SeqContainer(metaclass=ABCMeta):
             seq.from_dict(data)
             self.add(seq)
         self.note = dict_['note']
+        return self
 class SeqInfoContainer(SeqContainer):
     def _validate(self):
         pass

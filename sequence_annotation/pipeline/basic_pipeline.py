@@ -24,7 +24,7 @@ class BasicPipeline(Pipeline):
             if is_static:
                 class_counts = class_counts = self._get_class_count()
                 self._class_weight=self.data_handler.get_weight(class_counts=class_counts,
-                                                                 method_name=weight_setting['method'])
+                                                                method_name=weight_setting['method'])
                     
             else:
                 self._dynamic_weight_method = weight_setting['method']

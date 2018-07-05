@@ -15,7 +15,7 @@
                 },
     "previous_result_path":null,
     "path_root":"test/pipeline/batch_result",
-    "class_weight_setting":{"use_weight":true,"is_static":false,"method":"reversed_count_weight"},
+    "class_weight_setting":{"use_weight":true,"is_static":true,"method":"reversed_count_weight"},
     "use_generator":true,
     "values_to_ignore":null,
     "test_per_batch":true,

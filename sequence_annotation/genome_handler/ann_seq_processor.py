@@ -3,6 +3,11 @@ import numpy as np
 from . import ProcessedStatusNotSatisfied
 from . import AnnSequence
 from . import UninitializedException
+class NotOneHotException(Exception):
+    def __init__(self,seq_id):
+        msg = "Sequence,"+str(seq_id)+",is not one hot encoded"
+        super().__init__(msg)
+
 class AnnSeqProcessor(metaclass=ABCMeta):
     def is_dirty(self,seq,dirty_types):
         for dirty_type in dirty_types:
@@ -79,8 +84,10 @@ class AnnSeqProcessor(metaclass=ABCMeta):
         values = []
         for type_ in focus_types:
             values.append(seq.get_ann(type_))
-            
-        return np.all(np.isin(np.array(values), [0,1])) and self.is_full_annotated(seq, focus_types)
+        is_0_1 = np.all(np.isin(np.array(values), [0,1]))
+        is_full_annotated = self.is_full_annotated(seq, focus_types)
+        is_sum_to_length = self.is_value_sum_to_length(seq, focus_types)
+        return is_0_1 and is_full_annotated and is_sum_to_length
     def _get_one_hot_by_max(self, seq, focus_types=None):
         focus_types = focus_types or seq.ANN_TYPES
         one_hot_seq = self.get_normalized(seq,focus_types)

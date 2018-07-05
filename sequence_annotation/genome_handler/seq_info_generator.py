@@ -6,12 +6,10 @@ from . import DictValidator
 from . import NegativeNumberException
 class SeqInfoGenerator:
     """Extract selected regions' annotation information"""
-    def __init__(self, ):
+    def __init__(self):
         self._seed_id = 0
         self._seq_id = 0
     def _validate_principle(self,principle):
-        dict_validator = DictValidator(principle,self.valid_data_keys,[],[])
-        dict_validator.validate()
         if principle['length_constant']:
             max_diff = principle['total_length'] - (2*principle['half_length']+1)
             if max_diff < 0:
@@ -21,20 +19,17 @@ class SeqInfoGenerator:
             max_diff = principle['max_diff']
             if max_diff < 0:
                 raise NegativeNumberException('max_diff',max_diff)
-    @property
-    def valid_data_keys(self):
-        return ['remove_end_of_strand','with_random_choose',
-                'replaceable','each_region_number',
-                'sample_number_per_region','half_length','max_diff']
     def _validate(self,principle):
         """Validate required data"""
         self._validate_principle(principle)
     def generate(self, region_container, principle,
                  chroms_info, seed_id_prefix, seq_id_prefix):
+        if len(region_container)==0:
+            raise Exception("Container size sould larger than 0")
         self._validate(principle)
         seqs_info = SeqInfoContainer()
         selected_region_list = []
-        regions = self._group_by_type(region_container)
+        regions = self._group_by_type(region_container,principle['each_region_number'].keys())
         remove_end_of_strand = principle['remove_end_of_strand']
         for type_,number in principle['each_region_number'].items():
             if remove_end_of_strand:
@@ -59,12 +54,17 @@ class SeqInfoGenerator:
             for seq in seqs:
                 seqs_info.add(seq)
         return seeds,seqs_info
-    def _group_by_type(self, seqs_info):
+    def _group_by_type(self, seqs_info,types=None):
         tree = {}
+        if types is None:
+            keys = []
+            for seq_info in seqs_info:
+                keys.append(seq_info.ann_type)
+            types = set(keys)
+        for type_ in types:
+            tree[type_] = []
         for seq_info in seqs_info:
             key = seq_info.ann_type
-            if key not in tree.keys():
-                tree[key] = []
             tree[key].append(seq_info)
         return tree
     def _selected_region_list(self,regions,number,replaceable,with_random_choose):

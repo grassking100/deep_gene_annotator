@@ -3,6 +3,8 @@ from abc import ABCMeta
 from abc import abstractmethod
 from . import AnnSeqContainer
 from . import AnnSequence
+from . import AnnSeqProcessor
+from . import NotOneHotException
 class AnnSeqConverter(metaclass=ABCMeta):
     def __init__(self,foucus_type=None,extra_types=None):
         self._foucus_type = foucus_type or ['cds','intron','utr_5','utr_3']
@@ -39,15 +41,10 @@ class AnnSeqConverter(metaclass=ABCMeta):
         ann_seq.init_space()
         return ann_seq
     def _validate(self,ann_seq,focus_types=None):
-        total = 0
-        focus_types = focus_types or ann_seq.ANN_TYPES
-        for type_ in focus_types:
-            data = ann_seq.get_ann(type_)
-            total += sum(data)
-        if total != ann_seq.length:
-            error = ("Sequence annotation is not filled correctly.\n\t"
-                     "Annotation count/sequence length:"+str(total)+"/"+str(ann_seq.length))
-            raise Exception(error)
+        processor = AnnSeqProcessor()
+        if not processor.is_one_hot(ann_seq,focus_types):
+            raise NotOneHotException(ann_seq.id)
+
 class UscuSeqConverter(AnnSeqConverter):
     def convert(self,data):
         tx_start = data['txStart']
@@ -119,16 +116,15 @@ class EnsemblSeqConverter(AnnSeqConverter):
                      'utr_3':(data['utrs_3_start'],data['utrs_3_end'])}
         for type_,sites in site_info.items():
             starts,ends = sites
+            if len(starts) != len(ends):
+                raise Exception("Start and end sites number is not same")
             for (start,end) in zip(starts,ends):
-                if start != "Null" and end != "Null":
-                    template_ann_seq.set_ann(type_,1,start-tx_start,end-tx_start)
-                elif (start!="Null") != (end!="Null"):
-                    raise Exception("Start and end sites number is not same")
+                template_ann_seq.add_ann(type_,1,start-tx_start,end-tx_start)
         template_ann_seq.op_not_ann("intron","gene","exon")
         ann_seq = self._create_seq(data['protein_id'],data['chrom'],
                                    data['strand'],tx_start,tx_end)
         for type_ in ann_seq.ANN_TYPES:
             data = template_ann_seq.get_ann(type_)
-            ann_seq.set_ann(type_,data)
+            ann_seq.add_ann(type_,data)
         self._validate(ann_seq,self._foucus_type)
         return ann_seq

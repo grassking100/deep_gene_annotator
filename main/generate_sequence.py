@@ -17,10 +17,8 @@ frontground_types = ['cds','intron','utr_5','utr_3']
 background_type = 'other'
 def get_seqinfos(chroms):
     print("Prepare seqinfos")
-    generator = SeqInfoGenerator(chroms,principle,
-                                 genome_info['chromosome'],
-                                 "seed_"+time_root,"seq_"+time_root)
-    generator.generate()
+    generator = SeqInfoGenerator()
+    generator.generate(chroms,principle,genome_info['chromosome'],"seed_"+time_root,"seq_"+time_root)
     generator.seeds.to_data_frame().to_csv(root+"/"+"seed.csv",
                                            index=False,sep=",", header=True)
     generator.seqs_info.to_gtf().to_csv(root+"/"+"seq.gtf",
@@ -137,12 +135,12 @@ if __name__ == "__main__":
             principle['each_region_number'][key] = int(input('\t'+value+':'))
     principle['sample_number_per_region'] = int(input('sample number per annotation region:'))
     principle['constant_length'] = get_bool(input('constant length(T/F):'))
-    if principle['constant_length']: 
+    if principle['length_constant']: 
         principle['total_length'] = int(input('total length:'))
     else:
         principle['max_diff'] = int(input('max expand length per end:'))
     principle['half_length'] = int(input('core\'s half length:'))
-    data_source = int(input('Data source:'))
+    data_source = input('Data source:')
     file_path = os.path.expanduser(input("Table path:"))
     genome_info_path = os.path.expanduser(input('Genome infomration data path:'))
     with open(genome_info_path) as data_file:    

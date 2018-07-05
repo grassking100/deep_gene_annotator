@@ -52,7 +52,7 @@ def get_region(genome):
             info.start = index*half_length
             info.end =   info.start + length - 1
             info.source = chrom_source
-            info.note = '2018_5_30'
+            info.note = strftime("%Y_%m_%d", gmtime())
             if info.end >= chrom.length:
                 info.end = chrom.length - 1
                 info.start = info.end - length + 1

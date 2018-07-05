@@ -55,9 +55,6 @@ class Pipeline(metaclass=ABCMeta):
     def _parse_setting(self):
         pass
     def _init_model(self):
-        """if 'initial_epoch' in self._work_setting.keys():
-            if int(self._work_setting['initial_epoch']) > 0:
-                build_model = False"""
         build_model = not self._work_setting['load_model']
         if not build_model: 
             self.print_prompt("\tLoading model...")

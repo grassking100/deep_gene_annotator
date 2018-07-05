@@ -1,5 +1,5 @@
 import unittest
-from . import AnnSeqTestCase,EnsemblSeqConverter, AnnSequence
+from . import AnnSeqTestCase, EnsemblSeqConverter, AnnSequence, NotOneHotException
 class TestAnnSeqConverter(AnnSeqTestCase):
     def test_ensembl_data(self):
         converter = EnsemblSeqConverter()
@@ -7,12 +7,12 @@ class TestAnnSeqConverter(AnnSeqTestCase):
                 'tx_start':10,'tx_end':300,
                 'exons_start' :[10,50,100,150,200],
                 'exons_end':[40,90,140,190,300],
-                'utrs_5_start':[10,50,'Null','Null','Null','Null','Null'],
-                'utrs_5_end':[40,60,'Null','Null','Null','Null','Null'],
-                'cdss_start'  :[61,100,150,'Null','Null','Null','Null'],
-                'cdss_end':[90,140,160,'Null','Null','Null','Null'],
-                'utrs_3_start':[161,200,'Null','Null','Null','Null','Null'],
-                'utrs_3_end':[190,300,'Null','Null','Null','Null','Null'],
+                'utrs_5_start':[10,50],
+                'utrs_5_end':[40,60],
+                'cdss_start'  :[61,100,150],
+                'cdss_end':[90,140,160],
+                'utrs_3_start':[161,200],
+                'utrs_3_end':[190,300],
                }
         ann_seq = AnnSequence()
         ann_seq.length = 291
@@ -34,12 +34,12 @@ class TestAnnSeqConverter(AnnSeqTestCase):
                 'tx_start':10,'tx_end':300,
                 'exons_start' :[10,50,100,150,200],
                 'exons_end':[40,90,140,190,300],
-                'utrs_5_start':[10,50,'Null','Null','Null','Null','Null'],
-                'utrs_5_end':[40,60,'Null','Null','Null','Null','Null'],
-                'cdss_start'  :[61,100,150,160,'Null','Null','Null'],
-                'cdss_end':[90,140,160,'Null','Null','Null','Null'],
-                'utrs_3_start':[161,200,'Null','Null','Null','Null','Null'],
-                'utrs_3_end':[190,300,'Null','Null','Null','Null','Null'],
+                'utrs_5_start':[10,50],
+                'utrs_5_end':[40,60],
+                'cdss_start'  :[61,100,150,160],
+                'cdss_end':[90,140,160],
+                'utrs_3_start':[161,200],
+                'utrs_3_end':[190,300],
                }
         with self.assertRaises(Exception):
             result = converter.convert(data)
@@ -49,12 +49,27 @@ class TestAnnSeqConverter(AnnSeqTestCase):
                 'tx_start':10,'tx_end':300,
                 'exons_start' :[10,50,100,150,200],
                 'exons_end':[40,90,140,190,300],
-                'utrs_5_start':[10,50,'Null','Null','Null','Null','Null'],
-                'utrs_5_end':[40,60,'Null','Null','Null','Null','Null'],
-                'cdss_start'  :[61,100,150,'Null','Null','Null','Null'],
-                'cdss_end':[90,140,160,'Null','Null','Null','Null'],
-                'utrs_3_start':[161,200,'Null','Null','Null','Null','Null'],
-                'utrs_3_end':[191,300,'Null','Null','Null','Null','Null'],
+                'utrs_5_start':[10,50],
+                'utrs_5_end':[40,60],
+                'cdss_start'  :[61,100,150],
+                'cdss_end':[90,140,160],
+                'utrs_3_start':[161,200],
+                'utrs_3_end':[191,300],
+               }
+        with self.assertRaises(Exception):
+            result = converter.convert(data)
+    def test_ensembl_data_is_not_one_hot(self):
+        converter = EnsemblSeqConverter()
+        data = {'strand':'plus','protein_id':'test','chrom':1,
+                'tx_start':10,'tx_end':300,
+                'exons_start' :[10,50,100,150,200],
+                'exons_end':[40,90,140,190,300],
+                'utrs_5_start':[10,10,50],
+                'utrs_5_end':[40,40,60],
+                'cdss_start'  :[61,100,150],
+                'cdss_end':[90,140,160],
+                'utrs_3_start':[161,200],
+                'utrs_3_end':[190,300],
                }
         with self.assertRaises(Exception):
             result = converter.convert(data)

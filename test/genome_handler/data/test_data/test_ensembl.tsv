@@ -1,2 +1,2 @@
 Gene stable ID	Transcript stable ID	Protein stable ID	Chromosome/scaffold name	Strand	Transcript start (bp)	Transcript end (bp)	Exon region start (bp)	Exon region end (bp)	5' UTR start	5' UTR end	3' UTR start	3' UTR end	Genomic coding start	Genomic coding end	Transcript count
-Gene1	RNA1	Protein1	chr1	1	10	190	10,50,100,150	40,90,140,190	10,50	40,60	150	190	61,100	90,140	1
+Gene1	RNA1	Protein1	chr1	1	10	190	[10,50,100,150]	[40,90,140,190]	[10,50]	[40,60]	150	190	[61,100]	[90,140]	1

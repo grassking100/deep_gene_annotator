@@ -9,7 +9,7 @@ class RegionExtractor:
             seq_info_genome = self._parse_regions(ann_seq,focus_types)
             return seq_info_genome
         else:
-            err = "Input sequence must be one-hot sequence,not "+(ann_seq.processed_status or "None")+" seqeunce"
+            err = "Input sequence's type must be one-hot sequence,not "+(ann_seq.processed_status or "None")
             raise Exception(err)
     def _parse_regions(self,seq,focus_types):
         seq_info_genome = SeqInfoContainer()
