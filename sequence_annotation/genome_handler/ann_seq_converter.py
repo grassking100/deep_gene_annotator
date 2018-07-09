@@ -25,14 +25,14 @@ class AnnSeqConverter(metaclass=ABCMeta):
         ann_seq.source = 'template'
         ann_seq.id = 'template'
         extra_type = ['exon','ORF','utr','utr_5_potential','utr_3_potential','gene']
-        ann_seq.ANN_TYPES = self.ANN_TYPES + extra_type
+        ann_seq.ANN_TYPES = set(self.ANN_TYPES + extra_type)
         ann_seq.init_space()
         return ann_seq
     def _create_seq(self,name,chrom_id,strand,tx_start,tx_end):
         length = tx_end-tx_start+1
         nt_number = length
         ann_seq = AnnSequence()
-        ann_seq.abosolute_index = tx_start
+        ann_seq.absolute_index = tx_start
         ann_seq.id = name
         ann_seq.length = nt_number
         ann_seq.ANN_TYPES = self.ANN_TYPES
@@ -41,9 +41,15 @@ class AnnSeqConverter(metaclass=ABCMeta):
         ann_seq.init_space()
         return ann_seq
     def _validate(self,ann_seq,focus_types=None):
-        processor = AnnSeqProcessor()
+        processor = AnnSeqProcessor()         
         if not processor.is_one_hot(ann_seq,focus_types):
             raise NotOneHotException(ann_seq.id)
+        if 'exon' in ann_seq.ANN_TYPES:
+            added_exon = np.array([0]*ann_seq.length,dtype='float64')
+            for type_ in ['utr_5','utr_3','cds']:
+                added_exon += ann_seq.get_ann(type_)   
+            if not np.all(added_exon==ann_seq.get_ann('exon')):
+                raise Exception("Exon status is not consistent with UTR and CDS")
 
 class UscuSeqConverter(AnnSeqConverter):
     def convert(self,data):

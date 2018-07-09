@@ -114,32 +114,34 @@ class AnnSequence(Sequence):
         self._length = None
         self._data = {}
         self._use_memmap = False
-        self._abosolute_index = None
+        self._absolute_index = None
         self.processed_status = None
         super().__init__()
     def _checked_attr(self):
         return super()._checked_attr()+['_ANN_TYPES','_length']
     @property
-    def abosolute_index(self):
-        return self._abosolute_index
-    @abosolute_index.setter
-    def abosolute_index(self, value):
+    def absolute_index(self):
+        return self._absolute_index
+    @absolute_index.setter
+    def absolute_index(self, value):
         if value < 0:
-            raise NegativeNumberException("abosolute_index",value)
-        self._abosolute_index = value
+            raise NegativeNumberException("absolute_index",value)
+        self._absolute_index = value
     @property
     def ANN_TYPES(self):
         return self._ANN_TYPES
     @ANN_TYPES.setter
     def ANN_TYPES(self,value):
         if self._ANN_TYPES is None or not self._has_space:
+            if len(set(value))!=len(value):
+                raise Exception('Input types has duplicated')
             self._ANN_TYPES = value
         else:
             raise ChangeConstValException('ANN_TYPES')
     def _copied_public_attrs(self):
         return super()._copied_public_attrs()+['ANN_TYPES','length','processed_status']
     def _copied_protected_attrs(self):
-        return super()._copied_protected_attrs()+['_has_space','_abosolute_index']
+        return super()._copied_protected_attrs()+['_has_space','_absolute_index']
     def to_dict(self,only_data=False,without_data=False):
         if only_data:
             return self._data
@@ -181,13 +183,15 @@ class AnnSequence(Sequence):
     def clean_space(self):
         self._has_space = False
         self._data = {}
+        self.processed_status = None
     @property
     def has_space(self):
         return self._has_space
-    def init_space(self, memmap_id=None):
+    def init_space(self, memmap_id=None,dtype='float32'):
         self._use_memmap = (memmap_id is not None)
         self._data = {}
         self._validate()
+        self.processed_status = None
         self._has_space = True
         for ann_type in self.ANN_TYPES:
             if self._use_memmap:
@@ -195,7 +199,7 @@ class AnnSequence(Sequence):
                 self._data[ann_type] = np.memmap(filename, dtype='float32',
                                                  mode='w+',shape=(self._length))
             else:
-                self._data[ann_type] = np.array([0.0]*self._length,dtype='float32')
+                self._data[ann_type] = np.array([0.0]*self._length,dtype=dtype)
         return self
     def _validate_input_index(self, start_index, end_index):
         if start_index < 0:

@@ -15,7 +15,3 @@ class TestSequenceContainer(unittest.TestCase):
         for seq_info in container:
             iter_ids.append(seq_info.id)
         self.assertEqual(sorted(ids),iter_ids)
-if __name__=="__main__":    
-    unittest.TestSuite()
-    unittest.TestLoader().loadTestsFromTestCase(TestSequenceContainer)
-    unittest.main()

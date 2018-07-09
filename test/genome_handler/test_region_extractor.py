@@ -47,7 +47,3 @@ class TestRegionExtractor(SeqInfoTestCase):
         for region in regions:
             seqinfo = seqinfos.get(region.id)
             self.assert_seq_equal(seqinfo,region)
-if __name__=="__main__":    
-    unittest.TestSuite()
-    unittest.TestLoader().loadTestsFromTestCase(TestRegionExtractor)
-    unittest.main()

@@ -45,8 +45,3 @@ class TestDNAVector(unittest.TestCase):
         codes=['A','T','C','G',invalid_code]
         with self.assertRaises(SeqException):
             converter.seq2vecs(codes)
-if __name__=="__main__":
-    unittest.TestSuite()
-    unittest.TestLoader().loadTestsFromTestCase(TestDNAVector)
-    unittest.main()
-

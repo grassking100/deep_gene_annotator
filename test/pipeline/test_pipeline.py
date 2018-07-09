@@ -70,7 +70,3 @@ class TestPipeline(unittest.TestCase):
             path = abspath(expanduser(__file__+'/../result/'+id_))
             if os.path.exists(path):
                 shutil.rmtree(path)
-if __name__=="__main__":
-    unittest.TestSuite()
-    unittest.TestLoader().loadTestsFromTestCase(TestPipeline)
-    unittest.main()

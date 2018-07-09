@@ -26,7 +26,3 @@ class TestBatchPipeline(unittest.TestCase):
             path = abspath(expanduser(__file__+'/../batch_result/'+train_id))
             if os.path.exists(path):
                 shutil.rmtree(path)
-if __name__=="__main__":
-    unittest.TestSuite()
-    unittest.TestLoader().loadTestsFromTestCase(TestBatchPipeline)
-    unittest.main()

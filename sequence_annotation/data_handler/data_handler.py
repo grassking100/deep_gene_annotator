@@ -1,7 +1,10 @@
 from . import FastaConverter
 from . import SeqConverter
 from . import LengthNotEqualException
+from . import InvalidStrandType
+from . import AnnSeqContainer
 import os
+import warnings
 import numpy as np
 import pandas as pd
 import keras.backend as K
@@ -92,17 +95,27 @@ class SeqAnnDataHandler(DataHandler):
                                          with_soft_masked_status=setting['soft_masked'])
         fasta_converter = FastaConverter(seq_converter)
         seq_dict = fasta_converter.to_seq_dict(fasta_paths)
-        return fasta_converter.to_vec_dict(seq_dict = seq_dict,discard_invalid_seq=discard_invalid_seq)
+        return fasta_converter.to_vec_dict(seq_dict = seq_dict,discard_invalid_seq = discard_invalid_seq)
     @staticmethod
-    def get_ann_vecs(path,ann_types):
-        ann_data = np.load(path).item()
+    def get_ann_vecs(ann_seqs,ann_types):
+        warn = ("\n\n!!!\n"
+                "\tDNA sequence will be rearranged from 5' to 3'.\n"
+                "\tThe plus strand sequence will stay the same,"
+                " but the minus strand sequence will be flipped!\n"
+                "!!!\n")
+        warnings.warn(warn)
         dict_ = {}
-        for name,data in ann_data.items():
+        for ann_seq in ann_seqs:
             ann = []
             for type_ in ann_types:
-                value = data[type_]
-                ann.append(value)
-            dict_[name] = np.transpose(ann)
+                value = ann_seq.get_ann(type_)
+                if ann_seq.strand == 'plus':
+                    ann.append(value)
+                elif ann_seq.strand == 'minus':
+                    ann.append(np.flip(value,0))
+                else:
+                    raise InvalidStrandType(ann_seq.strand)
+            dict_[ann_seq.id] = np.transpose(ann)
         return dict_
     @staticmethod
     def process_tensor(answer, prediction,values_to_ignore=None):
@@ -146,5 +159,7 @@ class SeqAnnDataHandler(DataHandler):
             seq_paths = [seq_paths]
         seq_paths = [abspath(expanduser(seq_path)) for seq_path in seq_paths]
         seqs = cls.get_seq_vecs(seq_paths,setting)
-        answer = cls.get_ann_vecs(answer_path,ann_types)
+        ann_seqs = AnnSeqContainer()
+        ann_seqs.from_dict(np.load(answer_path).item())
+        answer = cls.get_ann_vecs(ann_seqs,ann_types)
         return cls._to_dict(seqs,answer,ann_types)

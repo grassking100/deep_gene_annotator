@@ -42,7 +42,3 @@ class TestAnnSeqExtractor(AnnSeqTestCase):
         extracted_seq = extracted_seqs.get('extract')
         """Test"""
         self.assert_seq_equal(extracted_seq,real_seq)
-if __name__=="__main__":    
-    unittest.TestSuite()
-    unittest.TestLoader().loadTestsFromTestCase(TestAnnSeqExtractor)
-    unittest.main()

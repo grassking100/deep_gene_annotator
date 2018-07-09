@@ -1,16 +1,17 @@
 from . import SeqInfoContainer
 from . import SeqInformation
+from . import AnnSeqProcessor
+from . import NotOneHotException
 class RegionExtractor:
     """#Get annotated region information"""
     def extract(self,ann_seq,focus_types=None):
         focus_types = focus_types or ann_seq.ANN_TYPES
-        if ann_seq.processed_status=="one_hot":
+        if ann_seq.processed_status=="one_hot" or AnnSeqProcessor().is_one_hot(ann_seq,focus_types):
             self._region_id = 0
             seq_info_genome = self._parse_regions(ann_seq,focus_types)
             return seq_info_genome
         else:
-            err = "Input sequence's type must be one-hot sequence,not "+(ann_seq.processed_status or "None")
-            raise Exception(err)
+            raise NotOneHotException(ann_seq.id)
     def _parse_regions(self,seq,focus_types):
         seq_info_genome = SeqInfoContainer()
         for type_ in focus_types:

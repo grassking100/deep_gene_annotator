@@ -78,8 +78,3 @@ class TestAnnGenomeCreator(unittest.TestCase):
         data = pd.read_csv(file_path,sep='\t').to_dict('record')
         result = self._uscu_convert(data)
         self._test_genome(real_genome,result)
-
-if __name__=="__main__":    
-    unittest.TestSuite()
-    unittest.TestLoader().loadTestsFromTestCase(TestAnnGenomeCreator)
-    unittest.main()

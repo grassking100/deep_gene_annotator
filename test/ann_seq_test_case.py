@@ -7,6 +7,7 @@ class AnnSeqTestCase(unittest.TestCase):
         self.assertEqual(real_seq.strand, test_seq.strand)
         self.assertEqual(real_seq.length, test_seq.length)
         self.assertEqual(real_seq.source, test_seq.source)
+        self.assertEqual(real_seq.processed_status, test_seq.processed_status)
         self.assertEqual(set(real_seq.ANN_TYPES), set(test_seq.ANN_TYPES))
         for type_ in real_seq.ANN_TYPES:
             err_msg="Wrong type:"+type_+"("+str(real_seq.id)+")"

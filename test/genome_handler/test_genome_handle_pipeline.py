@@ -53,7 +53,7 @@ class TestGenomeHandlePipeline(unittest.TestCase):
             for chrom in genome.data:
                 #Create sequence with wanted annotation
                 background = ann_seq_processor.get_background(chrom)
-                complete = ann_seq_processor.combine_status(chrom,{'other':background})
+                complete = ann_seq_processor.get_seq_with_added_type(chrom,{'other':background})
                 one_hot = ann_seq_processor.get_one_hot(complete,non_conflict_type,method='order')
                 one_hot.add_ann('other',ann_seq_processor.get_background(one_hot))
                 ann_seq_container.add(one_hot)
@@ -82,7 +82,3 @@ class TestGenomeHandlePipeline(unittest.TestCase):
         except Exception as exp:
             raise exp
             self.fail("There are some unexpected exception occur.")
-if __name__=="__main__":    
-    unittest.TestSuite()
-    unittest.TestLoader().loadTestsFromTestCase(TestGenomeHandlePipeline)
-    unittest.main()

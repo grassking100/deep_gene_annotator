@@ -30,7 +30,7 @@ half_length = int(length/2)
 def get_wanted_seq(chrom):
     ann_seq_processor = AnnSeqProcessor()
     background = ann_seq_processor.get_background(chrom,gene_ann_type)
-    complete = ann_seq_processor.combine_status(chrom,{'other':background})
+    complete = ann_seq_processor.get_seq_with_added_type(chrom,{'other':background})
     one_hot = ann_seq_processor.get_one_hot(complete,non_conflict_type,method='order')
     if not ann_seq_processor.is_one_hot(one_hot,non_conflict_type):
         raise Exception("Chromomsome is not one hot")

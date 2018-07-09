@@ -14,19 +14,6 @@ class AnnSeqProcessor(metaclass=ABCMeta):
             if np.sum(seq.get_ann(dirty_type)) > 0:
                 return True
         return False
-    def combine_status(self,ann_seq,status_dict):
-        extra_types = list(status_dict.keys())
-        combined_seq = AnnSequence()
-        combined_seq.from_dict(ann_seq.to_dict(without_data=True))
-        combined_seq.processed_status = None
-        combined_seq.ANN_TYPES = ann_seq.ANN_TYPES + extra_types
-        combined_seq.clean_space()
-        combined_seq.init_space()
-        for type_ in ann_seq.ANN_TYPES:
-            combined_seq.set_ann(type_,ann_seq.get_ann(type_))
-        for key,value in status_dict.items():
-            combined_seq.set_ann(key,value)
-        return combined_seq
     def get_certain_status(self,seq,focus_types=None):
         if not seq.processed_status == 'normalized':
             raise ProcessedStatusNotSatisfied(seq.processed_status,'normalized')
@@ -74,11 +61,10 @@ class AnnSeqProcessor(metaclass=ABCMeta):
         return status
     def is_value_sum_to_length(self, seq, focus_types=None):
         focus_types = focus_types or seq.ANN_TYPES
-        values = []
+        values = [0]*seq.length
         for type_ in focus_types:
-            values.append(seq.get_ann(type_))
-        sum_ = np.array(values).sum()
-        return sum_==seq.length and self.is_full_annotated(seq, focus_types)
+            values += seq.get_ann(type_)
+        return sum(values)==seq.length
     def is_one_hot(self, seq, focus_types=None):
         focus_types = focus_types or seq.ANN_TYPES
         values = []
@@ -91,13 +77,13 @@ class AnnSeqProcessor(metaclass=ABCMeta):
     def _get_one_hot_by_max(self, seq, focus_types=None):
         focus_types = focus_types or seq.ANN_TYPES
         one_hot_seq = self.get_normalized(seq,focus_types)
-        one_hot_seq.processed_status='one_hot'
+        one_hot_seq.processed_status = 'one_hot'
         other_types = self._get_unfocus_types(seq.ANN_TYPES,focus_types)
         values = []
         one_hot_value = {}
         for type_ in focus_types:
             values.append(one_hot_seq.get_ann(type_))
-            one_hot_value[type_] =[0]*one_hot_seq.length
+            one_hot_value[type_] = [0]*one_hot_seq.length
         one_hot_indice = np.argmax(values,0)
         for index,one_hot_index in enumerate(one_hot_indice):
             one_hot_type = focus_types[one_hot_index]
@@ -140,6 +126,19 @@ class AnnSeqProcessor(metaclass=ABCMeta):
     def get_background(self,seq,frontground_types=None):
         frontground_types = frontground_types or seq.ANN_TYPES
         return  np.logical_not(self.get_frontground(seq,frontground_types))
+    def get_seq_with_added_type(self,ann_seq,status_dict):
+        extra_types = list(status_dict.keys())
+        combined_seq = AnnSequence()
+        combined_seq.from_dict(ann_seq.to_dict(without_data=True))
+        combined_seq.processed_status = None
+        combined_seq.ANN_TYPES = ann_seq.ANN_TYPES + extra_types
+        combined_seq.clean_space()
+        combined_seq.init_space()
+        for type_ in ann_seq.ANN_TYPES:
+            combined_seq.set_ann(type_,ann_seq.get_ann(type_))
+        for key,value in status_dict.items():
+            combined_seq.set_ann(key,value)
+        return combined_seq
     def get_frontground(self,seq,frontground_types=None):
         frontground_types = frontground_types or seq.ANN_TYPES
         frontground_seq = np.array([0]*seq.length)

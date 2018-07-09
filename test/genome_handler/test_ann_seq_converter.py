@@ -73,7 +73,3 @@ class TestAnnSeqConverter(AnnSeqTestCase):
                }
         with self.assertRaises(Exception):
             result = converter.convert(data)
-if __name__=="__main__":    
-    unittest.TestSuite()
-    unittest.TestLoader().loadTestsFromTestCase(TestAnnSeqConverter)
-    unittest.main()

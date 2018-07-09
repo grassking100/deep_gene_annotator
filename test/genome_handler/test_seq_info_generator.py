@@ -42,7 +42,3 @@ class TestSeqInfoGenerator(unittest.TestCase):
         self.assertEqual(seed_number,len(seeds.data))
         seq_number = seed_number*principle['sample_number_per_region']
         self.assertEqual(seq_number,len(seqs_info.data))        
-if __name__=="__main__":    
-    unittest.TestSuite()
-    unittest.TestLoader().loadTestsFromTestCase(TestSeqInfoGenerator)
-    unittest.main()

@@ -69,7 +69,3 @@ class TestLostFactory(unittest.TestCase):
         with tf.Session() as sess:
             sess.run(init)
             self.assertNotEqual(sess.run(loss_value),sess.run(answer))
-if __name__=="__main__":
-    unittest.TestSuite()
-    unittest.TestLoader().loadTestsFromTestCase(TestLostFactory)
-    unittest.main()

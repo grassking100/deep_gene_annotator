@@ -54,9 +54,3 @@ class TestSeqInfoParser(unittest.TestCase):
         parser = EnsemblInfoParser()
         with self.assertRaises(InvalidStrandType):
             parser.parse(data)
-            
-if __name__=="__main__":    
-    unittest.TestSuite()
-    unittest.TestLoader().loadTestsFromTestCase(TestSeqInfoParser)
-    unittest.main()
-

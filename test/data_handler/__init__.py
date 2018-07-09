@@ -1,4 +1,8 @@
-import os
-import sys
 from sequence_annotation.data_handler import SeqConverter
 from sequence_annotation.utils import SeqException,CodeException
+from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
+from sequence_annotation.genome_handler.sequence import AnnSequence
+from sequence_annotation.data_handler.data_handler import SeqAnnDataHandler
+
+from ..ann_seq_test_case import AnnSeqTestCase
+from ..seq_info_test_case import SeqInfoTestCase

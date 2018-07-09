@@ -17,6 +17,7 @@ class TestAnnSeqProcessor(AnnSeqTestCase):
         ann.set_ann('exon',1,0,1).set_ann('intron',1,1,3).set_ann('other',1,3,5)
         ann.set_ann('other',2,6,6).set_ann('exon',1,5,7)
         normalized = AnnSeqProcessor().get_normalized(ann)
+        real.processed_status = 'normalized'
         real.set_ann('exon',1,0,0).set_ann('exon',.5,1,1)
         real.set_ann('intron',.5,1,1).set_ann('intron',1,2,2).set_ann('intron',.5,3,3)
         real.set_ann('other',.5,3,3).set_ann('other',1,4,4)
@@ -42,6 +43,7 @@ class TestAnnSeqProcessor(AnnSeqTestCase):
         real.set_ann('intron',.5,1,1).set_ann('intron',1,2,3)
         real.set_ann('other',1,3,5).set_ann('other',2,6,6)
         real.set_ann('exon',1,5,7).set_ann('intron',1,4,4)
+        real.processed_status = 'normalized'
         self.assert_seq_equal(real,normalized)
     def test_max_one_hot_all_types(self):
         ann = AnnSequence()
@@ -60,6 +62,7 @@ class TestAnnSeqProcessor(AnnSeqTestCase):
         real.set_ann('intron',1,2,3)
         real.set_ann('other',1,4,4).set_ann('exon',1,5,5)
         real.set_ann('other',1,6,6).set_ann('exon',1,7,7)
+        real.processed_status = 'one_hot'
         self.assert_seq_equal(real,normalized)
     def test_max_one_hot_all_types_by_specific_order(self):
         ann = AnnSequence()
@@ -78,6 +81,7 @@ class TestAnnSeqProcessor(AnnSeqTestCase):
         real.set_ann('intron',1,1,3)
         real.set_ann('other',1,4,4).set_ann('exon',1,5,5)
         real.set_ann('other',1,6,6).set_ann('exon',1,7,7)
+        real.processed_status = 'one_hot'
         self.assert_seq_equal(real,normalized)
     def test_max_one_hot_some_types_by_specific_order(self):
         ann = AnnSequence()
@@ -97,6 +101,7 @@ class TestAnnSeqProcessor(AnnSeqTestCase):
         real.set_ann('exon',1,0,0).set_ann('intron',1,1,4)
         real.set_ann('other',1,3,5).set_ann('other',2,6,6)
         real.set_ann('exon',1,5,7)
+        real.processed_status = 'one_hot'
         self.assert_seq_equal(real,normalized)
     def test_is_full_annotated_all_types(self):
         ann = AnnSequence()
@@ -131,6 +136,28 @@ class TestAnnSeqProcessor(AnnSeqTestCase):
         ann.set_ann('intron',1,0,0).set_ann('exon',1,0,1).set_ann('other',1,2,3)
         status = AnnSeqProcessor().is_full_annotated(ann,['exon','intron'])
         self.assertFalse(status)
+    def test_is_one_hot(self):
+        ann = AnnSequence()
+        ann.length = 4
+        ann.strand='plus'
+        ann.chromosome_id='1'
+        ann.id=1
+        ann.ANN_TYPES = ['exon','intron','other']
+        ann.init_space()
+        ann.set_ann('intron',1,0,0).set_ann('exon',1,1,3).set_ann('other',1,2,3)
+        status = AnnSeqProcessor().is_one_hot(ann,['exon','intron'])
+        self.assertTrue(status)
+    def test_is_not_one_hot(self):
+        ann = AnnSequence()
+        ann.length = 4
+        ann.strand='plus'
+        ann.chromosome_id='1'
+        ann.id=1
+        ann.ANN_TYPES = ['exon','intron','other']
+        ann.init_space()
+        ann.set_ann('intron',1,0,0).set_ann('exon',1,0,1).set_ann('other',1,2,3)
+        status = AnnSeqProcessor().is_one_hot(ann,['exon','intron'])
+        self.assertFalse(status)
     def test_order_one_hot_all_types(self):
         ann = AnnSequence()
         ann.length = 8
@@ -146,6 +173,7 @@ class TestAnnSeqProcessor(AnnSeqTestCase):
         normalized = AnnSeqProcessor().get_one_hot(ann,method='order')
         real.set_ann('exon',1,0,1).set_ann('intron',1,2,3)
         real.set_ann('other',1,4,4).set_ann('exon',1,5,7)
+        real.processed_status = 'one_hot'
         self.assert_seq_equal(real,normalized)
     def test_get_certain_status(self):
         ann = AnnSequence()
@@ -171,7 +199,3 @@ class TestAnnSeqProcessor(AnnSeqTestCase):
         ann.set_ann('exon',1,0,2).set_ann('intron',1,3,5)
         with self.assertRaises(ProcessedStatusNotSatisfied):
             certain_status = AnnSeqProcessor().get_certain_status(ann)
-if __name__=="__main__":    
-    unittest.TestSuite()
-    unittest.TestLoader().loadTestsFromTestCase(TestAnnSeqProcessor)
-    unittest.main()
