@@ -19,6 +19,7 @@
     "use_generator":true,
     "values_to_ignore":null,
     "test_per_batch":true,
+    "load_weights":false,
     "preprocess":[],
     "compile":{
         "learning_rate":0.001,

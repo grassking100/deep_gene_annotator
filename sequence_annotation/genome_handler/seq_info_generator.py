@@ -9,6 +9,7 @@ class SeqInfoGenerator:
     def __init__(self):
         self._seed_id = 0
         self._seq_id = 0
+
     def _validate_principle(self,principle):
         if principle['length_constant']:
             max_diff = principle['total_length'] - (2*principle['half_length']+1)
@@ -19,9 +20,11 @@ class SeqInfoGenerator:
             max_diff = principle['max_diff']
             if max_diff < 0:
                 raise NegativeNumberException('max_diff',max_diff)
+
     def _validate(self,principle):
         """Validate required data"""
         self._validate_principle(principle)
+
     def generate(self, region_container, principle,
                  chroms_info, seed_id_prefix, seq_id_prefix):
         if len(region_container)==0:
@@ -42,18 +45,18 @@ class SeqInfoGenerator:
                 temp = regions[type_]
             clean_regions = SeqInfoContainer()
             clean_regions.add(temp)
-            selected_region_list += self._selected_region_list(clean_regions,
-                                                               number,
-                                                               principle['replaceable'],
-                                                               principle['with_random_choose'])
-        seeds = self._create_seeds(selected_region_list,principle['with_random_choose'],seed_id_prefix)
-        number = principle['sample_number_per_region']
+            selected_region_list += list(np.random.choice(clean_regions.data,
+                                                          number,
+                                                          replace=principle['replaceable']))
+        seeds = self._create_seeds(selected_region_list,principle['modes'],seed_id_prefix)
+        number = principle['region_number_per_seed']
         for seed in seeds.data:
             length = chroms_info[seed.chromosome_id]
             seqs = self._create_seqs_info(seed,number,length,principle,seq_id_prefix).data
             for seq in seqs:
                 seqs_info.add(seq)
         return seeds,seqs_info
+
     def _group_by_type(self, seqs_info,types=None):
         tree = {}
         if types is None:
@@ -67,13 +70,7 @@ class SeqInfoGenerator:
             key = seq_info.ann_type
             tree[key].append(seq_info)
         return tree
-    def _selected_region_list(self,regions,number,replaceable,with_random_choose):
-        """Selected regions based on principle"""
-        if not with_random_choose:
-            region_list = regions.data
-        else:
-            region_list = list(np.random.choice(regions.data,number,replace=replaceable))
-        return region_list
+
     def _remove_end_regions(self, regions,chroms_info,max_length):
         clean_regions = []
         not_used_regions = []
@@ -90,22 +87,36 @@ class SeqInfoGenerator:
             for item in not_used_regions:
                 print(item.to_dict())
         return clean_regions
-    @property
-    def mode_text(self):
-        return ['start', 'middle']
+
     def _create_seed(self, region, mode,seed_id_prefix):
         """Create seed from region"""
-        centers = [region.start, int((region.start+region.end)/2)]
-        center = centers[self.mode_text.index(mode)]
+        if mode == 'middle':
+            center = int((region.start+region.end)/2)
+        elif mode == '5\'':
+            if region.strand=='plus':
+                center = region.start
+            elif region.strand =='minus':
+                center = region.end
+            else:
+                raise Exception()
+        elif mode == '3\'':
+            if region.strand == 'plus':
+                center = region.end
+            elif region.strand == 'minus':
+                center = region.start
+            else:
+                raise Exception()
+        else:
+            raise Exception(mode+" is not implement yet")
         seed = SeqInformation().from_dict(region.to_dict())
         seed.source = region.source + "_" + region.id
         seed.id = seed_id_prefix + "_" + str(self._seed_id)
-        seed.type_ = region.ann_type
-        seed.ann_status = mode
+        seed.ann_type = region.ann_type
         seed.extra_index_name = mode
         seed.extra_index = center
         self._seed_id += 1
         return seed
+
     def _create_seq_info(self, seed,length,principle,seq_id_prefix):
         sequence_info = SeqInformation().from_dict(seed.to_dict())
         sequence_info.source = seed.source + "_" + seed.id
@@ -130,20 +141,16 @@ class SeqInfoGenerator:
         sequence_info.id = seq_id_prefix + "_" + str(self._seq_id)
         self._seq_id += 1
         return sequence_info
-    def _create_seeds(self, region_list,with_random_choose,seed_id_prefix):
+
+    def _create_seeds(self, region_list,modes,seed_id_prefix):
         """Create seeds from regions"""
         seeds = SeqInfoContainer()
-        if with_random_choose:
-            for region in region_list:
-                mode = self.mode_text[random.randint(0,len(self.mode_text)-1)]
-                seed = self._create_seed(region, mode,seed_id_prefix)
-                seeds.add(seed)
-        else:
-            for region in region_list:
-                for mode in self.mode_text:
-                    seed = self._create_seed(region, mode,seed_id_prefix)
-                    seeds.add(seed)
+        for region in region_list:
+            mode = modes[random.randint(0,len(modes)-1)]
+            seed = self._create_seed(region, mode, seed_id_prefix)
+            seeds.add(seed)
         return seeds
+
     def _create_seqs_info(self, seed,sample_number_per_region,length,principle,seq_id_prefix):
         sequences_info = SeqInfoContainer()
         for index in range(sample_number_per_region):

@@ -8,8 +8,8 @@ class TestSeqInfoGenerator(unittest.TestCase):
         principle = {'remove_end_of_strand':True,'with_random_choose':True,
                      'replaceable':True,
                      "each_region_number":{'intron':10,'exon':20},
-                     'sample_number_per_region':6,'half_length':4,
-                     'max_diff':3,'length_constant':False}
+                     "region_number_per_seed":6,'half_length':4,
+                     'max_diff':3,'length_constant':False,"modes":['5\'']}
         chroms_info = {'chr1':100,'chr2':35}
         #Create sequence to test
         regions = SeqInfoContainer()
@@ -40,5 +40,5 @@ class TestSeqInfoGenerator(unittest.TestCase):
         seeds,seqs_info = generator.generate(regions,principle,chroms_info,"seed","seq")
         seed_number = sum(principle['each_region_number'].values())
         self.assertEqual(seed_number,len(seeds.data))
-        seq_number = seed_number*principle['sample_number_per_region']
+        seq_number = seed_number*principle['region_number_per_seed']
         self.assertEqual(seq_number,len(seqs_info.data))        

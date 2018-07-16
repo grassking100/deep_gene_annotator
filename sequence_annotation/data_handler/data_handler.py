@@ -3,6 +3,7 @@ from . import SeqConverter
 from . import LengthNotEqualException
 from . import InvalidStrandType
 from . import AnnSeqContainer
+from . import annotation_count
 import os
 import warnings
 import numpy as np
@@ -29,7 +30,7 @@ class DataHandler(metaclass=ABCMeta):
             if count > 0:
                 weight = 1 / count
             else:
-                raise Exception("Some of class has zero count,so it cannot get reversed count weight")
+                raise Exception(type_+" has zero count,so it cannot get reversed count weight")
             raw_weights[type_] = weight
         sum_raw_weights = sum(raw_weights.values())
         for type_,weight in raw_weights.items():
@@ -115,7 +116,7 @@ class SeqAnnDataHandler(DataHandler):
                     ann.append(np.flip(value,0))
                 else:
                     raise InvalidStrandType(ann_seq.strand)
-            dict_[ann_seq.id] = np.transpose(ann)
+            dict_[str(ann_seq.id)] = np.transpose(ann)
         return dict_
     @staticmethod
     def process_tensor(answer, prediction,values_to_ignore=None):
@@ -140,14 +141,14 @@ class SeqAnnDataHandler(DataHandler):
         data_pair = {}
         ann_vecs = answer
         for name,seq in seqs.items():
-            ann_vec = ann_vecs[name]
+            ann_vec = ann_vecs[str(name)]
             transposed_ann_vec = np.transpose(ann_vec)
-            ann_length = np.shape(ann_vec)[0]
-            seq_length = np.shape(seq)[0]
             for index, type_ in enumerate(ann_types):
                 if type_ not in ann_count.keys():
                     ann_count[type_] = 0
                 ann_count[type_] += np.sum(transposed_ann_vec[index])
+            ann_length = np.shape(ann_vec)[0]
+            seq_length = np.shape(seq)[0]
             if ann_length != seq_length:
                 raise LengthNotEqualException(ann_length, seq_length)
             data_pair[name]={'input':seq,'answer':ann_vec}

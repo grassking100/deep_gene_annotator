@@ -55,15 +55,19 @@ class Pipeline(metaclass=ABCMeta):
     def _parse_setting(self):
         pass
     def _init_model(self):
-        build_model = not self._work_setting['load_model']
-        if not build_model: 
-            self.print_prompt("\tLoading model...")
+        load_model = self._work_setting['load_model']
+        if load_model:
             model_path = expanduser(self._work_setting['trained_model_path'])
+            self.print_prompt("\tLoading model from "+model_path)
             self._model = self.model_handler.load_model(model_path)
-            self._model.load_weights(model_path, by_name=True)
         else:
             self.print_prompt("\tBuilding model...")
             self._model = self.model_handler.build_model(self._model_setting)
+            load_weights = self._work_setting['load_weights']
+            if load_weights:
+                model_path = expanduser(self._work_setting['trained_model_path'])
+                self.print_prompt("\tLoading weights from "+model_path)
+                self._model.load_weights(model_path, by_name=True)
     def _padding(self, data_dict, value):
         padded = {}
         for data_kind, data in data_dict.items():
