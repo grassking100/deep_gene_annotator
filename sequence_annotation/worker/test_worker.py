@@ -72,4 +72,3 @@ class TestWorker(Worker):
             history = self._evaluate_by_fit()
         history=np.transpose(history)
         self._result = dict(zip(self._model.metrics_names, history))
-        
