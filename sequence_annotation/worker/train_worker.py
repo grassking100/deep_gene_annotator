@@ -76,19 +76,23 @@ class TrainWorker(Worker):
         generator = DataGenerator(x_data,y_data,batch_size)
         return generator
     def _train_by_generator(self):
-        train_x = self._data['training']['inputs']
-        train_y = self._data['training']['answers']
         if 'validation' in self._data.keys():
+            train_x = self._data['training']['inputs']
+            train_y = self._data['training']['answers']
             val_x = self._data['validation']['inputs']
             val_y = self._data['validation']['answers']
         else:
-            shuffled_train_x = np.random.shuffle(train_x)
-            shuffled_train_y = np.random.shuffle(train_y)
-            index = len(shuffled_train_x)(1-self._validation_split)
-            train_x = train_x[:index]
-            train_y = train_y[:index]
-            val_x = train_x[index:]
-            val_y = train_y[index:]
+            data_x = self._data['training']['inputs']
+            data_y = self._data['training']['answers']
+            shuffled_index = list(range(len(data_x)))
+            np.random.shuffle(shuffled_index)
+            index = int(len(data_x)*(1-self._validation_split))
+            train_index = shuffled_index[:index]
+            val_index = shuffled_index[index:]
+            val_x = [data_x[i] for i in val_index]
+            val_y = [data_y[i] for i in val_index]
+            train_x = [data_x[i] for i in train_index]
+            train_y = [data_y[i] for i in train_index]
         val_data = self._prepare_data(val_x,val_y,self._batch_size)
         train_data = self._prepare_data(train_x,train_y,self._batch_size)
         callbacks = self._get_addition_callbacks()+self.callbacks

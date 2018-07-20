@@ -126,7 +126,7 @@ class SeqInfoGenerator:
             total_length = principle['total_length']
             max_diff = total_length - (2*half_length+1)
             diff = random.randint(0, max_diff)
-            new_start = index - half_length + diff
+            new_start = index - half_length - (max_diff - diff)
             new_end = index + half_length + diff
         else:
             max_diff = principle['max_diff']

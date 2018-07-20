@@ -13,12 +13,12 @@ class SeqContainer(metaclass=ABCMeta):
         return len(self._data)
     def __iter__(self):
         self._index = 0
-        self._keys = list(self._data.keys())
+        self._keys = sorted(list(self._data.keys()))
         return self  
     def __next__(self):
         if self._index >= len(self._data):
             self._index = 0
-            self._keys = list(self._data.keys())
+            self._keys = sorted(list(self._data.keys()))
             raise StopIteration  
         else:
             key = self._keys[self._index]

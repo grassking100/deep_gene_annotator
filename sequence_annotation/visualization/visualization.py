@@ -6,7 +6,40 @@ import pandas as pd
 from . import ModelHandler
 from . import SeqConverter
 from . import FastaConverter
-
+class SubplotHelper():
+    def __init__(self,nrow=1,ncol=1,width=50,height=50):
+        self.index = 0
+        self._nrow=nrow
+        self._ncol=ncol
+        self.fig, self.axes = plt.subplots(self._nrow,self._ncol)
+        self.fig.set_size_inches(width,height)
+    def get_ax(self,row_index=None,col_index=None):
+        if not isinstance(self.axes,np.ndarray):
+            ax=self.axes
+        else:
+            if row_index is None or col_index is None:
+                row_index = int(self.index/self._ncol)
+                col_index = self.index%self._ncol
+                self.index += 1
+            if len(self.axes.shape)==1:
+                ax=self.axes[col_index]
+            else:
+                ax=self.axes[row_index,col_index]
+        return ax
+    def set_axes_setting(self,title_params=None,xlabel_params=None,ylabel_params=None,
+                 tick_params=None,legends_params=None):
+        for sub_axes in self.axes:
+            for ax in sub_axes:
+                if title_params is not None:
+                    ax.set_title(**title_params)
+                if tick_params is not None:
+                    ax.tick_params(**tick_params)
+                if xlabel_params is not None:
+                    ax.set_xlabel(**xlabel_params)
+                if ylabel_params is not None:
+                    ax.set_ylabel(**ylabel_params)
+                if legends_params is not None:
+                    ax.legend(**legends_params)
 def ann_visual(answer, annotation_types):
     """visualize the probability of each type along  sequence"""    
     answer_vec = []
@@ -36,133 +69,192 @@ def error_visual(model, sequence, answer,annotation_types):
         error = error_status[type_]
         plt.plot(error, label=type_)
 
-def get_values_list(df,metric_type,ann_type=None):
+def metric_mean_converter(df):
+    "Get mean of each metric in dataframe form"
+    mean_list = []
+    for metric_type in set(df['metric_type']): 
+        for ann_type in set(df['ann_type']):
+            if (ann_type=='global')!= (metric_type in ['loss','accuracy']):
+                continue
+            for id_ in set(df['id']):
+                for source in set(df['source']):
+                    last_metric = get_sub_dataframe(df,metric_type=metric_type,source=source,
+                                                    ann_type=ann_type,index=-1,id_=id_)
+                    mean_value = last_metric['value'].mean()
+                    series = {'source':source,'ann_type':ann_type,'id':id_,
+                              'metric_type':metric_type,'value':mean_value}
+                    mean_list.append(pd.Series(series))
+    return pd.concat(mean_list,axis=1).T
+
+def get_values_list(df,metric_type,sources,ann_type=None,mode_id=None):
     values_list = []
     metric = df[df['metric_type']==metric_type]
     if ann_type is not None:
-        selected_metric = metric[metric['ann_type']==ann_type]
-    else:
-        selected_metric = metric[metric['metric_type']==metric_type]
-    for type_ in ['train','validation']:
-        selected=selected_metric[selected_metric['source']==type_]
+        metric = metric[metric['ann_type']==ann_type]
+    if mode_id is not None:
+        metric = metric[metric['mode_id']==mode_id]
+    for type_ in sources:
+        selected=metric[metric['source']==type_]
         values_list+=selected.to_dict(orient='records')
     return values_list
-def draw_metric_curve(data,annotations,line_type,title=None):
-    index = 1
-    def plot(title,ylabel,ylim=None):
-        plt.title(title,fontsize=18)
-        plt.xlabel('epoch',fontsize=18)
-        plt.ylabel(ylabel,fontsize=18)
-        plt.ylim(ylim)
-        plt.xlim([0,200])
-        plt.xticks(fontsize=18)
-        plt.yticks(fontsize=18)
-    def new_plot(index):
-        plt.subplot(len(annotations)+1,3,index)
-        return index + 1
-    fig = plt.figure(figsize=(20,20))
-    legends = []
+
+def draw_metric_curve(data,annotations,sources,line_types,scale_y_axis=True):
+    helper = SubplotHelper(6,3,50,50)
+    helper.set_axes_setting(xlabel_params={'xlabel':'epoch','fontsize':30},
+                            ylabel_params={'ylabel':'metric','fontsize':30})
     for ann_type in annotations:
         for metric_type in ['precision','recall','f1']:
             metrics = {'train':[],'validation':[]}
-            values_list = get_values_list(data,metric_type,ann_type)
-            index=new_plot(index)
+            values_list = get_values_list(data,metric_type,ann_type=ann_type,sources=sources)
+            ax = helper.get_ax()
+            ax.set_title(ann_type+"'s "+metric_type,size=30)
             for metric in values_list:
-                plt.plot(list(metric['value']),line_type[metric['source']])
-            plot(ann_type+"'s "+metric_type,metric_type,[0,1])
-    index=new_plot(index)
-    accs = get_values_list(data,'accuracy')
+                ax.plot(list(metric['value']),line_types[metric['source']])
+                #ax.set_xlim([0,200])
+                if scale_y_axis:
+                    ax.set_ylim([0,1])
+            for tick in ax.xaxis.get_major_ticks():
+                tick.label.set_fontsize(30)
+            for tick in ax.yaxis.get_major_ticks():
+                tick.label.set_fontsize(30)
+    accs = get_values_list(data,'accuracy',sources=sources)
+    ax = helper.get_ax()
+    ax.set_title("accuracy",size=30)
     for acc in accs:
-        plt.plot(list(acc['value']),line_type[acc['source']])
-    plot("accuracy",'accuracy',[0,1])
-    index=new_plot(index)
-    losses = get_values_list(data,'loss')
+        ax.plot(list(acc['value']),line_types[acc['source']])
+        #ax.set_xlim([0,200])
+        if scale_y_axis:
+            ax.set_ylim([0,1])
+        for tick in ax.xaxis.get_major_ticks():
+            tick.label.set_fontsize(30)
+        for tick in ax.yaxis.get_major_ticks():
+            tick.label.set_fontsize(30)
+    losses = get_values_list(data,'loss',sources=sources)
+    ax = helper.get_ax()
+    ax.set_title("loss",size=30)
     for loss in losses:
-        plt.plot(list(loss['value']),line_type[loss['source']])
-    plot("loss",'loss')
-    plt.subplots_adjust(top=.90,bottom =.1,wspace=.3,hspace=.8)
-    plt.suptitle(title, fontsize=30)
+        ax.plot(list(loss['value']),line_types[loss['source']])
+        #ax.set_xlim([0,200])
+        for tick in ax.xaxis.get_major_ticks():
+            tick.label.set_fontsize(30)
+        for tick in ax.yaxis.get_major_ticks():
+            tick.label.set_fontsize(30)
     for type_ in annotations:
-        fig.legend(['train','validation'], prop={'size': 20})
-    fig.savefig('loss_accuracy_and_metrics_of_each_type_of_expand_8_9_10/'+title.replace(' ','_').replace(',','_')+".png")
-def draw_metric_barplot(datas,annotations,title=None):
-    index = 0
-    fig,axes = plt.subplots(12,5)
-    fig.set_size_inches(50, 50)
-    def group_value(dfs, metric_type, ann_type=None):
-        last_metrics = []
-        for df in dfs:
-            metrics = get_values_list(df,metric_type,ann_type)
-            for metric in metrics:
-                last_metric = {}
-                for note in ['ann_type','metric_type','source','train_id','mode_id']:
-                    last_metric[note] = metric[note]
-                last_metric['value'] = list(metric['value'])[-1]
-                last_metrics.append(last_metric)
-        return last_metrics
-    for train_id in range(8,11):
-        for metric_type in ['f1','precision','recall']:
-            for ann_type in annotations:
-                dfs=datas[str(train_id)]
-                last_metrics = group_value(dfs,metric_type,ann_type)
-                df = pd.DataFrame(last_metrics).pivot(index='mode_id',columns='source',values='value')
-                df.plot.bar(ax=axes[int(index/5),index%5],
-                            title='expand_'+str(train_id)+' last '+ann_type+" "+metric_type+' of each mode',
-                            legend=None,ylim=[0,1])
-                index+=1 
-        for metric_type in ['loss','accuracy']:
+        helper.fig.legend(sources, prop={'size': 40})
+    return helper.fig,helper.axes
+
+def draw_each_class_barplot(df,soruces):
+    ids = set(df['id'])
+    metric_types = set(df['metric_type'])
+    helper = SubplotHelper(len(metric_types),len(ids),50,50)
+    for metric_type in metric_types:
+        for id_ in sorted(ids):
             ylim=[0,1]
             if metric_type=='loss':
                 ylim=None
-            dfs=datas[str(train_id)]
-            last_metrics = group_value(dfs,metric_type)
-            df = pd.DataFrame(last_metrics).pivot(index='mode_id',columns='source',values='value')
-            df.plot.bar(ax=axes[int(index/5),index%5],
-                        title='expand_'+str(train_id)+' last '+metric_type+' of each mode',
-                        legend=None,ylim=ylim)
-            index+=1
-        index+=3
-    fig.legend(['train','validation'])
-    fig.subplots_adjust(top=.95,bottom =.1,wspace=.1,hspace=.5)
-    fig.suptitle(title, fontsize=30)
-    fig.savefig('loss_accuracy_and_metrics_of_each_type_of_expand_8_9_10/'+title.replace(' ','_').replace(',','_')+".png")
-def metric_converter(pandas_data,sources,
-                     annotation_types=None,
-                     train_id=None,mode_id=None):
+            selected_df = get_sub_dataframe(df,metric_type=metric_type,id_=id_) 
+            pivot_df = selected_df.pivot('ann_type','source','value')[soruces]
+            ax = helper.get_ax()
+            pivot_df.plot.bar(ax=ax,rot=0,ylim=ylim)
+            ax.set_title("expand_"+str(id_)+" "+metric_type,size=30)
+            helper.fig.subplots_adjust(top=.95,bottom =.1,wspace=.2,hspace=.6)
+            ax.set_xlabel('annotation type', fontsize=30)
+            ax.set_ylabel('metric', fontsize=30)
+            ax.tick_params(axis='both',labelsize=30)
+            ax.tick_params(axis='x',rotation=10)
+            ax.legend(fontsize=30,mode="expand",bbox_to_anchor=(0.,-.5, 1., -.5),
+                      borderaxespad=0.,ncol=2, loc='lower center')   
+def draw_each_setting_barplot(df,soruces):
+    ann_types = set(df['ann_type'])
+    metric_types = ['precision','recall','f1','loss','accuracy']
+    helper = SubplotHelper(len(metric_types)-1,len(ann_types)-1,50,50)
+    for metric_type in metric_types:
+        for ann_type in ann_types:
+            if (ann_type=='global') == (metric_type in ['loss','accuracy']):
+                ylim=[0,1]
+                if metric_type=='loss':
+                    ylim=None
+                selected_df = get_sub_dataframe(df,metric_type=metric_type,ann_type=ann_type) 
+                pivot_df = selected_df.pivot('id','source','value')[soruces]
+                ax = helper.get_ax()
+                pivot_df.plot.bar(ax=ax,rot=0,ylim=ylim)
+                ax.set_title(str(ann_type)+" "+metric_type,size=30)
+                helper.fig.subplots_adjust(top=.95,bottom =.1,wspace=.2,hspace=.4)
+                ax.set_xlabel('id', fontsize=30)
+                ax.set_ylabel('metric', fontsize=30)
+                ax.tick_params(axis='both',labelsize=30)
+                ax.legend(fontsize=30,mode="expand",bbox_to_anchor=(0.,-.3, 1., -.3),
+                          borderaxespad=0.,ncol=2, loc='lower center')
+def draw_loss_curve(df,line_type,colors):
+    modes = set(df['mode_id'])
+    helper = SubplotHelper(len(modes),2,20,10*len(modes))
+    helper.set_axes_setting(xlabel_params={'xlabel':'epoch','fontsize':30},
+                            ylabel_params={'ylabel':'metric','fontsize':30})
+    color_setting = {}
+    id_list = list(set(df['id']))
+    id_list.sort()
+    for id_,color in zip(id_list,colors):
+        color_setting[id_]=color
+    for mode in modes:
+        for source in ['train','validation']:
+            values_list = get_values_list(df,'loss',sources=[source], mode_id=mode)
+            ax = helper.get_ax()
+            for item in values_list:
+                id_ = "expand_"+str(item['id'])
+                ax.set_title("Mode "+str(mode)+" "+source+" loss per epoch in each setting")
+                ax.semilogy(list(item['value']),label = id_, color=color_setting[item['id']])
+                ax.ylabel="loss"
+                ax.xlabel='epoch'
+                ax.legend(loc='best')  
+    return helper.fig,helper.axes
+
+def metric_converter(df,sources,prefixes,annotation_types=None,id_=None,mode_id=None):
+    """Create dataframe of annotation metric and global metric depends on input"""
     def name(prefix,ann,metric):
         return prefix+ann+"_"+metric+"_layer"
     metrics = []
-    prefix = ""
-    for source in sources:
-        if source=='validation':
-            prefix='val_' 
+    for prefix,source in zip(prefixes,sources):
         if annotation_types is not None:
             for type_ in annotation_types:
-                tp = pandas_data[name(prefix,type_,"TP")]
-                tn = pandas_data[name(prefix,type_,"TN")]
-                fp = pandas_data[name(prefix,type_,"FP")]
-                fn = pandas_data[name(prefix,type_,"FN")]
+                metric_value = {}
+                tp = df[name(prefix,type_,"TP")]
+                tn = df[name(prefix,type_,"TN")]
+                fp = df[name(prefix,type_,"FP")]
+                fn = df[name(prefix,type_,"FN")]
                 recall =  tp/(tp+fn)
                 precision =  tp/(tp+fp)
                 f1 = 2*(precision*recall)/(precision+recall)
-                metrics.append({'value':recall,'ann_type':type_,
-                                'metric_type':'recall',
-                                'source':source,'train_id':train_id,
-                                'mode_id':mode_id})
-                metrics.append({'value':precision,'ann_type':type_,
-                                'source':source,
-                                'metric_type':'precision',
-                                'train_id':train_id,
-                                'mode_id':mode_id})
-                metrics.append({'value':f1,'ann_type':type_,
-                                'source':source,
-                                'metric_type':'f1',
-                                'train_id':train_id,
-                                'mode_id':mode_id})
-        metrics.append({'value':pandas_data[prefix+'loss'],'source':source,
-                        'ann_type':'global','metric_type':'loss',
-                        'train_id':train_id,'mode_id':mode_id})   
-        metrics.append({'value':pandas_data[prefix+'accuracy'],'source':source,
-                        'ann_type':'global','metric_type':'accuracy',
-                        'train_id':train_id,'mode_id':mode_id})
+                metric_value['recall']=recall
+                metric_value['precision']=precision
+                metric_value['f1']=f1
+                for metric_type,value in metric_value.items():
+                    metrics.append({'value':value,'ann_type':type_,'metric_type':metric_type,
+                                    'source':source,'id':id_,'mode_id':mode_id})
+        metric_value = {}            
+        metric_value['loss']=df[prefix+'loss']
+        metric_value['accuracy']=df[prefix+'accuracy']
+        for metric_type,value in metric_value.items():
+            metrics.append({'value':value,'ann_type':'global','metric_type':metric_type,
+                            'source':source,'id':id_,'mode_id':mode_id})
     return pd.DataFrame(metrics)
+def get_sub_dataframe(df,metric_type=None,source=None,ann_type=None,mode_id=None,index=None,id_=None):
+    """Get dataframe of data which are selected in dataframe"""
+    if metric_type is not None:
+        df = df[df['metric_type']==metric_type]
+    if ann_type is not None:
+        df = df[df['ann_type']==ann_type]
+    if mode_id is not None:
+        df = df[df['mode_id']==mode_id]
+    if id_ is not None:
+        df = df[df['id']==id_]
+    if index is not None:
+        temp = []
+        for row in list(df['value']):
+            if isinstance(row,float):
+                temp.append(row)
+            else:
+                temp.append(list(row)[index])
+        df['value']=temp
+    if source is not None:
+        df=df[df['source']==source]
+    return df

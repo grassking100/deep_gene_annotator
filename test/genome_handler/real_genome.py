@@ -30,7 +30,10 @@ class RealGenome:
     def _add_seq_to_genome(self, genome, seq):
         chrom = genome.get(seq.chromosome_id+"_"+seq.strand)
         for type_ in seq.ANN_TYPES:
-            chrom.add_ann(type_,seq.get_ann(type_))
+            if seq.strand == 'plus':
+                chrom.add_ann(type_,seq.get_ann(type_))
+            else:
+                chrom.add_ann(type_,np.flip(seq.get_ann(type_),0))
     def _add_background(self,container):
         focus_types = ['cds','intron','utr_5','utr_3']
         for seq in container:

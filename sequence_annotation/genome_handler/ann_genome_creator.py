@@ -1,4 +1,5 @@
 import numpy as np
+import warnings
 from . import AnnSeqContainer
 from . import AnnSequence
 from . import InvalidStrandType
@@ -12,6 +13,8 @@ class AnnChromCreator(Creator):
     def __init__(self):
         super().__init__()
         self._ann_seq_processor = AnnSeqProcessor()
+        warnings.warn(("\n!!!\n\tCoordinate will be based on plus strand"
+                       "from 5' to 3 on both PLUS and MINUS strand'\n!!!\n"), UserWarning)
     def _validate(self):
         pass
     def create(self,ann_seqs,chrom_id,length,source):
@@ -47,19 +50,25 @@ class AnnChromCreator(Creator):
         txStart = ann_seq.absolute_index
         txEnd = ann_seq.absolute_index+ann_seq.length - 1
         strand = ann_seq.strand
-        if strand == 'plus':
+        gene_start_index = txStart
+        gene_end_index = txEnd
+        """
+            Coordinate will be based on plus strand 
+            from 5' to 3 on both PLUS and MINUS strand
+        """
+        """if strand == 'plus':
             gene_start_index = txStart
             gene_end_index = txEnd
         elif strand == 'minus':
             gene_start_index = chrom_length-1-txEnd
             gene_end_index = chrom_length-1-txStart
         else:
-            raise InvalidStrandType(strand)
+            raise InvalidStrandType(strand)"""
         ann_seq.source = source
         for type_ in ann_seq.ANN_TYPES:
             seq = ann_seq.get_ann(type_)
-            if strand=='minus':
-                seq = np.flip(seq, 0)
+            """if strand=='minus':
+                seq = np.flip(seq, 0)"""
             one_strand_chrom.add_ann(type_,seq,gene_start_index,gene_end_index)
 class AnnGenomeCreator(Creator):
     """Map annotated sequences on the genome"""

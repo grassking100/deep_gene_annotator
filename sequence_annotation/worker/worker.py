@@ -14,6 +14,9 @@ class Worker(metaclass=ABCMeta):
     @property
     def result(self):
         return self._result
+    @result.setter
+    def result(self,value):
+        self._result = value
     @abstractmethod
     def work(self):
         """Work"""

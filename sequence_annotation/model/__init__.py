@@ -1,4 +1,5 @@
 """This module includes librarys to help,build,train the model"""
+from .. import MinimalRNN
 from ..data_handler import SeqAnnDataHandler
 from ..utils import Builder
 from ..utils import DataValidator

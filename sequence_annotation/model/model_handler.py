@@ -2,10 +2,11 @@ from keras.models import load_model
 from keras.optimizers import Adam
 from . import CustomObjectsFacade
 from . import ModelBuilder
+from . import MinimalRNN
 class ModelHandler():
     @staticmethod
     def load_model(path):
-        return load_model(path,compile=False)
+        return load_model(path,custom_objects={'MinimalRNN':MinimalRNN},compile=False)
     @staticmethod
     def build_model(model_setting):
         builder = ModelBuilder(model_setting)
