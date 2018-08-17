@@ -1,6 +1,7 @@
 """This submodule will handler character sequence and one-hot encoding seqeunce conversion"""
 from . import CodeException, SeqException
 import numpy as np
+
 class SeqConverter():
     def __init__(self,code_vec_dictionay=None,codes=None,
                  is_case_sensitivity=False,with_soft_masked_status=False):
@@ -98,3 +99,14 @@ class SeqConverter():
             return "".join(seq)
         else:
             return seq
+    def seqs_encode(self,seqs,discard_invalid_seq):
+        """convert dictionary of seqeucnces to dictionary of one-hot encoding vector"""
+        data = {}
+        for name,seq in seqs.items():
+            try:
+                data[name] = self.seq2vecs(seq)
+            except SeqException as exp:
+                if not discard_invalid_seq:
+                    raise exp
+        return data
+

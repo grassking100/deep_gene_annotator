@@ -3,8 +3,8 @@ from keras.engine.topology import Layer
 from abc import ABCMeta
 from keras import backend as K
 import tensorflow as tf
-class MetricLayer(Layer,metaclass=ABCMeta):
-    """A layer can be called to calculate metric"""
+class StatefulMetric(Layer,metaclass=ABCMeta):
+    """A layer can be called to calculate stateful metric"""
     def __init__(self, metric, metric_method, name=None, class_type=None):
         super().__init__()
         self._class_type = class_type
@@ -42,8 +42,9 @@ class MetricLayer(Layer,metaclass=ABCMeta):
         result = tf.cast(self._calculate(y_true, y_pred), tf.int64)
         self.add_update(K.update_add(self._data, result),inputs=[y_true, y_pred])
         return self._data
-class MetricLayerFactory(metaclass=ABCMeta):
-    """A Factory creates metric layer"""
+
+class StatefulMetricFactory(metaclass=ABCMeta):
+    """A Factory creates stateful metric layer"""
     def _get_method(self,metric,method_name):
         """Return metric method if exist"""
         if hasattr(metric,method_name):
@@ -52,7 +53,7 @@ class MetricLayerFactory(metaclass=ABCMeta):
             mess = "Method,{method}, doesn't exist in metric,{metric}."
             mess = mess.format(method=method_name,metric=metric)
             raise Exception(mess)
-    def create(self, method_type, metric, class_type = None):
+    def create(self, method_type, metric, class_type=None):
         """Create metric layer"""
         if method_type=="TP":
             metric_name ='get_true_positive'
@@ -71,7 +72,5 @@ class MetricLayerFactory(metaclass=ABCMeta):
         else:
             raise Exception(method_type+" is not correct method")
         metric_method = self._get_method(metric,metric_name)
-        metric = MetricLayer(metric=metric,
-                             metric_method=metric_method,
-                             class_type=class_type)
+        metric = StatefulMetric(metric=metric,metric_method=metric_method,class_type=class_type)
         return metric

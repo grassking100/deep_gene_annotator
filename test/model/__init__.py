@@ -1,1 +1,1 @@
-from sequence_annotation.model.model_build_helper import LossFactory
+from sequence_annotation.model.loss import Loss

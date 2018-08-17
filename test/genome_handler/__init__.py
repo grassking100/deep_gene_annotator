@@ -18,7 +18,7 @@ from sequence_annotation.genome_handler.ann_seq_converter import EnsemblSeqConve
 from sequence_annotation.genome_handler.seq_status_detector import SeqStatusDetector
 from sequence_annotation.genome_handler.exon_handler import ExonHandler
 from sequence_annotation.genome_handler.ann_genome_processor import AnnGenomeProcessor
-from sequence_annotation.data_handler.fasta_converter import FastaConverter
+from sequence_annotation.data_handler.fasta import read_fasta
 from sequence_annotation.data_handler.seq_converter import SeqConverter
 from .real_genome import RealGenome
 from ..ann_seq_test_case import AnnSeqTestCase

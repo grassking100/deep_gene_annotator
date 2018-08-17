@@ -28,7 +28,6 @@ class BasicPipeline(Pipeline):
                     
             else:
                 self._dynamic_weight_method = weight_setting['method']
-    
     def _save_setting(self):
         data =  self._setting_to_saved()
         mode_id=self._work_setting['mode_id']

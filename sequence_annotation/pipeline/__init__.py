@@ -3,7 +3,7 @@ from ..model import CustomObjectsFacade
 from ..model import ModelHandler
 from ..worker import TrainWorker
 from ..worker import TestWorker
-from ..utils.json_reader import JsonReader
+from ..data_handler.json import read_json
 from ..data_handler import SeqAnnDataHandler,SimpleDataHandler
 from .pipeline import Pipeline
 from .basic_pipeline import BasicPipeline

@@ -14,7 +14,6 @@ K.set_session(sess)
 
 class TestWorker(Worker):
     def __init__(self, path_root, batch_size, model,data,
-                 previous_result=None,
                  use_generator=False,
                  test_per_batch=False):
         super().__init__(path_root)
@@ -25,7 +24,6 @@ class TestWorker(Worker):
         self._use_generator = use_generator
         self._test_per_batch = test_per_batch
     def before_work(self):
-        root_path = './'+self._path_root
         self._create_folder(["test"])
     def after_work(self):
         data = json.loads(pd.Series(self._result).to_json(orient='index'))
@@ -62,8 +60,6 @@ class TestWorker(Worker):
             history.append(temp)
         return history
     def work(self):
-        test_x = self._data['testing']['inputs']
-        test_y = self._data['testing']['answers']
         if self._use_generator:
             history = self._evaluate_by_generator()
         else:

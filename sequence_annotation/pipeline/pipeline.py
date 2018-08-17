@@ -93,20 +93,32 @@ class Pipeline(metaclass=ABCMeta):
             ann_types = None
         metric_types = self._work_setting['compile']['metric_types']
         loss = self._work_setting['compile']['loss']
-        learning_rate=self._work_setting['compile']['learning_rate']
         values_to_ignore=self._work_setting['values_to_ignore']
-        self.model_handler.compile_model(self._model,learning_rate=learning_rate,
+        optimizer_type = self._work_setting['optimizer_setting']['type']
+        optimizer_setting = self._work_setting['optimizer_setting']['keras_setting']
+        exec('from keras.optimizers import {optimizer_type}'.format(optimizer_type=optimizer_type))
+        exec('self._optimizer_class={optimizer_type}'.format(optimizer_type=optimizer_type))
+        optimizer = self._optimizer_class(**optimizer_setting)
+        self.model_handler.compile_model(self._model,
+                                         optimizer,
                                          ann_types=ann_types,
                                          values_to_ignore=values_to_ignore,
                                          class_weight=self._class_weight,
-                                         metric_types=metric_types,loss_type=loss,
+                                         metric_types=metric_types,
+                                         loss_type=loss,
                                          dynamic_weight_method=self._dynamic_weight_method)
     @abstractmethod
     def _init_worker(self):
         pass
+    def _save_model_summary(self):
+        mode_id = self._work_setting['mode_id']
+        path_root = self._work_setting['path_root'] + "/" + str(self._id) + "/" + mode_id
+        with open(path_root+"/train_model_summary.txt", "w") as file:
+            self._model.summary(print_fn=lambda x: file.write(x + '\n'))
     def _before_execute(self):
         self._worker.before_work()
         self._save_setting()
+        self._save_model_summary()
     def _execute(self):
         if self._is_prompt_visible:
             print('Start working('+strftime("%Y-%m-%d %H:%M:%S",gmtime())+")")
@@ -122,7 +134,7 @@ class Pipeline(metaclass=ABCMeta):
     def _create_folder(self,path):
         try:
             if not os.path.exists(path):
-                print_prompt("Create folder:"+path)
+                self.print_prompt("Create folder:"+path)
                 os.makedirs(path)
         except OSError as erro:
             if erro.errno != errno.EEXIST:

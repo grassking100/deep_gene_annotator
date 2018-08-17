@@ -4,7 +4,7 @@ sys.path.append(os.path.abspath(__file__+"/../.."))
 import argparse
 from time import gmtime, strftime, time
 from sequence_annotation.pipeline.pipeline_factory import PipelineFactory
-from sequence_annotation.utils.json_reader import JsonReader
+from sequence_annotation.data_handler.json import read_json
 if __name__ == '__main__':
     prompt = 'test.py --setting=<setting_file>'
     parser = argparse.ArgumentParser(description=prompt)
@@ -15,8 +15,8 @@ if __name__ == '__main__':
     print('Program start time: '+strftime("%Y-%m-%d %H:%M:%S",gmtime()))
     start_time = time()
     test_pipeline = PipelineFactory().create('test','sequecne_annotation')
-    work_setting = JsonReader().read(args.test_setting_path)
-    model_setting = JsonReader().read(args.model_setting_path)
+    work_setting = read_json(args.test_setting_path)
+    model_setting = read_json(args.model_setting_path)
     test_pipeline.execute(args.test_id,work_setting,model_setting)
     end_time = time()
     time_spend = end_time - start_time

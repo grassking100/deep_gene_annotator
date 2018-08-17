@@ -21,9 +21,13 @@
     "test_per_batch":true,
     "load_weights":false,
     "preprocess":[],
+    "optimizer_setting":
+    {
+        "keras_setting":{"lr":0.001},
+        "type":"Adam"
+    },
     "compile":{
-        "learning_rate":0.001,
-        "metric_types":["loss","constant"],
+        "metric_types":["loss","batch_counter"],
         "loss":"categorical_crossentropy"
     }
 }

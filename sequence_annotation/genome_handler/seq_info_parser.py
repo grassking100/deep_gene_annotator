@@ -1,8 +1,6 @@
-import pandas as pd
 from abc import ABCMeta
 from abc import abstractmethod
 import numpy as np
-import math
 import ast
 from . import NegativeNumberException,InvalidStrandType,NotPositiveException
 class SeqInfoParser(metaclass=ABCMeta):
@@ -12,10 +10,10 @@ class SeqInfoParser(metaclass=ABCMeta):
             returned_list.append(self._parse(data))
         return returned_list
     @abstractmethod
-    def _parse(self):
+    def _parse(self,data):
         pass
     @abstractmethod
-    def _validate(self):
+    def _validate(self,data):
         pass
 
 class UscuInfoParser(SeqInfoParser):

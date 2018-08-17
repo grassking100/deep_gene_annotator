@@ -83,7 +83,7 @@ class SeqInfoGenerator:
             else:
                 not_used_regions.append(item)
         if len(not_used_regions) > 0:
-            print("Following regions won't be used to generate data:")
+            print("\nFollowing regions won't be used to generate data:")
             for item in not_used_regions:
                 print(item.to_dict())
         return clean_regions

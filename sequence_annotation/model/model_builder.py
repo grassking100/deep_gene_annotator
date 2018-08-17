@@ -2,36 +2,76 @@
 from keras.layers.normalization import BatchNormalization
 from keras.layers import concatenate
 from keras.engine.training import Model
-from keras.layers import RNN,Input, Convolution1D
-from keras.layers import Bidirectional
+from keras.layers import RNN,Input
+from keras.layers import Bidirectional,Permute
 import copy
 from . import MinimalRNN
-from . import Builder
-class ModelBuilder(Builder):
+from . import MReluGRU
+from . import Cnn1dBatchReluBuilder,ResidualLayerBuilder,DeepResidualLayerBuilder
+from . import DeepDenseLayerBuilder,DenseLayerBuilder
+from . import BatchRenormalization
+from . import IndRNN
+
+def _import_regularizer(type_):
+    exec('from keras.regularizers import {regularizer}'.format(regularizer=type_))
+
+def _set_regularizer(dict_,regularizer_type,type_):
+    command = 'dict_[\'{regularizer_type}\']={regularizer}'
+    exec(command.format(regularizer_type=type_,regularizer=type_))
+
+class ModelBuilder:
     """This class will create and return sequence annotation model"""
     def __init__(self,model_setting):
         self.setting = model_setting
         self._layers = {}
         self._input_layer_ids =[]
         self._output_layer_ids =[]
+
     def _build_layers(self):
-        for name,setting in self.setting['layer'].items():
-            setting['keras_setting']['name'] = name
+        for setting in self.setting['layer'].values():
             self._build_layer(setting)
+
     def _get_layer(self,setting):
         layer_type = setting['type']
         keras_setting = setting['keras_setting']
         if 'kernel_regularizer' in keras_setting.keys():
-            exec('from keras.regularizers import {regularizer}'.format(regularizer=keras_setting['kernel_regularizer'][:2]))
-            exec('keras_setting[\'kernel_regularizer\']={regularizer}'.format(regularizer=keras_setting['kernel_regularizer']))
-        if layer_type == 'CNN_1D':
-            layer = self._build_CNN_1D(setting)
-        elif layer_type == 'Input':
+            _regularizer_import(keras_setting['kernel_regularizer'][:2])
+            _set_regularizer(keras_setting,'kernel_regularizer')
+        if 'bias_regularizer' in keras_setting.keys():
+            _regularizer_import(keras_setting['bias_regularizer'][:2])
+            _set_regularizer(keras_setting,'bias_regularizer')
+        if 'recurrent_regularizer' in keras_setting.keys():
+            _regularizer_import(keras_setting['recurrent_regularizer'][:2])
+            _set_regularizer(keras_setting,'recurrent_regularizer')
+        if 'activity_regularizer' in keras_setting.keys():
+            _regularizer_import(keras_setting['activity_regularizer'][:2])
+            _set_regularizer(keras_setting,'activity_regularizer')
+        if layer_type == 'Input':
             layer = self._build_input(setting)
         elif layer_type == 'MinimalRNN':
             layer = self._build_MinimalRNN(setting)
+        elif layer_type == 'BatchRenormalization':
+            layer = self._build_BatchRenormalization(setting)
+        elif layer_type == 'Cnn1dBatchRelu':
+            layer = self._build_Cnn1dBatchRelu(setting)
+        elif layer_type == 'ResidualLayer':
+            layer = self._build_ResidualLayer(setting)
+        elif layer_type == 'DeepResidualLayer':
+            layer = self._build_DeepResidualLayerBuilder(setting)
+        elif layer_type == 'DenseLayer':
+            layer = self._build_DenseLayerBuilder(setting)
+        elif layer_type == 'DeepDenseLayer':
+            layer = self._build_DeepDenseLayerBuilder(setting)
+        elif layer_type == 'IndRNN':
+            layer = self._build_IndRNN(setting)
+        elif layer_type == 'MReluGRU':
+            layer = self._build_MReluGRU(setting)
+        elif layer_type == 'Permute':
+            layer = self._build_Permute(setting)
         else:
             try:
+                if layer_type == 'CNN_1D':
+                    layer_type = 'Convolution1D'
                 exec('from keras.layers import {layer_type}'.format(layer_type=layer_type))
                 exec('self._temp_layer_class={layer_type}'.format(layer_type=layer_type))
                 layer = self._temp_layer_class(**keras_setting)
@@ -41,17 +81,19 @@ class ModelBuilder(Builder):
         if  is_RNN and 'bidirection_setting' in setting.keys():
             layer = self._to_bidirectional(layer,setting)
         return layer
+
     def _build_layer(self,setting):
-        setting_ = copy.deepcopy(setting)
-        layer = self._get_layer(setting_)
-        layer_type = setting_['type']
-        keras_setting = setting_['keras_setting']
-        layer_name = keras_setting['name']
-        if not layer_name in self._layers.keys():
+        if not setting['name'] in self._layers.keys():
+            setting_ = copy.deepcopy(setting)
+            layer = self._get_layer(setting_)
+            layer_type = setting_['type']
+            layer_name = setting_['name']
             self._layers[layer_name] = {}
             self._layers[layer_name]['layer'] = layer
             self._layers[layer_name]['setting'] = setting
-            if setting['is_output']:
+            if 'is_output' not in setting_:
+                setting_['is_output'] = False
+            if setting_['is_output']:
                 self._output_layer_ids.append(layer_name)
             if layer_type=='Input':
                 self._layers[layer_name]['is_linked'] = True
@@ -60,12 +102,13 @@ class ModelBuilder(Builder):
                 self._layers[layer_name]['is_linked'] = False
         else:
             raise Exception("Duplicate name:"+layer_name)
+
     def _link_layers(self):
-        for name,setting in self.setting['layer'].items():
-            setting['name'] = name
+        for setting in self.setting['layer'].values():
             self._link_layer(setting)
+
     def _link_layer(self, setting):
-        present_layer_status = self._layers[setting['keras_setting']['name']]
+        present_layer_status = self._layers[setting['name']]
         if not present_layer_status['is_linked']:
             if setting['previous_layer'] is not None:
                 present_layer = present_layer_status['layer']
@@ -84,6 +127,7 @@ class ModelBuilder(Builder):
                 else:
                     present_layer_status['layer'] = present_layer(previous_layers)
                 present_layer_status['is_linked'] = True
+
     def _build_model(self):
         input_layers = []
         output_layers = []
@@ -92,27 +136,86 @@ class ModelBuilder(Builder):
         for id_ in self._output_layer_ids:
             output_layers.append(self._layers[id_]['layer'])
         return Model(inputs=input_layers, outputs=output_layers)
+
     def build(self):
         """Create and return model"""
         self._validate()
+        for name,setting in self.setting['layer'].items():
+            setting['name'] = name
+            if "name" not in setting["keras_setting"].keys():
+                setting["keras_setting"]['name']=name
         self._build_layers()
         self._link_layers()
         model = self._build_model()
         return model
+
     def _validate(self):
-        pass
+        previous_layers = []
+        for layer in self.setting['layer'].values():
+            previous_layer = layer['previous_layer']
+            if previous_layer is not None:
+                if isinstance(previous_layer,list):
+                    previous_layers += previous_layer
+                else:
+                    previous_layers += [previous_layer]
+        previous_layers= set(previous_layers)
+        if len(self.setting['layer']) != (len(previous_layers)+1):
+            raise Exception("Some layer is missing,please check the model setting!!!")
+
+    def _build_BatchRenormalization(self,setting):
+        return_layer = BatchRenormalization(**setting['keras_setting'])
+        return return_layer
+
     def _build_MinimalRNN(self,setting):
         return_layer = MinimalRNN(**setting['keras_setting'])
         return return_layer
-    def _build_CNN_1D(self,setting):
-        return_layer = Convolution1D(**setting['keras_setting'])
-        return return_layer
+
     def _to_bidirectional(self,inner_layers,setting):
         return_layer = Bidirectional(inner_layers,**setting['bidirection_setting'])
         return_layer.name = inner_layers.name
         return return_layer
+
     def _build_input(self,setting):
         setting = setting['keras_setting']
         setting['shape'] = tuple(setting['shape'])
         return_layer = Input(**setting)
+        return return_layer
+
+    def _build_Permute(self,setting):
+        setting = setting['keras_setting']
+        setting['dims'] = tuple(setting['dims'])
+        return_layer = Permute(**setting)
+        return return_layer
+
+    def _build_Cnn1dBatchRelu(self,setting):
+        setting['setting']['name'] = setting['name']
+        return_layer = Cnn1dBatchReluBuilder().build(**setting['setting'])
+        return return_layer
+
+    def _build_ResidualLayer(self,setting):
+        setting['setting']['name'] = setting['name']
+        return_layer = ResidualLayerBuilder().build(**setting['setting'])
+        return return_layer
+
+    def _build_DeepResidualLayerBuilder(self,setting):
+        setting['setting']['name'] = setting['name']
+        return_layer = DeepResidualLayerBuilder().build(**setting['setting'])
+        return return_layer
+
+    def _build_DenseLayerBuilder(self,setting):
+        setting['setting']['name'] = setting['name']
+        return_layer = DenseLayerBuilder().build(**setting['setting'])
+        return return_layer
+
+    def _build_DeepDenseLayerBuilder(self,setting):
+        setting['setting']['name'] = setting['name']
+        return_layer = DeepDenseLayerBuilder().build(**setting['setting'])
+        return return_layer
+
+    def _build_IndRNN(self,setting):
+        return_layer = IndRNN(**setting['keras_setting'])
+        return return_layer
+
+    def _build_MReluGRU(self,setting):
+        return_layer = MReluGRU(**setting['keras_setting'])
         return return_layer

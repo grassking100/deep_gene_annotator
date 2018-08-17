@@ -16,7 +16,7 @@ from . import SeqInfoGenerator, AnnSeqContainer
 from . import SeqInfoContainer
 from . import AnnSeqExtractor, AnnSeqProcessor
 from . import UscuSeqConverter, EnsemblSeqConverter
-from . import FastaConverter,SeqConverter
+from . import SeqConverter
 from . import SeqStatusDetector
 from . import SeqInformation
 class TestGenomeHandlePipeline(unittest.TestCase):

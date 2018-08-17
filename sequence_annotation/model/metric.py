@@ -1,13 +1,12 @@
 """A submodule about metric"""
 from . import SeqAnnDataHandler
 from . import LengthNotEqualException
-from abc import ABCMeta
-from keras.losses import categorical_crossentropy
-from keras.metrics import categorical_accuracy
+from abc import ABCMeta,abstractmethod
 import tensorflow as tf
 import keras.backend as K
+
 class Metric(metaclass=ABCMeta):
-    def __init__(self,name):
+    def __init__(self,name='Metric'):
         self._name = name
         self._default_method = None
     @property
@@ -22,17 +21,19 @@ class Metric(metaclass=ABCMeta):
     @default_method.setter
     def default_method(self, value):
         self._default_method = value
-class DependentMetric(Metric):
-    def __init__(self,name):
+        
+class BatchCounter(Metric):
+    def __init__(self,name='BatchCounter'):
         super().__init__(name=name)
-        self._constant = 100
+        self._constant = 1
         self._default_method = None
     def set_constant(self, value):
         self._constant = value
     def get_constant(self):
         return K.variable(value=self._constant)
-class CategoricalMetric(Metric):
-    def __init__(self, name, values_to_ignore=None):
+
+class SeqAnnMetric(Metric):
+    def __init__(self, name='SeqAnnMetric', values_to_ignore=None):
         super().__init__(name=name)
         self._values_to_ignore = values_to_ignore
         self._pred = None
@@ -40,18 +41,19 @@ class CategoricalMetric(Metric):
     def _get_preprocessed(self, true, pred):
         clean_true, clean_pred = SeqAnnDataHandler.process_tensor(true, pred,values_to_ignore=self._values_to_ignore)  
         return (clean_true,clean_pred)
-    def _validate_input(self, true, pred):
-        true_shape = K.int_shape(true)[0:2]
-        pred_shape = K.int_shape(pred)[0:2]
-        if true_shape != pred_shape:
-            raise LengthNotEqualException(true_shape, pred_shape)
     def set_data(self, true, pred):
-        self._validate_input(true, pred)
         true, pred = self._get_preprocessed(true, pred)
         self._true = true
         self._pred = pred
-class SpecificTypeMetric(CategoricalMetric):
-    def __init__(self, name, target_index, values_to_ignore=None):
+    @abstractmethod
+    def get_result(self):
+        pass
+    def __call__(self, y_true, y_pred):
+        self.set_data(y_true, y_pred)
+        return self.get_result()
+
+class SpecificTypeMetric(SeqAnnMetric):
+    def __init__(self,target_index,name='SpecificTypeMetric', values_to_ignore=None):
         super().__init__(name=name, values_to_ignore=values_to_ignore)
         self._target_index = target_index
     def get_true_positive(self):
@@ -81,40 +83,15 @@ class SpecificTypeMetric(CategoricalMetric):
         binary_true = self._get_binary(clean_true)
         binary_pred = self._get_binary(clean_pred)
         return (binary_true,binary_pred)
-class StaticCrossentropy(CategoricalMetric):
-    def __init__(self, name,weights,values_to_ignore=None):
-        super().__init__(name=name,values_to_ignore=values_to_ignore)
-        self._weights = weights
+
+class Accuracy(SeqAnnMetric):
+    def __init__(self, name=None, values_to_ignore=None,type_="categorical_accuracy"):
+        super().__init__(name=name or type_,values_to_ignore=values_to_ignore)
+        try:
+            exec('from keras.metrics import {type_}'.format(type_=type_))
+            exec('self._acc_function={type_}'.format(type_=type_))
+        except ImportError as e:
+            raise Exception(accuracy_type + ' cannot be found in keras.metrics')
     def get_result(self):
-        if self._weights is not None:
-            true = tf.multiply(self._true, self._weights)
-        else:
-            true = self._true
-        loss = tf.reduce_mean(categorical_crossentropy(true, self._pred))
-        return loss
-    def __call__(self, y_true, y_pred):
-        self.set_data(y_true, y_pred)
-        return self.get_result()
-class CategoricalAccuracy(CategoricalMetric):
-    def get_result(self):
-        accuracy = tf.reduce_mean(categorical_accuracy(self._true, self._pred))
+        accuracy = tf.reduce_mean(self._acc_function(self._true, self._pred))
         return accuracy
-    def __call__(self, y_true, y_pred):
-        self.set_data(y_true, y_pred)
-        return self.get_result()
-class MetricFactory(metaclass=ABCMeta):
-    """A factory creates metric"""
-    def create(self, type_, name, weights=None, values_to_ignore=None, target_index=None):
-        if type_ == "accuracy":
-            metric = CategoricalAccuracy(name=name,values_to_ignore=values_to_ignore)
-        elif type_ == "static_crossentropy":
-            metric = StaticCrossentropy(name=name, weights=weights,
-                                        values_to_ignore=values_to_ignore)
-        elif type_ == "specific_type":
-            metric = SpecificTypeMetric(name=name, target_index=target_index,
-                                        values_to_ignore=values_to_ignore)
-        elif type_ == "dependent":
-            metric = DependentMetric(name=name)
-        else:
-            raise Exception(type_ + " is not correct metric type")
-        return metric

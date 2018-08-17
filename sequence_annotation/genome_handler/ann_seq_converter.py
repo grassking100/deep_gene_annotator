@@ -1,7 +1,6 @@
 import numpy as np
 from abc import ABCMeta
 from abc import abstractmethod
-from . import AnnSeqContainer
 from . import AnnSequence
 from . import AnnSeqProcessor
 from . import NotOneHotException

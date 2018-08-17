@@ -6,7 +6,7 @@ import unittest
 import shutil
 import pandas as pd
 from . import PipelineFactory
-from . import JsonReader
+from . import read_json
 from . import BatchPipeline
 class TestBatchPipeline(unittest.TestCase):
     def test_runable(self):
@@ -16,8 +16,8 @@ class TestBatchPipeline(unittest.TestCase):
         train_id='test_runable'
         try:
             pipeline = BatchPipeline(data_type='sequence_annotation',is_prompt_visible=False)
-            work_setting = JsonReader().read(work_setting_path)
-            model_setting = JsonReader().read(model_setting_path)
+            work_setting = read_json(work_setting_path)
+            model_setting = read_json(model_setting_path)
             pipeline.execute(train_id,work_setting,model_setting)
         except Exception as e:
             raise e

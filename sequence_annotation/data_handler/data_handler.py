@@ -1,9 +1,9 @@
-from . import FastaConverter
 from . import SeqConverter
 from . import LengthNotEqualException
 from . import InvalidStrandType
 from . import AnnSeqContainer
 from . import annotation_count
+from . import fasta
 import os
 import warnings
 import numpy as np
@@ -30,7 +30,7 @@ class DataHandler(metaclass=ABCMeta):
             if count > 0:
                 weight = 1 / count
             else:
-                raise Exception(type_+" has zero count,so it cannot get reversed count weight")
+                raise Exception(type_+" has zero value,so it cannot get reversed count weight")
             raw_weights[type_] = weight
         sum_raw_weights = sum(raw_weights.values())
         for type_,weight in raw_weights.items():
@@ -94,9 +94,10 @@ class SeqAnnDataHandler(DataHandler):
             discard_invalid_seq = setting['discard_invalid_sequence']
             seq_converter = SeqConverter(codes=setting['valid_codes'],
                                          with_soft_masked_status=setting['soft_masked'])
-        fasta_converter = FastaConverter(seq_converter)
-        seq_dict = fasta_converter.to_seq_dict(fasta_paths)
-        return fasta_converter.to_vec_dict(seq_dict = seq_dict,discard_invalid_seq = discard_invalid_seq)
+        else:
+            seq_converter = SeqConverter()
+        seqs = fasta.read_fasta(fasta_paths)
+        return seq_converter.seqs_encode(seqs, discard_invalid_seq)
     @staticmethod
     def get_ann_vecs(ann_seqs,ann_types):
         warn = ("\n\n!!!\n"
@@ -121,6 +122,12 @@ class SeqAnnDataHandler(DataHandler):
     @staticmethod
     def process_tensor(answer, prediction,values_to_ignore=None):
         """Remove specific ignored singal and concatenate them into a two dimension tensor"""
+        true_shape = K.int_shape(answer)
+        pred_shape = K.int_shape(prediction)
+        true_label_number = K.shape(answer)[2]
+        pred_label_number = K.shape(prediction)[2]
+        if len(true_shape)!=3 or len(pred_shape)!=3:
+            raise Exception("Shape must be 3 dimensions")
         reshape_prediction = K.reshape(prediction, [-1])
         reshape_answer = K.reshape(answer, [-1])
         if values_to_ignore is not None:
@@ -128,12 +135,16 @@ class SeqAnnDataHandler(DataHandler):
                 values_to_ignore=[values_to_ignore]
             index = tf.where(K.not_equal(reshape_answer, values_to_ignore))
             clean_prediction = K.reshape(K.gather(reshape_prediction, index),
-                                         [-1, K.shape(prediction)[2]])
+                                         [-1, pred_label_number])
             clean_answer = K.reshape(K.gather(reshape_answer, index),
-                                     [-1, K.shape(answer)[2]])
+                                     [-1, true_label_number])
         else:
-            clean_prediction = K.reshape(prediction, [-1, K.shape(prediction)[2]])
+            clean_prediction = K.reshape(prediction, [-1,pred_label_number])
             clean_answer = K.reshape(answer, [-1, K.shape(answer)[2]])
+        true_shape = K.int_shape(clean_answer)
+        pred_shape = K.int_shape(clean_prediction)
+        if true_shape != pred_shape:
+            raise LengthNotEqualException(true_shape, pred_shape)
         return (clean_answer, clean_prediction)
     @staticmethod
     def _to_dict(seqs,answer,ann_types):

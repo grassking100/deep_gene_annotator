@@ -1,14 +1,9 @@
-import numpy as np
 import warnings
 from . import AnnSeqContainer
 from . import AnnSequence
-from . import InvalidStrandType
 from . import DictValidator
-from . import Creator
-from . import NotPositiveException
-from . import UscuSeqConverter
 from . import AnnSeqProcessor
-class AnnChromCreator(Creator):
+class AnnChromCreator:
     """Map annotated sequences belong to specific chromosome on the chromosome"""
     def __init__(self):
         super().__init__()
@@ -25,7 +20,7 @@ class AnnChromCreator(Creator):
                 raise Exception(err)
         ann_types = ann_seqs.ANN_TYPES
         chrom = self._get_init_chrom(chrom_id,ann_types,length,source)
-        self._add_seqs(chrom,ann_seqs,length,source)
+        self._add_seqs(chrom,ann_seqs,source)
         return chrom
     def _get_init_chrom(self,chrom_id,ann_types,length,source):
         """Get initialized chromosome"""      
@@ -42,21 +37,22 @@ class AnnChromCreator(Creator):
             ann_seq.init_space()
             chrom.add(ann_seq)
         return chrom
-    def _add_seqs(self,chrom,ann_seqs,length,source):
+    def _add_seqs(self,chrom,ann_seqs,source):
         for ann_seq in ann_seqs:
             one_strand_chrom = chrom.get(str(ann_seq.chromosome_id)+"_"+ann_seq.strand)
-            self._add_seq(one_strand_chrom,ann_seq,length,source)
-    def _add_seq(self,one_strand_chrom,ann_seq,chrom_length,source):
+            self._add_seq(one_strand_chrom,ann_seq,source)
+    def _add_seq(self,one_strand_chrom,ann_seq,source):
         txStart = ann_seq.absolute_index
         txEnd = ann_seq.absolute_index+ann_seq.length - 1
-        strand = ann_seq.strand
         gene_start_index = txStart
         gene_end_index = txEnd
         """
             Coordinate will be based on plus strand 
             from 5' to 3 on both PLUS and MINUS strand
         """
-        """if strand == 'plus':
+        """
+        strand = ann_seq.strand
+        if strand == 'plus':
             gene_start_index = txStart
             gene_end_index = txEnd
         elif strand == 'minus':
@@ -70,7 +66,7 @@ class AnnChromCreator(Creator):
             """if strand=='minus':
                 seq = np.flip(seq, 0)"""
             one_strand_chrom.add_ann(type_,seq,gene_start_index,gene_end_index)
-class AnnGenomeCreator(Creator):
+class AnnGenomeCreator:
     """Map annotated sequences on the genome"""
     def __init__(self):
         super().__init__()

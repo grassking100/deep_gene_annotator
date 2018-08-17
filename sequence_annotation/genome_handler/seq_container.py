@@ -117,7 +117,7 @@ class AnnSeqContainer(SeqContainer):
         return AnnSequence()
     def from_dict(self,dict_):
         self.ANN_TYPES = dict_["type"]
-        super().from_dict(dict_)
+        return super().from_dict(dict_)
     def to_dict(self):
         dict_ = super().to_dict()
         dict_["type"] = self.ANN_TYPES

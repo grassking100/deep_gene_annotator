@@ -21,7 +21,7 @@ class Sequence(metaclass=ABCMeta):
         self.chromosome_id = None
         self._strand = None
     def __len__(self):
-        return self._length
+        return self.length
     def to_dict(self):
         dictionary = {}
         for attr in self._copied_public_attrs():

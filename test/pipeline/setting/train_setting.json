@@ -24,9 +24,13 @@
     "use_generator":true,
     "load_model":false,
     "load_weights":false,
+    "optimizer_setting":
+    {
+        "keras_setting":{"lr":0.001},
+        "type":"Adam"
+    },
     "compile":{
-        "learning_rate":0.001,
-        "metric_types":["loss","constant"],
+        "metric_types":["loss","batch_counter"],
         "loss":"mse"
     }
 }

@@ -1,52 +1,39 @@
 """This submodule provides library about visualize"""
 import matplotlib.pyplot as plt
 import numpy as np
-import os,sys
 import pandas as pd
-from . import ModelHandler
-from . import SeqConverter
-from . import FastaConverter
-class SubplotHelper():
-    def __init__(self,nrow=1,ncol=1,width=50,height=50):
-        self.index = 0
-        self._nrow=nrow
-        self._ncol=ncol
-        self.fig, self.axes = plt.subplots(self._nrow,self._ncol)
-        self.fig.set_size_inches(width,height)
-    def get_ax(self,row_index=None,col_index=None):
-        if not isinstance(self.axes,np.ndarray):
-            ax=self.axes
-        else:
-            if row_index is None or col_index is None:
-                row_index = int(self.index/self._ncol)
-                col_index = self.index%self._ncol
-                self.index += 1
-            if len(self.axes.shape)==1:
-                ax=self.axes[col_index]
-            else:
-                ax=self.axes[row_index,col_index]
-        return ax
-    def set_axes_setting(self,title_params=None,xlabel_params=None,ylabel_params=None,
-                 tick_params=None,legends_params=None):
-        for sub_axes in self.axes:
-            for ax in sub_axes:
-                if title_params is not None:
-                    ax.set_title(**title_params)
-                if tick_params is not None:
-                    ax.tick_params(**tick_params)
-                if xlabel_params is not None:
-                    ax.set_xlabel(**xlabel_params)
-                if ylabel_params is not None:
-                    ax.set_ylabel(**ylabel_params)
-                if legends_params is not None:
-                    ax.legend(**legends_params)
-def ann_visual(answer, annotation_types):
-    """visualize the probability of each type along  sequence"""    
+from . import SubplotHelper
+def ann_seq_visual(seq):
+    """visualize the probability of each type along sequence"""    
     answer_vec = []
-    for type_ in annotation_types:
-        answer_vec.append(answer[type_])
+    for type_ in seq.ANN_TYPES:
+        answer_vec.append(np.array([0.0]*seq.length))
+    for index,type_ in enumerate(seq.ANN_TYPES):
+        if seq.strand=='plus':
+            answer_vec[index] += seq.get_ann(type_)
+        else:
+            answer_vec[index] += np.flip(seq.get_ann(type_),0)
+    x = list(range(seq.length))
+    plt.stackplot(x,answer_vec,labels=seq.ANN_TYPES)
+    plt.legend(loc='upper right')
+
+def ann_seqs_visual(seqs):
+    """visualize the probability of each type along sequences"""    
+    answer_vec = []
+    max_len = 0
+    for seq in seqs:
+        max_len = max(seq.length,max_len)
+    for type_ in seqs.ANN_TYPES:
+        answer_vec.append(np.array([0.0]*max_len))
+    for seq in seqs:
+        for index,type_ in enumerate(seqs.ANN_TYPES):
+            if seq.strand=='plus':
+                answer_vec[index][0:seq.length] += seq.get_ann(type_)
+            else:
+                answer_vec[index][0:seq.length] += np.flip(seq.get_ann(type_),0)
     x = list(range(np.array(answer_vec).shape[1]))
-    plt.stackplot(x,answer_vec, labels=annotation_types)
+    plt.stackplot(x,answer_vec, labels=seqs.ANN_TYPES)
+    plt.legend(loc='upper right')    
 
 def seq_predict_visual(model, seqs, annotation_types):
     """visualize the predicted probability of each type along sequence"""
@@ -164,6 +151,7 @@ def draw_each_class_barplot(df,soruces):
             ax.tick_params(axis='x',rotation=10)
             ax.legend(fontsize=30,mode="expand",bbox_to_anchor=(0.,-.5, 1., -.5),
                       borderaxespad=0.,ncol=2, loc='lower center')   
+
 def draw_each_setting_barplot(df,soruces):
     ann_types = set(df['ann_type'])
     metric_types = ['precision','recall','f1','loss','accuracy']
@@ -185,6 +173,7 @@ def draw_each_setting_barplot(df,soruces):
                 ax.tick_params(axis='both',labelsize=30)
                 ax.legend(fontsize=30,mode="expand",bbox_to_anchor=(0.,-.3, 1., -.3),
                           borderaxespad=0.,ncol=2, loc='lower center')
+
 def draw_loss_curve(df,line_type,colors):
     modes = set(df['mode_id'])
     helper = SubplotHelper(len(modes),2,20,10*len(modes))
@@ -237,6 +226,7 @@ def metric_converter(df,sources,prefixes,annotation_types=None,id_=None,mode_id=
             metrics.append({'value':value,'ann_type':'global','metric_type':metric_type,
                             'source':source,'id':id_,'mode_id':mode_id})
     return pd.DataFrame(metrics)
+
 def get_sub_dataframe(df,metric_type=None,source=None,ann_type=None,mode_id=None,index=None,id_=None):
     """Get dataframe of data which are selected in dataframe"""
     if metric_type is not None:
