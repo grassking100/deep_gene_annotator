@@ -41,9 +41,11 @@ class Loss(SeqAnnMetric):
                 if self._dynamic_weight_method=="reversed_count_weight":
                     weight_ = self._reversed_count_weight(true)
                 else:
-                    raise Exception(dynamic_weight_method+"is not be implemented yet")
-        if weight_ is not None:
+                    raise Exception(dynamic_weight_method+" has not be implemented yet")
+        if weight_ is not None and type_=='categorical_crossentropy':
             true = tf.multiply(true, weight_)
+        else:
+            raise Exception(type_+" doesn't support weights loss yet")
         loss = tf.reduce_mean(self._loss_function(true,pred))
         return loss
     def _reversed_count_weight(self,seq_tensor):
