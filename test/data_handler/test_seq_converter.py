@@ -1,5 +1,7 @@
 import unittest
-from . import SeqConverter,SeqException,CodeException
+from sequence_annotation.data_handler.seq_converter import SeqConverter
+from sequence_annotation.utils.exception import SeqException,CodeException
+
 class TestDNAVector(unittest.TestCase):
     def test_code2vec(self):
         converter = SeqConverter()

@@ -1,12 +1,9 @@
 from abc import ABCMeta,abstractmethod
 import numpy as np
-from . import ProcessedStatusNotSatisfied
-from . import AnnSequence
-from . import UninitializedException
-class NotOneHotException(Exception):
-    def __init__(self,seq_id):
-        msg = "Sequence,"+str(seq_id)+",is not one hot encoded"
-        super().__init__(msg)
+from ..utils.exception import ProcessedStatusNotSatisfied
+from ..utils.exception import UninitializedException
+from .sequence import AnnSequence
+from .exception import NotOneHotException
 
 class AnnSeqProcessor(metaclass=ABCMeta):
     def is_dirty(self,seq,dirty_types):

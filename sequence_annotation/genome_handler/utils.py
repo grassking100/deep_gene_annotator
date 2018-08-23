@@ -62,21 +62,14 @@ def gene_boundary(data,raise_duplicated_excpetion=True):
     result.reset_index(inplace=True)
     return result
 
-def annotation_count(ann_seqs):
-    count = {}
-    for ann_seq in ann_seqs:
-        for type_ in ann_seq.ANN_TYPES:
-            if type_ not in count.keys():
-                count[type_] = 0
-            count[type_] += np.sum(ann_seq.get_ann(type_))
-    return count
-
-def preprocess_ensembl_data(parsed_file_path,valid_chroms_id,merged_by='Protein stable ID'):
+def preprocess_ensembl_data(parsed_file_path,valid_chroms_id,merged_by='Protein stable ID',gene_types=['protein_coding']):
     file = pd.read_csv(parsed_file_path,sep='\t',dtype={'Gene stable ID':np.str ,
                                                         'Protein stable ID':np.str ,
                                                         'Transcript stable ID':np.str ,
                                                         'Chromosome/scaffold name':np.str })
-    valid_data = all_[all_['Chromosome/scaffold name'].isin([str(char) for char in valid_chroms_id])]
+    gene_type_status = file['Gene type'].isin(gene_types)
+    chrom_status = file['Chromosome/scaffold name'].isin([str(char) for char in valid_chroms_id])
+    valid_data = file[gene_type_status & chrom_status]
     valid_data = valid_data.drop_duplicates()
     merged_data = merge_data(valid_data,merged_by)
     return merged_data

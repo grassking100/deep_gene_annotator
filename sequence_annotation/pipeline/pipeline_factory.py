@@ -1,6 +1,8 @@
 from abc import ABCMeta, abstractmethod
-from . import TrainPipeline,TestPipeline
-from . import SeqAnnDataHandler,SimpleDataHandler
+from .train_pipeline import TrainPipeline
+from .test_pipeline import TestPipeline
+from ..data_handler.data_handler import SeqAnnDataHandler,SimpleDataHandler
+
 class PipelineFactory(metaclass=ABCMeta):
     def create(self,purpose,data_type="simple",is_prompt_visible=True):
         if purpose == 'train':

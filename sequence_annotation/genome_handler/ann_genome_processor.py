@@ -1,6 +1,6 @@
-from . import RegionExtractor
-from . import SeqInfoContainer, AnnSeqContainer
-from . import AnnSeqProcessor
+from sequence_annotation.genome_handler.region_extractor import RegionExtractor
+from sequence_annotation.genome_handler.seq_container import AnnSeqContainer,SeqInfoContainer
+from sequence_annotation.genome_handler.ann_seq_processor import AnnSeqProcessor
 
 class AnnGenomeProcessor():
     

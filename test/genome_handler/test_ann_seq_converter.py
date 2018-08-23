@@ -1,5 +1,8 @@
 import unittest
-from . import AnnSeqTestCase, EnsemblSeqConverter, AnnSequence, NotOneHotException
+from . import AnnSeqTestCase
+from sequence_annotation.genome_handler.ann_seq_converter import EnsemblSeqConverter
+from sequence_annotation.genome_handler.sequence import AnnSequence
+from sequence_annotation.genome_handler.exception import NotOneHotException
 class TestAnnSeqConverter(AnnSeqTestCase):
     def test_ensembl_data(self):
         converter = EnsemblSeqConverter()

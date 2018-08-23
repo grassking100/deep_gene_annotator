@@ -1,6 +1,6 @@
 from . import AnnSeqTestCase
-from . import AnnSequence
-from . import ExonHandler
+from sequence_annotation.genome_handler.sequence import AnnSequence
+from sequence_annotation.genome_handler.exon_handler import ExonHandler
 class TestExonHandler(AnnSeqTestCase):
     def test_get_other_types(self):
         exon_handler = ExonHandler()

@@ -1,6 +1,6 @@
 from keras.callbacks import Callback
 import pandas as pd
-from . import NotPositiveException
+from ..utils.exception import NotPositiveException
 class ResultHistory(Callback):
     def __init__(self,filepath, verbose, period, previous_results):
         super().__init__()

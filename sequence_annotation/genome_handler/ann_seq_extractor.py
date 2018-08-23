@@ -1,7 +1,7 @@
 from abc import ABCMeta
 from abc import abstractmethod
-from . import AnnSequence
-from . import AnnSeqContainer
+from .sequence import AnnSequence
+from .seq_container import AnnSeqContainer
 
 class AnnSeqExtractor(metaclass=ABCMeta):
     def extract(self,ann_seq_container,seq_info_container):

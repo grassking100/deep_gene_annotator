@@ -1,6 +1,6 @@
 """A submodule about metric"""
-from . import SeqAnnDataHandler
-from . import LengthNotEqualException
+from ..data_handler.data_handler import SeqAnnDataHandler
+from ..utils.exception import LengthNotEqualException
 from abc import ABCMeta,abstractmethod
 import tensorflow as tf
 import keras.backend as K
@@ -45,12 +45,6 @@ class SeqAnnMetric(Metric):
         true, pred = self._get_preprocessed(true, pred)
         self._true = true
         self._pred = pred
-    @abstractmethod
-    def get_result(self):
-        pass
-    def __call__(self, y_true, y_pred):
-        self.set_data(y_true, y_pred)
-        return self.get_result()
 
 class SpecificTypeMetric(SeqAnnMetric):
     def __init__(self,target_index,name='SpecificTypeMetric', values_to_ignore=None):
@@ -95,3 +89,6 @@ class Accuracy(SeqAnnMetric):
     def get_result(self):
         accuracy = tf.reduce_mean(self._acc_function(self._true, self._pred))
         return accuracy
+    def __call__(self, y_true, y_pred):
+        self.set_data(y_true, y_pred)
+        return self.get_result()

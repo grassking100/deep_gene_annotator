@@ -1,8 +1,8 @@
 import unittest
 import numpy as np
-from . import AnnSeqContainer
-from . import AnnSequence
-from . import AnnSeqProcessor
+from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
+from sequence_annotation.genome_handler.sequence import AnnSequence
+from sequence_annotation.genome_handler.ann_seq_processor import AnnSeqProcessor
 class RealGenome:
     genome_information={'chromosome':{'chr1':30,'chr2':35},'source':'unit_test'}
     ANN_TYPES = ['cds','intron','utr_5','utr_3']

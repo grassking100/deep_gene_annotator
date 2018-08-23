@@ -1,8 +1,8 @@
 import warnings
-from . import AnnSeqContainer
-from . import AnnSequence
-from . import DictValidator
-from . import AnnSeqProcessor
+from .seq_container import AnnSeqContainer
+from .sequence import AnnSequence
+from ..utils.validator import DictValidator
+from .ann_seq_processor import AnnSeqProcessor
 class AnnChromCreator:
     """Map annotated sequences belong to specific chromosome on the chromosome"""
     def __init__(self):

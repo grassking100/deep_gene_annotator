@@ -4,8 +4,8 @@ import json
 import pandas as pd
 from time import strftime, gmtime
 from os.path import expanduser
-from . import BasicPipeline
-from . import TrainWorker
+from .basic_pipeline import BasicPipeline
+from .worker.train_worker import TrainWorker
 class TrainPipeline(BasicPipeline):
     """a pipeline about training model"""
     def _get_class_count(self):

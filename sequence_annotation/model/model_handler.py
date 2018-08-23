@@ -1,8 +1,8 @@
 from keras.models import load_model
 from keras.optimizers import Adam
-from . import CustomObjectsFacade
-from . import ModelBuilder
-from . import MinimalRNN
+from .custom_objects import CustomObjectsFacade
+from .model_builder import ModelBuilder
+from .. import MinimalRNN
 class ModelHandler():
     @staticmethod
     def load_model(path):

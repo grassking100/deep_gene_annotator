@@ -1,9 +1,8 @@
 from . import SeqInfoTestCase
 import numpy as np
-from . import AnnSequence
-from . import SeqInformation
-from . import SeqInfoContainer
-from . import RegionExtractor
+from sequence_annotation.genome_handler.sequence import AnnSequence,SeqInformation
+from sequence_annotation.genome_handler.seq_container import SeqInfoContainer
+from sequence_annotation.genome_handler.region_extractor import RegionExtractor
 class TestRegionExtractor(SeqInfoTestCase):
     def test_region_extract(self):
         #Create sequence to test

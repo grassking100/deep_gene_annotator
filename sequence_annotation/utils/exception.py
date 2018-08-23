@@ -93,6 +93,14 @@ class LengthNotEqualException(Exception):
                " "+str(second_length))
         super().__init__(msg)
 
+class DimensionNotSatisfy(Exception):
+    def __init__(self, dim, exception_dim):
+        msg = ("Dimension length should be"
+               " "+str(exception_dim)+","
+               "but get dimension with shape,"
+               ""+str(dim))
+        super().__init__(msg)
+
 class ReturnNoneException(Exception):
     def __init__(self,attr_name,solution=None):
         msg = "Try to return "+attr_name+" with None value"

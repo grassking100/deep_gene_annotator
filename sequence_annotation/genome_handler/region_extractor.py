@@ -1,7 +1,7 @@
-from . import SeqInfoContainer
-from . import SeqInformation
-from . import AnnSeqProcessor
-from . import NotOneHotException
+from .seq_container import SeqInfoContainer
+from .sequence import SeqInformation
+from .ann_seq_processor import AnnSeqProcessor
+from .exception import NotOneHotException
 class RegionExtractor:
     """#Get annotated region information"""
     def extract(self,ann_seq,focus_types=None):

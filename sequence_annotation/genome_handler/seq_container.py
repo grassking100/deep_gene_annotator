@@ -1,10 +1,9 @@
 from abc import ABCMeta
 from abc import abstractmethod
 import pandas as pd
-from . import AttrValidator
-from . import InvalidAnnotation
-from . import AnnSequence,SeqInformation,Sequence
-from . import IdNotFoundException,DuplicateIdException
+from ..utils.validator import AttrValidator
+from ..utils.exception import InvalidAnnotation,IdNotFoundException,DuplicateIdException
+from .sequence import AnnSequence,SeqInformation,Sequence
 class SeqContainer(metaclass=ABCMeta):
     def __init__(self):
         self._data = {}
@@ -122,3 +121,9 @@ class AnnSeqContainer(SeqContainer):
         dict_ = super().to_dict()
         dict_["type"] = self.ANN_TYPES
         return dict_
+    def add(self,seq_or_seqs):
+        if self.ANN_TYPES is not None:
+            super().add(seq_or_seqs)
+        else:
+            raise Exception("AnnSeqContainer must have ANN_TYPES")
+        

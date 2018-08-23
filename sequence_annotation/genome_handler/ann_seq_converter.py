@@ -1,9 +1,9 @@
 import numpy as np
 from abc import ABCMeta
 from abc import abstractmethod
-from . import AnnSequence
-from . import AnnSeqProcessor
-from . import NotOneHotException
+from .sequence import AnnSequence
+from .ann_seq_processor import AnnSeqProcessor
+from .exception import NotOneHotException
 class AnnSeqConverter(metaclass=ABCMeta):
     def __init__(self,foucus_type=None,extra_types=None):
         self._foucus_type = foucus_type or ['cds','intron','utr_5','utr_3']

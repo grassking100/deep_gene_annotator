@@ -1,8 +1,8 @@
 import unittest
 import numpy as np
 import pandas as pd
-from . import SeqInfoContainer
-from . import SeqInformation
+from sequence_annotation.genome_handler.seq_container import SeqInfoContainer
+from sequence_annotation.genome_handler.sequence import SeqInformation
 class TestSequenceContainer(unittest.TestCase):
     def test_iter_id(self):
         container = SeqInfoContainer()

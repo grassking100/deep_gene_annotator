@@ -1,14 +1,9 @@
 """This submodule provides class to defined test pipeline"""
-import pandas as pd
 import os
 import json
 from time import gmtime, strftime
-from os.path import expanduser
 from abc import abstractmethod,abstractproperty
-from . import SeqAnnDataHandler
-from . import SimpleDataHandler
-from . import Pipeline
-from . import TestWorker
+from .pipeline import Pipeline
 
 class BasicPipeline(Pipeline):
     @abstractmethod

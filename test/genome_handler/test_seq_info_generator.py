@@ -1,8 +1,8 @@
 import unittest
 import numpy as np
-from . import SeqInformation
-from . import SeqInfoContainer
-from . import SeqInfoGenerator
+from sequence_annotation.genome_handler.sequence import SeqInformation
+from sequence_annotation.genome_handler.seq_container import SeqInfoContainer
+from sequence_annotation.genome_handler.seq_info_generator import SeqInfoGenerator
 class TestSeqInfoGenerator(unittest.TestCase):
     def test_total_number(self):
         principle = {'remove_end_of_strand':True,'with_random_choose':True,

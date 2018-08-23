@@ -26,7 +26,6 @@ class StatefulMetric(Layer,metaclass=ABCMeta):
             Reset the state at the beginning of 
             training and evaluation for each epoch.
         """
-        #print("Reset layer:"+self.name)
         K.set_value(self._data, 0)
     def _calculate(self, y_true, y_pred):
         """Calculate and return result of metric"""

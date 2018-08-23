@@ -1,8 +1,8 @@
 from . import AnnSeqTestCase
 import numpy as np
-from . import ProcessedStatusNotSatisfied
-from . import AnnSequence
-from . import AnnSeqProcessor
+from sequence_annotation.utils.exception import ProcessedStatusNotSatisfied
+from sequence_annotation.genome_handler.sequence import AnnSequence
+from sequence_annotation.genome_handler.ann_seq_processor import AnnSeqProcessor
 class TestAnnSeqProcessor(AnnSeqTestCase):
     def test_normalized_all_types(self):
         ann = AnnSequence()

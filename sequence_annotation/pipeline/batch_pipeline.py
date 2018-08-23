@@ -1,5 +1,5 @@
 from abc import ABCMeta, abstractmethod
-from . import PipelineFactory
+from .pipeline_factory import PipelineFactory
 import copy
 class BatchPipeline(metaclass=ABCMeta):
     def __init__(self,data_type='simple',is_prompt_visible=True):

@@ -3,70 +3,72 @@ import sys
 from os.path import abspath, expanduser
 sys.path.append(abspath(expanduser(__file__+"/../..")))
 import unittest
-import shutil
-import pandas as pd
-from . import PipelineFactory
-from . import read_json
-
+from sequence_annotation.pipeline.processor.compiler import SimpleCompiler
+from sequence_annotation.pipeline.processor.model_processor import SimpleModel,ModelCreator
+from sequence_annotation.pipeline.processor.data_processor import AnnSeqData,SimpleData
+from keras import optimizers
+from keras.models import Sequential
+from keras.layers import Dense, Activation
+from sequence_annotation.pipeline.worker.train_worker import TrainWorker
+from sequence_annotation.pipeline.worker.test_worker import TestWorker
+from sequence_annotation.pipeline.pipeline import Pipeline
+from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
+from sequence_annotation.data_handler.fasta import read_fasta
+from sequence_annotation.data_handler.json import read_json
+from sequence_annotation.data_handler.seq_converter import SeqConverter
+import numpy as np
 class TestPipeline(unittest.TestCase):
-    def test_runable(self):
-        user_setting = {}
-        work_setting_path=abspath(expanduser(__file__+'/../setting/train_setting.json'))
-        model_setting_path=abspath(expanduser(__file__+'/../setting/model_setting.json'))
-        train_id='test_runable'
-        try:
-            train_pipeline = PipelineFactory().create('train','sequence_annotation',False)
-            work_setting = read_json(work_setting_path)
-            model_setting = read_json(model_setting_path)
-            train_pipeline.execute(train_id,work_setting,model_setting)
-        except Exception as e:
-            raise e
-            self.fail("There are some unexpected exception occur.")
-        finally:
-            path = abspath(expanduser(__file__+'/../result/'+train_id))
-            if os.path.exists(path):
-                shutil.rmtree(path)
-    def test_constant_metric(self):
-        user_setting = {}
-        work_setting_path = abspath(expanduser(__file__+'/../setting/train_setting.json'))
-        model_setting_path = abspath(expanduser(__file__+'/../setting/model_setting.json'))
-        train_id='test_constant'
-        try:
-            train_pipeline = PipelineFactory().create('train','sequence_annotation',False)
-            work_setting = read_json(work_setting_path)
-            model_setting = read_json(model_setting_path)
-            train_pipeline.execute(train_id,work_setting,model_setting)
-            path =  abspath(expanduser(__file__+'/../result/'+train_id+'/train/result/epoch_03.csv'))
-            data = pd.read_csv(path)
-            self.assertEqual((data['batch_counter_layer']==3).tolist(),[True]*3)
-            self.assertEqual((data['val_batch_counter_layer']==3).tolist(),[True]*3)
-        except Exception as e:
-            raise e
-            self.fail("There are some unexpected exception occur.")
-        finally:
-            path = abspath(expanduser(__file__+'/../result/'+train_id))
-            if os.path.exists(path):
-                shutil.rmtree(path)
-           
+    def test_simple_train(self):
+        model = Sequential([
+            Dense(32, input_shape=(2,)),
+            Activation('relu'),
+            Dense(2),
+            Activation('softmax')
+        ])
+        simple_model = SimpleModel(model)
+        compiler = SimpleCompiler('adam','binary_crossentropy')
+        data = SimpleData({'training':{'inputs':[[1,0]],'answers':[[1,0]]}})
+        worker = TrainWorker(is_verbose_visible=False)
+        pipeline = Pipeline(simple_model,data,compiler,worker,is_prompt_visible=False)
+        pipeline.execute(1)
+    def test_simple_test(self):
+        model = Sequential([
+            Dense(32, input_shape=(2,)),
+            Activation('relu'),
+            Dense(2),
+            Activation('softmax')
+        ])
+        simple_model = SimpleModel(model)
+        compiler = SimpleCompiler('adam','binary_crossentropy')
+        data = SimpleData({'testing':{'inputs':[[1,0]],'answers':[[1,0]]}})
+        worker = TestWorker(is_verbose_visible=False)
+        pipeline = Pipeline(simple_model,data,compiler,worker,is_prompt_visible=False)
+        pipeline.execute(1)
     def test_train_test(self):
-        user_setting = {}
-        train_setting_path = abspath(expanduser(__file__+'/../setting/train_setting.json'))
-        test_setting_path = abspath(expanduser(__file__+'/../setting/test_setting.json'))
-        model_setting_path = abspath(expanduser(__file__+'/../setting/model_setting.json'))
-        id_='test_train_test'
         try:
-            train_pipeline = PipelineFactory().create('train','sequence_annotation',False)
-            train_setting = read_json(train_setting_path)
-            test_setting = read_json(test_setting_path)
+            seq_data = np.load(abspath(expanduser(__file__+'/../data/seqs.npy'))).item()
+            seqs = AnnSeqContainer().from_dict(seq_data)
+            fasta = read_fasta(abspath(expanduser(__file__+'/../data/seqs.fasta')))
+            model_setting_path = abspath(expanduser(__file__+'/../setting/model_setting.json'))
             model_setting = read_json(model_setting_path)
-            train_pipeline.execute(id_,train_setting,model_setting)
-            test_pipeline = PipelineFactory().create('test','sequence_annotation',False)
-            test_pipeline.execute(id_,test_setting,model_setting)
-            self.assertEqual(dict(test_pipeline.worker.result)['loss'] <= 0.05,True)
+            model = ModelCreator(model_setting)
+            compiler = SimpleCompiler('adam','mse')
+            seq_converter = SeqConverter(codes="ATCGN", with_soft_masked_status=True)
+            data = AnnSeqData({'data':{'training':{'inputs':fasta,'answers':seqs}},
+                               'ANN_TYPES':["utr_5","utr_3","intron","cds","intergenic_region"]},
+                               seq_converter = seq_converter)
+            train_worker = TrainWorker(is_verbose_visible=False,batch_size=1, epoch=30,
+                                       validation_split=0.0, use_generator=True)
+            train_pipeline = Pipeline(model,data,compiler,train_worker,is_prompt_visible=False)
+            train_pipeline.execute(1)
+            test_worker = TestWorker(is_verbose_visible=False)
+            test_data = AnnSeqData({'data':{'testing':{'inputs':fasta,'answers':seqs}},
+                                    'ANN_TYPES':["utr_5","utr_3","intron","cds","intergenic_region"]},
+                                     seq_converter = seq_converter)
+            simple_model = SimpleModel(model.model)
+            test_pipeline = Pipeline(simple_model,test_data,compiler,test_worker,is_prompt_visible=False)
+            test_pipeline.execute(1)
+            self.assertEqual(dict(test_worker.result)['loss'] <= 0.05,True)
         except Exception as e:
             raise e
             self.fail("There are some unexpected exception occur.")
-        finally:
-            path = abspath(expanduser(__file__+'/../result/'+id_))
-            if os.path.exists(path):
-                shutil.rmtree(path)

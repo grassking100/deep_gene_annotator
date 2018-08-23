@@ -1,5 +1,6 @@
-from . import AnnSeqContainer,AnnSequence
-from . import SeqAnnDataHandler
+from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
+from sequence_annotation.genome_handler.sequence import AnnSequence
+from sequence_annotation.data_handler.data_handler import SeqAnnDataHandler
 import unittest
 import numpy as np
 from numpy.testing import assert_array_equal

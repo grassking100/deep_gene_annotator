@@ -5,13 +5,12 @@ from keras.engine.training import Model
 from keras.layers import RNN,Input
 from keras.layers import Bidirectional,Permute
 import copy
-from . import MinimalRNN
-from . import MReluGRU
-from . import Cnn1dBatchReluBuilder,ResidualLayerBuilder,DeepResidualLayerBuilder
-from . import DeepDenseLayerBuilder,DenseLayerBuilder
-from . import BatchRenormalization
-from . import IndRNN
-
+from .block_layer_builder import Cnn1dBatchReluBuilder,ResidualLayerBuilder,DeepResidualLayerBuilder
+from .block_layer_builder import DeepDenseLayerBuilder,DenseLayerBuilder
+from .. import MinimalRNN
+from .. import IndRNN
+from .. import MReluGRU
+from .. import BatchRenormalization
 def _import_regularizer(type_):
     exec('from keras.regularizers import {regularizer}'.format(regularizer=type_))
 

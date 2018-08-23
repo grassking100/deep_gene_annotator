@@ -1,9 +1,7 @@
-from . import SeqConverter
-from . import LengthNotEqualException
-from . import InvalidStrandType
-from . import AnnSeqContainer
-from . import annotation_count
-from . import fasta
+from .seq_converter import SeqConverter
+from ..utils.exception import LengthNotEqualException,InvalidStrandType
+from ..genome_handler.seq_container import AnnSeqContainer
+from .fasta import read_fasta
 import os
 import warnings
 import numpy as np
@@ -13,6 +11,7 @@ import tensorflow as tf
 from abc import ABCMeta, abstractmethod
 from keras.preprocessing.sequence import pad_sequences
 from os.path import expanduser,abspath
+
 class DataHandler(metaclass=ABCMeta):
     @classmethod
     def get_weight(cls,class_counts, method_name):
@@ -80,6 +79,7 @@ class SimpleDataHandler(DataHandler):
         for id_ in bulk_ids:
             data[id_] = list(raw_data[id_])[:-1]
         return (data,cell_types)
+
 class SeqAnnDataHandler(DataHandler):
     @staticmethod
     def padding(inputs, answers, padding_signal):
@@ -87,7 +87,7 @@ class SeqAnnDataHandler(DataHandler):
         align_answers = pad_sequences(answers, padding='post',value=padding_signal)
         return (align_inputs, align_answers)
     @staticmethod
-    def get_seq_vecs(fasta_paths,setting=None):
+    def get_seq_vecs(seqs,setting=None):
         seq_converter = None
         discard_invalid_seq = False
         if setting is not None:
@@ -96,16 +96,16 @@ class SeqAnnDataHandler(DataHandler):
                                          with_soft_masked_status=setting['soft_masked'])
         else:
             seq_converter = SeqConverter()
-        seqs = fasta.read_fasta(fasta_paths)
-        return seq_converter.seqs_encode(seqs, discard_invalid_seq)
+        return seq_converter.seqs_encoded(seqs, discard_invalid_seq)
     @staticmethod
-    def get_ann_vecs(ann_seqs,ann_types):
+    def get_ann_vecs(ann_seqs,ann_types=None):
         warn = ("\n\n!!!\n"
                 "\tDNA sequence will be rearranged from 5' to 3'.\n"
                 "\tThe plus strand sequence will stay the same,"
                 " but the minus strand sequence will be flipped!\n"
                 "!!!\n")
         warnings.warn(warn)
+        ann_types = ann_types or ann_seqs.ANN_TYPES
         dict_ = {}
         for ann_seq in ann_seqs:
             ann = []
@@ -124,10 +124,10 @@ class SeqAnnDataHandler(DataHandler):
         """Remove specific ignored singal and concatenate them into a two dimension tensor"""
         true_shape = K.int_shape(answer)
         pred_shape = K.int_shape(prediction)
-        true_label_number = K.shape(answer)[2]
-        pred_label_number = K.shape(prediction)[2]
         if len(true_shape)!=3 or len(pred_shape)!=3:
             raise Exception("Shape must be 3 dimensions")
+        true_label_number = K.shape(answer)[-1]
+        pred_label_number = K.shape(prediction)[-1]
         reshape_prediction = K.reshape(prediction, [-1])
         reshape_answer = K.reshape(answer, [-1])
         if values_to_ignore is not None:
@@ -140,13 +140,22 @@ class SeqAnnDataHandler(DataHandler):
                                      [-1, true_label_number])
         else:
             clean_prediction = K.reshape(prediction, [-1,pred_label_number])
-            clean_answer = K.reshape(answer, [-1, K.shape(answer)[2]])
+            clean_answer = K.reshape(answer, [-1, true_label_number])
         true_shape = K.int_shape(clean_answer)
         pred_shape = K.int_shape(clean_prediction)
         if true_shape != pred_shape:
             raise LengthNotEqualException(true_shape, pred_shape)
         return (clean_answer, clean_prediction)
     @staticmethod
+    def class_count(ann_seqs):
+        ann_count = {}
+        for type_ in ann_seqs.ANN_TYPES:
+            ann_count[type_] = 0
+        for ann_seq in ann_seqs:
+            for type_ in ann_seqs.ANN_TYPES:
+                ann_count[type_] += np.sum(ann_seq.get_ann(type_))
+        return ann_count
+"""    @staticmethod
     def _to_dict(seqs,answer,ann_types):
         ann_count = {}
         data_pair = {}
@@ -170,8 +179,8 @@ class SeqAnnDataHandler(DataHandler):
         if not isinstance(seq_paths,list):
             seq_paths = [seq_paths]
         seq_paths = [abspath(expanduser(seq_path)) for seq_path in seq_paths]
-        seqs = cls.get_seq_vecs(seq_paths,setting)
+        seqs = cls.get_seq_vecs(fasta.read_fasta(fasta_paths),setting)
         ann_seqs = AnnSeqContainer()
         ann_seqs.from_dict(np.load(answer_path).item())
         answer = cls.get_ann_vecs(ann_seqs,ann_types)
-        return cls._to_dict(seqs,answer,ann_types)
+        return cls._to_dict(seqs,answer,ann_types)"""

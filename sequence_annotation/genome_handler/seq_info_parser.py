@@ -2,7 +2,7 @@ from abc import ABCMeta
 from abc import abstractmethod
 import numpy as np
 import ast
-from . import NegativeNumberException,InvalidStrandType,NotPositiveException
+from ..utils.exception import NegativeNumberException,InvalidStrandType,NotPositiveException
 class SeqInfoParser(metaclass=ABCMeta):
     def parse(self,data_list):
         returned_list = []

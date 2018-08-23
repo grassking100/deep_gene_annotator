@@ -1,10 +1,8 @@
 from . import AnnSeqTestCase
 import numpy as np
-from . import AnnSeqContainer
-from . import SeqInfoContainer
-from . import AnnSeqExtractor
-from . import SeqInformation
-from . import AnnSequence
+from sequence_annotation.genome_handler.seq_container import AnnSeqContainer,SeqInfoContainer
+from sequence_annotation.genome_handler.ann_seq_extractor import AnnSeqExtractor
+from sequence_annotation.genome_handler.sequence import AnnSequence,SeqInformation
 class TestAnnSeqExtractor(AnnSeqTestCase):
     def test_extract_success(self):
         ann_seq_container = AnnSeqContainer()

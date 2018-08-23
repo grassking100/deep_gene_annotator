@@ -1,8 +1,9 @@
 from . import AnnSeqTestCase
-from . import ProcessedStatusNotSatisfied
-from . import AnnSequence
-from . import AnnGenomeProcessor
-from . import AnnSeqContainer
+from sequence_annotation.utils.exception import ProcessedStatusNotSatisfied
+from sequence_annotation.genome_handler.sequence import AnnSequence
+from sequence_annotation.genome_handler.ann_genome_processor import AnnGenomeProcessor
+from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
+
 class TestAnnGenomeProcessor(AnnSeqTestCase):
         
     def test_get_backgrounded_genome(self):

@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from . import SubplotHelper
 def ann_seq_visual(seq):
-    """visualize the probability of each type along sequence"""    
+    """visualize the count of each type along sequence"""    
     answer_vec = []
     for type_ in seq.ANN_TYPES:
         answer_vec.append(np.array([0.0]*seq.length))
@@ -18,7 +18,7 @@ def ann_seq_visual(seq):
     plt.legend(loc='upper right')
 
 def ann_seqs_visual(seqs):
-    """visualize the probability of each type along sequences"""    
+    """visualize the count of each type along sequences"""    
     answer_vec = []
     max_len = 0
     for seq in seqs:

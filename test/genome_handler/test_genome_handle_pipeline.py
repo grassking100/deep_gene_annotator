@@ -9,16 +9,19 @@ import pandas as pd
 import math
 from time import gmtime, strftime
 from os.path import abspath, expanduser
-from . import UscuInfoParser, EnsemblInfoParser
-from . import AnnChromCreator, AnnGenomeCreator
-from . import RegionExtractor, ExonHandler
-from . import SeqInfoGenerator, AnnSeqContainer
-from . import SeqInfoContainer
-from . import AnnSeqExtractor, AnnSeqProcessor
-from . import UscuSeqConverter, EnsemblSeqConverter
-from . import SeqConverter
-from . import SeqStatusDetector
-from . import SeqInformation
+from sequence_annotation.genome_handler.seq_info_parser import UscuInfoParser,EnsemblInfoParser
+from sequence_annotation.genome_handler.region_extractor import RegionExtractor
+from sequence_annotation.genome_handler.exon_handler import ExonHandler
+from sequence_annotation.genome_handler.seq_container import AnnSeqContainer,SeqInfoContainer
+from sequence_annotation.genome_handler.ann_seq_processor import AnnSeqProcessor
+from sequence_annotation.genome_handler.ann_seq_converter import EnsemblSeqConverter,UscuSeqConverter
+from sequence_annotation.genome_handler.seq_status_detector import SeqStatusDetector
+from sequence_annotation.genome_handler.ann_genome_creator import AnnGenomeCreator,AnnChromCreator
+from sequence_annotation.genome_handler.seq_info_generator import SeqInfoGenerator
+from sequence_annotation.genome_handler.ann_seq_extractor import AnnSeqExtractor
+from sequence_annotation.data_handler.seq_converter import SeqConverter
+from sequence_annotation.genome_handler.sequence import SeqInformation
+
 class TestGenomeHandlePipeline(unittest.TestCase):
     def test_runable(self):
         try:

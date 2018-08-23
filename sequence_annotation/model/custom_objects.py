@@ -1,4 +1,5 @@
-from . import StatefulMetricFactory
+from .stateful_metric import StatefulMetricFactory
+from .metric import SpecificTypeMetric
 from .metric import BatchCounter
 from .metric import Accuracy
 from .loss import Loss
@@ -11,8 +12,9 @@ class CustomObjectsFacade:
         self._dynamic_weight_method = dynamic_weight_method
         self._values_to_ignore = values_to_ignore
         self._weights = weights
-        self._metric_types = metric_types or ['TP','TN','FP','FN','accuracy','batch_counter']
+        self._metric_types = metric_types or []#or ['TP','TN','FP','FN','accuracy','batch_counter']
         self._metric_types.append("loss")
+        self._metric_types = set(self._metric_types)
         self._loss_type = loss_type
     @property
     def custom_objects(self):
@@ -26,8 +28,7 @@ class CustomObjectsFacade:
                 for metric_type in self._metric_types:
                     if metric_type in ['TP','TN','FP','FN']:
                         name = "{ann_type}_{status}".format(ann_type=ann_type,status=metric_type)
-                        metric = SpecificTypeMetric(name,values_to_ignore=self._values_to_ignore,
-                                                    target_index=index)
+                        metric = SpecificTypeMetric(index,name,values_to_ignore=self._values_to_ignore)
                         metric_layer= stateful_metric_factory.create(metric_type,metric=metric,
                                                                   class_type=ann_type)
                         custom_objects[metric_layer.name]=metric_layer

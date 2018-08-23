@@ -1,8 +1,7 @@
 import unittest
 import pandas as pd
-from . import InvalidStrandType,NegativeNumberException
-from . import UscuInfoParser
-from . import EnsemblInfoParser
+from sequence_annotation.utils.exception import InvalidStrandType,NegativeNumberException
+from sequence_annotation.genome_handler.seq_info_parser import UscuInfoParser,EnsemblInfoParser
 from . import ucsc_file_prefix
 from . import ensembl_file_prefix
 class TestSeqInfoParser(unittest.TestCase):

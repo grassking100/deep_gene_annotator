@@ -3,8 +3,8 @@ import warnings
 import tensorflow as tf
 import keras.backend as K
 import numpy as np
-from . import SeqAnnDataHandler
-from . import rename
+from ..data_handler.data_handler import SeqAnnDataHandler
+from ..utils.python_decorator import rename
 from .metric import SeqAnnMetric
 
 def focal_Loss(y_true, y_pred, alpha=0.25, gamma=2):
@@ -22,6 +22,7 @@ class Loss(SeqAnnMetric):
         super().__init__(name or type_,values_to_ignore)
         self._weights = weights
         self._dynamic_weight_method = dynamic_weight_method
+        self._type = type_
         if type_ == 'focal_loss':
             self._loss_function = focal_Loss
         else:
@@ -29,7 +30,7 @@ class Loss(SeqAnnMetric):
                 exec('from keras.losses import {type_}'.format(type_=type_))
                 exec('self._loss_function={type_}'.format(type_=type_))
             except ImportError as e:
-                raise Exception(loss_type+' cannot be found in keras.losses')
+                raise Exception(type_+' cannot be found in keras.losses')
     def get_result(self):
         true,pred = self._true,self._pred
         weight_ = None
@@ -41,11 +42,12 @@ class Loss(SeqAnnMetric):
                 if self._dynamic_weight_method=="reversed_count_weight":
                     weight_ = self._reversed_count_weight(true)
                 else:
-                    raise Exception(dynamic_weight_method+" has not be implemented yet")
-        if weight_ is not None and type_=='categorical_crossentropy':
-            true = tf.multiply(true, weight_)
-        else:
-            raise Exception(type_+" doesn't support weights loss yet")
+                    raise Exception(self._dynamic_weight_method+" has not be implemented yet")
+        if weight_ is not None:
+            if self._type=='categorical_crossentropy':
+                true = tf.multiply(true, weight_)
+            else:
+                raise Exception(self._type+" doesn't support weights loss yet")
         loss = tf.reduce_mean(self._loss_function(true,pred))
         return loss
     def _reversed_count_weight(self,seq_tensor):
@@ -55,3 +57,6 @@ class Loss(SeqAnnMetric):
         reversed_count_sum = tf.reduce_sum(reversed_count)
         weight = tf.divide(tf.multiply(1.0,reversed_count),reversed_count_sum)
         return tf.multiply(weight,dim)
+    def __call__(self, y_true, y_pred):
+        self.set_data(y_true, y_pred)
+        return self.get_result()

@@ -1,5 +1,5 @@
-from . import AnnSequence
-from . import RegionExtractor
+from .sequence import AnnSequence
+from .region_extractor import RegionExtractor
 class ExonHandler:
     @property
     def naive_exon_type(self):

@@ -3,14 +3,10 @@ import numpy as np
 from copy import deepcopy
 from tempfile import mkdtemp
 import os.path as path
-from . import AttrValidator, DictValidator
-from . import get_protected_attrs_names
-from . import ValueOutOfRange
-from . import UninitializedException
-from . import NegativeNumberException
-from . import InvalidStrandType
-from . import InvalidAnnotation
-from . import ChangeConstValException
+from ..utils.validator import AttrValidator, DictValidator
+from ..utils.helper import get_protected_attrs_names
+from ..utils.exception import UninitializedException,NegativeNumberException,InvalidStrandType
+from ..utils.exception import InvalidAnnotation,ChangeConstValException,ValueOutOfRange
 def logical_not(lhs, rhs):
     return np.logical_and(lhs,np.logical_not(rhs))
 class Sequence(metaclass=ABCMeta):
@@ -59,7 +55,7 @@ class Sequence(metaclass=ABCMeta):
     def length(self):
         pass
     def _checked_attr(self):
-        return ['id','_strand','chromosome_id']
+        return ['id','_strand']
     def _validate(self):
         attr_validator = AttrValidator(self,False,False,False,self._checked_attr())
         attr_validator.validate()

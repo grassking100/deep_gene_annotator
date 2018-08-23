@@ -1,12 +1,13 @@
 import unittest
 import numpy as np
 import pandas as pd
-from . import AnnSeqContainer
-from . import UscuInfoParser
-from . import UscuSeqConverter
-from . import AnnGenomeCreator
-from . import RealGenome
+from .real_genome import RealGenome
 from . import ucsc_file_prefix
+from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
+from sequence_annotation.genome_handler.seq_info_parser import UscuInfoParser
+from sequence_annotation.genome_handler.ann_seq_converter import UscuSeqConverter
+from sequence_annotation.genome_handler.ann_genome_creator import AnnGenomeCreator
+
 class TestAnnGenomeCreator(unittest.TestCase):
     real_genome = RealGenome()
     def _uscu_convert(self,data):
