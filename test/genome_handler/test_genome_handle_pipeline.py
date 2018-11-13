@@ -13,7 +13,7 @@ from sequence_annotation.genome_handler.seq_info_parser import UscuInfoParser,En
 from sequence_annotation.genome_handler.region_extractor import RegionExtractor
 from sequence_annotation.genome_handler.exon_handler import ExonHandler
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer,SeqInfoContainer
-from sequence_annotation.genome_handler.ann_seq_processor import AnnSeqProcessor
+from sequence_annotation.genome_handler.ann_seq_processor import get_background,get_seq_with_added_type,get_one_hot
 from sequence_annotation.genome_handler.ann_seq_converter import EnsemblSeqConverter,UscuSeqConverter
 from sequence_annotation.genome_handler.seq_status_detector import SeqStatusDetector
 from sequence_annotation.genome_handler.ann_genome_creator import AnnGenomeCreator,AnnChromCreator
@@ -32,7 +32,6 @@ class TestGenomeHandlePipeline(unittest.TestCase):
             ann_seq_container = AnnSeqContainer()
             info_container = SeqInfoContainer()
             ann_seq_container.ANN_TYPES = non_conflict_type + ['exon']
-            ann_seq_processor = AnnSeqProcessor()
             gene_converter = EnsemblSeqConverter(extra_types=['exon'])
             ann_genome_creator = AnnGenomeCreator()
             converted_data = AnnSeqContainer()
@@ -55,10 +54,10 @@ class TestGenomeHandlePipeline(unittest.TestCase):
             #Get one strand
             for chrom in genome.data:
                 #Create sequence with wanted annotation
-                background = ann_seq_processor.get_background(chrom)
-                complete = ann_seq_processor.get_seq_with_added_type(chrom,{'other':background})
-                one_hot = ann_seq_processor.get_one_hot(complete,non_conflict_type,method='order')
-                one_hot.add_ann('other',ann_seq_processor.get_background(one_hot))
+                background = get_background(chrom)
+                complete = get_seq_with_added_type(chrom,{'other':background})
+                one_hot = get_one_hot(complete,non_conflict_type,method='order')
+                one_hot.add_ann('other',get_background(one_hot))
                 ann_seq_container.add(one_hot)
                 #Create regions for extraction
                 for index in range(math.ceil(simple_seq.length/length)):

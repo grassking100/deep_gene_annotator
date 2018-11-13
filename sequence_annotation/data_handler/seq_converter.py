@@ -99,7 +99,7 @@ class SeqConverter():
             return "".join(seq)
         else:
             return seq
-    def seqs_encoded(self,seqs,discard_invalid_seq=False):
+    def encode_seqs(self,seqs,discard_invalid_seq=False):
         """convert dictionary of seqeucnces to dictionary of one-hot encoding vector"""
         data = {}
         for name,seq in seqs.items():

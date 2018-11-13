@@ -1,7 +1,7 @@
 from . import AnnSeqTestCase
 from sequence_annotation.utils.exception import ProcessedStatusNotSatisfied
 from sequence_annotation.genome_handler.sequence import AnnSequence
-from sequence_annotation.genome_handler.ann_genome_processor import AnnGenomeProcessor
+from sequence_annotation.genome_handler.ann_genome_processor import get_backgrounded_genome, get_one_hot_genome
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
 
 class TestAnnGenomeProcessor(AnnSeqTestCase):
@@ -31,7 +31,7 @@ class TestAnnGenomeProcessor(AnnSeqTestCase):
         ann_seqs.add(ann_seq)
         ann_seqs.add(ann_seq2)
         #Processing
-        result = AnnGenomeProcessor().get_backgrounded_genome(ann_seqs,['exon','intron'],'other')
+        result = get_backgrounded_genome(ann_seqs,['exon','intron'],'other')
         except_ann_seq = AnnSeqContainer()
         except_ann_seq = AnnSequence()
         except_ann_seq.ANN_TYPES = ['exon','intron','empty','other']     
@@ -78,7 +78,7 @@ class TestAnnGenomeProcessor(AnnSeqTestCase):
         ann_seqs.add(ann_seq)
         ann_seqs.add(ann_seq2)
         #Processing
-        result = AnnGenomeProcessor().get_one_hot_genome(ann_seqs,'order',['exon','intron'])
+        result = get_one_hot_genome(ann_seqs,'order',['exon','intron'])
         except_ann_seq = AnnSeqContainer()
         except_ann_seq = AnnSequence()
         except_ann_seq.ANN_TYPES = ['exon','intron','empty']     

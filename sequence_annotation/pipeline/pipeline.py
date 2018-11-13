@@ -3,25 +3,26 @@ from abc import ABCMeta
 from time import strftime, gmtime, time
 
 class Pipeline(metaclass=ABCMeta):
-    def __init__(self, model_processor,data_processor,compiler,worker,is_prompt_visible=True):
+    def __init__(self, model_processor,data_processor,compiler,worker,wrapper,is_prompt_visible=True):
         self._id = None
         self._is_prompt_visible = is_prompt_visible
         self._worker = worker
         self._compiler = compiler
         self._data_processor = data_processor
         self._model_processor = model_processor
+        self._wrapper = wrapper
     def print_prompt(self,value):
         if self._is_prompt_visible:
             print(value)
     def execute(self,id_):
         self._id = id_
-        self.print_prompt("Initializing model..")
+        self.print_prompt("Processing model..")
         self._prepare_model()
-        self.print_prompt("Loading data...")
+        self.print_prompt("Processing data...")
         self._prepare_data()
         self.print_prompt("Compiling model...")
         self._compile_model()
-        self.print_prompt("Initializing worker...")
+        self.print_prompt("Processing worker...")
         self._prepare_worker()
         self._before_execute()
         self.print_prompt("Executing...")
@@ -45,6 +46,7 @@ class Pipeline(metaclass=ABCMeta):
     def _prepare_worker(self):
         self._worker.model=self._model_processor.model
         self._worker.data=self._data_processor.data
+        self._worker.wrapper = self._wrapper
     def _before_execute(self):
         self._worker.before_work()
     def _after_execute(self):

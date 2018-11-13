@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
 from sequence_annotation.genome_handler.sequence import AnnSequence
-from sequence_annotation.genome_handler.ann_seq_processor import AnnSeqProcessor
+from sequence_annotation.genome_handler.ann_seq_processor import get_background
 class RealGenome:
     genome_information={'chromosome':{'chr1':30,'chr2':35},'source':'unit_test'}
     ANN_TYPES = ['cds','intron','utr_5','utr_3']
@@ -37,7 +37,7 @@ class RealGenome:
     def _add_background(self,container):
         focus_types = ['cds','intron','utr_5','utr_3']
         for seq in container:
-            background_status =ann_seq_processor.get_background_status(container,focus_types)
+            background_status = get_background(seq,focus_types)
             seq.set_ann('other',background_status)    
     def two_plus_strand(self,has_background):
         container = self._create_genome(has_background)
@@ -50,7 +50,6 @@ class RealGenome:
         container = self._create_genome(has_background)
         self._add_seq_to_genome(container, self._seq3())
         self._add_seq_to_genome(container, self._seq1())
-        ann_seq_processor = AnnSeqProcessor()
         if has_background:
             self._add_background(container)
         return container

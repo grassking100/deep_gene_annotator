@@ -59,6 +59,7 @@ class Sequence(metaclass=ABCMeta):
     def _validate(self):
         attr_validator = AttrValidator(self,False,False,False,self._checked_attr())
         attr_validator.validate()
+
 class SeqInformation(Sequence):
     def __init__(self):
         self._start = None
@@ -103,6 +104,7 @@ class SeqInformation(Sequence):
         if value < 0:
             raise NegativeNumberException("extra_index",value)
         self._extra_index = value
+
 class AnnSequence(Sequence):
     def __init__(self):
         self._has_space = False

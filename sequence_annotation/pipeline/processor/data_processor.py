@@ -1,8 +1,10 @@
 from abc import ABCMeta, abstractmethod,abstractproperty
 import numpy as np
+from ...genome_handler.utils import padding
 from ...data_handler.seq_converter import SeqConverter
-from ...data_handler.data_handler import SeqAnnDataHandler
+from ...genome_handler import ann_seq_processor
 from ...utils.exception import LengthNotEqualException,DimensionNotSatisfy
+from ...utils.helper import create_folder
 
 class IDataProcessor(metaclass=ABCMeta):
     @abstractmethod
@@ -21,7 +23,7 @@ class IDataProcessor(metaclass=ABCMeta):
     def after_process(self,path=None):
         pass
 
-class DataLoader(IDataProcessor):
+"""class DataLoader(IDataProcessor):
     def __init__(self,path):
         self._data = None
         self._path = path
@@ -38,7 +40,7 @@ class DataLoader(IDataProcessor):
         pass
     def process(self):
         pass
-
+"""
 
 class SimpleData(IDataProcessor):
     def __init__(self,data):
@@ -57,30 +59,35 @@ class SimpleData(IDataProcessor):
     def process(self):
         pass
 
-def padding(data_dict,value):
-    padded = {}
-    for data_kind, data in data_dict.items():
-        inputs = data['inputs']
-        answers = data['answers']
-        inputs, answers = SeqAnnDataHandler.padding(inputs,answers,value)
-        padded[data_kind]= {"inputs":inputs,"answers":answers}
-    return padded
-
 class AnnSeqData(SimpleData):
-    def __init__(self,data,padding_value=None,seq_converter=None,discard_invalid_seq=False):
+    def __init__(self,data,padding_value=None,seq_converter=None,
+                 discard_invalid_seq=False):
         super().__init__(data['data'])
+        self._record['padding_value'] = padding_value
+        self._record['discard_invalid_seq'] = discard_invalid_seq
         self._seq_converter = seq_converter or SeqConverter()
         self._padding_value = padding_value
         self._discard_invalid_seq = discard_invalid_seq
         self._ANN_TYPES = data['ANN_TYPES']
+    def before_process(self,path=None):
+        if path is not None:
+            json_path = create_folder(path) + "/setting/data.json"
+            with open(json_path,'w') as fp:
+                json.dump(self._record,fp)
     def _padding(self):
-        self._data = padding(self._data,self._padding_value)
+        padded = {}
+        for data_kind, data in self._data.items():
+            inputs = data['inputs']
+            answers = data['answers']
+            inputs, answers = padding(inputs,answers,self._padding_value)
+            padded[data_kind] = {"inputs":inputs,"answers":answers}
+        self._data =  padded
     def _to_dict(self):
         for data_kind,data in self._data.items(): 
             seqs = data['inputs']
             answers = data['answers']
-            seqs = self._seq_converter.seqs_encoded(seqs,self._discard_invalid_seq)
-            answers = SeqAnnDataHandler.get_ann_vecs(answers,self._ANN_TYPES)
+            seqs = self._seq_converter.encode_seqs(seqs,self._discard_invalid_seq)
+            answers = ann_seq_processor.get_ann_vecs(answers,self._ANN_TYPES)
             data_pairs = {'inputs':[],'answers':[]}
             for name in seqs.keys():
                 seq = seqs[name]
@@ -91,12 +98,8 @@ class AnnSeqData(SimpleData):
                     raise LengthNotEqualException(ann_length, seq_length)
                 data_pairs['inputs'].append(seq)
                 data_pairs['answers'].append(answer)
-
             self._data[data_kind] = data_pairs
-    def process(self):
-        self._to_dict()
-        if self._padding_value is not None:
-            self._padding()
+    def _validate(self):
         for data_kind,data in self._data.items():
             input_shape = np.shape(data['inputs'])
             answer_shape = np.shape(data['answers'])
@@ -104,14 +107,20 @@ class AnnSeqData(SimpleData):
                 raise DimensionNotSatisfy(input_shape,3)
             if len(answer_shape)!=3:
                 raise DimensionNotSatisfy(answer_shape,3)
+    def process(self):
+        self._to_dict()
+        if self._padding_value is not None:
+            self._padding()
+        self._validate()
 
+    """
 class DataLoaderFactory:
     def create(self,type_):
         if type_ == 'simple':
             return DataLoader
         else:
             raise Exception(type_+' has not be supported yet.')
-                            
+"""                            
 class DataContainerFactory:
     def create(self,type_):
         if type_ == 'simple':

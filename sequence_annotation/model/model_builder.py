@@ -11,13 +11,13 @@ from .. import MinimalRNN
 from .. import IndRNN
 from .. import MReluGRU
 from .. import BatchRenormalization
-def _import_regularizer(type_):
-    exec('from keras.regularizers import {regularizer}'.format(regularizer=type_))
-
-def _set_regularizer(dict_,regularizer_type,type_):
-    command = 'dict_[\'{regularizer_type}\']={regularizer}'
-    exec(command.format(regularizer_type=type_,regularizer=type_))
-
+def _set_regularizer(regularizer_type,regularizer):
+    temp = None
+    command = 'from keras.regularizers import {regularizer_type}'.format(regularizer_type=regularizer_type)
+    exec(command)
+    command = 'temp={regularizer}'.format(regularizer=regularizer)
+    exec(command)
+    return temp
 class ModelBuilder:
     """This class will create and return sequence annotation model"""
     def __init__(self,model_setting):
@@ -34,17 +34,25 @@ class ModelBuilder:
         layer_type = setting['type']
         keras_setting = setting['keras_setting']
         if 'kernel_regularizer' in keras_setting.keys():
-            _regularizer_import(keras_setting['kernel_regularizer'][:2])
-            _set_regularizer(keras_setting,'kernel_regularizer')
+            regularizer = keras_setting['kernel_regularizer']
+            regularizer_type =regularizer[:2]
+            temp = _set_regularizer(regularizer_type,regularizer)
+            keras_setting['kernel_regularizer'] = temp
         if 'bias_regularizer' in keras_setting.keys():
-            _regularizer_import(keras_setting['bias_regularizer'][:2])
-            _set_regularizer(keras_setting,'bias_regularizer')
+            regularizer = keras_setting['bias_regularizer']
+            regularizer_type =regularizer[:2]
+            temp = _set_regularizer(regularizer_type,regularizer)
+            keras_setting['bias_regularizer'] = temp
         if 'recurrent_regularizer' in keras_setting.keys():
-            _regularizer_import(keras_setting['recurrent_regularizer'][:2])
-            _set_regularizer(keras_setting,'recurrent_regularizer')
+            regularizer = keras_setting['recurrent_regularizer']
+            regularizer_type =regularizer[:2]
+            temp = _set_regularizer(regularizer_type,regularizer)
+            keras_setting['recurrent_regularizer'] = temp
         if 'activity_regularizer' in keras_setting.keys():
-            _regularizer_import(keras_setting['activity_regularizer'][:2])
-            _set_regularizer(keras_setting,'activity_regularizer')
+            regularizer = keras_setting['activity_regularizer']
+            regularizer_type =regularizer[:2]
+            temp = _set_regularizer(regularizer_type,regularizer)
+            keras_setting['activity_regularizer'] = temp
         if layer_type == 'Input':
             layer = self._build_input(setting)
         elif layer_type == 'MinimalRNN':

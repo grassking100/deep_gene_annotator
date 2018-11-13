@@ -78,6 +78,17 @@ class SeqContainer(metaclass=ABCMeta):
             self.add(seq)
         self.note = dict_['note']
         return self
+    def __setitem__(self, id_, seq):
+        if seq.id is None:
+            seq.id = id_
+            self._add(seq)
+        else:
+            if seq.id == id_:
+                self._add(seq)
+            else:
+                raise Exception('Sequence\'s id is not same as inputed key')
+    def __getitem__(self, id_):
+        return self.get(id_)
 class SeqInfoContainer(SeqContainer):
     def _validate(self):
         pass

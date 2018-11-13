@@ -1,10 +1,15 @@
 from abc import ABCMeta, abstractmethod
 from ...model.custom_objects import CustomObjectsFacade
+from ...utils.helper import create_folder
 class Compiler(metaclass=ABCMeta):
-    def __init__(self,optimizer,loss_type):
+    def __init__(self,optimizer,loss_type,metrics=None):
         self._optimizer = optimizer
         self._loss_type = loss_type
-        self._record = {}
+        self._metrics = metrics
+        self._record = {'optimizer':optimizer,
+                        'loss_type':loss_type,
+                        'metrics':metrics
+                       }
     @abstractmethod
     def process(self):
         pass
@@ -18,9 +23,14 @@ class Compiler(metaclass=ABCMeta):
 
 class SimpleCompiler(Compiler):
     def process(self,model):
-        model.compile(optimizer=self._optimizer, loss=self._loss_type)
-    
-class SeqAnnCompiler(Compiler):
+        model.compile(optimizer=self._optimizer, loss=self._loss_type,metrics=self._metrics)
+    def before_process(self,path=None):
+        if path is not None:
+            json_path = create_folder(path) + "/setting/compiler.json"
+            with open(json_path,'w') as fp:
+                json.dump(self._record,fp)
+
+class AnnSeqCompiler(Compiler):
     def __init__(self,optimizer,loss_type,ann_types=None,metric_types=None,values_to_ignore=None,
                  weights=None,dynamic_weight_method=None):
         super().__init__(optimizer,loss_type)
@@ -38,15 +48,21 @@ class SeqAnnCompiler(Compiler):
                                            weights = weight_vec,loss_type=loss_type,metric_types=metric_types,
                                            dynamic_weight_method=dynamic_weight_method)
         self._optimizer = optimizer
-    def process(self,model):
         custom_objects = self._facade.custom_objects
         custom_metrics = []
         not_include_keys = ["loss"]
         for key,value in custom_objects.items():
             if key not in not_include_keys:
                 custom_metrics.append(value)
-        model.compile(optimizer=self._optimizer, loss=custom_objects['loss'],metrics=custom_metrics)
-
+        self._custom_metrics = custom_metrics
+        self._loss = custom_objects['loss']
+    def process(self,model):
+        model.compile(optimizer=self._optimizer, loss=self._loss,metrics=self._custom_metrics)
+    def before_process(self,path=None):
+        if path is not None:
+            json_path = create_folder(path) + "/setting/compiler.json"
+            with open(json_path,'w') as fp:
+                json.dump(self._record,fp)
 class CompilerFactory:
     def create(self,type_):
         if type_ == 'simple':

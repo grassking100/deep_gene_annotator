@@ -1,12 +1,12 @@
 from .seq_container import SeqInfoContainer
 from .sequence import SeqInformation
-from .ann_seq_processor import AnnSeqProcessor
+from .ann_seq_processor import is_one_hot
 from .exception import NotOneHotException
 class RegionExtractor:
     """#Get annotated region information"""
     def extract(self,ann_seq,focus_types=None):
         focus_types = focus_types or ann_seq.ANN_TYPES
-        if ann_seq.processed_status=="one_hot" or AnnSeqProcessor().is_one_hot(ann_seq,focus_types):
+        if ann_seq.processed_status=="one_hot" or is_one_hot(ann_seq,focus_types):
             self._region_id = 0
             seq_info_genome = self._parse_regions(ann_seq,focus_types)
             return seq_info_genome

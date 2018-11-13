@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from . import SubplotHelper
-def ann_seq_visual(seq):
+def visual_ann_seq(seq):
     """visualize the count of each type along sequence"""    
     answer_vec = []
     for type_ in seq.ANN_TYPES:
@@ -17,7 +17,7 @@ def ann_seq_visual(seq):
     plt.stackplot(x,answer_vec,labels=seq.ANN_TYPES)
     plt.legend(loc='upper right')
 
-def ann_seqs_visual(seqs):
+def visual_ann_seqs(seqs):
     """visualize the count of each type along sequences"""    
     answer_vec = []
     max_len = 0
@@ -38,7 +38,7 @@ def ann_seqs_visual(seqs):
 def seq_predict_visual(model, seqs, annotation_types):
     """visualize the predicted probability of each type along sequence"""
     predict = np.transpose(model.predict(np.array([seqs])))
-    data = dict(zip(annotations,predict))
+    data = dict(zip(annotation_types,predict))
     ann_visual(data,annotation_types)
 
 def position_error(model, sequence, answer,annotation_types):
@@ -121,7 +121,6 @@ def draw_metric_curve(data,annotations,sources,line_types,scale_y_axis=True):
     ax.set_title("loss",size=30)
     for loss in losses:
         ax.plot(list(loss['value']),line_types[loss['source']])
-        #ax.set_xlim([0,200])
         for tick in ax.xaxis.get_major_ticks():
             tick.label.set_fontsize(30)
         for tick in ax.yaxis.get_major_ticks():

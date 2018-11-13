@@ -1,5 +1,5 @@
 """A submodule about metric"""
-from ..data_handler.data_handler import SeqAnnDataHandler
+from ..genome_handler.utils import process_tensor
 from ..utils.exception import LengthNotEqualException
 from abc import ABCMeta,abstractmethod
 import tensorflow as tf
@@ -39,7 +39,7 @@ class SeqAnnMetric(Metric):
         self._pred = None
         self._true = None
     def _get_preprocessed(self, true, pred):
-        clean_true, clean_pred = SeqAnnDataHandler.process_tensor(true, pred,values_to_ignore=self._values_to_ignore)  
+        clean_true, clean_pred = process_tensor(true, pred,values_to_ignore=self._values_to_ignore)  
         return (clean_true,clean_pred)
     def set_data(self, true, pred):
         true, pred = self._get_preprocessed(true, pred)

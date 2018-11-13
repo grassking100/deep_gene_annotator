@@ -3,7 +3,6 @@ import warnings
 import tensorflow as tf
 import keras.backend as K
 import numpy as np
-from ..data_handler.data_handler import SeqAnnDataHandler
 from ..utils.python_decorator import rename
 from .metric import SeqAnnMetric
 

@@ -1,6 +1,8 @@
 from abc import ABCMeta, abstractmethod, abstractproperty
 from os.path import expanduser
 from ...model.model_handler import ModelHandler
+from ...utils.helper import create_folder
+
 class IModelProcessor(metaclass=ABCMeta):
     @abstractmethod
     def process(self):
@@ -49,7 +51,12 @@ class ModelCreator(IModelProcessor):
     @property
     def record(self):
         return self._record
-
+    def before_process(self,path=None):
+        if path is not None:
+            json_path = create_folder(path) + "/setting/model.json"
+            with open(json_path,'w') as fp:
+                json.dump(self._record,fp)
+                
 class ModelLoader(IModelProcessor):
     def __init__(self,path):
         self._model = None
@@ -64,3 +71,8 @@ class ModelLoader(IModelProcessor):
     @property
     def record(self):
         return self._record
+    def before_process(self,path=None):
+        if path is not None:
+            json_path = create_folder(path) + "/setting/model.json"
+            with open(json_path,'w') as fp:
+                json.dump(self._record,fp)
