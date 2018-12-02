@@ -136,12 +136,12 @@ class DenseLayerBuilder():
     def build(self,conv1d_setting,BN_setting=None,act_name=None,concat_name=None,
               mode=0,dropout_value=0,dropout_name=None,name=None):
         """
-            mode 0: BN(ReLU(Add([Conv(inputs),inputs])))
-            mode 1: ReLU(BN(Add([Conv(inputs),inputs])))
-            mode 2: BN(Add([ReLU(Conv(inputs)),inputs]))
-            mode 3: ReLU(Add([BN(Conv(inputs)),inputs]))
-            mode 4: Add([BN(ReLU(Conv(inputs))),inputs])
-            mode 5: Add([ReLU(BN(Conv(inputs))),inputs])
+            mode 0: BN(ReLU(concat([Conv(inputs),inputs])))
+            mode 1: ReLU(BN(concat([Conv(inputs),inputs])))
+            mode 2: BN(concat([ReLU(Conv(inputs)),inputs]))
+            mode 3: ReLU(concat([BN(Conv(inputs)),inputs]))
+            mode 4: concat([BN(ReLU(Conv(inputs))),inputs])
+            mode 5: concat([ReLU(BN(Conv(inputs))),inputs])
         """
         if name is not None:
             if "name" not in conv1d_setting.keys():
@@ -197,12 +197,12 @@ class DeepDenseLayerBuilder():
               act_name=None,concat_name=None,mode=0,dropout_value=0,
               dropout_name=None,name=None):
         """
-            mode 0: BN(ReLU(Add([Conv(inputs),inputs])))
-            mode 1: ReLU(BN(Add([Conv(inputs),inputs])))
-            mode 2: BN(Add([ReLU(Conv(inputs)),inputs]))
-            mode 3: ReLU(Add([BN(Conv(inputs)),inputs]))
-            mode 4: Add([BN(ReLU(Conv(inputs))),inputs])
-            mode 5: Add([ReLU(BN(Conv(inputs))),inputs])
+            mode 0: BN(ReLU(concat([Conv(inputs),inputs])))
+            mode 1: ReLU(BN(concat([Conv(inputs),inputs])))
+            mode 2: BN(concat([ReLU(Conv(inputs)),inputs]))
+            mode 3: ReLU(concat([BN(Conv(inputs)),inputs]))
+            mode 4: concat([BN(ReLU(Conv(inputs))),inputs])
+            mode 5: concat([ReLU(BN(Conv(inputs))),inputs])
         """
         def DeepDenseLayer(inputs):
             previous_layer = inputs

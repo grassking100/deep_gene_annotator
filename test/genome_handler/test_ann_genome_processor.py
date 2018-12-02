@@ -9,9 +9,9 @@ class TestAnnGenomeProcessor(AnnSeqTestCase):
     def test_get_backgrounded_genome(self):
         ann_seqs = AnnSeqContainer()
         #Create sequence 1
-        ann_seqs.ANN_TYPES = ['exon','intron','empty']
+        ann_seqs.ANN_TYPES = ['exon','intron']
         ann_seq = AnnSequence()
-        ann_seq.ANN_TYPES = ['exon','intron','empty']     
+        ann_seq.ANN_TYPES = ['exon','intron']     
         ann_seq.length = 10
         ann_seq.id = 'input_1'
         ann_seq.strand = 'plus'
@@ -20,7 +20,7 @@ class TestAnnGenomeProcessor(AnnSeqTestCase):
         ann_seq.set_ann('exon',1,0,5).set_ann('intron',1,7,9)
         #Create sequence 2
         ann_seq2 = AnnSequence()
-        ann_seq2.ANN_TYPES = ['exon','intron','empty']     
+        ann_seq2.ANN_TYPES = ['exon','intron']     
         ann_seq2.length = 10
         ann_seq2.id = 'input_2'
         ann_seq2.strand = 'plus'
@@ -31,10 +31,10 @@ class TestAnnGenomeProcessor(AnnSeqTestCase):
         ann_seqs.add(ann_seq)
         ann_seqs.add(ann_seq2)
         #Processing
-        result = get_backgrounded_genome(ann_seqs,['exon','intron'],'other')
+        result = get_backgrounded_genome(ann_seqs,'other')
         except_ann_seq = AnnSeqContainer()
         except_ann_seq = AnnSequence()
-        except_ann_seq.ANN_TYPES = ['exon','intron','empty','other']     
+        except_ann_seq.ANN_TYPES = ['exon','intron','other']     
         except_ann_seq.length = 10
         except_ann_seq.id = 'input_1'
         except_ann_seq.strand = 'plus'
@@ -43,7 +43,7 @@ class TestAnnGenomeProcessor(AnnSeqTestCase):
         except_ann_seq.set_ann('exon',1,0,5).set_ann('intron',1,7,9)
         except_ann_seq.set_ann('other',1,6,6)
         except_ann_seq2 = AnnSequence()
-        except_ann_seq2.ANN_TYPES = ['exon','intron','empty','other']     
+        except_ann_seq2.ANN_TYPES = ['exon','intron','other']     
         except_ann_seq2.length = 10
         except_ann_seq2.id = 'input_2'
         except_ann_seq2.strand = 'plus'

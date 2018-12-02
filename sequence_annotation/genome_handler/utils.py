@@ -1,9 +1,6 @@
-import keras.backend as K
-import tensorflow as tf
 import math
 import numpy as np
 import pandas as pd
-from keras.preprocessing.sequence import pad_sequences
 from .seq_container import AnnSeqContainer
 from ..data_handler.seq_converter import SeqConverter
 from ..utils.exception import LengthNotEqualException
@@ -68,7 +65,8 @@ def gene_boundary(data,raise_duplicated_excpetion=True):
     result.reset_index(inplace=True)
     return result
 
-def preprocess_ensembl_data(parsed_file_path,valid_chroms_id,merged_by='Protein stable ID',gene_types=['protein_coding']):
+def preprocess_ensembl_data(parsed_file_path,valid_chroms_id,merged_by='Protein stable ID',
+                            gene_types=['protein_coding']):
     file = pd.read_csv(parsed_file_path,sep='\t',dtype={'Gene stable ID':np.str ,
                                                         'Protein stable ID':np.str ,
                                                         'Transcript stable ID':np.str ,
@@ -79,33 +77,6 @@ def preprocess_ensembl_data(parsed_file_path,valid_chroms_id,merged_by='Protein 
     valid_data = valid_data.drop_duplicates()
     merged_data = merge_data(valid_data,merged_by)
     return merged_data
-
-def process_tensor(answer, prediction,values_to_ignore=None):
-    """Remove specific ignored singal and concatenate them into a two dimension tensor"""
-    true_shape = K.int_shape(answer)
-    pred_shape = K.int_shape(prediction)
-    if len(true_shape)!=3 or len(pred_shape)!=3:
-        raise Exception("Shape must be 3 dimensions")
-    true_label_number = K.shape(answer)[-1]
-    pred_label_number = K.shape(prediction)[-1]
-    reshape_prediction = K.reshape(prediction, [-1])
-    reshape_answer = K.reshape(answer, [-1])
-    if values_to_ignore is not None:
-        if not isinstance(values_to_ignore,list):
-            values_to_ignore=[values_to_ignore]
-        index = tf.where(K.not_equal(reshape_answer, values_to_ignore))
-        clean_prediction = K.reshape(K.gather(reshape_prediction, index),
-                                     [-1, pred_label_number])
-        clean_answer = K.reshape(K.gather(reshape_answer, index),
-                                 [-1, true_label_number])
-    else:
-        clean_prediction = K.reshape(prediction, [-1,pred_label_number])
-        clean_answer = K.reshape(answer, [-1, true_label_number])
-    true_shape = K.int_shape(clean_answer)
-    pred_shape = K.int_shape(clean_prediction)
-    if true_shape != pred_shape:
-        raise LengthNotEqualException(true_shape, pred_shape)
-    return (clean_answer, clean_prediction)
 
 def to_dict(seqs,answer,ann_types):
     ann_count = {}
@@ -125,8 +96,3 @@ def to_dict(seqs,answer,ann_types):
         data_pair[name]={'input':seq,'answer':ann_vec}
     dict_ = {'data_pair':data_pair,'annotation_count':ann_count}
     return dict_
-
-def padding(inputs, answers, padding_signal):
-    align_inputs = pad_sequences(inputs, padding='post',value=0)
-    align_answers = pad_sequences(answers, padding='post',value=padding_signal)
-    return (align_inputs, align_answers)

@@ -7,7 +7,7 @@ class AnnChromCreator:
     """Map annotated sequences belong to specific chromosome on the chromosome"""
     def __init__(self):
         super().__init__()
-        warnings.warn(("\n!!!\n\tCoordinate will be 5' to 3' on plus strand"
+        warnings.warn(("\n!!!\n\tCoordinate will be 5' to 3' of plus strand"
                        " on both PLUS and MINUS strand'\n!!!\n"), UserWarning)
     def _validate(self):
         pass
@@ -46,8 +46,8 @@ class AnnChromCreator:
         gene_start_index = txStart
         gene_end_index = txEnd
         """
-            Coordinate will be 5' to 3' on plus strand 
-           on both PLUS and MINUS strand
+            Coordinate will be 5' to 3' of plus strand 
+            on both PLUS and MINUS strand
         """
         ann_seq.source = source
         for type_ in ann_seq.ANN_TYPES:

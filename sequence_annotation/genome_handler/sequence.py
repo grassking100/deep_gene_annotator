@@ -4,7 +4,7 @@ from copy import deepcopy
 from tempfile import mkdtemp
 import os.path as path
 from ..utils.validator import AttrValidator, DictValidator
-from ..utils.helper import get_protected_attrs_names
+from ..utils.utils import get_protected_attrs_names
 from ..utils.exception import UninitializedException,NegativeNumberException,InvalidStrandType
 from ..utils.exception import InvalidAnnotation,ChangeConstValException,ValueOutOfRange
 def logical_not(lhs, rhs):

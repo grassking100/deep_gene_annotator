@@ -5,7 +5,7 @@ import json
 from time import gmtime, strftime
 from os.path import expanduser
 from .basic_pipeline import BasicPipeline
-from .worker.test_worker import TestWorker
+from ..worker.test_worker import TestWorker
 
 class TestPipeline(BasicPipeline):
     def _get_class_count(self):

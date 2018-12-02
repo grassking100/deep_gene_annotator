@@ -1,6 +1,13 @@
 from sequence_annotation.genome_handler.region_extractor import RegionExtractor
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer,SeqInfoContainer
-from sequence_annotation.genome_handler.ann_seq_processor import get_background,get_seq_with_added_type,get_one_hot,simplify_seq
+from sequence_annotation.genome_handler.ann_seq_processor import get_background,get_seq_with_added_type,get_one_hot,simplify_seq,mixed_typed_seq_generate
+
+def mixed_typed_genome_generate(seqs):
+    mixed_seqs = AnnSeqContainer()
+    mixed_seqs.ANN_TYPES = ['exon','intron','mix','other']
+    for seq in seqs:
+        mixed_seqs.add(mixed_typed_seq_generate(seq))
+    return mixed_seqs
 
 def get_genome_region_info(ann_genome,focus_types=None):
     """Get region information about genome"""
@@ -10,10 +17,11 @@ def get_genome_region_info(ann_genome,focus_types=None):
         genome_region_info.add(extractor.extract(ann_seq,focus_types))
     return genome_region_info
 
-def get_backgrounded_genome(ann_genome,frontground_types,background_type):
+def get_backgrounded_genome(ann_genome,background_type,frontground_types=None):
     """Make genome with background annotation"""
     backgrounded_genome = AnnSeqContainer()
-    backgrounded_genome.ANN_TYPES = set(ann_genome.ANN_TYPES + [background_type])
+    frontground_types = frontground_types or ann_genome.ANN_TYPES
+    backgrounded_genome.ANN_TYPES = set(frontground_types + [background_type])
     for ann_seq in ann_genome:
         background = get_background(ann_seq,frontground_types=frontground_types)
         temp = get_seq_with_added_type(ann_seq,{background_type:background}) 

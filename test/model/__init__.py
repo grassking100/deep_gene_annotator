@@ -1,1 +1,0 @@
-from sequence_annotation.model.loss import Loss

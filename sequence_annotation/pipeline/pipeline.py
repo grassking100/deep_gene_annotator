@@ -3,8 +3,11 @@ from abc import ABCMeta
 from time import strftime, gmtime, time
 
 class Pipeline(metaclass=ABCMeta):
-    def __init__(self, model_processor,data_processor,compiler,worker,wrapper,is_prompt_visible=True):
-        self._id = None
+    def __init__(self,model_processor,data_processor,compiler,worker,wrapper,is_prompt_visible=True,id_=None,path=None):
+        self._id = id_
+        self._path = path
+        if self._path is not None and self._id is not None:
+            self._path = self._path + "/" + str(self._id)
         self._is_prompt_visible = is_prompt_visible
         self._worker = worker
         self._compiler = compiler
@@ -14,8 +17,7 @@ class Pipeline(metaclass=ABCMeta):
     def print_prompt(self,value):
         if self._is_prompt_visible:
             print(value)
-    def execute(self,id_):
-        self._id = id_
+    def execute(self):
         self.print_prompt("Processing model..")
         self._prepare_model()
         self.print_prompt("Processing data...")
@@ -29,20 +31,17 @@ class Pipeline(metaclass=ABCMeta):
         self._execute()
         self._after_execute()
     def _compile_model(self):
-        path = None
-        self._compiler.before_process(path)
+        self._compiler.before_process(self._path)
         self._compiler.process(self._model_processor.model)
-        self._compiler.after_process(path)
+        self._compiler.after_process(self._path)
     def _prepare_model(self):
-        path = None
-        self._model_processor.before_process(path)
+        self._model_processor.before_process(self._path)
         self._model_processor.process()
-        self._model_processor.after_process(path)
+        self._model_processor.after_process(self._path)
     def _prepare_data(self):
-        path = None
-        self._data_processor.before_process(path)
+        self._data_processor.before_process(self._path)
         self._data_processor.process()
-        self._data_processor.after_process(path)
+        self._data_processor.after_process(self._path)
     def _prepare_worker(self):
         self._worker.model=self._model_processor.model
         self._worker.data=self._data_processor.data

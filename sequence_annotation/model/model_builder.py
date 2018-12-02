@@ -7,10 +7,6 @@ from keras.layers import Bidirectional,Permute
 import copy
 from .block_layer_builder import Cnn1dBatchReluBuilder,ResidualLayerBuilder,DeepResidualLayerBuilder
 from .block_layer_builder import DeepDenseLayerBuilder,DenseLayerBuilder
-from .. import MinimalRNN
-from .. import IndRNN
-from .. import MReluGRU
-from .. import BatchRenormalization
 def _set_regularizer(regularizer_type,regularizer):
     temp = None
     command = 'from keras.regularizers import {regularizer_type}'.format(regularizer_type=regularizer_type)
@@ -55,10 +51,6 @@ class ModelBuilder:
             keras_setting['activity_regularizer'] = temp
         if layer_type == 'Input':
             layer = self._build_input(setting)
-        elif layer_type == 'MinimalRNN':
-            layer = self._build_MinimalRNN(setting)
-        elif layer_type == 'BatchRenormalization':
-            layer = self._build_BatchRenormalization(setting)
         elif layer_type == 'Cnn1dBatchRelu':
             layer = self._build_Cnn1dBatchRelu(setting)
         elif layer_type == 'ResidualLayer':
@@ -69,21 +61,24 @@ class ModelBuilder:
             layer = self._build_DenseLayerBuilder(setting)
         elif layer_type == 'DeepDenseLayer':
             layer = self._build_DeepDenseLayerBuilder(setting)
-        elif layer_type == 'IndRNN':
-            layer = self._build_IndRNN(setting)
-        elif layer_type == 'MReluGRU':
-            layer = self._build_MReluGRU(setting)
         elif layer_type == 'Permute':
             layer = self._build_Permute(setting)
         else:
             try:
-                if layer_type == 'CNN_1D':
-                    layer_type = 'Convolution1D'
                 exec('from keras.layers import {layer_type}'.format(layer_type=layer_type))
                 exec('self._temp_layer_class={layer_type}'.format(layer_type=layer_type))
-                layer = self._temp_layer_class(**keras_setting)
+                if layer_type in ['Convolution1D','Convolution2D']:
+                    class MaskedCNN(self._temp_layer_class):
+                        def __init__(self, *args,**kwargs):
+                            super().__init__(*args,**kwargs)
+                            self.supports_masking = True
+                        def compute_mask(self, inputs, mask):
+                            return mask
+                    layer = MaskedCNN(**keras_setting)
+                else:
+                    layer = self._temp_layer_class(**keras_setting)
             except ImportError as e:
-                raise Exception("Layer,{layer},has not implement yet".format(layer=layer_type))
+                raise Exception("Layer,{layer},has not been implemented yet".format(layer=layer_type))
         is_RNN = isinstance(layer.__class__,RNN.__class__)
         if  is_RNN and 'bidirection_setting' in setting.keys():
             layer = self._to_bidirectional(layer,setting)
@@ -169,14 +164,6 @@ class ModelBuilder:
         if len(self.setting['layer']) != (len(previous_layers)+1):
             raise Exception("Some layer is missing,please check the model setting!!!")
 
-    def _build_BatchRenormalization(self,setting):
-        return_layer = BatchRenormalization(**setting['keras_setting'])
-        return return_layer
-
-    def _build_MinimalRNN(self,setting):
-        return_layer = MinimalRNN(**setting['keras_setting'])
-        return return_layer
-
     def _to_bidirectional(self,inner_layers,setting):
         return_layer = Bidirectional(inner_layers,**setting['bidirection_setting'])
         return_layer.name = inner_layers.name
@@ -217,12 +204,4 @@ class ModelBuilder:
     def _build_DeepDenseLayerBuilder(self,setting):
         setting['setting']['name'] = setting['name']
         return_layer = DeepDenseLayerBuilder().build(**setting['setting'])
-        return return_layer
-
-    def _build_IndRNN(self,setting):
-        return_layer = IndRNN(**setting['keras_setting'])
-        return return_layer
-
-    def _build_MReluGRU(self,setting):
-        return_layer = MReluGRU(**setting['keras_setting'])
         return return_layer

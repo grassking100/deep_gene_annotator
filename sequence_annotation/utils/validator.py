@@ -1,12 +1,14 @@
 from abc import ABCMeta,abstractmethod
 from .exception import LengthNotEqualException, DictKeyNotExistException
 from .exception import MissingExpectDictKey, InvalidValueInDict, AttrIsNoneException
-from .helper import get_protected_attrs_names
+from .utils import get_protected_attrs_names
 import numpy as np
+
 class IVaildable(metaclass=ABCMeta):
     @abstractmethod
     def validate(self):
         pass
+
 class AttrValidator(IVaildable):
     """A class provides API for chcking if passed object's attribute is None or not"""
     def __init__(self, object_,

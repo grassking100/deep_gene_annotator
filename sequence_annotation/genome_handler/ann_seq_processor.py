@@ -198,3 +198,22 @@ def get_ann_vecs(ann_seqs,ann_types=None):
                 raise InvalidStrandType(ann_seq.strand)
         dict_[str(ann_seq.id)] = np.transpose(ann)
     return dict_
+
+def mixed_typed_seq_generate(seq):
+    if set(seq.ANN_TYPES)!=set(['exon','intron','other']):
+        raise Exception("Error")
+    vecs = []
+    for ann_type in ['exon','intron','other']:
+        temp = np.array(seq.get_ann(ann_type))
+        vecs.append(np.nan_to_num(temp/temp))
+    t_vecs = np.array(vecs).transpose()
+    mixed_type_seq = AnnSequence().from_dict(seq.to_dict())
+    mixed_type_seq.clean_space()
+    mixed_type_seq.ANN_TYPES =  ['exon','intron','mix','other']
+    mixed_type_seq.init_space()
+    mixed_type_seq.add_ann('exon',np.all(t_vecs==[1,0,0],1).astype('int'))
+    mixed_type_seq.add_ann('intron',np.all(t_vecs==[0,1,0],1).astype('int'))
+    mixed_type_seq.add_ann('mix',np.all(t_vecs==[1,1,0],1).astype('int'))
+    mixed_type_seq.add_ann('other',np.all(t_vecs==[0,0,1],1).astype('int'))
+    return mixed_type_seq
+
