@@ -24,25 +24,6 @@ class IDataProcessor(metaclass=ABCMeta):
     def after_process(self,path=None):
         pass
 
-"""class DataLoader(IDataProcessor):
-    def __init__(self,path):
-        self._data = None
-        self._path = path
-        self._record = {}
-    @property
-    def record(self):
-        return self._record
-    @property
-    def data(self):
-        return self._data
-    def before_process(self,path=None):
-        pass
-    def after_process(self,path=None):
-        pass
-    def process(self):
-        pass
-"""
-
 class SimpleData(IDataProcessor):
     def __init__(self,data):
         self._data = data
@@ -105,7 +86,7 @@ class AnnSeqData(SimpleData):
                 data_pairs['answers'].append(answer)
             self._data[data_kind] = data_pairs
     def _validate(self):
-        for data_kind,data in self._data.items():
+        for _, data in self._data.items():
             input_shape = np.shape(data['inputs'])
             answer_shape = np.shape(data['answers'])
             if len(input_shape)!=3:

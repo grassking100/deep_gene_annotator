@@ -3,7 +3,7 @@ from sequence_annotation.processor.data_processor import SimpleData,AnnSeqData
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
 from sequence_annotation.genome_handler.sequence import AnnSequence
 from sequence_annotation.utils.exception import DimensionNotSatisfy
-class TestPipeline(unittest.TestCase):
+class TestDataContainer(unittest.TestCase):
     def test_simple_data(self):
         try: 
             data = SimpleData({'training':{'inputs':[[1,0]],'answers':[[1,0]]}})

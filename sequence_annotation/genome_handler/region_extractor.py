@@ -4,10 +4,11 @@ from .ann_seq_processor import is_one_hot
 from .exception import NotOneHotException
 class RegionExtractor:
     """#Get annotated region information"""
+    def __init__(self):
+        self._region_id = 0
     def extract(self,ann_seq,focus_types=None):
         focus_types = focus_types or ann_seq.ANN_TYPES
         if ann_seq.processed_status=="one_hot" or is_one_hot(ann_seq,focus_types):
-            self._region_id = 0
             seq_info_genome = self._parse_regions(ann_seq,focus_types)
             return seq_info_genome
         else:

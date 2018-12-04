@@ -5,16 +5,11 @@
                          "previous_layer":null,
                          "is_output":false
                         },
-                "Masking":{"type":"Masking",
-                       "keras_setting":{"mask_value":-1},
-                       "is_output":false,
-                       "previous_layer":"Input"
-                      },
                 "CNN":{"type":"Convolution1D",
                        "keras_setting":{"kernel_size":3,"filters":12,"use_bias":true,
                                         "activation":"relu","padding":"same"},
                        "is_output":false,
-                       "previous_layer":"Masking"
+                       "previous_layer":"Input"
                       },
                 "LSTM":{"type":"LSTM",
                         "keras_setting":{"units":12,"activation":"tanh","return_sequences":true},

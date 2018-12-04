@@ -91,7 +91,6 @@ def draw_metric_curve(data,annotations,sources,line_types,scale_y_axis=True):
                             ylabel_params={'ylabel':'metric','fontsize':30})
     for ann_type in annotations:
         for metric_type in ['precision','recall','f1']:
-            metrics = {'train':[],'validation':[]}
             values_list = get_values_list(data,metric_type,ann_type=ann_type,sources=sources)
             ax = helper.get_ax()
             ax.set_title(ann_type+"'s "+metric_type,size=30)
@@ -109,7 +108,6 @@ def draw_metric_curve(data,annotations,sources,line_types,scale_y_axis=True):
     ax.set_title("accuracy",size=30)
     for acc in accs:
         ax.plot(list(acc['value']),line_types[acc['source']])
-        #ax.set_xlim([0,200])
         if scale_y_axis:
             ax.set_ylim([0,1])
         for tick in ax.xaxis.get_major_ticks():
@@ -206,7 +204,6 @@ def metric_converter(df,sources,prefixes,annotation_types=None,id_=None,mode_id=
             for type_ in annotation_types:
                 metric_value = {}
                 tp = df[name(prefix,type_,"TP")]
-                tn = df[name(prefix,type_,"TN")]
                 fp = df[name(prefix,type_,"FP")]
                 fn = df[name(prefix,type_,"FN")]
                 recall =  tp/(tp+fn)

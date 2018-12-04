@@ -1,4 +1,4 @@
-from abc import ABCMeta, abstractmethod
+from abc import ABCMeta
 from .pipeline_factory import PipelineFactory
 import copy
 class BatchPipeline(metaclass=ABCMeta):

@@ -1,13 +1,11 @@
 """This submodule provides trainer to train model"""
 from keras import backend as K
-import numpy as np
 import tensorflow as tf
 config = tf.ConfigProto()
 if hasattr(config,"gpu_options"):
     config.gpu_options.allow_growth=True
 sess = tf.Session(config=config)
 K.set_session(sess)
-from keras.utils import Sequence
 from keras.utils import plot_model
 from .worker import Worker
 class TrainWorker(Worker):
@@ -36,3 +34,7 @@ class TrainWorker(Worker):
         self._validate()
         history = self.wrapper(self.model,self.data)
         self._result = history.history
+
+    def after_work(self):
+        """Do something after worker work"""
+        pass

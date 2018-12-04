@@ -1,7 +1,7 @@
 import unittest
 import tensorflow as tf
 import keras
-from sequence_annotation.pipeline.loss import Loss
+from sequence_annotation.processor.loss import Loss
 
 class TestLoss(unittest.TestCase):
     def test_perfect(self):

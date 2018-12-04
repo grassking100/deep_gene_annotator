@@ -1,13 +1,14 @@
 from abc import ABCMeta
 from abc import abstractmethod
 import pandas as pd
-from ..utils.validator import AttrValidator
-from ..utils.exception import InvalidAnnotation,IdNotFoundException,DuplicateIdException
+from ..utils.exception import InvalidAnnotation,IdNotFoundException,DuplicateIdException,AttrIsNoneException
 from .sequence import AnnSequence,SeqInformation,Sequence
 class SeqContainer(metaclass=ABCMeta):
     def __init__(self):
         self._data = {}
         self.note = ""
+        self._keys = None
+        self._index = None
     def __len__(self):
         return len(self._data)
     def __iter__(self):
@@ -39,10 +40,10 @@ class SeqContainer(metaclass=ABCMeta):
         pass
     def add(self,seq_or_seqs):
         try:
-            iterator = iter(seq_or_seqs)
+            iter(seq_or_seqs)
             for seq in seq_or_seqs:
                 self._add(seq)
-        except Exception as exp:    
+        except Exception:    
             if hasattr(seq_or_seqs,'to_list'):
                 for seq in seq_or_seqs.to_list():
                     self._add(seq)
@@ -121,8 +122,8 @@ class AnnSeqContainer(SeqContainer):
         if len(diffs) > 0:
             raise InvalidAnnotation(str(diffs))
     def _validate(self):
-        validator = AttrValidator(self,False,True,False,None)
-        validator.validate()
+        if self.ANN_TYPES is None:
+            raise AttrIsNoneException(self.ANN_TYPES, 'ANN_TYPES')
     def _create_sequence(self):
         return AnnSequence()
     def from_dict(self,dict_):

@@ -1,5 +1,5 @@
-from abc import ABCMeta,abstractmethod
-import numpy as np
+from abc import ABCMeta
+
 class SeqStatusDetector(metaclass=ABCMeta):
     def get_invalid_status(self,seq,invalid_chars=None):
         invalid_chars = invalid_chars or []

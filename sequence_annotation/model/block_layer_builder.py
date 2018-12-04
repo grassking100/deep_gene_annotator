@@ -1,6 +1,5 @@
 from keras.layers import BatchNormalization, ReLU, Conv1D, Add, Dropout, Concatenate
-from keras.models import Sequential
-from keras.engine.topology import Layer
+
 class Cnn1dBatchReluBuilder():
     def build(self,conv1d_setting,BN_setting=None,act_name=None,mode=1,name=None):
         """

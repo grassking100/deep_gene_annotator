@@ -31,7 +31,6 @@ class BedInfoParser(SeqInfoParser):
             data[name] = data.pop(index)
         data['blockStarts'] = np.array(str(data['blockStarts']).split(","),dtype="int")
         data['blockSizes'] = np.array(str(data['blockSizes']).split(","),dtype="int")
-        self._result = []
         for key in value_int_zero_based:
             data[key] = int(data[key])
         for key in value_int_one_based:
@@ -66,7 +65,6 @@ class UscuInfoParser(SeqInfoParser):
         value_int_zero_based = ['txStart','cdsStart','exonCount']
         value_int_one_based = ['txEnd','cdsEnd']
         value_str = ['chrom','strand','name']
-        self._result = []
         temp_data = {}
         for key in value_int_zero_based:
             temp_data[key] = int(data[key])

@@ -24,8 +24,8 @@ class TestPipeline(unittest.TestCase):
                 GRU(2, input_shape=(None,2),return_sequences=True),
                 Convolution1D(2,1,activation='softmax')
             ])
-            compiler = AnnSeqCompiler('adam','categorical_crossentropy',['T','N'],
-                                      values_to_ignore=-1,
+            compiler = AnnSeqCompiler('adam','categorical_crossentropy',
+                                      values_to_ignore=-1,ann_types=['T','N'],
                                       dynamic_weight_method='reversed_count_weight')
             compiler.before_process()
             compiler.process(model)

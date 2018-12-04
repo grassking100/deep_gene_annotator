@@ -1,14 +1,13 @@
-from abc import ABCMeta,abstractmethod,abstractproperty
+from abc import ABCMeta,abstractproperty
 import numpy as np
 from copy import deepcopy
 from tempfile import mkdtemp
 import os.path as path
 from ..utils.validator import AttrValidator, DictValidator
-from ..utils.utils import get_protected_attrs_names
+from ..utils.utils import get_protected_attrs_names,logical_not
 from ..utils.exception import UninitializedException,NegativeNumberException,InvalidStrandType
 from ..utils.exception import InvalidAnnotation,ChangeConstValException,ValueOutOfRange
-def logical_not(lhs, rhs):
-    return np.logical_and(lhs,np.logical_not(rhs))
+
 class Sequence(metaclass=ABCMeta):
     def __init__(self):
         self.note = ""
@@ -158,10 +157,6 @@ class AnnSequence(Sequence):
         self._validate_dict_keys(dict_)
         super().from_dict(dict_)
         if self._has_space:
-            if self._use_memmap:
-                memmap_id = self.id
-            else:
-                memmap_id = None
             self.init_space()
             for type_ in self.ANN_TYPES:
                 value = deepcopy(dict_['data'][type_])
@@ -205,9 +200,9 @@ class AnnSequence(Sequence):
         if end_index < 0 :
             raise NegativeNumberException('end_index',end_index)
         if start_index >= self._length:
-            raise ValueOutOfRange('start_index',start_index,range(self._length))
+            raise ValueOutOfRange('start_index',start_index,list(range(self._length)))
         if end_index >= self._length :
-            raise ValueOutOfRange('end_index',end_index,range(self._length))
+            raise ValueOutOfRange('end_index',end_index,list(range(self._length)))
         if start_index>end_index:
             raise Exception("Start index must not larger than End index")
     def _validate_input_ann_type(self, ann_type):

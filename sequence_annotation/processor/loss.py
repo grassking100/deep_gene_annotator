@@ -3,7 +3,6 @@ import warnings
 import tensorflow as tf
 import keras.backend as K
 import numpy as np
-from ..utils.python_decorator import rename
 from .metric import SeqAnnMetric
 
 def focal_Loss(y_true, y_pred, alpha=0.25, gamma=2):
@@ -19,6 +18,7 @@ class Loss(SeqAnnMetric):
     def __init__(self, name=None,values_to_ignore=None,weights=None,
                  type_='categorical_crossentropy', dynamic_weight_method=None):
         super().__init__(name or type_,values_to_ignore)
+        self._dtype = 'float32'
         self._weights = weights
         self._dynamic_weight_method = dynamic_weight_method
         self._type = type_
@@ -28,8 +28,9 @@ class Loss(SeqAnnMetric):
             try:
                 exec('from keras.losses import {type_}'.format(type_=type_))
                 exec('self._loss_function={type_}'.format(type_=type_))
-            except ImportError as e:
+            except ImportError:
                 raise Exception(type_+' cannot be found in keras.losses')
+
     def _get_result(self):
         true,pred = self._true,self._pred
         weight_ = None
@@ -38,24 +39,34 @@ class Loss(SeqAnnMetric):
         else:
             if self._dynamic_weight_method is not None:
                 warnings.warn("Weight will be recalucalated by dynamic weight")
-                #if self._dynamic_weight_method=="reversed_count_weight":
-                #    weight_ = self._reversed_count_weight(true)
-                #else:
-                raise Exception(self._dynamic_weight_method+" has not be implemented yet")
+                if self._dynamic_weight_method=="reversed_count_weight":
+                    weight_ = self._reversed_count_weight(true)
+                else:
+                    raise Exception(self._dynamic_weight_method+" has not be implemented yet")
         if weight_ is not None:
             if self._type=='categorical_crossentropy':
                 true = tf.multiply(true, weight_)
             else:
                 raise Exception(self._type+" doesn't support weights loss yet")
-        loss = tf.reduce_mean(self._loss_function(true,pred))
+        loss = self._loss_function(true,pred)
         return loss
-    #def _reversed_count_weight(self,seq_tensor):
-    #    dim = tf.cast(tf.shape(seq_tensor)[1], tf.float32)
-    #    class_count = tf.cast(tf.reduce_sum(seq_tensor,[0]), tf.float32)
-    #    reversed_count = tf.divide(1,(class_count+1))
-    #    reversed_count_sum = tf.reduce_sum(reversed_count)
-    #    weight = tf.divide(tf.multiply(1.0,reversed_count),reversed_count_sum)
-    #    return tf.multiply(weight,dim)
+
+    def _reversed_count_weight(self,seq_tensor):
+        dim = tf.cast(tf.shape(seq_tensor)[1], tf.float32)
+        class_count = tf.cast(tf.reduce_sum(seq_tensor,[0,1]), tf.float32)
+        reversed_count = tf.divide(1,(class_count+1))
+        reversed_count_sum = tf.reduce_sum(reversed_count)
+        weight = tf.divide(tf.multiply(1.0,reversed_count),reversed_count_sum)
+        return tf.multiply(weight,dim)
+
     def __call__(self, y_true, y_pred):
+        if self._values_to_ignore is not None:
+            self._set_mask(y_true)
         self._set_data(y_true, y_pred)
-        return self._get_result()
+        result = self._get_result()
+        if self._mask is not None:
+            result *= tf.cast(self._mask,self._dtype)
+            result = result / tf.cast(K.sum(self._mask),'int32')
+        else:
+            result = K.mean(result)
+        return result    

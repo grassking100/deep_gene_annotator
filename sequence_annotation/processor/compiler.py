@@ -12,7 +12,7 @@ class Compiler(metaclass=ABCMeta):
                         'metrics':metrics
                         }
     @abstractmethod
-    def process(self):
+    def process(self,model=None):
         pass
     @property
     def record(self):
@@ -30,7 +30,7 @@ class SimpleCompiler(Compiler):
         self._record['weights'] = weights
         self._record['dynamic_weight_method'] = dynamic_weight_method
         self._builder = MetricBuilder(values_to_ignore = values_to_ignore)
-        self._builder.add_loss(loss_type=loss_type,weights=weights,
+        self._builder.add_loss(type_=loss_type,weights=weights,
                                dynamic_weight_method=dynamic_weight_method)
         self._loss = self._builder.build()['loss']
         self._optimizer = optimizer
@@ -43,12 +43,13 @@ class SimpleCompiler(Compiler):
             with open(json_path,'w') as fp:
                 json.dump(self._record,fp)
 
-class AnnSeqCompiler(Compiler):
-    def __init__(self,optimizer,loss_type,values_to_ignore=None,
+class AnnSeqCompiler(SimpleCompiler):
+    def __init__(self,optimizer,loss_type,acc_type="categorical_accuracy",values_to_ignore=None,
                  weights=None,dynamic_weight_method=None,
                  ann_types=None,metrics=None):
         super().__init__(optimizer,loss_type,values_to_ignore,
                          weights,dynamic_weight_method,metrics)
+        self._builder.add_accuracy(type_=acc_type)
         self._record['ann_types'] = ann_types
         for ann_type in ann_types:
             self._builder.add_TP(ann_type,ann_types)

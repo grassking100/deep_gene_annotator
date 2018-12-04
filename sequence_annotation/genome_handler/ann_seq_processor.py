@@ -1,8 +1,7 @@
-from abc import ABCMeta,abstractmethod
 import numpy as np
 import warnings
 from ..utils.exception import ProcessedStatusNotSatisfied
-from ..utils.exception import UninitializedException,InvalidStrandType
+from ..utils.exception import InvalidStrandType
 from .sequence import AnnSequence
 from .exception import NotOneHotException
 
@@ -166,7 +165,7 @@ def simplify_seq(seq,replace):
                 ann_seq.add_ann(key_,seq.get_ann(type_))
         return ann_seq
     else:
-        raise Exception("Sequence annotated is not one-hot")
+        raise NotOneHotException("Sequence annotated is not one-hot")
         
 def class_count(ann_seqs):
     ann_count = {}

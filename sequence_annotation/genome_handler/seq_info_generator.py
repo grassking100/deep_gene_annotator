@@ -2,7 +2,6 @@ import numpy as np
 import random
 from .sequence import SeqInformation
 from .seq_container import SeqInfoContainer
-from ..utils.validator import DictValidator
 from ..utils.exception import NegativeNumberException
 class SeqInfoGenerator:
     """Extract selected regions' annotation information"""

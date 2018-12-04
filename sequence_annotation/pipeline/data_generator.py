@@ -1,6 +1,5 @@
 from keras.utils import Sequence
 import numpy as np
-import math
 from ..utils.utils import padding
 
 class DataGenerator(Sequence):

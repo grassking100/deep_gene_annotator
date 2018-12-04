@@ -1,8 +1,6 @@
 import math
 import numpy as np
 import pandas as pd
-from .seq_container import AnnSeqContainer
-from ..data_handler.seq_converter import SeqConverter
 from ..utils.exception import LengthNotEqualException
 
 def merge_data(data,groupby,raise_duplicated_excpetion=True):
@@ -65,8 +63,8 @@ def gene_boundary(data,raise_duplicated_excpetion=True):
     result.reset_index(inplace=True)
     return result
 
-def preprocess_ensembl_data(parsed_file_path,valid_chroms_id,merged_by='Protein stable ID',
-                            gene_types=['protein_coding']):
+def preprocess_ensembl_data(parsed_file_path,valid_chroms_id,merged_by='Protein stable ID',gene_types=None):
+    gene_types = gene_types or ['protein_coding']
     file = pd.read_csv(parsed_file_path,sep='\t',dtype={'Gene stable ID':np.str ,
                                                         'Protein stable ID':np.str ,
                                                         'Transcript stable ID':np.str ,

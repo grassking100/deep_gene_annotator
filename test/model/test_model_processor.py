@@ -3,6 +3,7 @@ from sequence_annotation.model.model_processor import SimpleModel,ModelCreator
 from keras.models import Sequential
 from keras.layers import Dense, Activation
 import json
+from os.path import abspath, expanduser
 
 class TestModelProcessor(unittest.TestCase):
     def test_simple_model(self):
@@ -23,7 +24,7 @@ class TestModelProcessor(unittest.TestCase):
 
     def test_model_builder(self):
         try:
-            model_setting_path = abspath(expanduser(__file__+'/../pipeline/setting/model_setting.json'))
+            model_setting_path = abspath(expanduser(__file__+'/../../setting/model_setting.json'))
             with open(model_setting_path) as fp:
                 model_setting=json.load(fp)
             model = ModelCreator(model_setting)

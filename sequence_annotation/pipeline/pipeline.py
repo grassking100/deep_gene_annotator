@@ -22,8 +22,9 @@ class Pipeline(metaclass=ABCMeta):
         self._prepare_model()
         self.print_prompt("Processing data...")
         self._prepare_data()
-        self.print_prompt("Compiling model...")
-        self._compile_model()
+        if self._compiler is not None:
+            self.print_prompt("Compiling model...")
+            self._compile_model()
         self.print_prompt("Processing worker...")
         self._prepare_worker()
         self._before_execute()

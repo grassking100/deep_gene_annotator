@@ -2,7 +2,11 @@ import os
 import errno
 import keras.backend as K
 import tensorflow as tf
+import numpy as np
 from keras.preprocessing.sequence import pad_sequences
+
+def logical_not(lhs, rhs):
+    return np.logical_and(lhs,np.logical_not(rhs))
 
 def create_folder(path):
     try:

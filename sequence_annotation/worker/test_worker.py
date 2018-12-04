@@ -2,7 +2,6 @@
 import tensorflow as tf
 import keras.backend as K
 import json
-import numpy as np
 import pandas as pd
 from .worker import Worker
 config = tf.ConfigProto()
@@ -28,4 +27,8 @@ class TestWorker(Worker):
     def work(self):
         self._validate()
         history = self.wrapper(self.model,self.data)
-        self._result = dict(zip(self.model.metrics_names, [history]))
+        try:
+            iter(history)
+        except TypeError:
+            history = [history]
+        self._result = dict(zip(self.model.metrics_names, history))

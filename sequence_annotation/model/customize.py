@@ -1,8 +1,6 @@
-from keras.layers import Layer
-from keras import backend as K
-import tensorflow as tf
+from keras.layers import Layer, Conv1D
 
-class Mask(Layer):
+class GetMask(Layer):
     """Get mask of the previous layer"""
     def __init__(self, **kwargs):
         self.supports_masking = True
@@ -15,6 +13,18 @@ class Mask(Layer):
         if mask is not None:
             mask = K.cast(mask, K.floatx())
         return mask
+
+class RemoveMask(Layer):
+    """Remove mask of previous layer"""
+    def __init__(self, **kwargs):
+        self.supports_masking = True
+        super().__init__(**kwargs)
+
+    def compute_mask(self, input_, input_mask=None):
+        return None
+
+    def call(self, x, mask=None):
+        return x
 
 def symmetric_sigmoid(x):
     return K.hard_sigmoid(((x-0.5)*5))
@@ -41,3 +51,8 @@ def noised_relu(x,alpha=1,c=1,p=1):
     iid_noise = keras.backend.random_normal(shape=(1,tf.shape(x)[-1]))
     noised_result = alpha*raw_result + (1-alpha)*x + d*sigma*iid_noise
     return train_phase*(noised_result)+(1-train_phase)*raw_result
+
+class MaskedConvolution1D(Conv1D):
+    def __init__(self, *args,**kwargs):
+        super().__init__(*args,**kwargs)
+        self.supports_masking = True

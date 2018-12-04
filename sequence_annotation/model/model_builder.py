@@ -1,19 +1,19 @@
 """This submodule contains class which can create model"""
-from keras.layers.normalization import BatchNormalization
-from keras.layers import concatenate
 from keras.engine.training import Model
 from keras.layers import RNN,Input
 from keras.layers import Bidirectional,Permute
 import copy
 from .block_layer_builder import Cnn1dBatchReluBuilder,ResidualLayerBuilder,DeepResidualLayerBuilder
 from .block_layer_builder import DeepDenseLayerBuilder,DenseLayerBuilder
-def _set_regularizer(regularizer_type,regularizer):
+
+def set_regularizer(regularizer_type,regularizer):
     temp = None
     command = 'from keras.regularizers import {regularizer_type}'.format(regularizer_type=regularizer_type)
     exec(command)
     command = 'temp={regularizer}'.format(regularizer=regularizer)
     exec(command)
     return temp
+
 class ModelBuilder:
     """This class will create and return sequence annotation model"""
     def __init__(self,model_setting):
@@ -32,22 +32,22 @@ class ModelBuilder:
         if 'kernel_regularizer' in keras_setting.keys():
             regularizer = keras_setting['kernel_regularizer']
             regularizer_type =regularizer[:2]
-            temp = _set_regularizer(regularizer_type,regularizer)
+            temp = set_regularizer(regularizer_type,regularizer)
             keras_setting['kernel_regularizer'] = temp
         if 'bias_regularizer' in keras_setting.keys():
             regularizer = keras_setting['bias_regularizer']
             regularizer_type =regularizer[:2]
-            temp = _set_regularizer(regularizer_type,regularizer)
+            temp = set_regularizer(regularizer_type,regularizer)
             keras_setting['bias_regularizer'] = temp
         if 'recurrent_regularizer' in keras_setting.keys():
             regularizer = keras_setting['recurrent_regularizer']
             regularizer_type =regularizer[:2]
-            temp = _set_regularizer(regularizer_type,regularizer)
+            temp = set_regularizer(regularizer_type,regularizer)
             keras_setting['recurrent_regularizer'] = temp
         if 'activity_regularizer' in keras_setting.keys():
             regularizer = keras_setting['activity_regularizer']
             regularizer_type =regularizer[:2]
-            temp = _set_regularizer(regularizer_type,regularizer)
+            temp = set_regularizer(regularizer_type,regularizer)
             keras_setting['activity_regularizer'] = temp
         if layer_type == 'Input':
             layer = self._build_input(setting)
@@ -67,16 +67,7 @@ class ModelBuilder:
             try:
                 exec('from keras.layers import {layer_type}'.format(layer_type=layer_type))
                 exec('self._temp_layer_class={layer_type}'.format(layer_type=layer_type))
-                if layer_type in ['Convolution1D','Convolution2D']:
-                    class MaskedCNN(self._temp_layer_class):
-                        def __init__(self, *args,**kwargs):
-                            super().__init__(*args,**kwargs)
-                            self.supports_masking = True
-                        def compute_mask(self, inputs, mask):
-                            return mask
-                    layer = MaskedCNN(**keras_setting)
-                else:
-                    layer = self._temp_layer_class(**keras_setting)
+                layer = self._temp_layer_class(**keras_setting)
             except ImportError as e:
                 raise Exception("Layer,{layer},has not been implemented yet".format(layer=layer_type))
         is_RNN = isinstance(layer.__class__,RNN.__class__)
