@@ -10,12 +10,12 @@ class MetricBuilder():
         self._values_to_ignore = values_to_ignore
 
     def add_loss(self,*args,**kwargs):
-        loss = Loss(*args,**kwargs)
+        loss = Loss(values_to_ignore=self._values_to_ignore,*args,**kwargs)
         self._custom_objects["loss"]=loss
         return self
 
     def add_accuracy(self,*args,**kwargs):
-        acc = Accuracy(*args,**kwargs)
+        acc = Accuracy(values_to_ignore=self._values_to_ignore,*args,**kwargs)
         self._custom_objects["accuracy"]=acc
         return self
 

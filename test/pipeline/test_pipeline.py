@@ -5,11 +5,11 @@ import unittest
 from sequence_annotation.model.model_processor import SimpleModel,ModelCreator
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
 from sequence_annotation.processor.compiler import SimpleCompiler,AnnSeqCompiler
-from sequence_annotation.processor.stateful_metric import StatefulMetric
-from sequence_annotation.processor.metric import BatchCount,SampleCount
+from sequence_annotation.processor.metric.stateful_metric import StatefulMetric
+from sequence_annotation.processor.metric.metric import BatchCount,SampleCount
 from sequence_annotation.processor.data_processor import AnnSeqData,SimpleData
-from sequence_annotation.worker.train_worker import TrainWorker
-from sequence_annotation.worker.test_worker import TestWorker
+from sequence_annotation.processor.worker.train_worker import TrainWorker
+from sequence_annotation.processor.worker.test_worker import TestWorker
 from sequence_annotation.data_handler.fasta import read_fasta
 from sequence_annotation.data_handler.json import read_json
 from sequence_annotation.data_handler.seq_converter import SeqConverter

@@ -14,6 +14,9 @@ class Metric(metaclass=ABCMeta):
     @abstractmethod    
     def __call__(self, y_true, y_pred):
         pass
+    @property
+    def __name__(self):
+        return self.name
 
 class BatchCount(Metric):
     def __init__(self,name='batch_count',values_to_ignore=None):
@@ -119,7 +122,8 @@ class Accuracy(SeqAnnMetric):
         result = self._get_result()
         if self._mask is not None:
             result *= tf.cast(self._mask,self._dtype)
-            result = result / tf.cast(K.sum(self._mask),'int32')
+            result = K.sum(result)
+            result = result / tf.cast(K.sum(tf.cast(self._mask,'int32')),'float32')
         else:
             result = K.mean(result)
         return result    

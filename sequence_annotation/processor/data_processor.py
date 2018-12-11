@@ -124,12 +124,3 @@ class AnnSeqData(SimpleData):
             self._padding()
         if self._do_validate:
             self._validate()
-                          
-class DataContainerFactory:
-    def create(self,type_):
-        if type_ == 'simple':
-            return DataContainer
-        elif type_ == 'ann_seq':
-            return AnnSeqLoader
-        else:
-            raise Exception(type_+' has not be supported yet.')

@@ -7,8 +7,8 @@ from .metric import SeqAnnMetric
 
 def focal_Loss(y_true, y_pred, alpha=0.25, gamma=2):
     y_pred += K.epsilon()
-    ce = -y_true * K.log(y_pred)
-    weight_ = np.power(1 - y_pred, gamma) * y_true
+    ce = - y_true * K.log(y_pred)
+    weight_ = np.power(1 - y_pred, gamma)
     fl = ce * weight_ * alpha
     reduce_fl = K.max(fl, axis=-1)
     return reduce_fl
@@ -52,11 +52,11 @@ class Loss(SeqAnnMetric):
         return loss
 
     def _reversed_count_weight(self,seq_tensor):
-        dim = tf.cast(tf.shape(seq_tensor)[1], tf.float32)
+        dim = tf.cast(tf.shape(seq_tensor)[2], tf.float32)
         class_count = tf.cast(tf.reduce_sum(seq_tensor,[0,1]), tf.float32)
         reversed_count = tf.divide(1,(class_count+1))
         reversed_count_sum = tf.reduce_sum(reversed_count)
-        weight = tf.divide(tf.multiply(1.0,reversed_count),reversed_count_sum)
+        weight = tf.divide(reversed_count,reversed_count_sum)
         return tf.multiply(weight,dim)
 
     def __call__(self, y_true, y_pred):
@@ -66,7 +66,8 @@ class Loss(SeqAnnMetric):
         result = self._get_result()
         if self._mask is not None:
             result *= tf.cast(self._mask,self._dtype)
-            result = result / tf.cast(K.sum(self._mask),'int32')
+            result = K.sum(result)
+            result = result / tf.cast(K.sum(tf.cast(self._mask,'int32')),'float32')
         else:
             result = K.mean(result)
         return result    

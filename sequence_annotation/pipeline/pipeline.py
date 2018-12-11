@@ -18,10 +18,10 @@ class Pipeline(metaclass=ABCMeta):
         if self._is_prompt_visible:
             print(value)
     def execute(self):
-        self.print_prompt("Processing model..")
-        self._prepare_model()
         self.print_prompt("Processing data...")
         self._prepare_data()
+        self.print_prompt("Processing model..")
+        self._prepare_model()
         if self._compiler is not None:
             self.print_prompt("Compiling model...")
             self._compile_model()

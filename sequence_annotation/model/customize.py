@@ -1,4 +1,7 @@
-from keras.layers import Layer, Conv1D
+from keras.layers import Layer, Conv1D, Activation
+import tensorflow as tf
+import keras
+from keras import backend as K
 
 class GetMask(Layer):
     """Get mask of the previous layer"""
@@ -30,6 +33,7 @@ def symmetric_sigmoid(x):
     return K.hard_sigmoid(((x-0.5)*5))
 
 def sgn(x):
+    """If input is larger or equal to zero then function will return one, otherwise zero"""
     return tf.cast(x >= 0,dtype='float32')*2-1
 
 def noised_symmetric_sigmoid(x,alpha=1,c=1,p=1):
