@@ -42,10 +42,13 @@ class SimpleData(IDataProcessor):
         pass
 
 class AnnSeqData(SimpleData):
-    def __init__(self,data,padding_value=None,seq_converter=None,
+
+    def __init__(self,data,padding_value=None,seq_converter=None,answer_one_hot=True,
                  discard_invalid_seq=False,validation_split=0,do_validate=True):
         super().__init__(data['data'])
         self._record['padding_value'] = padding_value
+        self._record['seq_converter'] = seq_converter
+        self._record['answer_one_hot'] = answer_one_hot
         self._record['discard_invalid_seq'] = discard_invalid_seq
         self._record['validation_split'] = validation_split
         self._record['do_validate'] = do_validate
@@ -54,12 +57,15 @@ class AnnSeqData(SimpleData):
         self._padding_value = padding_value
         self._discard_invalid_seq = discard_invalid_seq
         self._ANN_TYPES = data['ANN_TYPES']
+        self._answer_one_hot = answer_one_hot
         self._do_validate = do_validate
+
     def before_process(self,path=None):
         if path is not None:
             json_path = create_folder(path) + "/setting/data.json"
             with open(json_path,'w') as fp:
                 json.dump(self._record,fp)
+
     def _padding(self):
         padded = {}
         for data_kind, data in self._data.items():
@@ -68,6 +74,7 @@ class AnnSeqData(SimpleData):
             inputs, answers = padding(inputs,answers,self._padding_value)
             padded[data_kind] = {"inputs":inputs,"answers":answers}
         self._data =  padded
+
     def _to_dict(self):
         for data_kind,data in self._data.items(): 
             seqs = data['inputs']
@@ -82,17 +89,25 @@ class AnnSeqData(SimpleData):
                 seq_length = np.shape(answer)[0]
                 if ann_length != seq_length:
                     raise LengthNotEqualException(ann_length, seq_length)
+                if not self._answer_one_hot:
+                    answer = np.argmax(answer,axis=-1)
                 data_pairs['inputs'].append(seq)
                 data_pairs['answers'].append(answer)
             self._data[data_kind] = data_pairs
+
     def _validate(self):
         for _, data in self._data.items():
             input_shape = np.shape(data['inputs'])
             answer_shape = np.shape(data['answers'])
-            if len(input_shape)!=3:
+            if len(input_shape) != 3:
                 raise DimensionNotSatisfy(input_shape,3)
-            if len(answer_shape)!=3:
-                raise DimensionNotSatisfy(answer_shape,3)
+            if self._answer_one_hot:
+                if len(answer_shape) != 3:
+                    raise DimensionNotSatisfy(answer_shape,3)
+            else:
+                if len(answer_shape) != 2:
+                    raise DimensionNotSatisfy(answer_shape,2)
+
     def _split(self):
         if self._validation_split > 0 and not 'validation' in self._data.keys():
             ANN_TYPES = self._data['training']['answers'].ANN_TYPES
@@ -117,6 +132,7 @@ class AnnSeqData(SimpleData):
                 val_seqs['answers'].add(self._data['training']['answers'][key])
             self._data['training'] = train_seqs
             self._data['validation'] = val_seqs
+
     def process(self):
         self._split()
         self._to_dict()

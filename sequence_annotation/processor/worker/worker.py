@@ -11,30 +11,38 @@ class Worker(metaclass=ABCMeta):
         self.is_prompt_visible = True
         self._path_root = path_root
         self.wrapper = None
+        self.compiler = None
+
     @property
     def result(self):
         return self._result
+
     @result.setter
     def result(self,value):
         self._result = value
+
     @abstractmethod
     def work(self):
         """Work"""
         pass
+
     @abstractmethod
     def after_work(self):
         """Do something after worker work"""
         pass
+
     @abstractmethod
     def before_work(self):
         """Do something before worker work"""
         pass
+
     def _validate(self):
         """Validate required data"""
         if self.model is None:
-            raise Exception("Model must be passed to worker")
+            raise Exception("Model must be setted")
         if self.data is None:
-            raise Exception("Data must be passed to worker")
+            raise Exception("Data must be setted")
         if self.wrapper is None:
-            raise Exception("Wrapper must be passed to worker")
+            raise Exception("Wrapper must be setted")
+
             

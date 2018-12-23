@@ -16,6 +16,7 @@ class TestWorker(Worker):
         self._result = {}
         self.is_verbose_visible = is_verbose_visible
         self.evaluate_generator_wrapper = None
+
     def before_work(self):
         if self._path_root is not None:
             create_folder("./"+path+"/test")
@@ -32,3 +33,6 @@ class TestWorker(Worker):
         except TypeError:
             history = [history]
         self._result = dict(zip(self.model.metrics_names, history))
+        
+    def _validate(self):
+        super()._validate()

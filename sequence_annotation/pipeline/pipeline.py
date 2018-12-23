@@ -3,7 +3,7 @@ from abc import ABCMeta
 from time import strftime, gmtime, time
 
 class Pipeline(metaclass=ABCMeta):
-    def __init__(self,model_processor,data_processor,compiler,worker,wrapper,is_prompt_visible=True,id_=None,path=None):
+    def __init__(self,model_processor,data_processor,compiler,worker,is_prompt_visible=True,id_=None,path=None):
         self._id = id_
         self._path = path
         if self._path is not None and self._id is not None:
@@ -13,7 +13,6 @@ class Pipeline(metaclass=ABCMeta):
         self._compiler = compiler
         self._data_processor = data_processor
         self._model_processor = model_processor
-        self._wrapper = wrapper
     def print_prompt(self,value):
         if self._is_prompt_visible:
             print(value)
@@ -44,9 +43,9 @@ class Pipeline(metaclass=ABCMeta):
         self._data_processor.process()
         self._data_processor.after_process(self._path)
     def _prepare_worker(self):
+        self._worker.compiler=self._compiler
         self._worker.model=self._model_processor.model
         self._worker.data=self._data_processor.data
-        self._worker.wrapper = self._wrapper
     def _before_execute(self):
         self._worker.before_work()
     def _after_execute(self):

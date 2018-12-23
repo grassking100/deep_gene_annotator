@@ -1,28 +1,9 @@
-from abc import ABCMeta, abstractmethod
-from .metric.metric_builder import MetricBuilder
-from ..utils.utils import create_folder
-
-class Compiler(metaclass=ABCMeta):
-    def __init__(self,optimizer,loss_type,metrics=None):
-        self._optimizer = optimizer
-        self._loss_type = loss_type
-        self._metrics = metrics
-        self._record = {'optimizer':optimizer,
-                        'loss_type':loss_type,
-                        'metrics':metrics
-                        }
-    @abstractmethod
-    def process(self,model=None):
-        pass
-    @property
-    def record(self):
-        return self._record
-    def before_process(self,path=None):
-        pass
-    def after_process(self,path=None):
-        pass
+from .compiler import Compiler
+from ..metric.metric_builder import MetricBuilder
+from ...utils.utils import create_folder
 
 class SimpleCompiler(Compiler):
+
     def __init__(self,optimizer,loss_type,values_to_ignore=None,
                  weights=None,dynamic_weight_method=None,metrics=None):
         super().__init__(optimizer,loss_type,metrics)
@@ -35,8 +16,10 @@ class SimpleCompiler(Compiler):
         self._loss = self._builder.build()['loss']
         self._optimizer = optimizer
         self._metrics = metrics or []
+
     def process(self,model):
         model.compile(optimizer=self._optimizer, loss=self._loss, metrics=self._metrics)
+
     def before_process(self,path=None):
         if path is not None:
             json_path = create_folder(path) + "/setting/compiler.json"
@@ -44,6 +27,7 @@ class SimpleCompiler(Compiler):
                 json.dump(self._record,fp)
 
 class AnnSeqCompiler(SimpleCompiler):
+
     def __init__(self,optimizer,loss_type,acc_type="categorical_accuracy",values_to_ignore=None,
                  weights=None,dynamic_weight_method=None,
                  ann_types=None,metrics=None):
