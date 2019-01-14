@@ -9,7 +9,7 @@ class DataGenerator(Sequence):
         self.batch_size = batch_size
         self.padding = padding
         self.shuffle = epoch_shuffle
-        self.indices = np.arange(int(np.shape(self.x)[0]))
+        self.indices = np.arange(len(self.x))
     def __len__(self):
         length = int(np.ceil(len(self.x) / self.batch_size))
         return length

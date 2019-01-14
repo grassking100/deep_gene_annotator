@@ -26,8 +26,8 @@ def fit_wrapper_generator(*args,**argws):
             val = None
         else:
             val = ([data['validation']['inputs']],[data['validation']['answers']])
-        return model.fit(x=[data['training']['inputs']],
-                         y=[data['training']['answers']],
+        return model.fit(x=data['training']['inputs'],
+                         y=data['training']['answers'],
                          validation_data=val,
                          *args,**argws)
     return fit_wrapper

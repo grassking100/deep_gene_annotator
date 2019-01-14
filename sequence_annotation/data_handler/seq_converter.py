@@ -2,6 +2,9 @@
 from ..utils.exception import CodeException, SeqException
 import numpy as np
 
+DNA_CODE = 'ATCG'
+AA_CODES = 'ARNDCQEGHILKMFPSTWYV'
+
 class SeqConverter():
     def __init__(self,code_vec_dictionay=None,codes=None,
                  is_case_sensitivity=False,with_soft_masked_status=False):
@@ -20,7 +23,7 @@ class SeqConverter():
             else:
                 raise Exception("Diciotnary is not inversible")
         else:
-            self._codes=codes or list('ATCG')
+            self._codes=codes or list(DNA_CODE)
             if self._is_values_unique(self._codes):
                 self._code_vec_dictionary = self._codes_to_vecs_dictionay(self._codes)
             else:
