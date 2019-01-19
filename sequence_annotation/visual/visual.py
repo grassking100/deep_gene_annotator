@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from . import SubplotHelper
+
 def visual_ann_seq(seq):
     """visualize the count of each type along sequence"""    
     answer_vec = []
@@ -17,7 +18,7 @@ def visual_ann_seq(seq):
     plt.stackplot(x,answer_vec,labels=seq.ANN_TYPES)
     plt.legend(loc='upper right')
 
-def visual_ann_seqs(seqs):
+def visual_ann_genome(seqs):
     """visualize the count of each type along sequences"""    
     answer_vec = []
     max_len = 0
@@ -35,23 +36,17 @@ def visual_ann_seqs(seqs):
     plt.stackplot(x,answer_vec, labels=seqs.ANN_TYPES)
     plt.legend(loc='upper right')    
 
-def seq_predict_visual(model, seqs, annotation_types):
-    """visualize the predicted probability of each type along sequence"""
-    predict = np.transpose(model.predict(np.array([seqs])))
-    data = dict(zip(annotation_types,predict))
-    ann_visual(data,annotation_types)
-
-def position_error(model, sequence, answer,annotation_types):
+def position_error(predict, answer, annotation_types):
     """calculate the error of each type along sequence"""
-    predict = np.transpose(model.predict(np.array([sequence]))[0])
+    predict = np.transpose(predict)[0]
     error = {}
     for index,type_ in enumerate(annotation_types):
         error[type_]=predict[index] - answer[type_]
     return  error
 
-def error_visual(model, sequence, answer,annotation_types):
+def visual_error(predict, answer, annotation_types):
     """visualize the error of each type along sequence"""
-    error_status = position_error(model, sequence, answer, annotation_types)
+    error_status = position_error(predict, answer, annotation_types)
     for type_ in annotation_types:
         error = error_status[type_]
         plt.plot(error, label=type_)

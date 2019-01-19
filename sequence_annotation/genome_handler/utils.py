@@ -76,6 +76,16 @@ def preprocess_ensembl_data(parsed_file_path,valid_chroms_id,merged_by='Protein 
     merged_data = merge_data(valid_data,merged_by)
     return merged_data
 
+def ann_count(ann_seqs):
+    ann_count = {}
+    types = ann_seqs.ANN_TYPES
+    for seq in ann_seqs:
+        for type_ in types:
+            if type_ not in ann_count.keys():
+                ann_count[type_] = 0
+            ann_count[type_] += np.sum(seq.get_ann(type_))
+    return ann_count
+
 def to_dict(seqs,answer,ann_types):
     ann_count = {}
     data_pair = {}

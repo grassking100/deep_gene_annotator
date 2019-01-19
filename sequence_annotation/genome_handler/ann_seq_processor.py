@@ -165,38 +165,49 @@ def simplify_seq(seq,replace):
                 ann_seq.add_ann(key_,seq.get_ann(type_))
         return ann_seq
     else:
-        raise NotOneHotException("Sequence annotated is not one-hot")
-        
-def class_count(ann_seqs):
+        raise NotOneHotException(seq.id)
+
+def class_count(ann_seq):
     ann_count = {}
-    for type_ in ann_seqs.ANN_TYPES:
+    ANN_TYPES = ann_genome.ANN_TYPES
+    for type_ in ANN_TYPES:
         ann_count[type_] = 0
-    for ann_seq in ann_seqs:
-        for type_ in ann_seqs.ANN_TYPES:
-            ann_count[type_] += np.sum(ann_seq.get_ann(type_))
+    for type_ in ANN_TYPES:
+        ann_count[type_] += np.sum(ann_seq.get_ann(type_))
     return ann_count
 
-def get_ann_vecs(ann_seqs,ann_types=None):
+def seq2vecs(ann_seq):
     warn = ("\n\n!!!\n"
             "\tDNA sequence will be rearranged from 5' to 3'.\n"
             "\tThe plus strand sequence will stay the same,"
             " but the minus strand sequence will be flipped!\n"
             "!!!\n")
     warnings.warn(warn)
-    ann_types = ann_types or ann_seqs.ANN_TYPES
-    dict_ = {}
-    for ann_seq in ann_seqs:
-        ann = []
-        for type_ in ann_types:
-            value = ann_seq.get_ann(type_)
-            if ann_seq.strand == 'plus':
-                ann.append(value)
-            elif ann_seq.strand == 'minus':
-                ann.append(np.flip(value,0))
-            else:
-                raise InvalidStrandType(ann_seq.strand)
-        dict_[str(ann_seq.id)] = np.transpose(ann)
-    return dict_
+    ann_types = ann_seq.ANN_TYPES
+    ann = []
+    for type_ in ann_types:
+        value = ann_seq.get_ann(type_)
+        if ann_seq.strand == 'plus':
+            ann.append(value)
+        elif ann_seq.strand == 'minus':
+            ann.append(np.flip(value,0))
+        else:
+            raise InvalidStrandType(ann_seq.strand)
+    return np.transpose(ann)
+
+def vecs2seq(vecs,id_,strand,ann_types):
+    #vecs shape is channel,length
+    if vecs.shape[0] != len(ann_types):
+        raise Exception("The number of annotation type is not match with the channel number.")
+    ann_seq = AnnSequence()
+    ann_seq.ANN_TYPES = ann_types
+    ann_seq.id=id_
+    ann_seq.length = vecs.shape[1]
+    ann_seq.strand=strand
+    ann_seq.init_space()
+    for index,type_ in  enumerate(ann_types):
+        ann_seq.set_ann(type_,vecs[index])
+    return ann_seq
 
 def mixed_typed_seq_generate(seq):
     if set(seq.ANN_TYPES)!=set(['exon','intron','other']):
@@ -216,3 +227,5 @@ def mixed_typed_seq_generate(seq):
     mixed_type_seq.add_ann('other',np.all(t_vecs==[0,0,1],1).astype('int'))
     return mixed_type_seq
 
+    
+    
