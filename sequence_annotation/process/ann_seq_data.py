@@ -35,8 +35,9 @@ class AnnSeqData(SimpleData):
         for data_kind, data in self._data.items():
             inputs = data['inputs']
             answers = data['answers']
+            lengths = data['lengths']
             inputs, answers = padding(inputs,answers,self._padding_value)
-            padded[data_kind] = {"inputs":inputs,"answers":answers}
+            padded[data_kind] = {"inputs":inputs,"answers":answers,'lengths':lengths}
         self._data =  padded
 
     def _to_dict(self):
@@ -45,7 +46,7 @@ class AnnSeqData(SimpleData):
             answers = data['answers']
             seqs = self._seq_converter.seqs2vecs(seqs,self._discard_invalid_seq)
             answers = ann_genome_processor.genome2vecs(answers)
-            data_pairs = {'inputs':[],'answers':[]}
+            data_pairs = {'inputs':[],'answers':[],'lengths':[]}
             for name in seqs.keys():
                 seq = seqs[name]
                 answer = answers[name]
@@ -57,6 +58,7 @@ class AnnSeqData(SimpleData):
                     answer = np.argmax(answer,axis=-1)
                 data_pairs['inputs'].append(seq)
                 data_pairs['answers'].append(answer)
+                data_pairs['lengths'].append(len(seq))
             self._data[data_kind] = data_pairs
 
     def _validate(self):

@@ -2,52 +2,36 @@
 import torch
 from ..process.worker import Worker
 from ..pytorch.callback import Accumulator, Recorder
-from ..function.data_generator import SeqGenerator
-
-import matplotlib.pyplot as plt
 import numpy as np
 import time
-
-def plt_dynamic(fig,ax,x,ys):
-    for y in ys:
-        ax.plot(x, y)
-    fig.canvas.draw()
-    
+  
 def _convert(inputs,labels):
-    inputs = torch.from_numpy(inputs).type('torch.FloatTensor').cuda()
-    labels = torch.from_numpy(labels).type('torch.LongTensor').cuda()
+    inputs = torch.from_numpy(inputs).float().cuda()
+    labels = torch.from_numpy(labels).cuda()
     return inputs,labels
 
 def train(model,inputs,labels,compiler,lengths):
     model.train(True)
     compiler.optimizer.zero_grad()
     outputs = model(inputs,lengths=lengths)
-    outputs = outputs.contiguous()
-    outputs = outputs.view(-1, outputs.size()[1])
     loss_ = compiler.loss(outputs, labels)
     loss_.backward()
-    compiler.optimizer.step()    
+    compiler.optimizer.step()
     return loss_.item(),outputs
 
 def validate(model,inputs,labels,compiler,lengths):
     model.train(False)
     outputs = model(inputs,lengths=lengths)
-    outputs = outputs.contiguous()
-    outputs = outputs.view(-1, outputs.size()[1])
     loss_ = compiler.loss(outputs, labels)
     return loss_.item(),outputs
 
-def fit_wrapper(epoch_num,batch_size=32,epoch_shuffle=False,
-                train_callbacks=[],val_callbacks=[],*args,**argws):
+def fit_wrapper(epoch_num,seq_generator,train_callbacks=[],val_callbacks=[],
+                writer=None,write_grad=False,write_weights=False):
     def fit(model,data,compiler):
-        fig,ax = plt.subplots(1,1)
         data_ = {}
         history = Recorder()
         for data_kind,item in data.items():
-            data_[data_kind] = SeqGenerator(item['inputs'],item['answers'],
-                                            batch_size,epoch_shuffle=epoch_shuffle,
-                                            return_len=True,order='NCL',padding_value=-1,
-                                            answer_one_hot=False)
+            data_[data_kind] = seq_generator(item['inputs'],item['answers'],item['lengths'])
         train_loss = Accumulator(name='loss')
         train_loss.on_work_begin()
         has_valid = 'validation' in data_.keys()
@@ -57,23 +41,34 @@ def fit_wrapper(epoch_num,batch_size=32,epoch_shuffle=False,
         for callback in train_callbacks+val_callbacks:
             callback.on_work_begin()
         history.on_work_begin()
-        for epoch in range(epoch_num):
+        train_batch_count = 0
+        for epoch in range(1,1+epoch_num):
             record = {}
             history.on_epoch_begin()
             for callback in train_callbacks+val_callbacks:
                 callback.on_epoch_begin()
             train_loss.on_epoch_begin()
             for item in data_['training']:
+                train_batch_count+=1
                 for callback in train_callbacks:
-                    callback.on_batch_begin()
+                    if 'on_batch_begin' in dir(callback):
+                        callback.on_batch_begin()
                 train_loss.on_batch_begin()
                 inputs, labels, lengths = item
                 inputs,labels = _convert(inputs,labels)
-                labels = labels.view(-1)
                 loss_,outputs = train(model,inputs,labels,compiler,lengths)
                 train_loss.on_batch_end(loss_)
                 for callback in train_callbacks:
-                    callback.on_batch_end(outputs,labels)
+                    if 'on_batch_end' in dir(callback):
+                        callback.on_batch_end(outputs,labels)
+                if writer is not None and write_grad:
+                    for name,param in model.named_parameters():
+                        grad = param.grad.cpu().detach().numpy()
+                        writer.add_histogram('grad_'+name, grad, train_batch_count)
+                if writer is not None and write_weights:
+                    for name,param in model.named_parameters():
+                        val = param.cpu().detach().numpy()
+                        writer.add_histogram(name,val , train_batch_count)
             train_loss.on_epoch_end()
             if hasattr(train_loss,'data'):
                 for type_,value in train_loss.data.items():
@@ -82,15 +77,16 @@ def fit_wrapper(epoch_num,batch_size=32,epoch_shuffle=False,
                 val_loss.on_epoch_begin()
                 for item in data_['validation']:
                     for callback in val_callbacks:
-                        callback.on_batch_begin()
+                        if 'on_batch_begin' in dir(callback):
+                            callback.on_batch_begin()
                     val_loss.on_batch_begin()
                     inputs, labels, lengths = item
                     inputs,labels = _convert(inputs,labels)
-                    labels = labels.view(-1)
                     loss_,outputs = validate(model,inputs,labels,compiler,lengths)
                     val_loss.on_batch_end(loss_)
                     for callback in val_callbacks:
-                        callback.on_batch_end(outputs,labels)
+                        if 'on_batch_end' in dir(callback):
+                            callback.on_batch_end(outputs,labels)
                 val_loss.on_epoch_end()
                 if hasattr(val_loss,'data'):
                     for type_,value in val_loss.data.items():
@@ -100,10 +96,13 @@ def fit_wrapper(epoch_num,batch_size=32,epoch_shuffle=False,
                     for type_,value in callback.data.items():
                         record[type_]=value
             history.on_epoch_end(record)
-            #plt_dynamic(fig,ax, np.arange(epoch+1), [history.data['loss'],history.data['val_loss']])
+            if writer is not None:
+                for name,val in record.items():
+                    writer.add_scalar(name, val, epoch)
             for callback in train_callbacks+val_callbacks:
-                callback.on_epoch_end()
-            print(epoch + 1, record)
+                callback.on_epoch_end(record)
+            print(epoch , record)
+            data_['training'].on_epoch_end()
         for callback in train_callbacks+val_callbacks+[history]:
             callback.on_work_end()
     return fit

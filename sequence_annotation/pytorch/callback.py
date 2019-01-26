@@ -2,6 +2,12 @@ from abc import ABCMeta, abstractmethod, abstractproperty
 import torch.nn.functional as F
 import torch.nn as nn
 import torch
+import matplotlib.pyplot as plt
+
+def plt_dynamic(fig,ax,x,ys):
+    for y in ys:
+        ax.plot(x, y)
+    fig.canvas.draw()
 
 class Callback(metaclass=ABCMeta):
     def on_work_begin(self,*args):
@@ -13,6 +19,15 @@ class Callback(metaclass=ABCMeta):
     def on_epoch_end(self,*args):
         pass
 
+class Reporter(Callback):
+    def __init__(self):
+        self._epoch_count = 0
+    def on_work_begin(self,*args):
+        self.fig,self.ax = plt.subplots(1,1)
+    def on_epoch_end(self,record):
+        self._epoch_count+=1
+        print(self._epoch_count,record)
+        
 class ModelCallback(Callback):
     def __init__(self):
         self._model = None
@@ -66,8 +81,11 @@ class Accumulator(DataDeepCallback):
         super().__init__(prefix=prefix)
     def _reset(self):
         self._data = 0
-    def on_batch_begin(self):
+        self._batch_count = 0
+    def on_epoch_begin(self):
         self._reset()
+    def on_batch_begin(self):
+        pass
     def on_batch_end(self,metric):
         with torch.no_grad():
             self._data+=metric
@@ -134,7 +152,7 @@ class CategoricalMetric(DataDeepCallback):
         recalls = []
         for index in range(self._class_num):
             TP = self._data["TP_"+str(index)]
-            FN = self._data["FN'_"+str(index)]
+            FN = self._data["FN_"+str(index)]
             RP = (TP+FN)
             if RP!=0:
                 recall = TP/RP
@@ -158,11 +176,14 @@ class CategoricalMetric(DataDeepCallback):
         return f1s
     def on_batch_end(self,outputs,labels):
         with torch.no_grad(): 
+            outputs = outputs.contiguous().view(-1, self._class_num)
             outputs = outputs.max(1)[1]
+            labels = torch.transpose(labels, 1, 2).contiguous().view(-1, self._class_num) 
+            labels,label_index = labels.max(1)
             if self._ignore_index is not None:
                 mask = labels != self._ignore_index
-            T_ = (outputs == labels)
-            F_ = (outputs != labels)
+            T_ = (outputs == label_index)
+            F_ = (outputs != label_index)
             if self._ignore_index is not None:
                 T_ = T_*mask
                 F_ = F_*mask
@@ -170,7 +191,7 @@ class CategoricalMetric(DataDeepCallback):
             self._data['F'] += F_.sum().item()
             for index in range(self._class_num):
                 P = outputs == index
-                R = labels == index
+                R = label_index == index
                 TP_ = P & R
                 TN_ = ~P & ~R
                 FP_ = P & ~R

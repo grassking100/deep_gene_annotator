@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from . import SubplotHelper
 
-def visual_ann_seq(seq):
+def visual_ann_seq(seq,length=None):
     """visualize the count of each type along sequence"""    
     answer_vec = []
     for type_ in seq.ANN_TYPES:
