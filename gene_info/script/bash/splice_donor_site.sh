@@ -1,6 +1,12 @@
-bed_file=$1
+if (( $# != 2 )); then
+    echo "Usage:"
+    echo "    bash splice_donor_site.sh BEDFILES RADIUS"
+    exit 1
+fi
+
+bed_file="${1%.*}"
 radius=$2
-bed_file="${bed_file%.*}"
+
 awk -F'\t' -v OFS="\t"  '
                          {   
                              n = split($11, sizes, ",")
@@ -24,9 +30,12 @@ awk -F'\t' -v OFS="\t"  '
                                          splice_donor_site = related_end       
                                      }
                                  }
-                                 print($1,splice_donor_site+$2-'$radius',splice_donor_site+$2+'$radius'+1,$4,$5,$6)
-                                 
+                                 start = splice_donor_site+$2-'$radius'
+                                 end = splice_donor_site+$2+'$radius'
+                                 if(start>=0)
+                                 {
+                                     print($1,start,end+1,$4,$5,$6)
+                                 }
                              }
                          }'  "$bed_file.bed" > "${bed_file}_splice_donor_site_with_radius_${radius}.bed"
-                         
-                         
+exit 0                   

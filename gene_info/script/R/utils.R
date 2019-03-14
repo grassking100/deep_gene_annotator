@@ -25,7 +25,6 @@ hist_3_diff <- function(data,use_abs=F,...)
   }
 }
 
-
 view_nucleotide <- function(path,main_=NA){
   fasta <- readDNAStringSet(path,"fasta")
   afmc <- consensusMatrix(fasta, baseOnly=T,as.prob = T)

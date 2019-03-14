@@ -19,22 +19,27 @@ write_bed12 <- function(bed,path,...){
   bed_ <- bed
   bed_['start'] <- as.numeric(as.character(unlist(bed_['start']))) - 1
   bed_['orf_start'] <- as.numeric(as.character(unlist(bed_['orf_start']))) - 1
+  bed_ <-format(bed_, scientific = F,trim=T)
   write.table(bed_,path,sep='\t', quote = F,col.names =F, row.names =F,...)
 }
 write_bed8 <- function(bed,path,...){
   bed_ <- bed
   bed_['start'] <- as.numeric(as.character(unlist(bed_['start']))) - 1
   bed_['orf_start'] <- as.numeric(as.character(unlist(bed_['orf_start']))) - 1
+  bed_ <-format(bed_, scientific = F,trim=T)
   write.table(bed_,path,sep='\t', quote = F,col.names =F, row.names =F,...)
 }
 write_bed <- function(bed,path,...){
   bed_ <- bed
   bed_['start'] <- as.numeric(as.character(unlist(bed_['start']))) - 1
+  bed_ <-format(bed_, scientific = F,trim=T) 
   write.table(bed_,path,sep='\t', quote = F,col.names =F, row.names =F,...)
+  
 }
 
 
 write_gff <- function(gff,path,...){
+  gff <-format(gff, scientific = FALSE,trim=T) 
   write.table(gff,path,sep='\t', quote = F,col.names =F, row.names =F,...)
 }
 

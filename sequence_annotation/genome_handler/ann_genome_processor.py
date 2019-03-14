@@ -57,17 +57,17 @@ def class_count(ann_genome):
             ann_count[type_] += count[type_]
     return ann_count
 
-def genome2vecs(ann_genome):
+def genome2dict_vec(ann_genome,ann_types=None):
     warn = ("\n\n!!!\n"
             "\tDNA sequence will be rearranged from 5' to 3'.\n"
             "\tThe plus strand sequence will stay the same,"
             " but the minus strand sequence will be flipped!\n"
             "!!!\n")
     warnings.warn(warn)
-    ANN_TYPES = ann_genome.ANN_TYPES
+    ann_types = ann_types or ann_genome.ANN_TYPES
     dict_ = {}
     for ann_seq in ann_genome:
-        dict_[str(ann_seq.id)] = ann_seq_processor.seq2vecs(ann_seq)
+        dict_[str(ann_seq.id)] = ann_seq_processor.seq2vecs(ann_seq,ann_types=ann_types)
     return dict_
 
 def vecs2genome(vecs,ids,strands,ann_types):

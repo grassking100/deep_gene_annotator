@@ -79,6 +79,7 @@ class GeneticBedSeqConverter(GeneticAnnSeqConverter):
         self._validate(ann_seq,self._foucus_type)
         return ann_seq
 
+
 class CodingAnnSeqConverter(AnnSeqConverter):
     def __init__(self,foucus_type=None,extra_types=None):
         foucus_type = foucus_type or ['cds','intron','utr_5','utr_3']
@@ -103,6 +104,50 @@ class CodingAnnSeqConverter(AnnSeqConverter):
                 added_exon += ann_seq.get_ann(type_)   
             if not np.all(added_exon==ann_seq.get_ann('exon')):
                 raise Exception("Exon status is not consistent with UTR and CDS")
+
+class CodingBedSeqConverter(CodingAnnSeqConverter):
+    def convert(self,data):
+        tx_start = data['chromStart']
+        tx_end = data['chromEnd']
+        gene = GeneticBedSeqConverter().convert(data)
+        length = gene.length
+        template_ann_seq = self._get_template_ann_seq(gene.length)
+        cds_start = data['thickStart'] - data['chromStart']
+        cds_end = data['thickEnd'] - data['chromStart']
+        if cds_start <= cds_end:
+            template_ann_seq.set_ann('ORF', 1 ,cds_start,cds_end)
+        template_ann_seq.set_ann('exon',gene.get_ann('exon'))
+        template_ann_seq.set_ann('intron',gene.get_ann('intron'))
+        template_ann_seq.op_and_ann('cds','exon','ORF')    
+        template_ann_seq.op_not_ann('utr','exon','ORF')
+        utr = template_ann_seq.get_ann('utr')
+        utr = template_ann_seq.get_ann('utr')
+        if np.any(utr==1):
+            if  gene.strand== 'plus':
+                if cds_start-1 >= 0:
+                    template_ann_seq.set_ann('utr_5_potential',1,0,cds_start-1)
+                if cds_end+1 <= length-1:
+                    template_ann_seq.set_ann('utr_3_potential',1,cds_end+1,length-1)
+            elif gene.strand == 'minus':
+                if cds_start-1 >= 0:
+                    template_ann_seq.set_ann('utr_3_potential',1,0,cds_start-1)
+                if cds_end+1 <= length-1:
+                    template_ann_seq.set_ann('utr_5_potential',1,cds_end+1,length-1)
+            else:
+                raise InvalidStrandType(gene.strand)
+            template_ann_seq.op_and_ann('utr_5','utr_5_potential','utr')
+            template_ann_seq.op_and_ann('utr_3','utr_3_potential','utr')
+        else:
+            template_ann_seq.set_ann('utr_5',utr)
+        name = data['name']
+        chrom_id = data['chrom']
+        ann_seq = self._create_seq(gene.id,gene.chromosome_id,gene.strand,tx_start,tx_end)
+        for type_ in ann_seq.ANN_TYPES:
+            data = template_ann_seq.get_ann(type_)
+            ann_seq.set_ann(type_,data)
+        #print(ann_seq.to_dict())
+        self._validate(ann_seq,self._foucus_type)
+        return ann_seq
 
 class UscuSeqConverter(CodingAnnSeqConverter):
     def convert(self,data):

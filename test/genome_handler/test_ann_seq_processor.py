@@ -2,7 +2,9 @@ from . import AnnSeqTestCase
 import numpy as np
 from sequence_annotation.utils.exception import ProcessedStatusNotSatisfied
 from sequence_annotation.genome_handler.sequence import AnnSequence
-from sequence_annotation.genome_handler.ann_seq_processor import get_normalized,get_one_hot,is_full_annotated,get_certain_status,get_ann_vecs,is_one_hot
+from sequence_annotation.genome_handler.ann_seq_processor import get_normalized,get_one_hot
+from sequence_annotation.genome_handler.ann_seq_processor import is_full_annotated,get_certain_status,is_one_hot
+from sequence_annotation.genome_handler.ann_genome_processor import genome2dict_vec
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
 from numpy.testing import assert_array_equal
 
@@ -227,7 +229,7 @@ class TestAnnSeqProcessor(AnnSeqTestCase):
         seq2.set_ann('other',1,0,0)
         genome.add(seq1)
         genome.add(seq2)
-        ann_vecs = get_ann_vecs(genome,['gene','other'])
+        ann_vecs = genome2dict_vec(genome,['gene','other'])
         answer =   {'seq1':np.transpose(np.array([[0,1,1,1,0,0,0,0,0,0],[1,0,0,0,1,1,1,1,1,1]])),
                     'seq2':np.transpose(np.array([[0,0,0,0,0,0,1,1,1,0],[1,1,1,1,1,1,0,0,0,1]]))
                    }

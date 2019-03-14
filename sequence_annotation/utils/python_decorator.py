@@ -1,4 +1,5 @@
 from .exception import ReturnNoneException
+
 def validate_return(solution):
     def wrap(func):
         def validate(self=None):

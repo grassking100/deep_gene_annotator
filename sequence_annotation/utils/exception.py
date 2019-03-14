@@ -95,7 +95,7 @@ class LengthNotEqualException(Exception):
 
 class DimensionNotSatisfy(Exception):
     def __init__(self, dim, exception_dim):
-        msg = ("Dimension length should be"
+        msg = ("Dimension size should be"
                " "+str(exception_dim)+","
                "but get dimension with shape,"
                ""+str(dim))

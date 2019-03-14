@@ -21,43 +21,60 @@ class BedInfoParser(SeqInfoParser):
        Purpose:Parse file from BED file and get data which stored infomration(zero-based)
        See format:https://genome.ucsc.edu/FAQ/FAQformat.html#format1
     """
+    def __init__(self,bed_type="bed_12"):
+        if bed_type in ["bed_12","bed_6"]:
+            self.bed_type = bed_type
+        else:
+            raise Exception("Wrong bed type")
     def _parse(self,data):
+        new_data = {}
         value_int_zero_based = ['chromStart','thickStart','blockCount']
         value_int_one_based = ['chromEnd','thickEnd']
         value_str = ['chrom','strand','name']
-        for index,name in enumerate(['chrom','chromStart','chromEnd','name','score',
-                                     'strand','thickStart','thickEnd','itemRgb',
-                                     'blockCount','blockSizes','blockStarts' ]):
-            data[name] = data.pop(index)
-        data['blockStarts'] = np.array(str(data['blockStarts']).split(","),dtype="int")
-        data['blockSizes'] = np.array(str(data['blockSizes']).split(","),dtype="int")
+        values_list = ['blockStarts','blockSizes']
+        columns = ['chrom','chromStart','chromEnd','name','score',
+                   'strand','thickStart','thickEnd','itemRgb',
+                   'blockCount','blockSizes','blockStarts']
+        if  self.bed_type=='bed_6':
+            columns = columns[:6]
+        for index,name in enumerate(columns):
+            new_data[name] = data[index]
+        for key in values_list:
+            if key in new_data.keys():
+                new_data[key] = np.array(str(new_data[key]).split(","),dtype="int")
         for key in value_int_zero_based:
-            data[key] = int(data[key])
+            if key in new_data.keys():
+                new_data[key] = int(new_data[key])
         for key in value_int_one_based:
-            data[key] = int(data[key])-1
+            if key in new_data.keys():
+                new_data[key] = int(new_data[key])-1
         for key in value_str:
-            data[key] = str(data[key])
-        if data['blockCount'] <= 0:
-            raise NotPositiveException("blockCount",data['blockCount'])
-        strand = data['strand']
+            if key in new_data.keys():
+                new_data[key] = str(new_data[key])
+        if  self.bed_type=='bed_12':
+            if new_data['blockCount'] <= 0:
+                raise NotPositiveException("blockCount",new_data['blockCount'])
+        strand = new_data['strand']
         if strand=='+':
-            data['strand'] = "plus"
+            new_data['strand'] = "plus"
         elif strand=='-':
-            data['strand'] = "minus"
+            new_data['strand'] = "minus"
         else:
             raise InvalidStrandType(strand)
-        self._validate(data)
-        return data
+        self._validate(new_data)
+        return new_data
 
     def _validate(self,data):
         value_int = ['chromStart','thickStart','blockCount','chromEnd','thickEnd']
         value_int_list = ['blockStarts','blockSizes']
         for key in value_int:
-            if data[key] < 0:
-                raise NegativeNumberException(key,data[key])
+            if key in data.keys():
+                if data[key] < 0:
+                    raise NegativeNumberException(key,data[key])
         for key in value_int_list:
-            if data[key] is not None and np.any(data[key] < 0):
-                raise NegativeNumberException(key,data[key])
+            if key in data.keys():
+                if np.any(data[key] < 0):
+                    raise NegativeNumberException(key,data[key])
 
 class UscuInfoParser(SeqInfoParser):
     """Purpose:Parse file from USCU table and get data which stored infomration(zero-based)"""

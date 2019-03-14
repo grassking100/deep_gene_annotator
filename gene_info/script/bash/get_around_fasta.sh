@@ -1,3 +1,4 @@
+#!/bin/bash
 bed="${1%.*}"
 genome=$2
 dist_to_5=$3

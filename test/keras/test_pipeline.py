@@ -9,14 +9,12 @@ from sequence_annotation.keras.process.compiler import SimpleCompiler,AnnSeqComp
 from sequence_annotation.keras.function.stateful_metric import StatefulMetric
 from sequence_annotation.keras.function.metric import BatchCount,SampleCount
 from sequence_annotation.process.data_processor import SimpleData
-from sequence_annotation.keras.process.ann_seq_data import AnnSeqData
+from sequence_annotation.process.ann_seq_data import AnnSeqData
 from sequence_annotation.keras.process.train_worker import TrainWorker
 from sequence_annotation.keras.process.test_worker import TestWorker
 from sequence_annotation.data_handler.fasta import read_fasta
 from sequence_annotation.data_handler.json import read_json
 from sequence_annotation.data_handler.seq_converter import SeqConverter
-from sequence_annotation.keras.function.wrapper import fit_generator_wrapper_generator,fit_wrapper_generator
-from sequence_annotation.keras.function.wrapper import evaluate_generator_wrapper_generator
 from sequence_annotation.process.pipeline import Pipeline
 import numpy as np
 from keras import optimizers
@@ -36,10 +34,8 @@ class TestPipeline(unittest.TestCase):
             simple_model = SimpleModel(model)
             compiler = SimpleCompiler('adam','binary_crossentropy')
             data = SimpleData({'training':{'inputs':[[1,0]],'answers':[[1,0]]}})
-            worker = TrainWorker(is_verbose_visible=False)
-            wrapper = fit_generator_wrapper_generator(verbose=0)
-            pipeline = Pipeline(simple_model,data,worker,
-                                wrapper,compiler,is_prompt_visible=False)
+            worker = TrainWorker(verbose=0)
+            pipeline = Pipeline(simple_model,data,worker,compiler,is_prompt_visible=False)
 
             pipeline.execute()
         except Exception as e:
@@ -57,10 +53,8 @@ class TestPipeline(unittest.TestCase):
             simple_model = SimpleModel(model)
             compiler = SimpleCompiler('adam','binary_crossentropy')
             data = SimpleData({'testing':{'inputs':[[1,0]],'answers':[[1,0]]}})
-            worker = TestWorker(is_verbose_visible=False)
-            wrapper = evaluate_generator_wrapper_generator(verbose=0)
-            pipeline = Pipeline(simple_model,data,worker
-                                ,wrapper,compiler,is_prompt_visible=False)
+            worker = TestWorker(verbose=0)
+            pipeline = Pipeline(simple_model,data,worker,compiler,is_prompt_visible=False)
             pipeline.execute()
         except Exception as e:
             raise e
@@ -79,22 +73,16 @@ class TestPipeline(unittest.TestCase):
                                             metrics=[StatefulMetric(SampleCount()),
                                                      StatefulMetric(BatchCount())])
             seq_converter = SeqConverter(codes="ATCGN", with_soft_masked_status=True)
-            data = AnnSeqData({'data':{'training':{'inputs':fasta,'answers':seqs}},
-                               'ANN_TYPES':ann_types},
+            data = AnnSeqData({'training':{'inputs':fasta,'answers':seqs}},
                                seq_converter = seq_converter)
-            train_worker = TrainWorker(is_verbose_visible=False)
-            train_wrapper = fit_generator_wrapper_generator(batch_size=1, epochs=30,verbose=0)
-            train_pipeline = Pipeline(model,data,train_worker,
-                                      train_wrapper,train_compiler,is_prompt_visible=False)
+            train_worker = TrainWorker(batch_size=1, epochs=30,verbose=0)
+            train_pipeline = Pipeline(model,data,train_worker,train_compiler,is_prompt_visible=False)
             train_pipeline.execute()
-            test_worker = TestWorker(is_verbose_visible=False)
-            test_data = AnnSeqData({'data':{'testing':{'inputs':fasta,'answers':seqs}},
-                                    'ANN_TYPES':ann_types},
+            test_worker = TestWorker(verbose=0)
+            test_data = AnnSeqData({'testing':{'inputs':fasta,'answers':seqs}},
                                      seq_converter = seq_converter)
             simple_model = SimpleModel(model.model)
-            evaluate_wrapper = evaluate_generator_wrapper_generator(verbose=0)
-            test_pipeline = Pipeline(simple_model,test_data,test_worker,
-                                     evaluate_wrapper,is_prompt_visible=False)
+            test_pipeline = Pipeline(simple_model,test_data,test_worker,is_prompt_visible=False)
             test_pipeline.execute()
             self.assertEqual(test_worker.result['loss'] <= 0.05,True)
         except Exception as e:
@@ -113,10 +101,8 @@ class TestPipeline(unittest.TestCase):
         model_ = Model(inputs=inputs, outputs=outputs)
         model = SimpleModel(model_)
         compiler = SimpleCompiler('adam','mse',metrics=[StatefulMetric(BatchCount())])
-        train_worker = TrainWorker(is_verbose_visible=False)
-        train_wrapper = fit_wrapper_generator(batch_size=2,epochs=100,verbose=0)
-        train_pipeline = Pipeline(model,data,train_worker,
-                                  train_wrapper,compiler,is_prompt_visible=False)
+        train_worker = TrainWorker(batch_size=2,epochs=100,verbose=0)
+        train_pipeline = Pipeline(model,data,train_worker,compiler,is_prompt_visible=False)
         train_pipeline.execute()
         result = train_worker.result
         self.assertTrue(np.all(np.array(result['batch_count'])==2))
@@ -134,10 +120,8 @@ class TestPipeline(unittest.TestCase):
         model_ = Model(inputs=inputs, outputs=outputs)
         model = SimpleModel(model_)
         compiler = SimpleCompiler('adam','mse',metrics=[StatefulMetric(SampleCount())])
-        train_worker = TrainWorker(is_verbose_visible=False)
-        train_wrapper = fit_wrapper_generator(batch_size=2,epochs=100,verbose=0)
-        train_pipeline = Pipeline(model,data,train_worker,
-                                  train_wrapper,compiler,is_prompt_visible=False)
+        train_worker = TrainWorker(batch_size=2,epochs=100,verbose=0)
+        train_pipeline = Pipeline(model,data,train_worker,compiler,is_prompt_visible=False)
         train_pipeline.execute()
         result = train_worker.result
         self.assertTrue(np.all(np.array(result['sample_count'])==3))

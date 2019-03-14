@@ -154,8 +154,8 @@ def get_frontground(seq,frontground_types=None):
         frontground_seq = np.logical_or(frontground_seq,seq.get_ann(type_))
     return frontground_seq
 
-def simplify_seq(seq,replace):
-    if seq.processed_status=='one_hot':
+def simplify_seq(seq,replace,focus_types=None):
+    if seq.processed_status=='one_hot' or is_one_hot(seq,focus_types=focus_types):
         ann_seq = AnnSequence().from_dict(seq.to_dict())
         ann_seq.clean_space()
         ann_seq.ANN_TYPES = list(replace.keys())
@@ -176,14 +176,14 @@ def class_count(ann_seq):
         ann_count[type_] += np.sum(ann_seq.get_ann(type_))
     return ann_count
 
-def seq2vecs(ann_seq):
+def seq2vecs(ann_seq,ann_types=None):
     warn = ("\n\n!!!\n"
             "\tDNA sequence will be rearranged from 5' to 3'.\n"
             "\tThe plus strand sequence will stay the same,"
             " but the minus strand sequence will be flipped!\n"
             "!!!\n")
     warnings.warn(warn)
-    ann_types = ann_seq.ANN_TYPES
+    ann_types = ann_types or ann_seq.ANN_TYPES
     ann = []
     for type_ in ann_types:
         value = ann_seq.get_ann(type_)
@@ -211,7 +211,7 @@ def vecs2seq(vecs,id_,strand,ann_types):
 
 def mixed_typed_seq_generate(seq):
     if set(seq.ANN_TYPES)!=set(['exon','intron','other']):
-        raise Exception("Error")
+        raise Exception("Error ANN_TYPES,it should be 'exon','intron','other'.")
     vecs = []
     for ann_type in ['exon','intron','other']:
         temp = np.array(seq.get_ann(ann_type))
@@ -226,6 +226,3 @@ def mixed_typed_seq_generate(seq):
     mixed_type_seq.add_ann('mix',np.all(t_vecs==[1,1,0],1).astype('int'))
     mixed_type_seq.add_ann('other',np.all(t_vecs==[0,0,1],1).astype('int'))
     return mixed_type_seq
-
-    
-    

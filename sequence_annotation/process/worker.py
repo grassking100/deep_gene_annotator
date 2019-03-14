@@ -3,14 +3,13 @@ from abc import ABCMeta, abstractmethod
 
 class Worker(metaclass=ABCMeta):
     """The class hold model and handle with data input, model pedict and model result"""
-    def __init__(self,wrapper, path_root=None):
+    def __init__(self,path_root=None):
         self.model = None
         self._result = {}
         self.data = None
         self.is_verbose_visible = True
         self.is_prompt_visible = True
         self._path_root = path_root
-        self._wrapper = wrapper
         self.compiler = None
 
     @property
@@ -26,12 +25,10 @@ class Worker(metaclass=ABCMeta):
         """Work"""
         pass
 
-    @abstractmethod
     def after_work(self):
         """Do something after worker work"""
         pass
 
-    @abstractmethod
     def before_work(self):
         """Do something before worker work"""
         pass

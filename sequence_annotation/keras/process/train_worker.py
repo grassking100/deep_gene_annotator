@@ -1,6 +1,6 @@
 """This submodule provides trainer to train model"""
-from keras import backend as K
 import tensorflow as tf
+from keras import backend as K
 config = tf.ConfigProto()
 if hasattr(config,"gpu_options"):
     config.gpu_options.allow_growth=True
@@ -8,14 +8,15 @@ sess = tf.Session(config=config)
 K.set_session(sess)
 from keras.utils import plot_model
 from ...process.worker import Worker
+from ...function.data_generator import DataGenerator
+
 
 class TrainWorker(Worker):
     """a worker which will train and evaluate the model"""
-    def __init__(self,wrapper,path_root=None,is_verbose_visible=True):
-        super().__init__(wrapper,path_root)
-        self._result = {}
-        self.is_verbose_visible = is_verbose_visible
-
+    def __init__(self,path_root=None,*args,**kwargs):
+        super().__init__(path_root)
+        self._args = args
+        self._kwargs = kwargs
     def before_work(self):
         if self._path_root is not None:
             root_path = './'+self._path_root
@@ -32,9 +33,23 @@ class TrainWorker(Worker):
     def work(self):
         """Train model"""
         self._validate()
-        history = self.wrapper(self.model,self.data)
-        self._result = history.history
-
+        data = {}
+        for data_kind,item in self.data.items():
+            if 'batch_size' in self._kwargs:
+                batch_size = self._kwargs['batch_size']
+            else:
+                batch_size = 32
+            data[data_kind] = DataGenerator(item['inputs'],item['answers'],batch_size=batch_size)
+        if 'validation' not in data.keys():
+            data['validation'] = None
+        if 'batch_size' in self._kwargs:
+            del self._kwargs['batch_size']
+        result =  self.model.fit_generator(generator=data['training'],
+                                      validation_data=data['validation'],
+                                      *self._args,**self._kwargs)
+        self._result = result.history
     def after_work(self):
-        """Do something after worker work"""
-        pass
+        if self._path_root is not None:
+            data = json.loads(pd.Series(self._result).to_json(orient='index'))
+            with open(self._path_root + '/result/record.json', 'w') as outfile:  
+                json.dump(data, outfile,indent=4)

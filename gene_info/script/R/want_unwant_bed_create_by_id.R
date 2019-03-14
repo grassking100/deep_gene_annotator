@@ -3,7 +3,7 @@
 args <- commandArgs(trailingOnly=TRUE)
 print(args)
 if (length(args)!=6) {
-  stop("Size argument must be supplied (input file)", call.=FALSE)
+  stop("Six arguments must be supplied (input file)", call.=FALSE)
 }
 want_id <- args[1]
 coordinate_consist_bed <- args[2]
@@ -16,14 +16,24 @@ coordinate_consist_bed <- read_bed(coordinate_consist_bed)
 want_id <- read.table(want_id)$V1
 if(convert_want_id_to_gene_id)
 {
-    want_id <- unique(find_gene_id(want_id))
+    #
+    #want_id <- unique(find_gene_id(want_id))
+    want_id <- unique(want_id)
 }
-print(head(want_id))
-unwant_id <- valid_official_araport11_coding[!valid_official_araport11_coding$gene_id %in% want_id,]$gene_id
 
+###!!!!!!!!!!!!!!!!!!!!!!!!!!######
+#print(mRNA_bed$id)
+###########################################################################################################3
+#unwant_id <- valid_official_araport11_coding[!valid_official_araport11_coding$gene_id %in% want_id,]$gene_id
+unwant_id <- mRNA_bed[!mRNA_bed$id %in% want_id,]$id
+#print(want_id)
+#print(unwant_id)
+#################################################################
 print("Get nonoverlap mRNA and unwant mRNA")
-want_bed = coordinate_consist_bed[find_gene_id(coordinate_consist_bed$id) %in% want_id,]
-unwant_bed = mRNA_bed[find_gene_id(mRNA_bed$id) %in% unwant_id,]
+#want_bed = coordinate_consist_bed[find_gene_id(coordinate_consist_bed$id) %in% want_id,]
+want_bed = coordinate_consist_bed[coordinate_consist_bed$id %in% want_id,]
+#unwant_bed = mRNA_bed[find_gene_id(mRNA_bed$id) %in% unwant_id,]
+unwant_bed = mRNA_bed[mRNA_bed$id %in% unwant_id,]
 #Export file
 print("Export file")
 print(export_want_bed_path)

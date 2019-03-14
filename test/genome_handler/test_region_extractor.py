@@ -27,6 +27,7 @@ class TestRegionExtractor(SeqInfoTestCase):
             seqinfo.start = 0
             seqinfo.end = 4
             seqinfo.id = 'region_1_plus_'+str(i)
+            seqinfo.source = chrom.id
             seqinfos.add(seqinfo)
         seq = seqinfos.get('region_1_plus_0')
         seq.start = 0

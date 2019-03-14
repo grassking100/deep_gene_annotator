@@ -3,6 +3,7 @@ from abc import abstractmethod
 import pandas as pd
 from ..utils.exception import InvalidAnnotation,IdNotFoundException,DuplicateIdException,AttrIsNoneException
 from .sequence import AnnSequence,SeqInformation,Sequence
+
 class SeqContainer(metaclass=ABCMeta):
     def __init__(self):
         self._data = {}
@@ -30,25 +31,18 @@ class SeqContainer(metaclass=ABCMeta):
         unsorted_seqs = list(self._data.values())
         sorted_seqs = sorted(unsorted_seqs, key=lambda seq: seq.id)
         return sorted_seqs
-    def to_list(self):
-        return self.data
     @abstractmethod
     def _validate_seq(self,seq):
         pass
     @abstractmethod
     def _validate(self):
         pass
-    def add(self,seq_or_seqs):
-        try:
-            iter(seq_or_seqs)
-            for seq in seq_or_seqs:
+    def add(self,seqs):
+        if isinstance(seqs,SeqContainer) or isinstance(seqs,list):            
+            for seq in seqs:
                 self._add(seq)
-        except Exception:    
-            if hasattr(seq_or_seqs,'to_list'):
-                for seq in seq_or_seqs.to_list():
-                    self._add(seq)
-            else:
-                self._add(seq_or_seqs)
+        else:
+            self._add(seqs)
     def _add(self, seq):
         self._validate()
         self._validate_seq(seq)
@@ -90,6 +84,7 @@ class SeqContainer(metaclass=ABCMeta):
                 raise Exception('Sequence\'s id is not same as inputed key')
     def __getitem__(self, id_):
         return self.get(id_)
+
 class SeqInfoContainer(SeqContainer):
     def _validate(self):
         pass
@@ -99,20 +94,24 @@ class SeqInfoContainer(SeqContainer):
         return SeqInformation()
     def to_gtf(self):
         df = self.to_data_frame()
-        selected_df = df[['id','source','strand']].copy()
-        selected_df['seqname'] = df['chromosome_id']
-        selected_df['start'] = df['start'] + 1
-        selected_df['end'] = df['end'] + 1
-        selected_df['feature'] = df['id']
-        selected_df['score'] = '.'
-        selected_df['frame'] = '.'
-        selected_df['attribute'] = "seed_status="+df['ann_type']+"_"+df['ann_status']
-        gtf_order = ['seqname','source','feature',
-                     'start','end','score',
-                     'strand','frame','attribute']
-        selected_df['strand']=selected_df['strand'].str.replace("plus", '+')
-        selected_df['strand']=selected_df['strand'].str.replace("minus", '-')
+        try:
+            selected_df = df[['id','source','strand']].copy()
+            selected_df['seqname'] = df['chromosome_id']
+            selected_df['start'] = df['start'] + 1
+            selected_df['end'] = df['end'] + 1
+            selected_df['feature'] = df['ann_type']
+            selected_df['score'] = '.'
+            selected_df['frame'] = '.'
+            selected_df['attribute'] = "ID="+df['id']+";Parent="+df['source']+";status="+df['ann_status']
+            gtf_order = ['seqname','source','feature',
+                         'start','end','score',
+                         'strand','frame','attribute']
+            selected_df['strand']=selected_df['strand'].str.replace("plus", '+')
+            selected_df['strand']=selected_df['strand'].str.replace("minus", '-')
+        except:
+            print(self.to_dict())
         return selected_df[gtf_order]
+    
 class AnnSeqContainer(SeqContainer):
     def __init__(self):
         super().__init__()
@@ -133,9 +132,9 @@ class AnnSeqContainer(SeqContainer):
         dict_ = super().to_dict()
         dict_["type"] = self.ANN_TYPES
         return dict_
-    def add(self,seq_or_seqs):
+    def add(self,seqs):
         if self.ANN_TYPES is not None:
-            super().add(seq_or_seqs)
+            super().add(seqs)
         else:
-            raise Exception("AnnSeqContainer must have ANN_TYPES")
+            raise Exception("AnnSequence or AnnSeqContainer must have ANN_TYPES")
         

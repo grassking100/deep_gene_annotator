@@ -4,6 +4,7 @@ import keras.backend as K
 import tensorflow as tf
 import numpy as np
 from keras.preprocessing.sequence import pad_sequences
+import math
 
 def logical_not(lhs, rhs):
     return np.logical_and(lhs,np.logical_not(rhs))
@@ -71,3 +72,32 @@ def padding(inputs, answers, padding_signal):
 
 def model_method(model,input_index,output_index):
     return K.function([model.layers[input_index].input], [model.layers[output_index].output])
+
+def split(ids,ratios):
+    if round(sum(ratios))!=1:
+        raise Exception("Ratio sum should be one")
+    lb = ub = 0
+    ids_list=[]
+    id_len = len(ids)
+    sum_=0
+    for index in range(len(ratios)):
+        ub += ratios[index]
+        item = ids[math.ceil(lb*id_len):math.ceil(ub*id_len)]
+        sum_+=len(item)
+        ids_list.append(item)
+        lb=ub
+    if sum_!=id_len:
+        raise Exception("Id number is not consist with origin count")
+    return ids_list
+
+def index2onehot(index,channel_size):
+    if (np.array(index)<0).any() or (np.array(index)>=channel_size).any():
+        raise Exception("Invalid number")
+    L = len(index)
+    loc = list(range(L))
+    onehot = np.zeros((channel_size,L))
+    onehot[index,loc]=1
+    return onehot
+
+def get_subdict(ids,data):
+    return dict(zip(ids,[data[id_] for id_ in ids]))

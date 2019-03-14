@@ -258,3 +258,16 @@ class AnnSequence(Sequence):
         self._validate_input_ann_type(ann_type)
         self._validate_input_index(start_index, end_index)
         return self._data[ann_type][start_index : end_index+1].copy()
+
+    def get_subseq(self, start_index=None, end_index=None):
+        if start_index is None:
+            start_index = 0
+        if end_index is None:
+            end_index = self._length - 1
+        sub_seq = self.__class__().from_dict(self.to_dict())
+        sub_seq.clean_space()
+        sub_seq.length = end_index - start_index + 1
+        sub_seq.init_space()
+        for type_ in self.ANN_TYPES:
+            sub_seq.set_ann(type_,self.get_ann(type_,start_index,end_index))
+        return sub_seq

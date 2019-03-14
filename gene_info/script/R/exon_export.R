@@ -1,4 +1,4 @@
-library("gsubfn")
+#library("gsubfn")
 source('script/R/gff.R')
 source('script/R/utils.R')
 Araport11_GFF3_genes_transposons=read_gff('data/Araport11_GFF3_genes_transposons.201606.gff')

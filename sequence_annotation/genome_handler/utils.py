@@ -1,7 +1,11 @@
 import math
 import numpy as np
 import pandas as pd
+import random
+from . import ann_seq_processor
 from ..utils.exception import LengthNotEqualException
+from .sequence import AnnSequence
+from .seq_container import AnnSeqContainer
 
 def merge_data(data,groupby,raise_duplicated_excpetion=True):
     def sort_aggregate(x):
@@ -63,7 +67,8 @@ def gene_boundary(data,raise_duplicated_excpetion=True):
     result.reset_index(inplace=True)
     return result
 
-def preprocess_ensembl_data(parsed_file_path,valid_chroms_id,merged_by='Protein stable ID',gene_types=None):
+def preprocess_ensembl_data(parsed_file_path,valid_chroms_id,
+                            merged_by='Protein stable ID',gene_types=None):
     gene_types = gene_types or ['protein_coding']
     file = pd.read_csv(parsed_file_path,sep='\t',dtype={'Gene stable ID':np.str ,
                                                         'Protein stable ID':np.str ,
@@ -86,21 +91,51 @@ def ann_count(ann_seqs):
             ann_count[type_] += np.sum(seq.get_ann(type_))
     return ann_count
 
-def to_dict(seqs,answer,ann_types):
-    ann_count = {}
-    data_pair = {}
-    ann_vecs = answer
-    for name,seq in seqs.items():
-        ann_vec = ann_vecs[str(name)]
-        transposed_ann_vec = np.transpose(ann_vec)
-        for index, type_ in enumerate(ann_types):
-            if type_ not in ann_count.keys():
-                ann_count[type_] = 0
-            ann_count[type_] += np.sum(transposed_ann_vec[index])
-        ann_length = np.shape(ann_vec)[0]
-        seq_length = np.shape(seq)[0]
-        if ann_length != seq_length:
-            raise LengthNotEqualException(ann_length, seq_length)
-        data_pair[name]={'input':seq,'answer':ann_vec}
-    dict_ = {'data_pair':data_pair,'annotation_count':ann_count}
-    return dict_
+def loader(fasta,ann_seqs,min_len=None,max_len=None,ratio=None,outlier_coef=1.5,simplify_map=None,num_max=None):
+    seqs_len = [len(seq) for seq in ann_seqs]
+    seqs_len.sort()
+    min_len = min_len or 0
+    outlier_name = None
+    if max_len is None:
+        ratio = ratio or 0.01
+        max_len = seqs_len[:int(len(seqs_len)*ratio)][-1]
+    inner_fasta = {}
+    for seq in ann_seqs:
+        if min_len <= len(seq) <= max_len:
+            inner_fasta[seq.id]=fasta[seq.id]
+        elif len(seq) >= max_len*outlier_coef:
+            outlier_name = seq.id
+    keys = list(inner_fasta.keys())
+    random.shuffle(keys)
+    if num_max is not None:
+        keys = keys[:num_max]
+    selected_seqs = AnnSeqContainer()
+    if simplify_map is not None:
+        selected_seqs.ANN_TYPES = list(simplify_map.keys())
+    else:
+        selected_seqs.ANN_TYPES = ann_seqs.ANN_TYPES
+    selected_fasta = {}
+    number = 0
+    for seq_id in keys:
+        seq = ann_seqs.get(seq_id)
+        if simplify_map is not None:
+            seq = ann_seq_processor.mixed_typed_seq_generate(seq)
+            seq = ann_seq_processor.simplify_seq(seq,simplify_map)
+        selected_seqs.add(seq)
+        selected_fasta[seq_id]=inner_fasta[seq_id]
+        number += 1
+    outlier_seq = None
+    outlier_fasta = None
+    if outlier_name is not None:
+        outlier_seq = ann_seqs.get(outlier_name)
+        outlier_fasta = fasta[outlier_name]
+        if simplify_map is not None:
+            outlier_seq = ann_seq_processor.mixed_typed_seq_generate(outlier_seq)
+            outlier_seq = ann_seq_processor.simplify_seq(outlier_seq,simplify_map)
+    return selected_fasta,selected_seqs,outlier_fasta,outlier_seq
+
+def get_subseqs(ids,ann_seqs):
+    sub_seqs = AnnSeqContainer()
+    sub_seqs.ANN_TYPES = ann_seqs.ANN_TYPES
+    sub_seqs.add([ann_seqs[id_] for id_ in ids])
+    return sub_seqs

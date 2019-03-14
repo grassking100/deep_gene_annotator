@@ -1,5 +1,4 @@
-gff_file="$1"
-gff_file="${gff_file%.*}"
+gff_file="${1%.*}"
 awk -F'\t' -v OFS="\t"  '
                          {   
                              
@@ -22,7 +21,7 @@ awk -F'\t' -v OFS="\t"  '
                                        print(new_chr,$2,$3,$4,$5,$6,$7,$8,$9)
                                     }
                                 }
-		                     }
+                             }
                          }'  "${gff_file}.gff" > ${gff_file}_rename_chr.gff
                          
                          
