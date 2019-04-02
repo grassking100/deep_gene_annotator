@@ -5,22 +5,15 @@ from ...utils.utils import create_folder
 class SimpleCompiler(Compiler):
     def __init__(self,optimizer,loss_type,values_to_ignore=None,
                  weights=None,dynamic_weight_method=None,metrics=None):
-        super().__init__()
+        self._record = locals()
         self._optimizer = optimizer
         self._loss_type = loss_type
-        self._record['optimizer']=optimizer
-        self._record['loss_type']=loss_type
-        self._record['metrics'] = metrics
-        self._record['values_to_ignore'] = values_to_ignore
-        self._record['weights'] = weights
-        self._record['dynamic_weight_method'] = dynamic_weight_method
         self._builder = MetricBuilder(values_to_ignore = values_to_ignore)
         self._builder.add_loss(type_=loss_type,weights=weights,
                                dynamic_weight_method=dynamic_weight_method)
         self._loss = self._builder.build()['loss']
         self._optimizer = optimizer
         self._metrics = metrics or []
-
     def process(self,model):
         model.compile(optimizer=self._optimizer, loss=self._loss, metrics=self._metrics)
 
@@ -37,6 +30,7 @@ class AnnSeqCompiler(SimpleCompiler):
                  ann_types=None,metrics=None):
         super().__init__(optimizer,loss_type,values_to_ignore,
                          weights,dynamic_weight_method,metrics)
+        self._record.update(locals())
         self._builder.add_accuracy(type_=acc_type)
         self._record['ann_types'] = ann_types
         for ann_type in ann_types:

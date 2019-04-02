@@ -20,7 +20,6 @@ simple_belong_by_boundary <- function(exp_sites,boundarys,start_name,end_name){
       }
     }
   }
-
   return(belong_indice)
 }
 

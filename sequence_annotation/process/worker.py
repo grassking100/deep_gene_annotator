@@ -3,40 +3,32 @@ from abc import ABCMeta, abstractmethod
 
 class Worker(metaclass=ABCMeta):
     """The class hold model and handle with data input, model pedict and model result"""
-    def __init__(self,path_root=None):
+    def __init__(self):
         self.model = None
-        self._result = {}
+        self.compiler = None
         self.data = None
+        self.result = {}
         self.is_verbose_visible = True
         self.is_prompt_visible = True
-        self._path_root = path_root
-        self.compiler = None
-
-    @property
-    def result(self):
-        return self._result
-
-    @result.setter
-    def result(self,value):
-        self._result = value
+        self._settings = {}
 
     @abstractmethod
     def work(self):
         """Work"""
         pass
 
-    def after_work(self):
+    def after_work(self,path=None):
         """Do something after worker work"""
         pass
 
-    def before_work(self):
+    def before_work(self,path=None):
         """Do something before worker work"""
         pass
 
     def _validate(self):
         """Validate required data"""
         if self.model is None:
-            raise Exception("Model must be setted")
+            raise Exception("Model must be set")
         if self.data is None:
-            raise Exception("Data must be setted")
+            raise Exception("Data must be set")
             

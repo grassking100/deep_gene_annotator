@@ -56,13 +56,14 @@ def from_bidirection(x,lengths):
 
 class RNN(nn.Module):
     def __init__(self,rnn_cell,go_backward=False,
-                 bidirectional=True,init_value=1,train_init_value=True):
+                 bidirectional=True,init_value=1,train_init_value=True,state_number=None):
         super().__init__()
         self._rnn = rnn_cell
         self._bidirectional = bidirectional
         self._go_backward = go_backward
         self.init_states = torch.nn.Parameter(requires_grad=train_init_value)
         self._init_value = init_value
+        self._state_number = state_number or 1
         if hasattr(self._rnn,'output_names'):
             self.output_names = self._rnn.output_names
         else:
@@ -109,7 +110,7 @@ class RNN(nn.Module):
             batch_sizes = [N for _ in range(L)]
         return x,N,batch_sizes
     def _forward(self,x,num,batch_sizes):
-        previous_h = self.init_states.repeat(num,1)
+        previous_h = self.init_states.repeat(num,self._state_number)
         all_states = [[] for _ in self.output_names]
         count = 0 
         for batch_size in batch_sizes:

@@ -1,6 +1,5 @@
 import unittest
-from sequence_annotation.process.data_processor import SimpleData
-from sequence_annotation.process.ann_seq_data import AnnSeqData
+from sequence_annotation.process.data_processor import SimpleData, AnnSeqData
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
 from sequence_annotation.genome_handler.sequence import AnnSequence
 from sequence_annotation.utils.exception import DimensionNotSatisfy

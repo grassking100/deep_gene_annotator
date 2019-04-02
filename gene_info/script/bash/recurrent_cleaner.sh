@@ -24,7 +24,7 @@ saved_num=-1
 index=0
 
 while true;do
-    
+    echo "Safe filter:${index}"
     bash script/bash/safe_filter.sh ${want_bed}.bed ${unwant_bed}.bed ${fai} ${dist_to_5} ${dist_to_3}
     num=$( cat ${want_bed}_expand_left_${dist_to_5}_right_${dist_to_3}_safe_zone_id.txt | wc -l)
     echo "Seqeunce number:${num}"

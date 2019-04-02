@@ -1,5 +1,5 @@
-#print('script')
-source("./script/R/gff.R")
+setwd('~/../home')
+source('./sequence_annotation/gene_info/script/R/gff.R')
 args <- commandArgs(trailingOnly=TRUE)
 print(args)
 if (length(args)!=1) {

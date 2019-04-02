@@ -21,13 +21,8 @@ if(convert_want_id_to_gene_id)
     want_id <- unique(want_id)
 }
 
-###!!!!!!!!!!!!!!!!!!!!!!!!!!######
-#print(mRNA_bed$id)
 ###########################################################################################################3
-#unwant_id <- valid_official_araport11_coding[!valid_official_araport11_coding$gene_id %in% want_id,]$gene_id
 unwant_id <- mRNA_bed[!mRNA_bed$id %in% want_id,]$id
-#print(want_id)
-#print(unwant_id)
 #################################################################
 print("Get nonoverlap mRNA and unwant mRNA")
 #want_bed = coordinate_consist_bed[find_gene_id(coordinate_consist_bed$id) %in% want_id,]
@@ -42,4 +37,4 @@ want_bed <- gff_to_bed(want_bed,'id',orf_start_convert,orf_end_convert)
 want_bed$group = find_gene_id(want_bed$id)
 write_bed(unique(want_bed[,1:6]),export_want_bed_path)
 write_bed(unwant_bed,export_unwant_bed_path)
-
+print("Export finished")

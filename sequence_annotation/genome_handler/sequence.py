@@ -132,7 +132,8 @@ class AnnSequence(Sequence):
         if self._ANN_TYPES is None or not self._has_space:
             if len(set(value))!=len(value):
                 raise Exception('Input types has duplicated')
-            self._ANN_TYPES = value
+            self._ANN_TYPES = list(value)
+            self._ANN_TYPES.sort()
         else:
             raise ChangeConstValException('ANN_TYPES')
     def _copied_public_attrs(self):
@@ -200,9 +201,9 @@ class AnnSequence(Sequence):
         if end_index < 0 :
             raise NegativeNumberException('end_index',end_index)
         if start_index >= self._length:
-            raise ValueOutOfRange('start_index',start_index,list(range(self._length)))
+            raise ValueOutOfRange('start_index',start_index,list([0,self._length-1]))
         if end_index >= self._length :
-            raise ValueOutOfRange('end_index',end_index,list(range(self._length)))
+            raise ValueOutOfRange('end_index',end_index,list([0,self._length-1]))
         if start_index>end_index:
             raise Exception("Start index must not larger than End index")
     def _validate_input_ann_type(self, ann_type):

@@ -14,10 +14,9 @@ def batch_log_sum_exp(x):
     return max_score.view(-1) + torch.log(torch.sum(torch.exp(x - max_score_broadcast),dim=1))
 
 class BatchCRFLoss(nn.Module):
-    def __init__(self,transitions):
+    def __init__(self):
         super().__init__()
-        self.ann_size = transitions.shape[0]
-        self.transitions = transitions
+        self.transitions = None
     def _forward_alg(self, observes, lengths):
         _,batch_sizes = pack_padded_sequence(observes,lengths,batch_first=True)
         N,C,_ = observes.shape
@@ -62,6 +61,8 @@ class BatchCRFLoss(nn.Module):
         return score
 
     def forward(self, observes, answers, lengths=None,**kwargs):
+        if self.transitions is None:
+            raise Exception("Transitions have not been set yet")
         answers = answers.max(1)[1]
         pre_time = time.time()
         O_N,O_C,O_L = observes.shape
@@ -72,9 +73,10 @@ class BatchCRFLoss(nn.Module):
         #    raise Exception("Lengths are not the same")
         if O_N!=A_N or O_N != len(lengths):
             raise Exception("Numbers are not the same")
-        if O_C != self.ann_size:
+        tagset_size = self.transitions.shape[0]
+        if O_C != tagset_size:
             raise Exception("Observed data's channel, "+str(O_C)+\
-                            ", should be same as annotation size,"+str(self.ann_size))
+                            ", should be same as annotation size,"+str(tagset_size))
         forward_score = self._forward_alg(observes,lengths)
         gold_score = self._score_sentence(observes, answers,lengths)
         result = sum(forward_score-gold_score)/O_N

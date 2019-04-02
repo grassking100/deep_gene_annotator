@@ -1,4 +1,5 @@
 """This submodule provides trainer to train model"""
+import warnings
 import tensorflow as tf
 from keras import backend as K
 config = tf.ConfigProto()
@@ -9,36 +10,37 @@ K.set_session(sess)
 import json
 import pandas as pd
 from ...process.worker import Worker
-from ...function.data_generator import DataGenerator
+from ...process.data_generator import DataGenerator
+from ..function.work_generator import EvaluateGenerator
+
 
 class TestWorker(Worker):
-    def __init__(self,path_root=None,*args,**kwargs):
-        super().__init__(path_root)
-        self._args = args
-        self._kwargs = kwargs
-
-    def before_work(self):
-        if self._path_root is not None:
+    def __init__(self,test_generator=None,evaluate_generator=None):
+        super().__init__()
+        self._evaluate_generator = evaluate_generator or EvaluateGenerator()
+        self._test_generator = test_generator or DataGenerator()
+        
+    def before_work(self,path=None):
+        if path is not None:
             create_folder("./"+path+"/test")
-    def after_work(self):
-        if self._path_root is not None:
+    def after_work(self,path=None):
+        warnings.warn("This method is deprecated,it will be replaced by using callback in Keras",
+                      DeprecationWarning)
+        if path is not None:
             data = json.loads(pd.Series(self._result).to_json(orient='index'))
-            with open(self._path_root + '/test/evaluate.json', 'w') as outfile:  
+            with open(path + '/test/evaluate.json', 'w') as outfile:  
                 json.dump(data, outfile,indent=4)
+
     def work(self):
+        data = self.data['testing']
         self._validate()
-        item = self.data['testing']
-        if 'batch_size' in self._kwargs:
-            batch_size = self._kwargs['batch_size']
-        else:
-            batch_size = 32
-        test_data = DataGenerator(item['inputs'],item['answers'],batch_size=batch_size)
-        if 'batch_size' in self._kwargs:
-            del self._kwargs['batch_size']
-        history = self.model.evaluate_generator(test_data,*self._args,**self._kwargs)
+        self._test_generator.x_data=data['inputs']
+        self._test_generator.y_data=data['answers']
+        self._evaluate_generator.generator = self._test_generator
+        self._evaluate_generator.model = self.model
+        history = self._evaluate_generator()
         try:
             iter(history)
         except TypeError:
             history = [history]
-        self._result = dict(zip(self.model.metrics_names, history))
-
+        self.result = dict(zip(self.model.metrics_names, history))

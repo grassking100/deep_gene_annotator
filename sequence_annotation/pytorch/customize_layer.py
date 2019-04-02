@@ -2,64 +2,77 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch
 from torch.nn.init import ones_,zeros_,uniform_,normal_,constant_,eye_
-from torch.nn import Hardtanh, Sigmoid
+from torch.nn import Hardtanh, Sigmoid,Tanh,ReLU
 from torch import randn
 import numpy as np
-from .RNN.rnn import RNN
 import time
-from .CRF import BatchCRF
 from abc import abstractproperty,ABCMeta
+from .RNN.rnn import RNN
+from .CRF import BatchCRF
+
+hard_sigmoid = Hardtanh(min_val=0)
 def sgn(x):
     return (x>0).float()*2-1
 
-def noisy_hard_function(hard_function,alpha=1.0,c=0.05,p=1):
-    sigmoid = Sigmoid()
-    def noised(x,training):
-        h = hard_function(x)
-        if training:
-            native_result = (alpha*h+(1-alpha)*x).float()
+class NoisyHardAct(nn.Module):
+    def __init__(self,alpha=None,c=None,p=None):
+        super().__init__()
+        self._alpha = alpha or 1
+        self._c = c or 0.05
+        self._p = p or 1
+        self._sigmoid = Sigmoid()
+        self._hard_function = self._get_hard_function
+        self._alpha_complement = 1-self._alpha
+        if self._alpha_complement>0:
+            self._sgn=1
+        else:
+            self._sgn=-1
+    @abstractproperty
+    def _get_hard_function(self):
+        pass
+    def forward(self,x):
+        h = self._hard_function(x)
+        if self.training:
+            random = torch.abs(torch.randn_like(x))
             diff = h-x
-            temp = sgn(x)
-            temp2=sgn(torch.FloatTensor([1-alpha])).cuda()
-            d = (-temp*temp2)
-            sigma=(c*(sigmoid(p*diff)-0.5)**2)
-            random = torch.abs(randn(x.size())).cuda()
+            d = -sgn(x)*self._sgn
+            if self._alpha == 1:
+                native_result = h
+            else:
+                native_result = self._alpha*h+self._alpha_complement*x
+            if self._p == 1:
+                diff = self._p*diff
+            sigma = self._c*(self._sigmoid(diff)-0.5)**2
             return native_result+(d*sigma*random)
         else:
             return h
-    return noised
 
-def noisy_hard_tanh(alpha=1.0,c=0.05,p=1):
-    hard_tanh = Hardtanh()
-    return noisy_hard_function(hard_tanh,alpha,c,p)
+class NoisyHardTanh(NoisyHardAct):
+    @property
+    def _get_hard_function(self):
+        return Hardtanh()
 
-def noisy_hard_sigmoid(alpha=1.0,c=0.05,p=1):
-    hard_sigmoid = Hardtanh(0,1)
-    return noisy_hard_function(hard_sigmoid,alpha,c,p)
+class NoisyHardSigmoid(NoisyHardAct):
+    @property
+    def _get_hard_function(self):
+        return hard_sigmoid
 
-def noisy_relu(alpha=1.0,c=0.05,p=1):
-    return noisy_hard_function(F.relu,alpha,c,p)
+class NoisyReLU(NoisyHardAct):
+    @property
+    def _get_hard_function(self):
+        return ReLU()
 
-class PadConv1d(nn.Module):
-    def __init__(self,pad_value=None,*args,**kwargs):
-        super().__init__()
-        self._kernel_size = kwargs['kernel_size']
-        self._in_channels = kwargs['in_channels']
-        self.cnn = nn.Conv1d(*args,**kwargs).cuda()
-        self.weight=cnn.weight
-        self.bias=cnn.bias
-        self.pad_value = pad_value
-        self.reset_parameters()
-    def reset_parameters(self):
-        bound = (1/(self._in_channels*self._kernel_size))
-        uniform_(self.cnn.weight,-bound,bound)
-        if self.cnn.bias is not None:
-            constant_(self.cnn.bias,0)
-    def forward(self,x):
-        if self.pad_value is not None:
-            x = F.pad(x, [0,self._kernel_size-1], 'constant', self.pad_value)
-        x = self.cnn(x)
-        return x
+class Conv1d(nn.Conv1d):
+    def forward(self,x,lengths=None):
+        min_length = x.shape[2] - self.kernel_size[0]
+        x = super().forward(x)
+        if lengths is not None:
+            new_lengths = []
+            for length in lengths:
+                new_lengths.append(min(length,min_length))
+            return x, new_lengths
+        else:
+            return x
 
 class Concat(nn.Module):
     def __init__(self,*args,**kwargs):
@@ -108,38 +121,7 @@ class IndLinear(nn.Module):
         uniform_(self.vector,-1,1)
         constant_(self.bias,0)
 
-class GatedIndRnnCellOld(torch.nn.Module):
-    def __init__(self, input_size, hidden_size):
-        super().__init__()
-        self._gate_num = 1
-        self.input_size = input_size
-        self.hidden_size = hidden_size
-        self.gate_weights = torch.nn.Parameter(torch.empty(hidden_size, hidden_size+input_size))
-        self.weights_i = torch.nn.Parameter(torch.empty(hidden_size, input_size))
-        self.gate_bias = torch.nn.Parameter(torch.empty(hidden_size))
-        self.bn = nn.LayerNorm(hidden_size+ input_size).cuda()
-        self.gate_function =  noisy_hard_sigmoid()
-        self.recurrent_function = noisy_relu(c=1)
-        self.reset_parameters()
-        self.output_names = ['new_h','concat_input','pre_gate_i','gate_i','values_i','pre_h']
-    def reset_parameters(self):
-        gate_bound = (1/(self.input_size+self.hidden_size))
-        input_bound = (1/(self.input_size))
-        uniform_(self.gate_weights,-gate_bound,gate_bound)
-        uniform_(self.weights_i,-input_bound,input_bound)
-        constant_(self.gate_bias,0.5)
-    def forward(self, input, state):
-        #input shape should be (number,feature size)
-        concat_input = torch.cat([input,state], dim=1)
-        pre_gate_i = F.linear(concat_input, self.gate_weights,self.gate_bias)
-        gate_i = self.gate_function(pre_gate_i,training=self.training)
-        values_i = F.linear(input, self.weights_i)
-        values_i = Tanh()(values_i)
-        pre_h = state*(1-gate_i)+ values_i*gate_i
-        new_h = self.recurrent_function(pre_h,training=self.training)
-        return new_h,concat_input,pre_gate_i,gate_i,values_i,pre_h
-
-class GatedIndRnnCellOld2(nn.Module):
+class GatedIndRnnCell(nn.Module):
     def __init__(self, input_size, hidden_size):
         super().__init__()
         self._gate_num = 1
@@ -148,70 +130,36 @@ class GatedIndRnnCellOld2(nn.Module):
         self.gate_weights_ih = nn.Parameter(torch.empty(hidden_size, input_size))
         self.gate_weights_hh = nn.Parameter(torch.empty(hidden_size, hidden_size))
         self.weights_i = nn.Parameter(torch.empty(hidden_size, input_size))
-        self.gate_bias = nn.Parameter(torch.empty(hidden_size))
+        self.i_gate_bias = nn.Parameter(torch.empty(hidden_size))
+        self.f_gate_bias = nn.Parameter(torch.empty(hidden_size))
         self.input_bias = nn.Parameter(torch.empty(hidden_size))
-        self.gate_function =  noisy_hard_sigmoid()
-        self.recurrent_function = noisy_hard_sigmoid()
+        self.gate_function =  NoisyHardSigmoid()
+        self.ln = nn.LayerNorm(hidden_size)
+        self.recurrent_function = NoisyReLU()
         self.reset_parameters()
-        self.output_names = ['new_h','pre_gate_i','gate_i','values_i','pre_h',
-                             'pre_values_i','pre_gate_i_ih','pre_gate_i_hh']
+        self.output_names = ['new_h','pre_gate_f','pre_gate_i','gate_f','gate_i','values_i','pre_h']
     def reset_parameters(self):
-        gate_bound_hh = (1/((self.hidden_size)))
-        gate_bound_ih = (1/((self.input_size)))
-        input_bound = (1/(self.input_size))
-        #eye_(self.gate_weights_hh)
+        gate_bound_ih = (1/((self.input_size**0.5)))
+        gate_bound_hh = (1/((self.input_size**0.5)))
+        input_bound = (1/(self.input_size**0.5))
+        uniform_(self.gate_weights_ih,-gate_bound_ih,gate_bound_ih)
         uniform_(self.gate_weights_hh,-gate_bound_hh,gate_bound_hh)
-        uniform_(self.gate_weights_ih,-gate_bound_ih,gate_bound_ih)
         uniform_(self.weights_i,-input_bound,input_bound)
-        constant_(self.gate_bias,0.5)
-        constant_(self.input_bias,0)
-    def forward(self, input, state):
-        #input shape should be (number,feature size)
-        concat_input = torch.cat([input,state], dim=1)
-        pre_gate_i_ih = F.linear(input, self.gate_weights_ih)
-        pre_gate_i_hh = F.linear(state, self.gate_weights_hh)
-        pre_gate_i = pre_gate_i_ih + pre_gate_i_hh +self.gate_bias
-        gate_i = self.gate_function(pre_gate_i,training=self.training)
-        pre_values_i = F.linear(input, self.weights_i,self.input_bias)
-        values_i = noisy_hard_sigmoid(c=1)(pre_values_i,training=self.training)
-        pre_h = state*gate_i+ values_i*(1-gate_i)
-        #!!!To avoid NAN problem
-        #if self.training:
-        #    new_h = self.recurrent_function(pre_h,training=self.training)
-        #else:
-        new_h = pre_h
-        return new_h,pre_gate_i,gate_i,values_i,pre_h,pre_values_i,pre_gate_i_ih,pre_gate_i_hh
-
-class GatedIndRnnCell(nn.Module):
-    def __init__(self, input_size, hidden_size):
-        super().__init__()
-        self._gate_num = 1
-        self.input_size = input_size
-        self.hidden_size = hidden_size
-        self.gate_weights_ih = nn.Parameter(torch.empty(hidden_size, input_size))
-        self.weights_i = nn.Parameter(torch.empty(hidden_size, input_size))
-        self.gate_bias = nn.Parameter(torch.empty(hidden_size))
-        self.input_bias = nn.Parameter(torch.empty(hidden_size))
-        self.gate_function =  noisy_hard_sigmoid(alpha=1)
-        self.recurrent_function = noisy_relu(alpha=1)
-        self.reset_parameters()
-        self.output_names = ['new_h','pre_gate','gate','values_i','pre_h','pre_gate_i_ih']
-    def reset_parameters(self):
-        gate_bound_ih = (1/((self.input_size)))
-        input_bound = (1/(self.input_size))
-        uniform_(self.gate_weights_ih,-gate_bound_ih,gate_bound_ih)
-        uniform_(self.weights_i,-input_bound,input_bound)
-        constant_(self.gate_bias,1)
+        constant_(self.i_gate_bias,1)
+        constant_(self.f_gate_bias,1)
         constant_(self.input_bias,0)
     def forward(self, input, state):
         #input shape should be (number,feature size)
         values_i = F.linear(input, self.weights_i,self.input_bias)
         pre_gate_ih = F.linear(input, self.gate_weights_ih)
-        pre_gate = pre_gate_ih + self.gate_bias
-        gate = self.gate_function(pre_gate,training=self.training)
-        pre_h = state*gate+ values_i
+        pre_gate_hh = F.linear(self.ln(state), self.gate_weights_hh)
+        pre_gate_f = pre_gate_ih + self.f_gate_bias
+        pre_gate_i = pre_gate_hh + self.i_gate_bias
+        gate_f = self.gate_function(pre_gate_f,training=self.training)
+        gate_i = self.gate_function(pre_gate_i,training=self.training)
+        pre_h = state*gate_f+ values_i*gate_i
         new_h = self.recurrent_function(pre_h,self.training)
-        return new_h,pre_gate,gate,values_i,pre_h,pre_gate_ih
+        return new_h,pre_gate_f,pre_gate_i,gate_f,gate_i,values_i,pre_h
 
 class PWM(nn.Module):
     def __init__(self,epsilon=None):
@@ -226,30 +174,73 @@ class PWM(nn.Module):
         freq_with_background = freq * channel_size
         inform = (freq*(freq_with_background+self._epsilon).log2_()).sum(1)
         if len(x.shape)==3:
-            return (freq.transpose(0,1)*inform).transpose(0,1)#inform*freq
+            return (freq.transpose(0,1)*inform).transpose(0,1)
         elif len(x.shape)==2:
             return (freq.transpose(0,1)*inform).transpose(0,1)
         else:
             raise Exception("Shape is not permmited.")
-            
-def noisy_relu_half_max_float32(alpha=1.0, c=0.05, p=1):
-    half_relu_max_float32 = Hardtanh(0,np.finfo(np.float32).max/2)
-    return noisy_hard_function(half_relu_max_float32,alpha,c,p)
+
+class SeqAnnLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.gamma = 0
+        self.ignore_index = -1
+        self.alphas = None
+
+    def forward(self, output, target,spatial_weights=None,**kwargs):
+        """data shape is N,C,L"""
+        if isinstance(output,tuple):
+            pt = output[0]
+            pt,_,distribution_output,_ = output
+        else:
+            pt = output
+        input_length = pt.shape[2]
+        if isinstance(output,tuple):
+            gate_i = distribution_output['new_h']
+            center=0.5
+            gate_loss_ = ((center**2)-(gate_i-center)**2).mean(1)
+        if list(pt.shape) != list(target.shape):
+            target = target.transpose(0,2)[:input_length].transpose(0,2)
+        target = target.float()
+        if self.ignore_index is not None:
+            mask = (target.max(1)[0] != self.ignore_index).float()
+        decay_cooef = (1-pt)**self.gamma
+        loss_ =  -decay_cooef* (pt+1e-32).log() * target
+        if spatial_weights is not None:
+            if list(pt.shape) != list(spatial_weights.shape):
+                 spatial_weights = spatial_weights.transpose(0,2)[:input_length].transpose(0,2)
+            spatial_weights = torch.FloatTensor(spatial_weights)
+        if self.alphas is not None:
+            loss_ = (loss_.transpose(1,2)*self.alphas).transpose(1,2)
+        loss_ = loss_.sum(1)
+        if self.ignore_index is not None:
+            loss_ = loss_*mask
+            loss = loss_.sum()/mask.sum()
+            if isinstance(output,tuple):
+                gate_loss_ = gate_loss_*mask
+                gate_loss = gate_loss_.sum()/mask.sum()
+                loss+=gate_loss
+        else:
+            loss = loss_.mean()
+            if isinstance(output,tuple):
+                gate_loss = gate_loss_.mean()
+                loss+=gate_loss
+        return loss
 
 class ConcatCNN(nn.Module):
-    def __init__(self,in_channels,layer_num,kernel_sizes,outputs,ln_mode=None,
-                 with_pwm=True):
+    def __init__(self,in_channels,layer_num,kernel_sizes,out_channels,
+                 ln_mode=None,with_pwm=True):
         super().__init__()
         self.in_channels = in_channels
         self.layer_num = layer_num
         self.kernel_sizes = kernel_sizes
-        self.outputs = outputs
+        self.out_channels = out_channels
         self.with_pwm = with_pwm
         if ln_mode in ["before_cnn","after_cnn","after_activation",None]:
             self.ln_mode = ln_mode
         else:
             raise Exception('ln_mode should be "before_cnn", "after_cnn", None, or "after_activation"')
-        self.activation_function = noisy_relu()
+        self.activation_function = NoisyReLU()
         self._build_layers()
         self.reset_parameters()
     def _build_layers(self):
@@ -259,21 +250,22 @@ class ConcatCNN(nn.Module):
         self.pwm = PWM()
         for index in range(self.layer_num):
             kernel_size = self.kernel_sizes[index]
-            output = self.outputs[index]
-            cnn = nn.Conv1d(in_channels=in_num,kernel_size=kernel_size,
-                            out_channels=output)
+            out_channels = self.out_channels[index]
+            cnn = Conv1d(in_channels=in_num,kernel_size=kernel_size,
+                            out_channels=out_channels)
             self.cnns.append(cnn)
             setattr(self, 'cnn_'+str(index), cnn)
             if self.ln_mode is not None:
-                in_channel = {"before_cnn":in_num,"after_cnn":output,"after_activation":output}
+                in_channel = {"before_cnn":in_num,"after_cnn":out_channels,"after_activation":out_channels}
                 ln = nn.LayerNorm(in_channel[self.ln_mode])
                 self.lns.append(ln)
                 setattr(self, 'ln_'+str(index), ln)
-            in_num += output
+            in_num += out_channels
         self.out_channels = in_num
     def reset_parameters(self):
         for layer in self.children():
-            layer.reset_parameters()
+            if hasattr(layer,'reset_parameters'):
+                layer.reset_parameters()
     def _layer_normalized(self,ln,x,name,distribution_output):
         x = ln(x.transpose(1, 2)).transpose(1, 2)
         distribution_output[name] = x
@@ -290,14 +282,14 @@ class ConcatCNN(nn.Module):
                 x_ = self._layer_normalized(ln,x_,'ln_'+str(index),distribution_output)
                 if self.with_pwm:
                     x_ = self.pwm(x_)
-            x_ = cnn(x_)
+            x_,lengths = cnn(x_,lengths)
             distribution_output['cnn_x_'+str(index)] = x_
             if self.ln_mode=='after_cnn':
                 ln = self.lns[index]
                 x_ = self._layer_normalized(ln,x_,'ln_'+str(index),distribution_output)
                 if self.with_pwm:
                     x_ = self.pwm(x_)
-            x_ = self.activation_function(x_,self.training)
+            x_ = self.activation_function(x_)
             distribution_output['post_act_x_'+str(index)] = x_
             if self.ln_mode=='after_activation':
                 ln = self.lns[index]
@@ -307,85 +299,46 @@ class ConcatCNN(nn.Module):
             x_,lengths = Concat(dim=1)([pre_x,x_],lengths)
         distribution_output['cnn_result'] = x_
         return x_,lengths,distribution_output
-
-class SeqAnnlLoss(nn.Module):
-    def __init__(self, class_num,alphas=None, gamma=0,ignore_index=None):
-        super().__init__()
-        self.gamma = gamma
-        self._ignore_index = ignore_index
-        self._class_num = class_num
-        self._alphas = alphas
-    def forward(self, output, target,spatial_weights=None,**kwargs):
-        """data shape is N,C,L"""
-        if isinstance(output,tuple):
-            pt = output[0]
-            pt,_,distribution_output,_ = output
-        else:
-            pt = output
-        input_length = pt.shape[2]
-        if isinstance(output,tuple):
-            gate_i = distribution_output['new_h']
-            center=0.5
-            gate_loss_ = ((center**2)-(gate_i-center)**2).mean(1)
-        if list(pt.shape) != list(target.shape):
-            target = target.transpose(0,2)[:input_length].transpose(0,2)
-        target = target.float()
-        if self._ignore_index is not None:
-            mask = (target.max(1)[0] != self._ignore_index).float()
-        decay_cooef = (1-pt)**self.gamma
-        loss_ =  -decay_cooef* (pt+1e-32).log() * target
-        if spatial_weights is not None:
-            if list(pt.shape) != list(spatial_weights.shape):
-                 spatial_weights = spatial_weights.transpose(0,2)[:input_length].transpose(0,2)
-            spatial_weights = torch.FloatTensor(spatial_weights)#.cuda()
-        if self._alphas is not None:
-            loss_ = (loss_.transpose(1,2)*self._alphas).transpose(1,2)
-        loss_ = loss_.sum(1)
-        if self._ignore_index is not None:
-            loss_ = loss_*mask
-            loss = loss_.sum()/mask.sum()
-            if isinstance(output,tuple):
-                gate_loss_ = gate_loss_*mask
-                gate_loss = gate_loss_.sum()/mask.sum()
-                loss+=gate_loss
-        else:
-            loss = loss_.mean()
-            if isinstance(output,tuple):
-                gate_loss = gate_loss_.mean()
-                loss+=gate_loss
-        return loss
     
 class ConcatRNN(nn.Module):
-    def __init__(self,in_channels,layer_num,outputs,rnn_cell_class,rnns_as_output=True,
-                 layer_norm=False,bidirectional=True,**kwargs):
+    def __init__(self,in_channels,layer_num,hidden_sizes,rnn_cell_class,
+                 rnns_as_output=True,layer_norm=True,bidirectional=True,
+                 tanh_after_rnn=False,cnn_before_rnn=False,**kwargs):
         super().__init__()
         self.in_channels = in_channels
         self.layer_num = layer_num
-        self.outputs = outputs
+        self.hidden_sizes = hidden_sizes
         self.layer_norm = layer_norm
         self.kwargs = kwargs
         self.rnn_cell_class = rnn_cell_class
         self.rnns_as_output = rnns_as_output
+        self.tanh_after_rnn = tanh_after_rnn
+        self.cnn_before_rnn = cnn_before_rnn
         self.bidirectional = bidirectional
         self._build_layers()
         self.reset_parameters()
     def _build_layers(self):
         in_num = self.in_channels
         self.rnns = []
+        self.cnns_before_rnn = []
         self.lns=[]
         for index in range(self.layer_num):
-            output_num = self.outputs[index]
-            rnn_cell = self.rnn_cell_class(input_size=in_num,hidden_size=output_num)
+            hidden_size = self.hidden_sizes[index]
+            rnn_cell = self.rnn_cell_class(input_size=in_num,hidden_size=hidden_size)
             rnn = RNN(rnn_cell,bidirectional=self.bidirectional,**self.kwargs)
             self.rnns.append(rnn)
             setattr(self, 'rnn_'+str(index), rnn)
+            if self.cnn_before_rnn:
+                cbr = Conv1d(in_channels=in_num,kernel_size=2,out_channels=in_num)
+                self.cnns_before_rnn.append(cbr)
+                setattr(self, 'cbr_'+str(index), cbr)
             if self.layer_norm:
-                ln = nn.LayerNorm(output_num*2)
+                ln = nn.LayerNorm(hidden_size*2)
                 self.lns.append(ln)
                 setattr(self, 'ln_'+str(index), ln)
-            in_num += output_num*2
+            in_num += hidden_size*2
         if self.rnns_as_output:
-            self.out_channels = output_num*2*self.layer_num
+            self.out_channels = hidden_size*2*self.layer_num
         else:
             self.out_channels = in_num
     def reset_parameters(self):
@@ -396,34 +349,43 @@ class ConcatRNN(nn.Module):
         x_ = x.transpose(1, 2)
         distribution_output = {}
         rnn_output = {}
+        for name in self.rnns[0].output_names:
+            if name not in rnn_output.keys():
+                rnn_output[name] = []
+        rnn_output['after_rnn'] = []
         for index in range(self.layer_num):
             rnn = self.rnns[index]
             pre_x = x_
+            if self.cnn_before_rnn:
+                cbr = self.cnns_before_rnn[index]
+                x_=x_.transpose(1, 2)
+                distribution_output["pre_cbr_"+str(index)] = x_
+                x_,lengths = cbr(x_,lengths)
+                distribution_output["cbr_"+str(index)] = x_
+                x_=x_.transpose(1, 2)
             x_ = rnn(x_,lengths)
             if hasattr(rnn,'output_names'):
                 for name,item in zip(rnn.output_names,x_):
-                    if name not in rnn_output.keys():
-                        rnn_output[name] = []
                     rnn_output[name].append(item)
                     values = item.transpose(1,2)
                     distribution_output["rnn_"+str(index)+"_"+name] = values
                 x_ = x_[rnn.output_names.index('new_h')]
-            else:
-                if 'new_h' not in rnn_output.keys():
-                    rnn_output['new_h'] = []
-                rnn_output['new_h'].append(x_)
             if self.layer_norm:
                 x_ = self.lns[index](x_)
-            x_ = Concat(dim=1)([pre_x.transpose(1,2),x_.transpose(1,2)])
+            if self.tanh_after_rnn:
+                x_ = x_.tanh()
+            rnn_output['after_rnn'].append(x_)
+            x_,lengths = Concat(dim=1)([pre_x.transpose(1,2),x_.transpose(1,2)],lengths)
             x_ = x_.transpose(1,2)
         for name,value in rnn_output.items():
-            temp = torch.cat(value,2)
-            rnn_output[name] = temp.transpose(1, 2)
+            value = [item.transpose(1,2) for item in value]
+            temp,lengths = Concat(dim=1)(value,lengths)
+            rnn_output[name] = temp
         if self.rnns_as_output:
-            x = rnn_output['new_h']
+            x = rnn_output['after_rnn']
         else:
             x = x_.transpose(1, 2)
-        distribution_output['rnn_result'] = rnn_output['new_h']
+        distribution_output['rnn_result'] = rnn_output['after_rnn']
         return x,lengths,distribution_output
 
 class ISeqAnnModel(nn.Module,metaclass=ABCMeta):
@@ -440,50 +402,60 @@ class ISeqAnnModel(nn.Module,metaclass=ABCMeta):
         pass
 
 class SeqAnnModel(ISeqAnnModel):
-    def __init__(self,in_channels,out_channels,rnn_cell_class,
-                 cnn_num=0,cnn_kernel_sizes=128,cnn_outputs=[],
-                 rnn_num=0,rnn_outputs=[],reduce_cnn_ratio=1,
-                 init_value=0,with_pwm=True,
-                 use_CRF=False,rnn_layer_norm=False,**kwargs):
+    def __init__(self,in_channels,out_channels,
+                 cnns_setting=None,
+                 rnns_setting=None,
+                 reduce_cnn_ratio=None,
+                 pwm_before_rnns=None,
+                 use_CRF=None,
+                 reduced_cnn_number=None,
+                 last_kernel_size=None):
         super().__init__()
         self.in_channels=in_channels
         self.out_channels = out_channels
-        self.cnn_num=cnn_num
-        self.cnn_kernel_sizes=cnn_kernel_sizes
-        self.cnn_outputs=cnn_outputs
-        self.rnn_num=rnn_num
-        self.rnn_outputs = rnn_outputs
-        self.rnn_cell_class=rnn_cell_class
-        self.rnn_layer_norm = rnn_layer_norm
-        self.reduce_cnn_ratio = reduce_cnn_ratio
-        self.init_value = init_value
-        self.use_CRF = use_CRF
-        self.with_pwm = with_pwm
+        self.cnns_setting = cnns_setting or {'layer_num':0}
+        self.rnns_setting = rnns_setting or {'layer_num':0}
+        self.cnn_num = self.cnns_setting['layer_num']
+        self.rnn_num = self.rnns_setting['layer_num']
+        self.reduced_cnn_number = reduced_cnn_number
+        self.pwm_before_rnns = pwm_before_rnns or True
+        self.last_kernel_size = last_kernel_size or 1
+        self.use_CRF = use_CRF or False
+        self.reduce_cnn_ratio = reduce_cnn_ratio or 1
+        if self.reduce_cnn_ratio <= 0:
+            raise Exception("Reduce_cnn_ratio should be larger than zero")
         self.CRF = None
         self._saved_index_outputs = None
         self._outputs = None
         self._lengths = None
         self._distribution = None
+        self._reduce_cnn = self.reduce_cnn_ratio < 1 or self.reduced_cnn_number is not None
         self._build_layers()
         self.reset_parameters()
+        self.write_cnn = True
+        self.write_rnn = True
     def _build_layers(self):
         in_channels=self.in_channels
         if self.cnn_num > 0:
-            self.cnns = ConcatCNN(in_channels,self.cnn_num,self.cnn_kernel_sizes,
-                                  self.cnn_outputs,ln_mode="before_cnn",with_pwm=self.with_pwm)
+            self.cnns = ConcatCNN(in_channels,**self.cnns_setting)
             self.cnn_ln = nn.LayerNorm(self.cnns.out_channels)
-            self.cnn_pwm = PWM()
-            if self.reduce_cnn_ratio<1:
-                self.cnn_merge = nn.Conv1d(in_channels=self.cnns.out_channels,kernel_size=1,
-                                           out_channels=int(self.cnns.out_channels*self.reduce_cnn_ratio))
-            in_channels=int(self.cnns.out_channels*self.reduce_cnn_ratio)
+            if self._reduce_cnn:
+                if self.reduce_cnn_ratio < 1:
+                    out_channels = int(self.cnns.out_channels*self.reduce_cnn_ratio)
+                else:
+                    out_channels = self.reduced_cnn_number
+                self.cnn_merge = Conv1d(in_channels=self.cnns.out_channels,
+                                        kernel_size=1,out_channels=out_channels)
+                in_channels = out_channels    
+            else:
+                in_channels = self.cnns.out_channels
+            if self.pwm_before_rnns:
+                self.cnn_pwm = PWM()
         if self.rnn_num > 0:
-            self.rnns =  ConcatRNN(in_channels,self.rnn_num,
-                                   self.rnn_outputs,self.rnn_cell_class,
-                                   init_value=self.init_value,
-                                   layer_norm=self.rnn_layer_norm)
+            print(in_channels)
+            self.rnns = ConcatRNN(in_channels,**self.rnns_setting)
             in_channels=self.rnns.out_channels
-        self.last = nn.Conv1d(in_channels=in_channels,kernel_size=1,
+        self.last = Conv1d(in_channels=in_channels,kernel_size=self.last_kernel_size,
                               out_channels=self.out_channels)
         self.CRF = BatchCRF(self.out_channels)
        
@@ -491,9 +463,9 @@ class SeqAnnModel(ISeqAnnModel):
         for layer in self.children():
             if hasattr(layer,'reset_parameters'):
                 layer.reset_parameters()
-        if self.cnn_num > 0 and self.reduce_cnn_ratio<1:
-            normal_(self.cnn_merge.weight)
-            constant_(self.cnn_merge.bias,0)
+        #if self._reduce_cnn:
+        #    normal_(self.cnn_merge.weight)
+        #    constant_(self.cnn_merge.bias,0)
         constant_(self.last.bias,0)
         normal_(self.last.weight)
 
@@ -505,21 +477,24 @@ class SeqAnnModel(ISeqAnnModel):
             pre_time = time.time()
             x,lengths,cnn_distribution = self.cnns(x,lengths)
             x = self.cnn_ln(x.transpose(1,2)).transpose(1,2)
-            x = self.cnn_pwm(x)
-            if self.reduce_cnn_ratio < 1:
-                x = self.cnn_merge(x)
-            distribution_output.update(cnn_distribution)
+            if self._reduce_cnn:
+                x,lengths = self.cnn_merge(x,lengths)
+            if self.pwm_before_rnns:
+                x = self.cnn_pwm(x)
+            if self.write_cnn:
+                distribution_output.update(cnn_distribution)
             print("CNN time",int(time.time()-pre_time))
         if self.rnn_num > 0:
             pre_time = time.time()
             distribution_output["pre_rnn_result"] = x
-            x,lengths,rnn_distribution = self.rnns(x,lengths)
+            x,lengths,rnn_distribution =self.rnns(x,lengths)
             distribution_output["pre_last_result"] = x
-            distribution_output.update(rnn_distribution)
+            if self.write_rnn:
+                distribution_output.update(rnn_distribution)
             print("RNN time",int(time.time()-pre_time))
-        x = self.last(x)
+        x,lengths = self.last(x,lengths)
+        distribution_output["last"] = x
         if not self.use_CRF:
-            distribution_output["pre_softmax"] = x
             x = nn.LogSoftmax(dim=1)(x)
             distribution_output["log_softmax"] = x
             x = x.exp()
@@ -527,7 +502,7 @@ class SeqAnnModel(ISeqAnnModel):
         self._distribution = distribution_output
         self._lengths = lengths
         self._outputs = x
-        if self.use_CRF is None:
+        if not self.use_CRF:
             output_index = self._outputs.max(1)[1]
         else:
             output_index = self.CRF(self._outputs,self._lengths)

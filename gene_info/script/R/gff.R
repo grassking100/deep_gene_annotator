@@ -37,7 +37,6 @@ write_bed <- function(bed,path,...){
   
 }
 
-
 write_gff <- function(gff,path,...){
   gff <-format(gff, scientific = FALSE,trim=T) 
   write.table(gff,path,sep='\t', quote = F,col.names =F, row.names =F,...)
@@ -112,7 +111,5 @@ gff_to_bed <- function(gff,id_name='id',orf_starts=NA,orf_ends=NA){
     bed <- cbind(bed,orf_start=find_orf_start(bed[,id_name]),
                  orf_end=find_orf_end(bed[,id_name]))
   }
-  
   return(unique(bed))
 }
-

@@ -58,23 +58,25 @@ class RegionExtractor:
         return seq_infos
 
 class GeneInfoExtractor:
-    def extract(self,anns,simply_map=None):
-        seq_infos = SeqInfoContainer
+    def __init__(self):
+        self._extractor = RegionExtractor()
+    def extract(self,anns,simply_map):
+        seq_infos = SeqInfoContainer()
         for ann in anns:
-            seq_infos.add(self.extract_per_seq(ann,simply_map,simply_map))
+            seq_infos.add(self.extract_per_seq(ann,simply_map))
         return seq_infos
     def extract_per_seq(self,ann,simply_map):
-        extractor = RegionExtractor()
         seq_infos = SeqInfoContainer()
+        
         simple_seq = simplify_seq(ann,simply_map)
         simple_seq.chromosome_id = ann.chromosome_id or ann.id
-        genes = [region for region in extractor.extract(simple_seq) if region.ann_type=='gene']
+        genes = [region for region in self._extractor.extract(simple_seq) if region.ann_type=='gene']
         seq_infos.add(genes)
         for gene in genes:
             #print(gene.to_dict())
             subseq = ann.get_subseq(gene.start,gene.end)
             subseq.id = gene.id
-            subregions = extractor.extract(subseq)
+            subregions = self._extractor.extract(subseq)
             #print(subregions.to_dict())
             seq_infos.add(subregions)
         return seq_infos

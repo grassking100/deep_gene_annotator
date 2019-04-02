@@ -103,7 +103,7 @@ def loader(fasta,ann_seqs,min_len=None,max_len=None,ratio=None,outlier_coef=1.5,
     for seq in ann_seqs:
         if min_len <= len(seq) <= max_len:
             inner_fasta[seq.id]=fasta[seq.id]
-        elif len(seq) >= max_len*outlier_coef:
+        elif max_len < len(seq) <= max_len*outlier_coef:
             outlier_name = seq.id
     keys = list(inner_fasta.keys())
     random.shuffle(keys)

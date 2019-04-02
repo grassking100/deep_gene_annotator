@@ -1,4 +1,4 @@
-library("VennDiagram")
+#library("VennDiagram")
 library(Biostrings)
 hist_5_diff <- function(data,use_abs=F,...)
 {

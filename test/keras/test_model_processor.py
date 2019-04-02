@@ -1,6 +1,6 @@
 import unittest
-from sequence_annotation.function.model_processor import SimpleModel
-from sequence_annotation.keras.function.model_creator import ModelCreator
+from sequence_annotation.process.model_processor import SimpleModel
+from sequence_annotation.keras.process.model_creator import ModelCreator
 from keras.models import Sequential
 from keras.layers import Dense, Activation
 import json
