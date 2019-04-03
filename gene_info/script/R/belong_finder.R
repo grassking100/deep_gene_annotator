@@ -48,7 +48,9 @@ belong_by_boundary <- function(exp_sites,boundarys,exp_site_name,boundary_start_
             selected_exp_site = selected_exp_sites[i,]
             for(sub_index in strsplit(index,split=',')[[1]])
             {
-              selected_exp_site_ <- cbind(selected_exp_site,ref_name=selected_boundarys[as.numeric(sub_index),ref_name])
+              name=selected_boundarys[as.numeric(sub_index),ref_name]
+                #print(name)
+              selected_exp_site_ <- cbind(selected_exp_site,ref_name=name)
               returned_data <- rbind(returned_data,selected_exp_site_)
             }
           }

@@ -1,4 +1,4 @@
-biomart_araport_11_gene_info <- read.csv('data/biomart_araport_11_gene_info.csv',stringsAsFactors=F)
+biomart_araport_11_gene_info <- read.csv('data/biomart_araport_11_gene_info_2018_11_27.csv',stringsAsFactors=F)
 biomart_araport_11_gene_info = biomart_araport_11_gene_info[c('Gene.stable.ID',
                                                               'Gene.start..bp.',
                                                               'Gene.end..bp.',
@@ -34,7 +34,7 @@ gro <- gro[c('chr','strand','Normalized.Tag.Count','start','end')]
 names(gro) <- c('chr','strand','tag_count','start','end')
 gro['mode'] <- round((gro$end + gro$start)/2)
 
-cleavage_site <- read.csv('data/NIHMS48846-supplement-2_S10. DRS peaks in coding genes_private.csv',
+cleavage_site <- read.csv('data/NIHMS48846-supplement-2_S10_DRS_peaks_in_coding_genes_private.csv',
                           stringsAsFactors=F)
 
 cleavage_site[cleavage_site$Strand=='fwd',]['Strand'] <- '+'
@@ -43,12 +43,11 @@ cleavage_site <- cleavage_site[,c('Chromosome','Strand','Position','Raw.DRS.read
 colnames(cleavage_site) <- c('chr','strand','position','read_count')
 cleavage_site$chr <- apply(cleavage_site,1,function(x) {substr(x['chr'],start=4,stop=nchar(x['chr']))})
 
+external_five_UTR <- read_bed('data/most_five_UTR.bed')
+external_three_UTR <- read_bed('data/most_three_UTR.bed')
 
-external_five_UTR <- read_bed('data/Araport11_five_prime_UTR_2018_11_19_five_most_UTR.bed')
-external_three_UTR <- read_bed('data/Araport11_three_prime_UTR_2018_11_19_three_most_UTR.bed')
-
-external_five_UTR$chr <- apply(external_five_UTR,1,function(x) {substr(x['chr'],start=4,stop=nchar(x['chr']))})
-external_three_UTR$chr <- apply(external_three_UTR,1,function(x) {substr(x['chr'],start=4,stop=nchar(x['chr']))})
+#external_five_UTR$chr <- apply(external_five_UTR,1,function(x) {substr(x['chr'],start=4,stop=nchar(x['chr']))})
+#external_three_UTR$chr <- apply(external_three_UTR,1,function(x) {substr(x['chr'],start=4,stop=nchar(x['chr']))})
 
 valid_external_five_UTR <- subset(external_five_UTR,chr %in% as.character(1:5) & id %in% valid_transcript_id)
 valid_external_three_UTR <- subset(external_three_UTR,chr %in% as.character(1:5) & id %in% valid_transcript_id)
