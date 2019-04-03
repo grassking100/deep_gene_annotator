@@ -32,12 +32,12 @@ print('Find outer data')
 #long_dist_gro_sites$gro_source <- 'long_dist'
 #long_dist_gro_sites$gene_id <- find_gene_id(long_dist_gro_sites$ref_name)
 
-#long_dist_cleavage_sites <- belong_by_distance(valid_cleavage_site,valid_official_araport11_coding,
-#                                               21,500,"evidence_3_end",'exist_3_end',
-#                                               "cleavage_id",'id')
+long_dist_cleavage_sites <- belong_by_distance(valid_cleavage_site,valid_official_araport11_coding,
+                                               21,500,"evidence_3_end",'exist_3_end',
+                                               "cleavage_id",'id')
 
-#long_dist_cleavage_sites$gro_source <- 'long_dist'
-#long_dist_cleavage_sites$gene_id <- find_gene_id(long_dist_cleavage_sites$ref_name)
+long_dist_cleavage_sites$gro_source <- 'long_dist'
+long_dist_cleavage_sites$gene_id <- find_gene_id(long_dist_cleavage_sites$ref_name)
 
 #write.table(dist_gro_sites,str_with_time('dist_gro_sites_','.tsv'),sep='\t',quote =F)
 #write.table(inner_gro_sites,str_with_time('inner_gro_sites_','.tsv'),sep='\t',quote =F)
@@ -48,7 +48,10 @@ print('Find outer data')
 #write.table(dist_cleavage_sites,str_with_time('dist_cleavage_sites_','.tsv'),sep='\t',quote =F)
 #write.table(inner_cleavage_sites,str_with_time('inner_cleavage_sites_','.tsv'),sep='\t',quote =F)
 #write.table(merged_cleavage_sites,str_with_time('merged_cleavage_sites_','.tsv'),sep='\t',quote =F)
-#write.table(long_dist_cleavage_sites,str_with_time('long_dist_cleavage_sites_','.tsv'),sep='\t',quote =F)
+
+print("Write")
+write.table(long_dist_cleavage_sites,str_with_time('long_dist_cleavage_sites_','.tsv'),sep='\t',quote =F)
+print("Write end")
 
 long_dist_gro_sites <- read.csv('long_dist_gro_sites_2019_04_03.tsv',sep='\t',stringsAsFactors=F)
 long_dist_cleavage_sites <- read.csv('long_dist_cleavage_sites_2019_04_03.tsv',sep='\t',stringsAsFactors=F)
