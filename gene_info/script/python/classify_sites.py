@@ -57,9 +57,9 @@ if __name__ == "__main__":
         valid_gro = pd.read_csv(valid_gro_site_path,sep='\t')
         valid_cleavage_site = pd.read_csv(valid_cleavage_site_path,sep='\t')
         valid_external_five_UTR = pd.read_csv(valid_external_five_UTR_path,sep='\t')
-        valid_external_five_UTR['start'] += 1
+        #valid_external_five_UTR['start'] += 1
         valid_external_three_UTR = pd.read_csv(valid_external_three_UTR_path,sep='\t')
-        valid_external_three_UTR['start'] += 1
+        #valid_external_three_UTR['start'] += 1
         print('Classify valid GRO sites and cleavage sites and write data')
         ###Classify valid GRO sites and cleavage sites and write data###
         dist_gro_sites = belong_by_distance(valid_gro,valid_official_bed,
