@@ -32,12 +32,12 @@ print('Find outer data')
 #long_dist_gro_sites$gro_source <- 'long_dist'
 #long_dist_gro_sites$gene_id <- find_gene_id(long_dist_gro_sites$ref_name)
 
-long_dist_cleavage_sites <- belong_by_distance(valid_cleavage_site,valid_official_araport11_coding,
-                                               21,500,"evidence_3_end",'exist_3_end',
-                                               "cleavage_id",'id')
+#long_dist_cleavage_sites <- belong_by_distance(valid_cleavage_site,valid_official_araport11_coding,
+#                                               21,500,"evidence_3_end",'exist_3_end',
+#                                               "cleavage_id",'id')
 
-long_dist_cleavage_sites$gro_source <- 'long_dist'
-long_dist_cleavage_sites$gene_id <- find_gene_id(long_dist_cleavage_sites$ref_name)
+#long_dist_cleavage_sites$gro_source <- 'long_dist'
+#long_dist_cleavage_sites$gene_id <- find_gene_id(long_dist_cleavage_sites$ref_name)
 
 #write.table(dist_gro_sites,str_with_time('dist_gro_sites_','.tsv'),sep='\t',quote =F)
 #write.table(inner_gro_sites,str_with_time('inner_gro_sites_','.tsv'),sep='\t',quote =F)
@@ -50,13 +50,13 @@ long_dist_cleavage_sites$gene_id <- find_gene_id(long_dist_cleavage_sites$ref_na
 #write.table(merged_cleavage_sites,str_with_time('merged_cleavage_sites_','.tsv'),sep='\t',quote =F)
 
 print("Write")
-write.table(long_dist_cleavage_sites,str_with_time('long_dist_cleavage_sites_','.tsv'),sep='\t',quote =F)
+#write.table(long_dist_cleavage_sites,str_with_time('long_dist_cleavage_sites_','.tsv'),sep='\t',quote =F)
 print("Write end")
 
-long_dist_gro_sites <- read.csv('long_dist_gro_sites_2019_04_03.tsv',sep='\t',stringsAsFactors=F)
-long_dist_cleavage_sites <- read.csv('long_dist_cleavage_sites_2019_04_03.tsv',sep='\t',stringsAsFactors=F)
-merged_gro_sites <- read.csv('merged_gro_sites_2019_04_03.tsv',sep='\t',stringsAsFactors=F)
-merged_cleavage_sites <- read.csv('merged_cleavage_sites_2019_04_03.tsv',sep='\t',stringsAsFactors=F)
+long_dist_gro_sites <- read.csv('script/data/2019_04_03/long_dist_gro_sites_2019_04_03.tsv',sep='\t',stringsAsFactors=F)
+long_dist_cleavage_sites <- read.csv('script/data/2019_04_03/long_dist_cleavage_sites_2019_04_03.tsv',sep='\t',stringsAsFactors=F)
+merged_gro_sites <- read.csv('script/data/2019_04_03/merged_gro_sites_2019_04_03.tsv',sep='\t',stringsAsFactors=F)
+merged_cleavage_sites <- read.csv('script/data/2019_04_03/merged_cleavage_sites_2019_04_03.tsv',sep='\t',stringsAsFactors=F)
 
 ############################################################################################
 print('Clean and merge data')
@@ -64,6 +64,9 @@ long_dist_gro_sites_gene_id <- unique(long_dist_gro_sites$gene_id)
 long_dist_cleavage_sites_gene_id <- unique(long_dist_cleavage_sites$gene_id)
 safe_merged_gro_sites <- merged_gro_sites[!merged_gro_sites$gene_id %in% long_dist_gro_sites_gene_id,]
 safe_merged_cleavage_sites <- merged_cleavage_sites[!merged_cleavage_sites$gene_id %in% long_dist_cleavage_sites_gene_id,]
+
+write.table(safe_merged_gro_sites,str_with_time('script/data/2019_04_03/safe_merged_gro_sites_','.tsv'),sep='\t',quote =F)
+write.table(safe_merged_cleavage_sites,str_with_time('script/data/2019_04_03/safe_merged_cleavage_sites_','.tsv'),sep='\t',quote =F)
 
 merged_data <- merge(safe_merged_gro_sites,safe_merged_cleavage_sites,
                      c('chr','strand','ref_name','gene_id'),all=T)
@@ -74,7 +77,7 @@ write.table(merged_data,str_with_time('merged_data_','.tsv'),sep='\t',quote =F)
 clean_merged_data <- merged_data[!is.na(merged_data$evidence_5_end) & !is.na(merged_data$evidence_3_end),]
 clean_merged_data$coordinate_start <- apply(clean_merged_data[,c('evidence_5_end','evidence_3_end')],1,min)
 clean_merged_data$coordinate_end <- apply(clean_merged_data[,c('evidence_5_end','evidence_3_end')],1,max)
-write.table(clean_merged_data,str_with_time('clean_merged_data_','.tsv'),sep='\t',quote =F)
+write.table(clean_merged_data,str_with_time('script/data/2019_04_03/clean_merged_data_','.tsv'),sep='\t',quote =F)
 ############################################################################################
 print('Consist with gene')
 
