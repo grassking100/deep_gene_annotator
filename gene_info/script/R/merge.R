@@ -11,20 +11,26 @@ print('Find belong')
 #                                           'evidence_3_end','start','end','cleavage_id','id')
 print("Find belong end")
 
-#dist_gro_sites$gro_source <- 'dist'
-#inner_gro_sites$gro_source <- 'inner'
-#merged_gro_sites_ <- rbind(dist_gro_sites,inner_gro_sites)
-#merged_gro_sites_ <- merged_gro_sites_[!is.na(merged_gro_sites_['ref_name']),]
-#merged_gro_sites <- consist(merged_gro_sites_,'ref_name','tag_count')
+dist_gro_sites <- read.csv('script/data/2019_04_03/dist_gro_sites_2019_04_03.tsv',sep='\t',stringsAsFactors=F)
+inner_gro_sites <- read.csv('script/data/2019_04_03/inner_gro_sites_2019_04_03.tsv',sep='\t',stringsAsFactors=F)
+dist_gro_sites$gro_source <- 'dist'
+inner_gro_sites$gro_source <- 'inner'
+
+merged_gro_sites_ <- rbind(dist_gro_sites,inner_gro_sites)
+merged_gro_sites_ <- merged_gro_sites_[!is.na(merged_gro_sites_['ref_name']),]
+merged_gro_sites <- consist(merged_gro_sites_,'ref_name','tag_count')
 
 #merged_gro_sites$gene_id <- find_gene_id(merged_gro_sites$ref_name)
 
-#dist_cleavage_sites$cleavage_source <- 'dist'
-#inner_cleavage_sites$cleavage_source <- 'inner'
-#merged_cleavage_sites_ <- rbind(dist_cleavage_sites,inner_cleavage_sites)
-#merged_cleavage_sites_ <- merged_cleavage_sites_[!is.na(merged_cleavage_sites_['ref_name']),]
-#merged_cleavage_sites <- consist(merged_cleavage_sites_,'ref_name','read_count')
-#merged_cleavage_sites$gene_id <- find_gene_id(merged_cleavage_sites$ref_name)
+
+dist_gro_sites <- read.csv('script/data/2019_04_03/dist_cleavage_sites_2019_04_03.tsv',sep='\t',stringsAsFactors=F)
+inner_gro_sites <- read.csv('script/data/2019_04_03/inner_cleavage_sites_2019_04_03.tsv',sep='\t',stringsAsFactors=F)
+dist_cleavage_sites$cleavage_source <- 'dist'
+inner_cleavage_sites$cleavage_source <- 'inner'
+merged_cleavage_sites_ <- rbind(dist_cleavage_sites,inner_cleavage_sites)
+merged_cleavage_sites_ <- merged_cleavage_sites_[!is.na(merged_cleavage_sites_['ref_name']),]
+merged_cleavage_sites <- consist(merged_cleavage_sites_,'ref_name','read_count')
+merged_cleavage_sites$gene_id <- find_gene_id(merged_cleavage_sites$ref_name)
 print('Find outer data')
 #long_dist_gro_sites <- belong_by_distance(valid_gro,valid_official_araport11_coding,
 #                                          -1000,-21,'evidence_5_end','exist_5_end',
