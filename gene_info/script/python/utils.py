@@ -11,12 +11,13 @@ def consist_(data,by,ref_value,drop_duplicated):
     for name in ref_names:
         sector = sectors.get_group(name)
         max_data = sector.loc[sector[ref_value].idxmax()]
-        true_count = sum(sector[ref_value] == max_data[ref_value])
-        if drop_duplicated:
-            if true_count==1:
-                returned.append(max_data)
+        temp = sector[sector[ref_value] == max_data[ref_value]]
+        true_count = len(temp)
+        if true_count==1:
+            returned.append(max_data)
         else:
-            returned += sector.to_dict('record')
+            if not drop_duplicated:
+                returned += temp.to_dict('record')
     return returned
 
 def consist(data,by,ref_value,drop_duplicated):

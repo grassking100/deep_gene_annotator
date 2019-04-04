@@ -64,15 +64,24 @@ if __name__ == "__main__":
         inner_gro_sites['gro_source'] = 'inner'
         long_dist_gro_sites['gro_source'] = 'long_dist'
         orf_inner_gro_sites['gro_source'] = 'orf_inner'
-        merged_gro_sites = pd.concat([dist_gro_sites,inner_gro_sites,long_dist_gro_sites])
+        merged_gro_sites = pd.concat([dist_gro_sites,inner_gro_sites])
+        merged_gro_sites = consist(merged_gro_sites,'ref_name','tag_count',True)
+        
         
         dist_cleavage_sites['cleavage_source'] = 'dist'
         inner_cleavage_sites['cleavage_source'] = 'inner'
         long_dist_cleavage_sites['cleavage_source'] = 'long_dist'
         orf_inner_cleavage_sites['cleavage_source'] = 'orf_inner'
         
-        merged_cleavage_sites = pd.concat([dist_cleavage_sites,inner_cleavage_sites,long_dist_cleavage_sites])
+        merged_cleavage_sites = pd.concat([dist_cleavage_sites,inner_cleavage_sites])
+        merged_cleavage_sites = consist(merged_cleavage_sites,'ref_name','read_count',True)
         ##
+        gro_names = get_gene_names(long_dist_gro_sites,'ref_name',id_convert)
+        long_dist_gro_sites = long_dist_gro_sites.assign(gene_id=pd.Series(gro_names).values)
+        
+        cs_names = get_gene_names(long_dist_cleavage_sites,'ref_name',id_convert)
+        long_dist_cleavage_sites = long_dist_cleavage_sites.assign(gene_id=pd.Series(cs_names).values)
+        
         gro_names = get_gene_names(merged_gro_sites,'ref_name',id_convert)
         merged_gro_sites = merged_gro_sites.assign(gene_id=pd.Series(gro_names).values)
         cs_names = get_gene_names(merged_cleavage_sites,'ref_name',id_convert)
@@ -81,12 +90,12 @@ if __name__ == "__main__":
 
         ###Clean data without invalid sites###
         print('Clean and export data')
-        long_dist_gro_site_id = set(merged_gro_sites[merged_gro_sites['gro_source'].isin(['long_dist'])]['gene_id'])
+        long_dist_gro_site_id = set(long_dist_gro_sites['gene_id'])
         
-        safe_merged_gro_site = merged_gro_sites[merged_gro_sites['gro_source'].isin(['dist','inner']) ]
+        safe_merged_gro_site = merged_gro_sites[merged_gro_sites['gro_source'].isin(['dist','inner']) & (~merged_gro_sites['gene_id'].isin(long_dist_gro_site_id))]
         
-        long_dist_cleavage_site_id = set(merged_cleavage_sites[merged_cleavage_sites['cleavage_source'].isin(['long_dist'])]['gene_id'])
-        safe_merged_cleavage_sites = merged_cleavage_sites[merged_cleavage_sites['cleavage_source'].isin(['dist','inner'])& merged_cleavage_sites['gene_id'].isin(long_dist_cleavage_site_id)]
+        long_dist_cleavage_site_id = set(long_dist_cleavage_sites['gene_id'])
+        safe_merged_cleavage_sites = merged_cleavage_sites[merged_cleavage_sites['cleavage_source'].isin(['dist','inner'])& (~merged_cleavage_sites['gene_id'].isin(long_dist_cleavage_site_id))]
         
         
         #safe_merged_gro_site = consist(safe_merged_gro_site,'gene_id','tag_count',True)
