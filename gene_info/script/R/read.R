@@ -1,4 +1,4 @@
-biomart_araport_11_gene_info <- read.csv('data/biomart_araport_11_gene_info_2018_11_27.csv',stringsAsFactors=F)
+biomart_araport_11_gene_info <- read.csv('~/../home/io/Arabidopsis_thaliana/data/biomart_araport_11_gene_info_2018_11_27.csv',stringsAsFactors=F)
 biomart_araport_11_gene_info = biomart_araport_11_gene_info[c('Gene.stable.ID',
                                                               'Gene.start..bp.',
                                                               'Gene.end..bp.',
@@ -14,7 +14,7 @@ id_convert <- as.character(biomart_araport_11_gene_info$gene_id)
 names(id_convert) <- as.character(biomart_araport_11_gene_info$transcript_id)
 
 
-official_araport11_coding <-read_bed12('data/Araport11_protein_coding.201606.bed')
+official_araport11_coding <-read_bed12('~/../home/io/Arabidopsis_thaliana/data/Araport11_protein_coding.201606.bed')
 
 official_araport11_coding$chr <- apply(official_araport11_coding,1,function(x) {substr(x['chr'],start=4,stop=nchar(x['chr']))})
 official_araport11_coding <- subset(official_araport11_coding,chr %in% as.character(1:5))
@@ -22,9 +22,9 @@ biomart_araport11_coding <- subset(biomart_araport_11_gene_info,transcript_type 
 valid_transcript_id <- intersect(official_araport11_coding$id,biomart_araport11_coding$transcript_id)
 valid_gene_id <- id_convert[as.character(valid_transcript_id)]
 
-gro_1 <- read.csv('data/tss_peak_SRR3647033_background_SRR3647034_2018_11_04.tsv',
+gro_1 <- read.csv('~/../home/io/Arabidopsis_thaliana/data/tss_peak_SRR3647033_background_SRR3647034_2018_11_04.tsv',
                   sep='\t',header=T,stringsAsFactors=F,comment.char = "#")
-gro_2 <- read.csv('data/tss_peak_SRR3647033_background_SRR3647035_2018_11_04.tsv',
+gro_2 <- read.csv('~/../home/io/Arabidopsis_thaliana/data/tss_peak_SRR3647033_background_SRR3647035_2018_11_04.tsv',
                   sep='\t',header=T,stringsAsFactors=F,comment.char = "#")
 
 gro_ <- rbind(gro_1,gro_2)
@@ -34,7 +34,7 @@ gro <- gro[c('chr','strand','Normalized.Tag.Count','start','end')]
 names(gro) <- c('chr','strand','tag_count','start','end')
 gro['mode'] <- round((gro$end + gro$start)/2)
 
-cleavage_site <- read.csv('data/NIHMS48846-supplement-2_S10_DRS_peaks_in_coding_genes_private.csv',
+cleavage_site <- read.csv('~/../home/io/Arabidopsis_thaliana/data/NIHMS48846-supplement-2_S10_DRS_peaks_in_coding_genes_private.csv',
                           stringsAsFactors=F)
 
 cleavage_site[cleavage_site$Strand=='fwd',]['Strand'] <- '+'
@@ -43,8 +43,8 @@ cleavage_site <- cleavage_site[,c('Chromosome','Strand','Position','Raw.DRS.read
 colnames(cleavage_site) <- c('chr','strand','position','read_count')
 cleavage_site$chr <- apply(cleavage_site,1,function(x) {substr(x['chr'],start=4,stop=nchar(x['chr']))})
 
-external_five_UTR <- read_bed('data/most_five_UTR.bed')
-external_three_UTR <- read_bed('data/most_three_UTR.bed')
+external_five_UTR <- read_bed('~/../home/io/Arabidopsis_thaliana/data/most_five_UTR.bed')
+external_three_UTR <- read_bed('~/../home/io/Arabidopsis_thaliana/data/most_three_UTR.bed')
 
 #external_five_UTR$chr <- apply(external_five_UTR,1,function(x) {substr(x['chr'],start=4,stop=nchar(x['chr']))})
 #external_three_UTR$chr <- apply(external_three_UTR,1,function(x) {substr(x['chr'],start=4,stop=nchar(x['chr']))})
