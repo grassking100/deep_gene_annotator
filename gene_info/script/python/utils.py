@@ -3,13 +3,14 @@ import pandas as pd
 BED_COLUMNS = ['chr','start','end','id','score','strand','orf_start','orf_end','rgb','count','block_size','block_related_start']
 
 def consist_(data,by,ref_value,drop_duplicated):
-    data.reset_index(inplace=True)
+    #data.reset_index(inplace=True)
     returned = []
     ref_names = set(data[by])
     ref_names = [name for name in ref_names if str(name)!='nan']
     sectors = data.groupby(by)
     for name in ref_names:
         sector = sectors.get_group(name)
+        #ssector.reset_index(inplace=True)
         max_data = sector.loc[sector[ref_value].idxmax()]
         temp = sector[sector[ref_value] == max_data[ref_value]]
         true_count = len(temp)
@@ -33,7 +34,7 @@ def consist(data,by,ref_value,drop_duplicated):
     return  df
 
 def coordinate_consist_filter_(data,group_by,site_name):
-    data.reset_index(drop=True)
+    #data.reset_index(drop=True)
     returned = []
     ref_names = set(data[group_by])
     ref_names = [name for name in ref_names if str(name)!='nan']

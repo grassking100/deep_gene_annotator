@@ -66,7 +66,8 @@ if __name__ == "__main__":
         gro = gro_1.merge(gro_2,left_on=gro_columns,right_on=gro_columns)
         valid_gro = gro[gro['chr'].isin(valid_chrs)]
         valid_gro.columns = ['chr','strand','tag_count','start','end']
-        valid_gro['evidence_5_end'] = round((valid_gro['end']+ valid_gro['start'])/2)    
+        evidence_5_end = round((valid_gro['end']+ valid_gro['start'])/2)    
+        valid_gro = valid_gro.assign(evidence_5_end=pd.Series(evidence_5_end).values)
         ###Process cleavage sites data###
         cleavage_site = cleavage_site[['Chromosome','Strand','Position','Raw DRS read count']]
         cleavage_site.loc[cleavage_site['Strand']=='fwd','Strand'] = '+'

@@ -56,7 +56,7 @@ if __name__ == "__main__":
     command = 'bedtools getfasta -s -name -fi '+genome_path+' -bed '+merged_path+'.bed -fo '+merged_path+'.fasta'
     os.system(command)
     for path_root in paths:
-        command = 'bedtools getfasta -s -name -fi '+genome_path+' -bed '+saved_root+"/"
-        command += path_root+'.bed -fo '+saved_root+"/"+ path_root+'.fasta'
+        command = 'bedtools getfasta -s -name -fi '+genome_path+' -bed '+saved_root+"/"+result_bed_path+"_"
+        command += path_root+'.bed -fo '+saved_root+"/"+result_bed_path+"_"+ path_root+'.fasta'
         print(command)
         os.system(command)
