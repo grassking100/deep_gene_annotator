@@ -22,7 +22,7 @@ mkdir -p $fasta_root
 fai=$root/araport_11_Arabidopsis_thaliana_Col-0_rename.fasta.fai
 genome_file=$root/araport_11_Arabidopsis_thaliana_Col-0_rename.fasta
 script_root="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-bed_target_path=$root/Araport11_protein_coding.201606.bed
+bed_target_path=$root/Araport11_GFF3_genes_transposons.201606_coding_repair_2019_04_07.bed
 id_convert=$saved_root/id_convert.tsv
 biomart_path=$root/biomart_araport_11_gene_info_2018_11_27.csv
 gro_1=$root/tss_peak_SRR3647033_background_SRR3647034_2018_11_04.tsv 
