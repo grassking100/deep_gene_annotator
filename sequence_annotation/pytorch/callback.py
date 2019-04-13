@@ -186,7 +186,7 @@ class EarlyStop(Callback):
             self.best_epoch = self._counter
             self.best_result = target
         if (self._counter-self.best_epoch)>=self.patient:
-            self.worker.is_running = False
+            self._worker.is_running = False
 
     def on_work_end(self):
         print("Best "+str(self.target)+": "+str(self.best_result))
