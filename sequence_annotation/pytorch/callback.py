@@ -185,7 +185,7 @@ class EarlyStop(Callback):
                 self._model_weights = self._worker.model.state_dict()
             self.best_epoch = self._counter
             self.best_result = target
-        if (self._counter-self.best_epoch)>=self.patient:
+        if (self._counter-self.best_epoch) > self.patient:
             self._worker.is_running = False
 
     def on_work_end(self):
