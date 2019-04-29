@@ -3,8 +3,9 @@ sys.path.append(os.path.dirname(__file__))
 from utils import get_id_table, read_bed, write_bed, simply_coord_with_gene_id
 import pandas as pd
 from argparse import ArgumentParser
-    
+
 if __name__ == "__main__":
+    root_path = "/".join(sys.argv[0].split('/')[:-1])
     #Reading arguments
     parser = ArgumentParser()
     parser.add_argument("-s", "--saved_root",help="saved_root",required=True)
@@ -25,13 +26,12 @@ if __name__ == "__main__":
         coordinate_consist_bed = read_bed(coordinate_consist_bed_path)
         gene_bed = simply_coord_with_gene_id(coordinate_consist_bed,id_convert)
         write_bed(gene_bed,gene_bed_path)
-        command = "bash ./sequence_annotation/gene_info/script/bash/nonoverlap_filter.sh "+ gene_bed_path
+        command = "bash "+root_path+"/../bash/nonoverlap_filter.sh "+ gene_bed_path
+        print("Execute "+command)
         os.system(command)
         nonoverlap_id = [id_ for id_ in open(nonoverlap_id_path).read().split('\n') if id_ != '']
         ###Write data###
         coordinate_consist_bed['gene_id'] = [id_convert[id_] for id_ in coordinate_consist_bed['id']]
-        nonoverlap_id
         want_bed = coordinate_consist_bed[coordinate_consist_bed['gene_id'].isin(nonoverlap_id)]
         want_bed = want_bed[~ want_bed.duplicated()]
         write_bed(want_bed,output_path)
-        

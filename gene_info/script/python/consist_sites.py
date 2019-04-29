@@ -66,18 +66,12 @@ if __name__ == "__main__":
         orf_inner_gro_sites['gro_source'] = 'orf_inner'
         merged_gro_sites_ = pd.concat([dist_gro_sites,inner_gro_sites,long_dist_gro_sites])
         merged_gro_sites = consist(merged_gro_sites_,'ref_name','tag_count',True)
-        print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-        print("AT1G04945.1" in merged_gro_sites['ref_name'])
-        print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
         dist_cleavage_sites['cleavage_source'] = 'dist'
         inner_cleavage_sites['cleavage_source'] = 'inner'
         long_dist_cleavage_sites['cleavage_source'] = 'long_dist'
         orf_inner_cleavage_sites['cleavage_source'] = 'orf_inner'
         merged_cleavage_sites_ = pd.concat([dist_cleavage_sites,inner_cleavage_sites,long_dist_cleavage_sites])
         merged_cleavage_sites = consist(merged_cleavage_sites_,'ref_name','read_count',True)
-        print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-        print("AT1G04945.1" in merged_cleavage_sites['ref_name'])
-        print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
         ###Clean data without invalid sites###
         print('Clean and export data')
         safe_merged_gro_site = merged_gro_sites[merged_gro_sites['gro_source'].isin(['dist','inner'])]

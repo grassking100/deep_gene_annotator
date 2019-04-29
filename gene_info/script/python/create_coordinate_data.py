@@ -18,7 +18,7 @@ if __name__ == "__main__":
     saved_root = args['saved_root']
     safe_merged_gro_sites_path = args['safe_merged_gro_sites_path']
     safe_merged_cleavage_sites_path = args['safe_merged_cleavage_sites_path']
-    consist_data_path = saved_root+'/coordinate_consist.tsv'
+    consist_data_path = saved_root+'/consist_data.tsv'
     if os.path.exists(consist_data_path):
         print("Result files are already exist,procedure will be skipped.")
     else:
@@ -34,11 +34,7 @@ if __name__ == "__main__":
         print('Consist data with gene id')
         clean_merged_data_by_id = consist(clean_merged_data,'gene_id','tag_count',False)
         clean_merged_data_by_id = consist(clean_merged_data_by_id,'gene_id','read_count',False)
-        
-        #consist_data = coordinate_consist_filter(clean_merged_data_by_id,'gene_id','coordinate_start')
+        consist_data = coordinate_consist_filter(clean_merged_data_by_id,'gene_id','coordinate_start')
         consist_data = coordinate_consist_filter(clean_merged_data_by_id,'gene_id','coordinate_end')
-        print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-        print("AT1G04945.1" in set(consist_data['ref_name']))
-        print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
         consist_data = consist_data[['ref_name','coordinate_start','coordinate_end']]
         consist_data.to_csv(consist_data_path,index=None,sep='\t')

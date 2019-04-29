@@ -10,13 +10,18 @@ def consist_(data,by,ref_value,drop_duplicated):
     sectors = data.groupby(by)
     for name in ref_names:
         sector = sectors.get_group(name)
-        max_data = sector.loc[sector[ref_value].idxmax()]
-        true_count = sum(sector[ref_value] == max_data[ref_value])
+        max_value = max(sector[ref_value])
+        sector = sector.to_dict('record')
+        list_ = []
+        for item in sector:
+            if item[ref_value]==max_value:
+                list_.append(item)
+        true_count = len(list_)
         if drop_duplicated:
             if true_count==1:
-                returned.append(max_data)
+                returned += list_
         else:
-            returned += sector.to_dict('record')
+            returned += list_
     return returned
 
 def consist(data,by,ref_value,drop_duplicated):
@@ -173,8 +178,10 @@ def get_bed_most_UTR(bed):
         three['id'] = five['id'] = item['id']
         three['strand'] = five['strand'] = strand
         three['chr'] = five['chr'] = item['chr']
-        most_UTR_site.append(five)
-        most_UTR_site.append(three)
+        if five['start'] <= five['end']:
+            most_UTR_site.append(five)
+        if three['start'] <= three['end']:
+            most_UTR_site.append(three)
     most_UTR_site = pd.DataFrame.from_dict(most_UTR_site)
     return most_UTR_site
 

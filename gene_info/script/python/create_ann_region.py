@@ -43,9 +43,12 @@ if __name__ == "__main__":
     araound_data = pd.read_csv(selected_region_path,header=None,sep='\t').to_dict('record')
     #Read chromosome length file
     chrom_info = pd.read_csv(fai_path,header=None,sep='\t')
-    chrom_id = [chr_.replace('Chr','') for chr_ in chrom_info[0]]
+    #chrom_id = [chr_.replace('Chr','') for chr_ in chrom_info[0]]
+    chrom_id = chrom_info[0]
     chrom_length = chrom_info[1]
-    chrom_info = dict(zip(chrom_id,chrom_length))
+    chrom_info = {}
+    for id_,length in zip(chrom_id,chrom_length):
+        chrom_info[str(id_)] = length
     #Parse the bed file and convert its data to AnnSeqContainer
     parser_12 = BedInfoParser()
     parsed = parser_12.parse(data)

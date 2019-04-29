@@ -1,4 +1,4 @@
-script_root="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+script_root="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 selected_bed=${1%.*}
 unselected_bed=${2%.*}
 genome=$3
@@ -7,6 +7,7 @@ downstream_dist=$5
 saved_root=$6
 expand_path=$saved_root/region_upstream_${upstream_dist}_downstream_${downstream_dist}.bed
 saved_path=$saved_root/region_upstream_${upstream_dist}_downstream_${downstream_dist}_safe_zone.bed
+
 echo Expand around ${selected_bed}.bed
 bedtools slop -s -i ${selected_bed}.bed -g $genome -l $upstream_dist -r $downstream_dist > $expand_path
 #Output safe zone

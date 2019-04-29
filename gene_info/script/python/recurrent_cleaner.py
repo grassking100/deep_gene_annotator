@@ -5,6 +5,7 @@ import pandas as pd
 from argparse import ArgumentParser
 
 if __name__ == "__main__":
+    root_path = "/".join(sys.argv[0].split('/')[:-1])
     #Reading arguments
     parser = ArgumentParser()
     parser.add_argument("-s", "--saved_root",help="saved_root",required=True)
@@ -36,7 +37,7 @@ if __name__ == "__main__":
         left_bed = raw_bed[~raw_bed['id'].isin(want_id)]
         all_bed = pd.concat([coordinate_consist_bed,left_bed])
         want_bed_path = saved_root+'/want.bed'
-        unwant_bed_path = saved_root+'/unwant_bed.bed'
+        unwant_bed_path = saved_root+'/unwant.bed'
         saved_nums = []
         saved_num = -1
         index = 0
@@ -49,13 +50,16 @@ if __name__ == "__main__":
             if len(want_bed)==0:
                 break
             id_path = saved_root+'/region_upstream_'+str(upstream_dist)+'_downstream_'+\
-            str(downstream_dist)+'_safe_zone_id.txt'
-            command = "bash ./sequence_annotation/gene_info/script/bash/safe_filter.sh "+ want_bed_path+\
+            str(downstream_dist)+'_safe_zone_id'
+            command = "bash "+root_path+"/../bash/safe_filter.sh "+ want_bed_path+\
             " "+unwant_bed_path+" "+fai_path+" "+str(upstream_dist)+" "+str(downstream_dist)+" "+saved_root
             print("Execute command:"+command)
             os.system(command)
             #break
-            want_id = [id_ for id_ in open(id_path).read().split('\n')if id_ != '']
+            want_id = [id_ for id_ in open(id_path+'.txt').read().split('\n')if id_ != '']
+            with open(id_path+"_"+str(index)+'.txt',"w") as fp:
+                for id_ in want_id:
+                    fp.write(id_+"\n")
             num = len(want_id)
             print("Iter "+str(index)+" get number:"+str(num))
             saved_nums.append(num)
@@ -64,7 +68,7 @@ if __name__ == "__main__":
             else:
                 saved_num = num
                 want_bed_path = saved_root+'/want_iter_'+str(index)+'.bed'
-                unwant_bed_path = saved_root+'/unwan_iter_'+str(index)+'.bed'
+                unwant_bed_path = saved_root+'/unwant_iter_'+str(index)+'.bed'
 
         ###Write data###
         want_bed = coordinate_consist_bed[coordinate_consist_bed['id'].isin(want_id)]
