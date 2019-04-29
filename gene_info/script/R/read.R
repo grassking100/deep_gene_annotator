@@ -1,3 +1,4 @@
+print("Read")
 biomart_araport_11_gene_info <- read.csv('~/../home/io/Arabidopsis_thaliana/data/biomart_araport_11_gene_info_2018_11_27.csv',stringsAsFactors=F)
 biomart_araport_11_gene_info = biomart_araport_11_gene_info[c('Gene.stable.ID',
                                                               'Gene.start..bp.',
@@ -14,7 +15,7 @@ id_convert <- as.character(biomart_araport_11_gene_info$gene_id)
 names(id_convert) <- as.character(biomart_araport_11_gene_info$transcript_id)
 
 
-official_araport11_coding <-read_bed12('~/../home/io/Arabidopsis_thaliana/data/Araport11_protein_coding.201606.bed')
+official_araport11_coding <-read_bed12('~/../home/io/Arabidopsis_thaliana/data/Araport11_GFF3_genes_transposons.201606_coding_repair_2019_04_07.bed')
 
 official_araport11_coding$chr <- apply(official_araport11_coding,1,function(x) {substr(x['chr'],start=4,stop=nchar(x['chr']))})
 official_araport11_coding <- subset(official_araport11_coding,chr %in% as.character(1:5))
@@ -43,8 +44,8 @@ cleavage_site <- cleavage_site[,c('Chromosome','Strand','Position','Raw.DRS.read
 colnames(cleavage_site) <- c('chr','strand','position','read_count')
 cleavage_site$chr <- apply(cleavage_site,1,function(x) {substr(x['chr'],start=4,stop=nchar(x['chr']))})
 
-external_five_UTR <- read_bed('~/../home/io/Arabidopsis_thaliana/data/most_five_UTR.bed')
-external_three_UTR <- read_bed('~/../home/io/Arabidopsis_thaliana/data/most_three_UTR.bed')
+external_five_UTR <- read_bed('~/../home/io/Arabidopsis_thaliana/data/most_five_UTR_2019_04_28.bed')
+external_three_UTR <- read_bed('~/../home/io/Arabidopsis_thaliana/data/most_three_UTR_2019_04_28.bed')
 
 #external_five_UTR$chr <- apply(external_five_UTR,1,function(x) {substr(x['chr'],start=4,stop=nchar(x['chr']))})
 #external_three_UTR$chr <- apply(external_three_UTR,1,function(x) {substr(x['chr'],start=4,stop=nchar(x['chr']))})

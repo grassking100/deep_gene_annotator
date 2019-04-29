@@ -13,17 +13,26 @@ export_unwant_bed_path <- args[5]
 convert_want_id_to_gene_id <- as.logical(args[6])
 mRNA_bed <- read_bed(mRNA_bed_path)
 coordinate_consist_bed <- read_bed(coordinate_consist_bed)
-want_id <- read.table(want_id)$V1
+want_id <- read.table(want_id,stringsAsFactors=F)$V1
 if(convert_want_id_to_gene_id)
 {
     want_id <- unique(find_gene_id(want_id))
 }
-print(head(want_id))
-unwant_id <- valid_official_araport11_coding[!valid_official_araport11_coding$gene_id %in% want_id,]$gene_id
+
+all_transcript_ids <- mRNA_bed$id
+all_gene_ids <- find_gene_id(all_transcript_ids)
+unwant_transcript_id <- all_transcript_ids[!all_gene_ids %in% want_id]
+unwant_gene_id <- unique(find_gene_id(unwant_transcript_id))
+
+print(length(want_id))
+print(length(all_transcript_ids))
+print(length(unique(all_gene_ids)))
+print(length(unwant_transcript_id))
+print(length(unwant_gene_id))
 
 print("Get nonoverlap mRNA and unwant mRNA")
 want_bed = coordinate_consist_bed[find_gene_id(coordinate_consist_bed$id) %in% want_id,]
-unwant_bed = mRNA_bed[find_gene_id(mRNA_bed$id) %in% unwant_id,]
+unwant_bed = mRNA_bed[all_gene_ids %in% unwant_gene_id,]
 #Export file
 print("Export file")
 print(export_want_bed_path)
@@ -32,4 +41,3 @@ want_bed <- gff_to_bed(want_bed,'id',orf_start_convert,orf_end_convert)
 want_bed$group = find_gene_id(want_bed$id)
 write_bed(unique(want_bed[,1:6]),export_want_bed_path)
 write_bed(unwant_bed,export_unwant_bed_path)
-
