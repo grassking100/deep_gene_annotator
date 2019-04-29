@@ -108,9 +108,7 @@ class TrainWorker(PyWorker):
             pre_time = time.time()
             self.writer.counter = epoch
             for callback in all_callbacks:
-                if hasattr(callback,'counter'):
-                    callback.counter = epoch
-                callback.on_epoch_begin()
+                callback.on_epoch_begin(counter=epoch)
             for item in self._train_generator:
                 inputs, labels, extra = item
                 train_per_batch(self.model,inputs,labels,extra,

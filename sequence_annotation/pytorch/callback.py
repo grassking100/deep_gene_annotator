@@ -105,7 +105,7 @@ class Callback(metaclass=ABCMeta):
         pass
     def on_work_end(self):
         pass
-    def on_epoch_begin(self):
+    def on_epoch_begin(self,counter,**kwargs):
         pass
     def on_epoch_end(self,metric,**kwargs):
         pass
@@ -120,10 +120,11 @@ class GFFCompare(Callback):
         self._path = path
         self._simplify_map = simplify_map
         self._ann_types = ann_types
-        self.counter = 0
-    def on_epoch_begin(self):
+        self._counter = 0
+    def on_epoch_begin(self,counter,**kwargs):
         self._outputs = SeqInfoContainer()
         self._answers = SeqInfoContainer()
+        self._counter = counter
     def on_batch_end(self,index_outputs,labels,ids,lengths,**kwargs):
         C = len(self._ann_types)
         indice = list(range(C))
@@ -153,9 +154,9 @@ class EarlyStop(Callback):
         self.target = 'val_loss'
         self.optimize_min = True
         self.patient = 16
-        self.saved_best_weights = False
-        self.restored_best_weights = False
-        self.counter = 0
+        self.save_best_weights = False
+        self.restore_best_weights = False
+        self._counter = 0
         self.best_result = None
         self._best_epoch = 0
         self._model_weights = None
@@ -164,6 +165,9 @@ class EarlyStop(Callback):
     @property
     def best_epoch(self):
         return self._best_epoch
+        
+    def on_epoch_begin(self,counter,**kwargs):
+        self._counter = counter
 
     def on_epoch_end(self,metric,**kwargs):
         target = metric[self.target]
@@ -177,20 +181,20 @@ class EarlyStop(Callback):
             if self.best_result < target:
                 update = True
         if update:
-            if self.saved_best_weights:
+            if self.save_best_weights:
                 self._model_weights = self._worker.model.state_dict()
-            self.best_epoch = self.counter
+            self.best_epoch = self._counter
             self.best_result = target
-        if (self.counter-self.best_epoch)>=self.patient:
-            self.worker.is_running = False
+        if (self._counter-self.best_epoch) > self.patient:
+            self._worker.is_running = False
 
     def on_work_end(self):
         print("Best "+str(self.target)+": "+str(self.best_result))
-        if self.restored_best_weights:
+        if self.save_best_weights and self.restore_best_weights:
             self._worker.model.load_state_dict(self._model_weights)
 
     def on_work_begin(self, worker,**kwargs):
-        if self.saved_best_weights:
+        if self.save_best_weights:
             self._model_weights = worker.model.state_dict()
         self._worker = worker
 
@@ -199,10 +203,12 @@ class TensorboardCallback(Callback):
         self.tensorboard_writer = tensorboard_writer
         self._prefix = ""
         self._model = None
-        self.counter = 0
+        self._counter = 0
         self.do_add_grad = True
         self.do_add_weights = True
         self.do_add_scalar = True
+    def on_epoch_begin(self,counter,**kwargs):
+        self._counter = counter
     @property
     def prefix(self):
         return self._prefix
@@ -216,15 +222,15 @@ class TensorboardCallback(Callback):
         
     def on_epoch_end(self,metric,**kwargs):
         if self.do_add_grad:
-            self.tensorboard_writer.add_grad(counter=self.counter,
+            self.tensorboard_writer.add_grad(counter=self._counter,
                                              named_parameters=self._model.named_parameters(),
                                              prefix=self.prefix)
         if self.do_add_weights:
-            self.tensorboard_writer.add_weights(counter=self.counter,
+            self.tensorboard_writer.add_weights(counter=self._counter,
                                                 named_parameters=self._model.named_parameters(),
                                                 prefix=self.prefix)
         if self.do_add_scalar:
-            self.tensorboard_writer.add_scalar(counter=self.counter,record=metric,
+            self.tensorboard_writer.add_scalar(counter=self._counter,record=metric,
                                                prefix=self.prefix)
     def on_work_begin(self,worker,**kwargs):
         self._model = worker.model
@@ -237,9 +243,11 @@ class SeqFigCallback(Callback):
         self.train = False
         self._model = None
         self.class_names = None
-        self.counter = 0
+        self._counter = 0
         self.colors = None
         self._prefix = ""
+    def on_epoch_begin(self,counter,**kwargs):
+        self._counter = counter
     @property
     def prefix(self):
         return self._prefix
@@ -264,11 +272,11 @@ class SeqFigCallback(Callback):
         self._model(self._data,lengths=lengths,return_values=True)
         for name,value in self._model.saved_distribution.items():
             self._writer.add_distribution(name,value,prefix=self._prefix,
-                                          counter=self.counter)
+                                          counter=self._counter)
             if len(value.shape)==3:
                 value = value[0]
             self._writer.add_figure(name+"_figure",value.transpose(0,1),prefix=self._prefix,
-                                    counter=self.counter,title=name)
+                                    counter=self._counter,title=name)
         with torch.no_grad():    
             result = self._model.saved_index_outputs[0].cpu().numpy()
         class_num = self._model.out_channels
@@ -335,7 +343,7 @@ class Accumulator(DataCallback):
         self._data = 0
         self._batch_count = 0
 
-    def on_epoch_begin(self):
+    def on_epoch_begin(self,**kwargs):
         self._reset()
 
     def on_batch_end(self,metric,**kwargs):
@@ -369,7 +377,7 @@ class CategoricalMetric(DataCallback):
         else:
             raise Exception('The number of class\'s name is not the same with class\' number')
         
-    def on_batch_begin(self):
+    def on_batch_begin(self,**kwargs):
         self._reset()
     def on_batch_end(self,index_outputs,labels,**kwargs):
         #N,L or N,C,L

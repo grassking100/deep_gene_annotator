@@ -18,8 +18,7 @@ if __name__ == "__main__":
     saved_root = args['saved_root']
     safe_merged_gro_sites_path = args['safe_merged_gro_sites_path']
     safe_merged_cleavage_sites_path = args['safe_merged_cleavage_sites_path']
-    clean_merged_data_path = saved_root+'/clean_merged_data.tsv'
-    consist_data_path = saved_root+'/coordinate_consist.tsv'
+    consist_data_path = saved_root+'/consist_data.tsv
     if os.path.exists(consist_data_path):
         print("Result files are already exist,procedure will be skipped.")
     else:
@@ -34,9 +33,9 @@ if __name__ == "__main__":
         clean_merged_data['coordinate_end'] =  clean_merged_data[['evidence_5_end','evidence_3_end']].max(1)
         clean_merged_data.to_csv(clean_merged_data_path,index=None,sep='\t')
         print('Consist data with gene id')
-        consist_data = consist(clean_merged_data,'gene_id','tag_count',False)
-        consist_data = consist(consist_data,'gene_id','read_count',False)
-        consist_data = coordinate_consist_filter(consist_data,'gene_id','coordinate_start')
-        consist_data = coordinate_consist_filter(consist_data,'gene_id','coordinate_end')
+        clean_merged_data_by_id = consist(clean_merged_data,'gene_id','tag_count',False)
+        clean_merged_data_by_id = consist(clean_merged_data_by_id,'gene_id','read_count',False)
+        consist_data = coordinate_consist_filter(clean_merged_data_by_id,'gene_id','coordinate_start')
+        consist_data = coordinate_consist_filter(clean_merged_data_by_id,'gene_id','coordinate_end')
         consist_data = consist_data[['ref_name','coordinate_start','coordinate_end']]
         consist_data.to_csv(consist_data_path,index=None,sep='\t')

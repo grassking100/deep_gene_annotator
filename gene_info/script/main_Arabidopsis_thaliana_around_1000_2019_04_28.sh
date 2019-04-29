@@ -1,5 +1,5 @@
 #!/bin/bash
-folder_name=python
+folder_name=2019_04_28
 upstream_dist=1000
 downstream_dist=500
 tolerate_dist=20
@@ -36,9 +36,9 @@ python3 $script_root/python/preprocess_raw_data.py --saved_root $saved_root --be
 
 python3 $script_root/python/get_most_UTR.py -b $saved_root/valid_official_coding.bed -s $saved_root
 
-python3 $script_root/python/classify_sites.py -o $saved_root/valid_official_coding.bed  -g $saved_root/valid_gro.tsv -c $saved_root/valid_cleavage_site.tsv  -f $root/most_five_UTR.tsv -t $root/most_three_UTR.tsv \
--s $saved_root -u $upstream_dist -d $downstream_dist -p $tolerate_dist \
--f $saved_root/most_five_UTR.tsv -t $saved_root/most_three_UTR.tsv 
+python3 $script_root/python/classify_sites.py -o $saved_root/valid_official_coding.bed  -g $saved_root/valid_gro.tsv -c $saved_root/valid_cleavage_site.tsv -s $saved_root -u $upstream_dist -d $downstream_dist -p $tolerate_dist \
+-f $saved_root/most_five_UTR.tsv -t $saved_root/most_three_UTR.tsv \
+
 python3 $script_root/python/consist_sites.py --dist_gro_sites $saved_root/dist_gro_sites.tsv \
 --dist_cleavage_sites $saved_root/dist_cleavage_sites.tsv --inner_gro_sites $saved_root/inner_gro_sites.tsv \
 --inner_cleavage_sites $saved_root/inner_cleavage_sites.tsv --long_dist_gro_sites $saved_root/long_dist_gro_sites.tsv \
@@ -47,7 +47,7 @@ python3 $script_root/python/consist_sites.py --dist_gro_sites $saved_root/dist_g
 
 #Write to coordinate_consist.bed
 python3 $script_root/python/create_coordinate_data.py -s $saved_root -g $saved_root/safe_merged_gro_sites.tsv -c $saved_root/safe_merged_cleavage_sites.tsv
-python3 $script_root/python/create_coordinate_bed.py -s $saved_root -c $saved_root/coordinate_consist.tsv \
+python3 $script_root/python/create_coordinate_bed.py -s $saved_root -c $saved_root/consist_data.tsv \
 -o $saved_root/valid_official_coding.bed -i $id_convert
 #Remove overlap gene
 python3 $script_root/python/nonoverlap_filter.py -c $saved_root/coordinate_consist.bed -i $id_convert -s $separate_path
@@ -61,6 +61,6 @@ python3 $script_root/python/get_around_fasta.py -b $separate_path/recurrent_clea
 -o $downstream_dist -t $TSS_radius -d $donor_radius -a $accept_radius -c $cleavage_radius -s $fasta_root -g $genome_file
 cp $fasta_root/$result_merged.bed $result_path/$result_merged.bed
 
-#python3 $script_root/python/create_ann_region.py -m $result_path/result.bed -r $result_path/$result_merged.bed \
-#-f $fai -s $folder_name -o $result_path/$result_merged.h5 --saved_root $result_path
+python3 $script_root/python/create_ann_region.py -m $result_path/result.bed -r $result_path/$result_merged.bed \
+-f $fai -s $folder_name -o $result_path/$result_merged.h5 --saved_root $result_path
 echo "End of program"

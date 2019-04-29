@@ -25,7 +25,6 @@ if __name__ == "__main__":
     gro_2_path = args['gro_2_path']
     cs_path = args['cs_path']
     saved_root = args['saved_root']
-    #valid_official_coding_path = saved_root+'/valid_official_coding.tsv'
     valid_official_coding_bed_path = saved_root+'/valid_official_coding.bed'
     valid_gro_path = saved_root+'/valid_gro.tsv'
     valid_cleavage_site_path = saved_root+'/valid_cleavage_site.tsv'

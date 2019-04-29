@@ -51,7 +51,6 @@ consist <- function(data,by,ref_value,remove_duplicate=T){
     for(chr_ in chrs){
       subdata <- subset(data,chr==chr_ & strand==strand_)
       consist_data = consist_(subdata,by,ref_value,remove_duplicate)
-
       if(!is.data.frame(return_data) )
       {
         return_data <- consist_data
