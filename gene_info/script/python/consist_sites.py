@@ -1,6 +1,6 @@
 import os, sys
 sys.path.append(os.path.dirname(__file__))
-from utils import consist, get_id_table
+from utils import consist
 import pandas as pd
 from argparse import ArgumentParser
 def get_gene_names(df,name,convert_table):
@@ -28,7 +28,6 @@ if __name__ == "__main__":
                         help="orf_inner_cleavage_sites_path",required=True)
     parser.add_argument("-s", "--saved_root",
                         help="saved_root",required=True)
-    parser.add_argument("--id_convert_path",help="id_convert_path",required=True)
     args = vars(parser.parse_args())
     dist_gro_sites_path = args['dist_gro_sites_path']
     dist_cleavage_sites_path = args['dist_cleavage_sites_path']
@@ -39,9 +38,6 @@ if __name__ == "__main__":
     orf_inner_gro_sites_path = args['orf_inner_gro_sites_path']
     orf_inner_cleavage_sites_path = args['orf_inner_cleavage_sites_path']
     saved_root = args['saved_root']
-    id_convert_path = args['id_convert_path']
-    id_convert = pd.read_csv(id_convert_path,sep='\t',index_col=0).to_dict()['gene_id']
-    id_convert = get_id_table(id_convert_path)
     safe_merged_gro_sites_path = saved_root+'/safe_merged_gro_sites'+'.tsv'
     safe_merged_cleavage_sites_path = saved_root+'/safe_merged_cleavage_sites.tsv'
     print('Left only most significant signals')
@@ -74,13 +70,8 @@ if __name__ == "__main__":
         merged_cleavage_sites = consist(merged_cleavage_sites_,'ref_name','read_count',True)
         ###Clean data without invalid sites###
         print('Clean and export data')
-        long_dist_gro_site_id = set(long_dist_gro_sites['gene_id'])
-        
-        safe_merged_gro_site = merged_gro_sites[merged_gro_sites['gro_source'].isin(['dist','inner']) & (~merged_gro_sites['gene_id'].isin(long_dist_gro_site_id))]
-        
-        long_dist_cleavage_site_id = set(long_dist_cleavage_sites['gene_id'])
-        safe_merged_cleavage_sites = merged_cleavage_sites[merged_cleavage_sites['cleavage_source'].isin(['dist','inner'])& (~merged_cleavage_sites['gene_id'].isin(long_dist_cleavage_site_id))]
+        safe_merged_gro_site = merged_gro_sites[merged_gro_sites['gro_source'].isin(['dist','inner'])]        
+        safe_merged_cleavage_sites = merged_cleavage_sites[merged_cleavage_sites['cleavage_source'].isin(['dist','inner'])]
         ###Write data###
-
         safe_merged_gro_site.to_csv(safe_merged_gro_sites_path,sep='\t',index=False)
         safe_merged_cleavage_sites.to_csv(safe_merged_cleavage_sites_path,sep='\t',index=False)

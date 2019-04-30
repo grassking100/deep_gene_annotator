@@ -21,7 +21,7 @@ mkdir -p $fasta_root
 #Set parameter
 fai=$root/araport_11_Arabidopsis_thaliana_Col-0_rename.fasta.fai
 genome_file=$root/araport_11_Arabidopsis_thaliana_Col-0_rename.fasta
-script_root="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+script_root="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 bed_target_path=$root/Araport11_GFF3_genes_transposons.201606_coding_repair_2019_04_07.bed
 id_convert=$saved_root/id_convert.tsv
 biomart_path=$root/biomart_araport_11_gene_info_2018_11_27.csv
@@ -43,10 +43,10 @@ python3 $script_root/python/consist_sites.py --dist_gro_sites $saved_root/dist_g
 --dist_cleavage_sites $saved_root/dist_cleavage_sites.tsv --inner_gro_sites $saved_root/inner_gro_sites.tsv \
 --inner_cleavage_sites $saved_root/inner_cleavage_sites.tsv --long_dist_gro_sites $saved_root/long_dist_gro_sites.tsv \
 --long_dist_cleavage_sites $saved_root/long_dist_cleavage_sites.tsv --orf_inner_gro_sites_path $saved_root/orf_inner_gro_sites.tsv \
---orf_inner_cleavage_sites_path $saved_root/orf_inner_cleavage_sites.tsv -s $saved_root --id_convert_path $id_convert
+--orf_inner_cleavage_sites_path $saved_root/orf_inner_cleavage_sites.tsv -s $saved_root
 
 #Write to coordinate_consist.bed
-python3 $script_root/python/create_coordinate_data.py -s $saved_root -g $saved_root/safe_merged_gro_sites.tsv -c $saved_root/safe_merged_cleavage_sites.tsv
+python3 $script_root/python/create_coordinate_data.py -s $saved_root -g $saved_root/safe_merged_gro_sites.tsv -c $saved_root/safe_merged_cleavage_sites.tsv -i $id_convert
 python3 $script_root/python/create_coordinate_bed.py -s $saved_root -c $saved_root/consist_data.tsv \
 -o $saved_root/valid_official_coding.bed -i $id_convert
 #Remove overlap gene

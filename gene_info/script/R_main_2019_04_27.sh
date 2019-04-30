@@ -6,8 +6,20 @@ coordinate_consist=coordinate_consist
 raw_mRNA=filtered_coding_gene.bed
 exon_file=~/../home/io/Arabidopsis_thaliana/data/Araport11_coding_exon_2019_04_07
 
+#Read library
+Rscript --save script/R/utils.R
+Rscript --save --restore script/R/gff.R
+Rscript --save --restore script/R/belong_finder.R
+Rscript --save --restore script/R/merge_and_clean.R
+#Read and run
+Rscript --save --restore script/R/read.R
+Rscript --save --restore script/R/coding_bed_process.R
+Rscript --save --restore script/R/belong_by_dist.R
+Rscript --save --restore script/R/belong_by_boundary.R
+Rscript --save --restore script/R/clean.R
+Rscript --save --restore script/R/merge.R
+Rscript --save --restore script/R/consist.R
 mkdir data
-
 Rscript --save --restore script/R/bed_repair.R $raw_mRNA ${coordinate_consist}.bed all_coding_mRNA.bed
 bash script/bash/nonoverlap_filter.sh ${coordinate_consist_with_gene_id}.bed
 
