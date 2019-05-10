@@ -9,7 +9,7 @@ if __name__ == "__main__":
     #Reading arguments
     parser = ArgumentParser()
     parser.add_argument("-s", "--saved_root",help="saved_root",required=True)
-    parser.add_argument("-i", "--id_convert_path",help="id_convert_path",required=True)
+    parser.add_argument("-i", "--id_convert_path",help="id_convert_path",required=False)
     parser.add_argument("-r", "--raw_bed_path",help="raw_bed_path",required=True)
     parser.add_argument("-c", "--coordinate_consist_bed_path",help="coordinate_consist_bed_path",required=True)
     parser.add_argument("-f", "--fai_path",help="fai_path",required=True)
@@ -28,7 +28,9 @@ if __name__ == "__main__":
         print("Result files are already exist, procedure will be skipped.")
     else:
         ###Read data###
-        id_convert = get_id_table(id_convert_path)
+        id_convert = None
+        if id_convert_path is not None:
+            id_convert = get_id_table(id_convert_path)
         raw_bed = read_bed(raw_bed_path)
         coordinate_consist_bed = read_bed(coordinate_consist_bed_path)
         raw_bed['chr'] = raw_bed['chr'].str.replace('Chr', '')

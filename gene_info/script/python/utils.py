@@ -2,6 +2,20 @@ import pandas as pd
 
 BED_COLUMNS = ['chr','start','end','id','score','strand','orf_start','orf_end','rgb','count','block_size','block_related_start']
 
+def unique_site(data,by,ref_value):
+    returned = []
+    ref_names = set(data[by])
+    ref_names = [name for name in ref_names if str(name)!='nan']
+    sectors = data.groupby(by)
+    for name in ref_names:
+        sector = sectors.get_group(name)
+        value = list(sector[ref_value])
+        if len(set(value)) == 1:
+            sector = sector.to_dict('record')
+            returned.append(sector[0])
+    df = pd.DataFrame.from_dict(returned)       
+    return df
+
 def consist_(data,by,ref_value,drop_duplicated):
     #data.reset_index(inplace=True)
     returned = []
@@ -143,12 +157,13 @@ def belong_by_distance(exp_sites,ref_sites,five_dist,three_dist,exp_site_name,re
     return  df
 
 def get_id_table(path):
-    id_convert = pd.read_csv(path,sep='\t',index_col=0).to_dict()['gene_id']
-    return id_convert
+    id_convert = pd.read_csv(path,sep='\t').to_dict('list')
+    table = {}
+    for g_id,t_id in zip(id_convert['gene_id'],id_convert['transcript_id']):
+        table[t_id] = g_id
+    return table
 
 def get_bed_most_UTR(bed):
-    bed.loc[:,'start'] += 1
-    bed.loc[:,'orf_start'] += 1
     most_UTR_site = []
     for item in bed.to_dict('record'):
         exon_starts = []
@@ -202,17 +217,17 @@ def classify_data_by_id(all_bed,selected_ids,id_convert=None):
         want_id = id_info[id_info['status']=='want']['ref_id']
         unwant_id = id_info[id_info['status']=='unwant']['ref_id']
     else:
-        id_info = pd.DataFrame(all_ids,columns=['gene_id'])
-        want_status = id_info['gene_id'].isin(selected_ids)
-        want_id = id_info[want_status,'gene_id']
-        unwant_id = id_info[~want_status,'gene_id']
+        id_info = pd.DataFrame(all_ids,columns=['id'])
+        want_status = id_info['id'].isin(selected_ids)
+        want_id = id_info[want_status]['id']
+        unwant_id = id_info[~want_status]['id']
     want_bed = all_bed[all_bed['id'].isin(want_id)]
     unwant_bed = all_bed[all_bed['id'].isin(unwant_id)]
     return want_bed, unwant_bed
 
 def create_coordinate_bed(consist_data,valid_official_gene_info):
     coordinate_consist_data = valid_official_gene_info.merge(consist_data,left_on='id', right_on='ref_name')
-    coordinate_consist_data['start_diff'] = coordinate_consist_data['coordinate_start'] - (coordinate_consist_data['start']+1)
+    coordinate_consist_data['start_diff'] = coordinate_consist_data['coordinate_start'] - coordinate_consist_data['start']
     coordinate_consist_data['end_diff'] = coordinate_consist_data['coordinate_end'] - coordinate_consist_data['end']
     new_data = []
     for item in coordinate_consist_data.to_dict('record'):
@@ -227,41 +242,39 @@ def create_coordinate_bed(consist_data,valid_official_gene_info):
         block_size[-1] += end_diff
         for val in block_related_start:
             if val<0:
-                raise Exception(item['ref_name']+" has negative relative start site")
+                raise Exception(item['ref_name']+" has negative relative start site,"+str(val))
         for val in block_size:
             if val<=0:
-                raise Exception(item['ref_name']+" has nonpositive size")
+                raise Exception(item['ref_name']+" has nonpositive size,"+str(val))
         temp = dict(item)
         temp['block_related_start'] = ','.join(str(c) for c in block_related_start)
         temp['block_size'] = ','.join(str(c) for c in block_size)
-        temp['start'] = item['coordinate_start'] - 1
-        temp['orf_start'] = item['orf_start'] - 1
-        temp['end'] = item['coordinate_end']
+        temp['start'] = temp['coordinate_start']
+        temp['end'] = temp['coordinate_end']
         new_data.append(temp)
     return pd.DataFrame.from_dict(new_data)
 
-def read_bed(path,mark_with_one_based_sites=False):
+def read_bed(path):
     #Read bed data into pandas DataFrame format
     bed = pd.read_csv(path,sep='\t',header=None)
     bed.columns = BED_COLUMNS[:len(bed.columns)]
     data = []
-    if mark_with_one_based_sites:
-        for item in bed.to_dict('record'):
-            temp = dict(item)
-            if temp['strand']=='+':
-                temp['five_end'] = temp['start'] + 1
-                temp['three_end'] = temp['end']
-            else:
-                temp['five_end'] = temp['end']
-                temp['three_end'] = temp['start'] + 1
-            data.append(temp)
-        df = pd.DataFrame.from_dict(data)
-    else:
-        df = bed
+    for item in bed.to_dict('record'):
+        temp = dict(item)
+        if temp['strand'] == '+':
+            temp['five_end'] = temp['start'] + 1
+            temp['three_end'] = temp['end']
+        else:
+            temp['five_end'] = temp['end']
+            temp['three_end'] = temp['start'] + 1
+        data.append(temp)
+    df = pd.DataFrame.from_dict(data)
     df = df.astype(str)
     for name in ['start','end','orf_start','orf_end','count']:
         if name in df.columns:
             df[name] = df[name].astype(float).astype(int)
+            if name in ['start','orf_start']:
+                df[name] = df[name] + 1
     return df
 
 def write_bed(bed,path):
@@ -270,6 +283,8 @@ def write_bed(bed,path):
     for name in ['start','end','orf_start','orf_end','count']:
         if name in bed.columns:
             bed[name] = bed[name].astype(float).astype(int)
+            if name in ['start','orf_start']:
+                bed[name] = bed[name] - 1
     bed.to_csv(path,sep='\t',index=None,header=None)
 
 def simply_coord(bed):
@@ -279,10 +294,11 @@ def simply_coord(bed):
     bed = bed.drop_duplicates()
     return bed
 
-def simply_coord_with_gene_id(bed,id_convert):
+def simply_coord_with_gene_id(bed,id_convert=None):
     bed = bed[BED_COLUMNS[:6]]
-    gene_ids = [id_convert[id_] for id_ in bed['id']]
-    bed = bed.assign(id=pd.Series(gene_ids).values)
+    if id_convert is not None:
+        gene_ids = [id_convert[id_] for id_ in bed['id']]
+        bed = bed.assign(id=pd.Series(gene_ids).values)
     bed['score'] = '.'
     bed = bed.drop_duplicates()
     return bed
@@ -302,3 +318,31 @@ def merge_bed_by_coord(bed):
         item['id'] = new_id
         data+=[item]
     return pd.DataFrame.from_dict(data)
+
+def get_df_with_seq_id(df):
+    df_dict = df.to_dict('record')
+    data = []
+    for item in df_dict:
+        ids = item[8].split(';')
+        type_ = item[2]
+        item_id = ""
+        item_name = ""
+        item_parent = ""
+        for id_ in ids:
+            if id_.startswith("Parent"):
+                item_parent = id_[7:]
+            if id_.startswith("ID"):
+                item_id = id_[3:]
+            if id_.startswith("Name"):
+                item_name = id_[5:]
+        item_parent = item_parent.split(",")
+        item_id = item_id.split(",")
+        for parent in item_parent:
+            for id_ in item_id:
+                copied = dict(item)
+                copied['id'] = id_
+                copied['parent'] = parent
+                copied['name'] = item_name
+                data.append(copied)
+    df = pd.DataFrame.from_dict(data)
+    return df

@@ -1,6 +1,6 @@
 import os, sys
 sys.path.append(os.path.dirname(__file__))
-from utils import get_bed_most_UTR,read_bed
+from utils import get_bed_most_UTR,read_bed,write_bed
 import pandas as pd
 from argparse import ArgumentParser
 if __name__ == "__main__":
@@ -24,11 +24,7 @@ if __name__ == "__main__":
         three_most_utr = utr_bed[utr_bed['type']=='three_most_utr']
         five_most_utr.to_csv(saved_root+"/most_five_UTR.tsv",sep='\t',index=None)
         three_most_utr.to_csv(saved_root+"/most_three_UTR.tsv",sep='\t',index=None)
-        
         five_most_utr_bed = five_most_utr[['chr','start','end','id','score','strand']].copy()
         three_most_utr_bed = three_most_utr[['chr','start','end','id','score','strand']].copy()
-        five_most_utr_bed['start'] = five_most_utr_bed['start'] - 1
-        three_most_utr_bed['start'] = three_most_utr_bed['start'] - 1
-        five_most_utr_bed.to_csv(saved_root+"/most_five_UTR.bed",sep='\t',index=None,header=None)
-        three_most_utr_bed.to_csv(saved_root+"/most_three_UTR.bed",sep='\t',index=None,header=None)
-        
+        write_bed(five_most_utr_bed,saved_root+"/most_five_UTR.bed")
+        write_bed(three_most_utr_bed,saved_root+"/most_three_UTR.bed")

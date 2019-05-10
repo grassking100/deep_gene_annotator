@@ -11,42 +11,10 @@ from ..genome_handler import ann_genome_processor,ann_seq_processor
 from ..utils.exception import LengthNotEqualException,DimensionNotSatisfy
 from ..utils.utils import create_folder,get_subdict
 
-class DataProcessor(metaclass=ABCMeta):
-    @abstractmethod
-    def __init__(self,data):
-        pass
-    @abstractmethod
-    def process(self):
-        pass
-    @property
-    def data(self):
-        return self._data
-    def before_process(self,path=None):
-        pass
-    def after_process(self,path=None):
-        pass
-
-class SimpleData(DataProcessor):
-    def __init__(self,data):
-        self._data = data
-        self._settings = {}
-    def process(self):
-        pass
-    def before_process(self,path=None):
-        if path is not None:
-            json_path = path + "/data_setting.json"
-            with open(json_path,'w') as fp:
-                try:
-                    json.dump(self._settings,fp)
-                except TypeError:
-                     fp.write(str(self._settings))
-
-class AnnSeqData(SimpleData):
+class AnnSeqProcessor:
     def __init__(self,data,padding=None,seq_converter=None,answer_by_index=False,
                  discard_invalid_seq=False,validation_split=0):
-        super().__init__(data)
-        self._settings.update(locals())
-        del self._settings['data']
+        self._data = data
         if 'training' in data.keys():
             self._ann_types = data['training']['answers'].ANN_TYPES
         else:
@@ -154,3 +122,4 @@ class AnnSeqData(SimpleData):
                 self._data[purpose] = self._pad(self._data[purpose])
             self._data[purpose] = self._handle_extra(self._data[purpose])
             self._validate(self._data[purpose])
+        return self._data

@@ -3,6 +3,7 @@ import random
 from .sequence import SeqInformation
 from .seq_container import SeqInfoContainer
 from ..utils.exception import NegativeNumberException
+
 class SeqInfoGenerator:
     """Extract selected regions' annotation information"""
     def __init__(self):

@@ -1,11 +1,9 @@
-from ..process.compiler import Compiler
 from .customize_layer import SeqAnnLoss
 import torch
 import json
 
-class SeqAnnCompiler(Compiler):
+class ModelExecutor:
     def __init__(self):
-        self._settings = {}
         self.loss = SeqAnnLoss()
         self.optimizer_settings = {}
         self.grad_clip = None
@@ -37,14 +35,3 @@ class SeqAnnCompiler(Compiler):
             self.loss.transitions = model.CRF.transitions
         if self.optimizer_class is not None:
             self._optimizer = self.optimizer_class(model.parameters(),**self.optimizer_settings)
-
-    def before_process(self,path=None):
-        if path is not None:
-            json_path = path + "/compiler_setting.json"
-            for key in ['optimizer_class','optimizer_settings','grad_clip','grad_norm']:
-                self._settings[key] = getattr(self,key)
-            with open(json_path,'w') as fp:
-                try:
-                    json.dump(self._settings,fp)
-                except TypeError:
-                     fp.write(str(self._settings))

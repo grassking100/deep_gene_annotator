@@ -7,13 +7,13 @@ import numpy as np
 import time
 import json
 
-def train_per_batch(model,inputs,labels,extra,compiler,callbacks):
+def train_per_batch(model,inputs,labels,extra,executor,callbacks):
     for callback in callbacks:
         callback.on_batch_begin()
     torch.cuda.empty_cache()
     inputs = torch.from_numpy(inputs).float().cuda()
     labels = torch.from_numpy(labels).long().cuda()
-    loss_ = compiler.fit(model,inputs,labels,**extra)
+    loss_ = executor.fit(model,inputs,labels,**extra)
     for callback in callbacks:
         callback.on_batch_end(outputs=model.saved_outputs,
                               index_outputs=model.saved_index_outputs,
@@ -23,13 +23,13 @@ def train_per_batch(model,inputs,labels,extra,compiler,callbacks):
                               ids=extra['ids'],
                               parmeters=model.named_parameters())
 
-def evaluate_per_batch(model,inputs,labels,extra,compiler,callbacks):
+def evaluate_per_batch(model,inputs,labels,extra,executor,callbacks):
     for callback in callbacks:
         callback.on_batch_begin()
     torch.cuda.empty_cache()
     inputs = torch.from_numpy(inputs).float().cuda()
     labels = torch.from_numpy(labels).long().cuda()
-    loss_ = compiler.evaluate(model,inputs,labels,**extra)
+    loss_ = executor.evaluate(model,inputs,labels,**extra)
     for callback in callbacks:
         callback.on_batch_end(outputs=model.saved_outputs,
                               index_outputs=model.saved_index_outputs,
@@ -40,23 +40,21 @@ def evaluate_per_batch(model,inputs,labels,extra,compiler,callbacks):
                               parmeters=model.named_parameters())
 
 class PyWorker(Worker):
-    def __init__(self):
+    def __init__(self,model_executor=None):
         super().__init__()
         self._settings = locals()
         self._data = {}
-        
+        self.executor = model_executor or ModelExecutor()
     def _validate(self):
         """Validate required data"""
         super()._validate()
-        if self.compiler is None:
-            raise Exception("Compiler must be setted")
 
 class TrainWorker(PyWorker):
     """a worker which will train and evaluate the model"""
-    def __init__(self,train_generator=None,val_generator=None):
-        super().__init__()
-        self._train_generator = train_generator
-        self._val_generator = val_generator
+    def __init__(self,train_generator=None,val_generator=None,model_executor=None):
+        super().__init__(model_executor=model_executor)
+        self._train_generator = train_generator or DataGenerator()
+        self._val_generator = val_generator or DataGenerator()
         self.train_callbacks = []
         self.val_callbacks = []
         self.other_callbacks = []
@@ -64,10 +62,6 @@ class TrainWorker(PyWorker):
         self.epoch_start = 0
         self.epoch_num = 1
         self.is_running = True
-        if self._train_generator is None:
-            self._train_generator = DataGenerator()
-        if self._train_generator is None:
-            self._val_generator = DataGenerator()
 
     def before_work(self,path=None):
         self._train_generator.x_data = self.data['training']['inputs']
@@ -97,9 +91,11 @@ class TrainWorker(PyWorker):
                      fp.write(str(self._settings))
             self._recoder = Recorder()
             self._recoder.path=record_saved_path
+
     def work(self):
         """Train model"""
         self._validate()
+        self.executor.process()
         callbacks = self.train_callbacks+self.val_callbacks + self.other_callbacks
         all_callbacks = callbacks + [self._recoder]
         for callback in all_callbacks:
@@ -112,11 +108,11 @@ class TrainWorker(PyWorker):
             for item in self._train_generator:
                 inputs, labels, extra = item
                 train_per_batch(self.model,inputs,labels,extra,
-                                self.compiler,self.train_callbacks)
+                                self.executor,self.train_callbacks)
             for item in self._val_generator:
                 inputs, labels, extra = item
                 evaluate_per_batch(self.model,inputs,labels,extra,
-                                   self.compiler,self.val_callbacks)
+                                   self.executor,self.val_callbacks)
             record = {}
             for callback in callbacks:
                 if hasattr(callback,'data'):
@@ -166,9 +162,11 @@ class TestWorker(PyWorker):
                      fp.write(str(self._settings))
         self._recoder = Recorder()
         self._recoder.path=record_saved_path
+
     def work(self):
         """Test model"""
         self._validate()
+        self.executor.process()
         callbacks = self.callbacks + [self._recoder]
         for callback in callbacks:
             callback.on_work_begin(model=self.model)
@@ -178,7 +176,7 @@ class TestWorker(PyWorker):
         for item in self._generator:
             inputs, labels, extra = item
             evaluate_per_batch(self.model,inputs,labels,extra,
-                               self.compiler,self.callbacks)
+                               self.executor,self.callbacks)
         for callback in self.callbacks:
             if hasattr(callback,'data'):
                 for type_,value in callback.data.items():

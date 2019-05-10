@@ -44,7 +44,6 @@ if __name__ == "__main__":
         gro_2 = pd.read_csv(gro_2_path,comment ='#',sep='\t')
         cleavage_site = pd.read_csv(cs_path)
         valid_chrs = [str(chr_) for chr_ in range(1,6)]
-
         ###Process araport_11_gene_info###
         biomart_coding = biomart_gene_info[biomart_gene_info['transcript_type']=='protein_coding']
         official_coding_bed['chr'] = official_coding_bed['chr'].str.replace('Chr','')
@@ -65,7 +64,7 @@ if __name__ == "__main__":
         gro = gro_1.merge(gro_2,left_on=gro_columns,right_on=gro_columns)
         valid_gro = gro[gro['chr'].isin(valid_chrs)]
         valid_gro.columns = ['chr','strand','tag_count','start','end']
-        evidence_5_end = round((valid_gro['end']+ valid_gro['start'])/2)    
+        evidence_5_end = round((valid_gro['end']+ valid_gro['start'])/2)
         valid_gro = valid_gro.assign(evidence_5_end=pd.Series(evidence_5_end).values)
         ###Process cleavage sites data###
         cleavage_site = cleavage_site[['Chromosome','Strand','Position','Raw DRS read count']]

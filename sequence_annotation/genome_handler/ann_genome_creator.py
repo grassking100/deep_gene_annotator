@@ -41,14 +41,14 @@ class AnnChromCreator:
             one_strand_chrom = chrom.get(str(ann_seq.chromosome_id)+"_"+ann_seq.strand)
             self._add_seq(one_strand_chrom,ann_seq,source)
     def _add_seq(self,one_strand_chrom,ann_seq,source):
-        txStart = ann_seq.absolute_index
-        txEnd = ann_seq.absolute_index+ann_seq.length - 1
-        gene_start_index = txStart
-        gene_end_index = txEnd
         """
             Coordinate will be 5' to 3' of plus strand 
             on both PLUS and MINUS strand
         """
+        txStart = ann_seq.absolute_index
+        txEnd = ann_seq.absolute_index+ann_seq.length - 1
+        gene_start_index = txStart
+        gene_end_index = txEnd
         ann_seq.source = source
         for type_ in ann_seq.ANN_TYPES:
             seq = ann_seq.get_ann(type_)

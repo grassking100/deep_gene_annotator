@@ -110,7 +110,6 @@ class AnnSequence(Sequence):
         self._ANN_TYPES = None
         self._length = None
         self._data = {}
-        self._use_memmap = False
         self._absolute_index = None
         self.processed_status = None
         super().__init__()
@@ -181,19 +180,13 @@ class AnnSequence(Sequence):
     @property
     def has_space(self):
         return self._has_space
-    def init_space(self, memmap_id=None,dtype='float32'):
-        self._use_memmap = (memmap_id is not None)
+    def init_space(self, dtype='float32'):
         self._data = {}
         self._validate()
         self.processed_status = None
         self._has_space = True
         for ann_type in self.ANN_TYPES:
-            if self._use_memmap:
-                filename = path.join(mkdtemp(),str(memmap_id))
-                self._data[ann_type] = np.memmap(filename, dtype='float32',
-                                                 mode='w+',shape=(self._length))
-            else:
-                self._data[ann_type] = np.array([0.0]*self._length,dtype=dtype)
+            self._data[ann_type] = np.array([0.0]*self._length,dtype=dtype)
         return self
     def _validate_input_index(self, start_index, end_index):
         if start_index < 0:
@@ -247,8 +240,6 @@ class AnnSequence(Sequence):
         self._validate_input_ann_type(ann_type)
         self._validate_input_index(start_index, end_index)
         self._data[ann_type][start_index : end_index+1] = value
-        if self._use_memmap:      
-            self._data[ann_type].flush()
         return self
     def get_ann(self,ann_type, start_index=None, end_index=None):
         if start_index is None:

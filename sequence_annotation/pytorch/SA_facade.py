@@ -9,10 +9,9 @@ from .CRF import BatchCRFLoss,BatchCRF
 from .customize_layer import SeqAnnLoss,SeqAnnModel
 from .callback import CategoricalMetric,TensorboardCallback,TensorboardWriter
 from .callback import EarlyStop,GFFCompare,SeqFigCallback
-from .compiler import SeqAnnCompiler
+from .executer import ModelExecutor
 from ..process.pipeline import Pipeline 
-from ..process.data_processor import AnnSeqData
-from ..process.model_processor import SimpleModel
+from ..process.data_processor import AnnSeqProcessor
 from ..utils.utils import split,get_subdict
 from ..genome_handler.utils import get_subseqs,ann_count
 from ..genome_handler.region_extractor import GeneInfoExtractor
@@ -33,7 +32,7 @@ class SeqAnnFacade:
         self._extra_val_callbacks = []
         self._extra_other_callbacks = []
         self._extra_test_callbacks = []
-        self._compiler = SeqAnnCompiler()
+        self._model_executor = ModelExecutor()
         self._path = None
 
     def clean_callbacks(self):
@@ -42,18 +41,18 @@ class SeqAnnFacade:
         self._extra_other_callbacks = []
         self._extra_test_callbacks = []
  
-    def set_compiler(self,loss=None,optimizer_settings=None,
+    def set_optimizer(self,loss=None,optimizer_settings=None,
                      grad_clip=None,grad_norm=None,optimizer_class=None):
         param=locals()
         del param['self']
-        self._settings['compiler'] = param
-        self._compiler = SeqAnnCompiler()
+        self._settings['optimizer'] = param
+        self._model_executor = ModelExecutor()
         for key,value in param.items():
-            if hasattr(self._compiler,key):
+            if hasattr(self._model_executor,key):
                 if value is not None:
-                    setattr(self._compiler,key,value)
+                    setattr(self._model_executor,key,value)
             else:
-                raise Exception(str(self._compiler)+" has no attribute "+key)
+                raise Exception(str(self._model_executor)+" has no attribute "+key)
         return self
 
     @property
@@ -170,7 +169,6 @@ class SeqAnnFacade:
             settings.update(self._settings)
             with open(self._path+"/facade_train_setting.json",'w') as fp:
                 fp.write(str(settings))
-        builder = SimpleModel(model)
         train_gen = SeqGenerator()
         val_gen = SeqGenerator()
         train_gen.batch_size=val_gen.batch_size=batch_size
@@ -178,23 +176,22 @@ class SeqAnnFacade:
         train_gen.order=val_gen.order='NCL'
         train_gen.order_target=val_gen.order_target=['answers','inputs']
         train_gen.pad_value=val_gen.pad_value={'answers':-1,'inputs':0}
-        worker = TrainWorker(train_gen,val_gen)
+        worker = TrainWorker(train_gen,val_gen,self._model_executor)
         worker.epoch_num=epoch_num
         worker.train_callbacks=train_callbacks
         worker.val_callbacks=val_callbacks
         worker.other_callbacks=other_callbacks
         worker.writer=self._writer
-        data = AnnSeqData({'training':{'inputs':self.train_seqs,
-                                       'answers':self.train_ann_seqs},
-                           'validation':{'inputs':self.val_seqs,
-                                         'answers':self.val_ann_seqs}},discard_invalid_seq=True)
-        pipeline = Pipeline(builder,data,worker,self._compiler)
+        data_ = {'training':{'inputs':self.train_seqs,'answers':self.train_ann_seqs},
+                 'validation':{'inputs':self.val_seqs,'answers':self.val_ann_seqs}
+        data = AnnSeqData(data_,discard_invalid_seq=True).process()
+        pipeline = Pipeline(model,data,worker)
         pipeline.path=self._path
         pipeline.execute()
         record = pipeline.result
         return record
 
-    def test(self,model,compiler,batch_size=32):
+    def test(self,model,batch_size=32):
         self._validate_ann_seqs([self.test_ann_seqs])
         callbacks = self._create_default_test_callbacks(self._path)
         if self._writer is not None:
@@ -204,19 +201,18 @@ class SeqAnnFacade:
             settings.update(self._settings)
             with open(self._path+"/facade_test_setting.json",'w') as fp:
                 fp.write(str(settings))
-        builder = SimpleModel(model)
         gen = SeqGenerator()
         gen.batch_size=batch_size
         gen.return_extra_info=True
         gen.order='NCL'
         gen.order_target=['answers','inputs']
         gen.pad_value={'answers':-1,'inputs':0}
-        worker = TestWorker(gen)
+        worker = TestWorker(gen,self._model_executor)
         worker.callbacks=callbacks
         worker.writer=writer
         data = AnnSeqData({'testing':{'inputs':self.test_seqs,'answers':self.test_ann_seqs}},
-                          discard_invalid_seq=True)
-        pipeline = Pipeline(builder,data,worker,self._compiler)
+                          discard_invalid_seq=True).process()
+        pipeline = Pipeline(model,data,worker)
         pipeline.path=self._path
         pipeline.execute()
         record = pipeline.result

@@ -5,7 +5,6 @@ import os
 import pandas as pd
 from argparse import ArgumentParser
 
-
 if __name__ == "__main__":
     #Reading arguments
     parser = ArgumentParser()
@@ -25,11 +24,10 @@ if __name__ == "__main__":
     id_convert = get_id_table(id_convert_path)
     coordinate_consist_bed_path = saved_root+'/coordinate_consist.bed'
     if os.path.exists(coordinate_consist_bed_path):
-        print("Result files are already exist,procedure will be skipped.")
+        print("Result files are already exist, procedure will be skipped.")
     else:
         consist_data = pd.read_csv(consist_data_path,sep='\t')
         valid_official_bed = read_bed(valid_official_bed_path)
-
         coordinate_consist_data = valid_official_bed.merge(consist_data,left_on='id', right_on='ref_name')
         new_data = create_coordinate_bed(consist_data,valid_official_bed)
         new_data['gene_id'] = [id_convert[id_] for id_ in new_data['id']]

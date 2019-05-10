@@ -11,17 +11,16 @@ from sequence_annotation.data_handler.fasta import read_fasta
 from sequence_annotation.data_handler.json import read_json
 from sequence_annotation.data_handler.seq_converter import SeqConverter
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
-from sequence_annotation.process.model_processor import SimpleModel
-from sequence_annotation.process.data_processor import SimpleData, AnnSeqData
+from sequence_annotation.process.data_processor import AnnSeqProcessor
 from sequence_annotation.process.pipeline import Pipeline
 from sequence_annotation.process.data_generator import DataGenerator
 from sequence_annotation.keras.function.work_generator import FitGenerator,EvaluateGenerator
-from sequence_annotation.keras.process.model_creator import ModelCreator
 from sequence_annotation.keras.process.compiler import SimpleCompiler,AnnSeqCompiler
 from sequence_annotation.keras.function.stateful_metric import StatefulMetric
 from sequence_annotation.keras.function.metric import BatchCount,SampleCount
 from sequence_annotation.keras.process.train_worker import TrainWorker
 from sequence_annotation.keras.process.test_worker import TestWorker
+from sequence_annotation.keras.function.model_builder import ModelBuilder
 
 class TestPipeline(unittest.TestCase):
     def test_simple_train(self):
@@ -32,12 +31,12 @@ class TestPipeline(unittest.TestCase):
                 Dense(2),
                 Activation('softmax')
             ])
-            simple_model = SimpleModel(model)
             compiler = SimpleCompiler('adam','binary_crossentropy')
-            data = SimpleData({'training':{'inputs':[[1,0]],'answers':[[1,0]]}})
+            data = {'training':{'inputs':[[1,0]],'answers':[[1,0]]}}
             fit_generator = FitGenerator(verbose=0)
             worker = TrainWorker(fit_generator=fit_generator)
-            pipeline = Pipeline(simple_model,data,worker,compiler)
+            compiler.process(model)
+            pipeline = Pipeline(model,data,worker)
             pipeline.is_prompt_visible=False
             pipeline.execute()
         except Exception as e:
@@ -52,12 +51,12 @@ class TestPipeline(unittest.TestCase):
                 Dense(2),
                 Activation('softmax')
             ])
-            simple_model = SimpleModel(model)
             compiler = SimpleCompiler('adam','binary_crossentropy')
-            data = SimpleData({'testing':{'inputs':[[1,0]],'answers':[[1,0]]}})
+            data = {'testing':{'inputs':[[1,0]],'answers':[[1,0]]}}
             generator = EvaluateGenerator(verbose=0)
             worker = TestWorker(evaluate_generator=generator)
-            pipeline = Pipeline(simple_model,data,worker,compiler)
+            compiler.process(model)
+            pipeline = Pipeline(model,data,worker)
             pipeline.is_prompt_visible=False
             pipeline.execute()
         except Exception as e:
@@ -72,13 +71,13 @@ class TestPipeline(unittest.TestCase):
             fasta = read_fasta(abspath(expanduser(__file__+'/../../data/seqs.fasta')))
             model_setting_path = abspath(expanduser(__file__+'/../../setting/model_setting.json'))
             model_setting = read_json(model_setting_path)
-            model = ModelCreator(model_setting)
+            model = ModelBuilder(model_setting).build()
             train_compiler = AnnSeqCompiler('adam','mse',ann_types=ann_types,
                                             metrics=[StatefulMetric(SampleCount()),
                                                      StatefulMetric(BatchCount())])
             seq_converter = SeqConverter(codes="ATCGN", with_soft_masked_status=True)
-            data = AnnSeqData({'training':{'inputs':fasta,'answers':seqs}},
-                               seq_converter = seq_converter)
+            data = AnnSeqProcessor({'training':{'inputs':fasta,'answers':seqs}},
+                               seq_converter = seq_converter).process()
             fit_generator = FitGenerator(verbose=0,epochs=30)
             train_generator = DataGenerator()
             train_generator.batch_size=1
@@ -87,15 +86,15 @@ class TestPipeline(unittest.TestCase):
             train_worker = TrainWorker(train_generator=train_generator,
                                        val_generator=val_generator,
                                        fit_generator=fit_generator)
-            train_pipeline = Pipeline(model,data,train_worker,train_compiler)
+            train_compiler.process(model)
+            train_pipeline = Pipeline(model,data,train_worker)
             train_pipeline.is_prompt_visible=False
             train_pipeline.execute()
             generator = EvaluateGenerator(verbose=0)
             test_worker = TestWorker(evaluate_generator=generator)
-            test_data = AnnSeqData({'testing':{'inputs':fasta,'answers':seqs}},
-                                     seq_converter = seq_converter)
-            simple_model = SimpleModel(model.model)
-            test_pipeline = Pipeline(simple_model,test_data,test_worker)
+            test_data = AnnSeqProcessor({'testing':{'inputs':fasta,'answers':seqs}},
+                                     seq_converter = seq_converter).process()
+            test_pipeline = Pipeline(model,test_data,test_worker)
             test_pipeline.is_prompt_visible=False
             test_pipeline.execute()
             self.assertEqual(test_pipeline.result['loss'] <= 0.05,True)
@@ -107,13 +106,12 @@ class TestPipeline(unittest.TestCase):
         # Dummy dataset
         x = np.ones((3, 1))
         y = np.zeros((3, 1))
-        data = SimpleData({'training':{'inputs':x,'answers':y},
-                           'validation':{'inputs':x,'answers':y}})
+        data = {'training':{'inputs':x,'answers':y},
+                'validation':{'inputs':x,'answers':y}}
         # Dummy model
         inputs = Input(shape=(1,))
         outputs = Dense(1)(inputs)
-        model_ = Model(inputs=inputs, outputs=outputs)
-        model = SimpleModel(model_)
+        model = Model(inputs=inputs, outputs=outputs)
         compiler = SimpleCompiler('adam','mse',metrics=[StatefulMetric(BatchCount())])
         fit_generator = FitGenerator(verbose=0,epochs=100)
         train_generator = DataGenerator()
@@ -123,7 +121,8 @@ class TestPipeline(unittest.TestCase):
         train_worker = TrainWorker(train_generator=train_generator,
                                    val_generator=val_generator,
                                    fit_generator=fit_generator)
-        train_pipeline = Pipeline(model,data,train_worker,compiler)
+        compiler.process(model)
+        train_pipeline = Pipeline(model,data,train_worker)
         train_pipeline.is_prompt_visible=False
         train_pipeline.execute()
         result = train_pipeline.result
@@ -134,13 +133,12 @@ class TestPipeline(unittest.TestCase):
         # Dummy dataset
         x = np.ones((3, 1))
         y = np.zeros((3, 1))
-        data = SimpleData({'training':{'inputs':x,'answers':y},
-                           'validation':{'inputs':x,'answers':y}})
+        data = {'training':{'inputs':x,'answers':y},
+                'validation':{'inputs':x,'answers':y}}
         # Dummy model
         inputs = Input(shape=(1,))
         outputs = Dense(1)(inputs)
-        model_ = Model(inputs=inputs, outputs=outputs)
-        model = SimpleModel(model_)
+        model = Model(inputs=inputs, outputs=outputs)
         compiler = SimpleCompiler('adam','mse',metrics=[StatefulMetric(SampleCount())])
         fit_generator = FitGenerator(verbose=0,epochs=100)
         train_generator = DataGenerator()
@@ -150,7 +148,8 @@ class TestPipeline(unittest.TestCase):
         train_worker = TrainWorker(train_generator=train_generator,
                                    val_generator=val_generator,
                                    fit_generator=fit_generator)
-        train_pipeline = Pipeline(model,data,train_worker,compiler)
+        compiler.process(model)
+        train_pipeline = Pipeline(model,data,train_worker)
         train_pipeline.is_prompt_visible=False
         train_pipeline.execute()
         result = train_pipeline.result

@@ -10,6 +10,7 @@ radius=$2
 awk -F'\t' -v OFS="\t"  '
                          {   
                              n = split($11, sizes, ",")
+                             transcrtipt_start = $2 + 1
                              split($12, related_starts, ",")
                              for (i = 1; i <= n;i++)
                              {   
@@ -30,11 +31,11 @@ awk -F'\t' -v OFS="\t"  '
                                          splice_donor_site = related_end       
                                      }
                                  }
-                                 start = splice_donor_site+$2-'$radius'
-                                 end = splice_donor_site+$2+'$radius'
+                                 start = splice_donor_site+transcrtipt_start-'$radius'
+                                 end = splice_donor_site+transcrtipt_start+'$radius'
                                  if(start>=0)
                                  {
-                                     print($1,start,end+1,$4,$5,$6)
+                                     print($1,start-1,end,$4,$5,$6)
                                  }
                              }
                          }'  "$bed_file.bed" > "${bed_file}_splice_donor_site_with_radius_${radius}.bed"

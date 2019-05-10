@@ -23,7 +23,7 @@ if __name__ == "__main__":
     safe_merged_cleavage_sites_path = args['safe_merged_cleavage_sites_path']
     consist_data_path = saved_root+'/consist_data.tsv'
     if os.path.exists(consist_data_path):
-        print("Result files are already exist,procedure will be skipped.")
+        print("Result files are already exist, procedure will be skipped.")
     else:
         safe_merged_gro_sites = pd.read_csv(safe_merged_gro_sites_path,sep='\t')
         safe_merged_cleavage_sites = pd.read_csv(safe_merged_cleavage_sites_path,sep='\t')

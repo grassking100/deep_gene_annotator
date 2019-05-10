@@ -28,7 +28,6 @@ if __name__ == "__main__":
     accept_radius = args['accept_radius']
     root_path = "/".join(sys.argv[0].split('/')[:-1])
     script_root = root_path+'/../bash'
-    result_bed_path = "result"
     around_path = 'upstream_'+str(upstream_dist)+'_downstream_'+str(downstream_dist)
     tss_around_path = 'transcription_start_site_with_radius_'+str(TSS_radius)
     cleavage_around_path = 'cleavage_site_with_radius_'+str(cleavage_radius)
@@ -36,10 +35,10 @@ if __name__ == "__main__":
     accept_around_path = 'splice_accept_site_with_radius_'+str(accept_radius)
     for tool_name,dist in zip(['transcription_start_site','splice_donor_site','splice_accept_site','cleavage_site'],
                               [TSS_radius,donor_radius,accept_radius,cleavage_radius]):
-        command = "bash "+script_root+"/"+tool_name+".sh "+saved_root+"/result.bed "+str(dist)
+        command = "bash "+script_root+"/"+tool_name+".sh "+bed_path+" "+str(dist)
         print(command)
         os.system(command)
-    command = "bash "+script_root+"/selected_around.sh "+saved_root+"/result.bed "
+    command = "bash "+script_root+"/selected_around.sh "+bed_path+" "
     command += str(upstream_dist)+" "+str(downstream_dist)
     print(command)
     os.system(command)
@@ -47,17 +46,17 @@ if __name__ == "__main__":
     for path in paths:
         path = saved_root+"/result_"+path+'.bed'
         write_bed(simply_coord(read_bed(path)),path)
-    result_bed = read_bed(saved_root+"/result.bed")
-    result_bed = merge_bed_by_coord(result_bed)
+    result_bed = merge_bed_by_coord(read_bed(bed_path))
     id_ = result_bed['id'].astype(str)
-    id_ += '_around_upstream_'+str(upstream_dist)+'_downstream_'+str(downstream_dist)
+    id_ += '_up_'+str(upstream_dist)+'_down_'+str(downstream_dist)
     result_bed['id'] = id_
     merged_path = saved_root+"/result_"+around_path+"_merged"
     write_bed(result_bed,merged_path+".bed")
-    command = 'bedtools getfasta -s -name -fi '+genome_path+' -bed '+merged_path+'.bed -fo '+merged_path+'.fasta'
+    
+    command = 'bedtools getfasta -s -fi '+genome_path+' -bed '+merged_path+'.bed -fo '+merged_path+'.fasta'
     os.system(command)
     for path_root in paths:
-        command = 'bedtools getfasta -s -name -fi '+genome_path+' -bed '+saved_root+"/result_"
+        command = 'bedtools getfasta -s -fi '+genome_path+' -bed '+saved_root+"/result_"
         command += path_root+'.bed -fo '+saved_root+"/result_"+ path_root+'.fasta'
         print(command)
         os.system(command)

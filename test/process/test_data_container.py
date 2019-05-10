@@ -1,19 +1,10 @@
 import unittest
-from sequence_annotation.process.data_processor import SimpleData, AnnSeqData
+from sequence_annotation.process.data_processor import AnnSeqProcessor
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
 from sequence_annotation.genome_handler.sequence import AnnSequence
 from sequence_annotation.utils.exception import DimensionNotSatisfy
 
 class TestDataContainer(unittest.TestCase):
-    def test_simple_data(self):
-        try: 
-            data = SimpleData({'training':{'inputs':[[1,0]],'answers':[[1,0]]}})
-            data.before_process()
-            data.process()
-            data.after_process()
-        except Exception as e:
-            raise e
-            self.fail("There are some unexpected exception occur.")
     def test_ann_seq_data(self):
         try:
             ann_seqs = AnnSeqContainer()
@@ -36,11 +27,9 @@ class TestDataContainer(unittest.TestCase):
             ann_seq2.set_ann('Black',1,3,3)
             ann_seq2.set_ann('White',1,0,2)
             ann_seqs.add(ann_seq2)
-            data = AnnSeqData({'training':{'inputs':{'A':'AATCG','B':'TTTC'},'answers':ann_seqs}},
+            data = AnnSeqProcessor({'training':{'inputs':{'A':'AATCG','B':'TTTC'},'answers':ann_seqs}},
                               padding={'inputs':0,'answers':-1})
-            data.before_process()
             data.process()
-            data.after_process()
         except Exception as e:
             raise e
             self.fail("There are some unexpected exception occur.")

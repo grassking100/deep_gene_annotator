@@ -1,12 +1,11 @@
 #!/bin/bash
-folder_name=2019_04_28
-upstream_dist=1000
+folder_name=2019_05_01
+upstream_dist=500
 downstream_dist=500
-tolerate_dist=20
-TSS_radius=200
-donor_radius=200
-accept_radius=200
-cleavage_radius=200
+TSS_radius=100
+donor_radius=100
+accept_radius=100
+cleavage_radius=100
 root="./io/Arabidopsis_thaliana/data"
 saved_root=$root/$folder_name
 result_path=$saved_root/result
@@ -18,6 +17,7 @@ mkdir -p $saved_root
 mkdir -p $result_path
 mkdir -p $separate_path
 mkdir -p $fasta_root
+cp -t $saved_root ${BASH_SOURCE[0]}
 #Set parameter
 fai=$root/araport_11_Arabidopsis_thaliana_Col-0_rename.fasta.fai
 genome_file=$root/araport_11_Arabidopsis_thaliana_Col-0_rename.fasta
@@ -36,14 +36,13 @@ python3 $script_root/python/preprocess_raw_data.py --saved_root $saved_root --be
 
 python3 $script_root/python/get_most_UTR.py -b $saved_root/valid_official_coding.bed -s $saved_root
 
-python3 $script_root/python/classify_sites.py -o $saved_root/valid_official_coding.bed  -g $saved_root/valid_gro.tsv -c $saved_root/valid_cleavage_site.tsv -s $saved_root -u $upstream_dist -d $downstream_dist -p $tolerate_dist \
--f $saved_root/most_five_UTR.tsv -t $saved_root/most_three_UTR.tsv \
+python3 $script_root/python/classify_sites.py -o $saved_root/valid_official_coding.bed  -g $saved_root/valid_gro.tsv -c $saved_root/valid_cleavage_site.tsv -s $saved_root -u $upstream_dist -d $downstream_dist \
+-f $saved_root/most_five_UTR.tsv -t $saved_root/most_three_UTR.tsv 
 
-python3 $script_root/python/consist_sites.py --dist_gro_sites $saved_root/dist_gro_sites.tsv \
---dist_cleavage_sites $saved_root/dist_cleavage_sites.tsv --inner_gro_sites $saved_root/inner_gro_sites.tsv \
---inner_cleavage_sites $saved_root/inner_cleavage_sites.tsv --long_dist_gro_sites $saved_root/long_dist_gro_sites.tsv \
---long_dist_cleavage_sites $saved_root/long_dist_cleavage_sites.tsv --orf_inner_gro_sites_path $saved_root/orf_inner_gro_sites.tsv \
---orf_inner_cleavage_sites_path $saved_root/orf_inner_cleavage_sites.tsv -s $saved_root
+python3 $script_root/python/consist_sites.py --ig $saved_root/inner_gro_sites.tsv \
+--ic $saved_root/inner_cleavage_sites.tsv --lg $saved_root/long_dist_gro_sites.tsv \
+--lc $saved_root/long_dist_cleavage_sites.tsv --tg $saved_root/transcript_gro_sites.tsv \
+--tc $saved_root/transcript_cleavage_sites.tsv -s $saved_root
 
 #Write to coordinate_consist.bed
 python3 $script_root/python/create_coordinate_data.py -s $saved_root -g $saved_root/safe_merged_gro_sites.tsv -c $saved_root/safe_merged_cleavage_sites.tsv -i $id_convert
@@ -57,7 +56,7 @@ python3 $script_root/python/recurrent_cleaner.py -r $saved_root/valid_official_c
 
 cp $separate_path/recurrent_cleaned.bed $fasta_root/result.bed
 cp $separate_path/recurrent_cleaned.bed $result_path/result.bed
-python3 $script_root/python/get_around_fasta.py -b $separate_path/recurrent_cleaned.bed -u $upstream_dist \
+python3 $script_root/python/get_around_fasta.py -b $fasta_root/result.bed -u $upstream_dist \
 -o $downstream_dist -t $TSS_radius -d $donor_radius -a $accept_radius -c $cleavage_radius -s $fasta_root -g $genome_file
 cp $fasta_root/$result_merged.bed $result_path/$result_merged.bed
 

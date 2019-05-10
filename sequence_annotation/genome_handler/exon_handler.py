@@ -58,12 +58,10 @@ class ExonHandler():
                 new_seq.add_ann(type_,seq.get_ann(type_))
         return new_seq
     def _create_seq(self,seq,ann_types):
-        #processed_status = seq.processed_status
         new_seq = AnnSequence().from_dict(seq.to_dict(without_data=False))
         new_seq.clean_space()
         new_seq.ANN_TYPES = ann_types
         new_seq.init_space()
-        #new_seq.processed_status = processed_status
         return new_seq
     def _get_other_types(self,seq):
         """Get types which are not related with exon"""

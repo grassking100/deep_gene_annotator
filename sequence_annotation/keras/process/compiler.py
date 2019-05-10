@@ -1,11 +1,11 @@
-from ...process.compiler import Compiler
+#from ...process.compiler import Compiler
 from ..function.metric_builder import MetricBuilder
 from ...utils.utils import create_folder
 
-class SimpleCompiler(Compiler):
+class SimpleCompiler:
     def __init__(self,optimizer,loss_type,values_to_ignore=None,
                  weights=None,dynamic_weight_method=None,metrics=None):
-        self._record = locals()
+        #elf._record = locals()
         self._optimizer = optimizer
         self._loss_type = loss_type
         self._builder = MetricBuilder(values_to_ignore = values_to_ignore)
@@ -17,12 +17,6 @@ class SimpleCompiler(Compiler):
     def process(self,model):
         model.compile(optimizer=self._optimizer, loss=self._loss, metrics=self._metrics)
 
-    def before_process(self,path=None):
-        if path is not None:
-            json_path = create_folder(path) + "/setting/compiler.json"
-            with open(json_path,'w') as fp:
-                json.dump(self._record,fp)
-
 class AnnSeqCompiler(SimpleCompiler):
 
     def __init__(self,optimizer,loss_type,acc_type="categorical_accuracy",values_to_ignore=None,
@@ -30,9 +24,9 @@ class AnnSeqCompiler(SimpleCompiler):
                  ann_types=None,metrics=None):
         super().__init__(optimizer,loss_type,values_to_ignore,
                          weights,dynamic_weight_method,metrics)
-        self._record.update(locals())
+        #self._record.update(locals())
         self._builder.add_accuracy(type_=acc_type)
-        self._record['ann_types'] = ann_types
+        #self._record['ann_types'] = ann_types
         for ann_type in ann_types:
             self._builder.add_TP(ann_type,ann_types)
             self._builder.add_FP(ann_type,ann_types)
