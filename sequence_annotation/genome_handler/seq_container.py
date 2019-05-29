@@ -1,9 +1,11 @@
 from abc import ABCMeta
 from abc import abstractmethod
 import pandas as pd
-from ..utils.exception import InvalidAnnotation,IdNotFoundException,DuplicateIdException,AttrIsNoneException
+from ..utils.exception import InvalidAnnotation,IdNotFoundException,DuplicateIdException,AttrIsNoneException,ChangeConstValException
 from .sequence import AnnSequence,SeqInformation,Sequence
 
+gff_order = ['seqname','source','feature','start','end','score','strand','frame','attribute']
+    
 class SeqContainer(metaclass=ABCMeta):
     def __init__(self):
         self._data = {}
@@ -17,7 +19,7 @@ class SeqContainer(metaclass=ABCMeta):
         self._keys = sorted(list(self._data.keys()))
         return self  
     def __next__(self):
-        if self._index >= len(self._data):
+        if self._index >= len(self._data) or self.is_empty():
             self._index = 0
             self._keys = sorted(list(self._data.keys()))
             raise StopIteration  
@@ -25,6 +27,13 @@ class SeqContainer(metaclass=ABCMeta):
             key = self._keys[self._index]
             self._index += 1  
             return self._data[key]
+
+    def is_empty(self):
+        return len(self) == 0
+
+    def clean(self):
+        self._data = {}
+
     @property
     def data(self):
         """Return sequences in order based on their id"""
@@ -92,30 +101,39 @@ class SeqInfoContainer(SeqContainer):
         pass
     def _create_sequence(self):
         return SeqInformation()
-    def to_gtf(self):
+    def to_gff(self):
+        if self.is_empty():
+            raise Exception("Container is empty")
         df = self.to_data_frame()
-        try:
-            selected_df = df[['id','source','strand']].copy()
-            selected_df['seqname'] = df['chromosome_id']
-            selected_df['start'] = df['start'] + 1
-            selected_df['end'] = df['end'] + 1
-            selected_df['feature'] = df['ann_type']
-            selected_df['score'] = '.'
-            selected_df['frame'] = '.'
-            selected_df['attribute'] = "ID="+df['id']+";Parent="+df['source']+";status="+df['ann_status']
-            gtf_order = ['seqname','source','feature',
-                         'start','end','score',
-                         'strand','frame','attribute']
-            selected_df['strand']=selected_df['strand'].str.replace("plus", '+')
-            selected_df['strand']=selected_df['strand'].str.replace("minus", '-')
-        except:
-            print(self.to_dict())
-        return selected_df[gtf_order]
-    
+        selected_df = df[['id','source','strand']].copy()
+        selected_df['seqname'] = df['chromosome_id']
+        selected_df['start'] = df['start'] + 1
+        selected_df['end'] = df['end'] + 1
+        selected_df['feature'] = df['ann_type']
+        selected_df['score'] = '.'
+        selected_df['frame'] = '.'
+        selected_df['attribute'] = "ID="+df['id']+";Parent="+df['parent']+";Status="+df['ann_status']
+        selected_df['strand']=selected_df['strand'].str.replace("plus", '+')
+        selected_df['strand']=selected_df['strand'].str.replace("minus", '-')
+        return selected_df[gff_order]
+
 class AnnSeqContainer(SeqContainer):
     def __init__(self):
         super().__init__()
-        self.ANN_TYPES = None
+        self._ANN_TYPES = None
+    @property
+    def ANN_TYPES(self):
+        return self._ANN_TYPES
+    @ANN_TYPES.setter
+    def ANN_TYPES(self,value):
+        if self._ANN_TYPES is None or not self._has_space:
+            if len(set(value))!=len(value):
+                raise Exception('Input types has duplicated data')
+            self._ANN_TYPES = list(value)
+            self._ANN_TYPES.sort()
+        else:
+            raise ChangeConstValException('ANN_TYPES')
+
     def _validate_seq(self, seq):
         diffs = set(seq.ANN_TYPES).symmetric_difference(self.ANN_TYPES)
         if len(diffs) > 0:

@@ -25,15 +25,9 @@ class RegionExtractor:
 
     def _create_seq_info(self, seq, ann_type, start, end):
         self._region_id += 1
-        target = SeqInformation()
-        target.chromosome_id = seq.chromosome_id or seq.id
-        target.strand = seq.strand
-        target.source = seq.source or seq.id
-        target.ann_type = ann_type
-        target.ann_status = "whole"
+        target = seq.copy()
+        target.parent = seq.id
         target.id = str(seq.id)+"_"+str(ann_type)+"_"+str(self._region_id)
-        target.start = start
-        target.end = end
         return target
 
     def _parse_of_region(self,seq,ann_type):
@@ -76,9 +70,21 @@ class GeneInfoExtractor:
         simple_seq.chromosome_id = ann.chromosome_id or ann.id
         genes = [region for region in self._extractor.extract(simple_seq) if region.ann_type=='gene']
         seq_infos.add(genes)
+        mRNAs = []
         for gene in genes:
-            subseq = ann.get_subseq(gene.start,gene.end)
-            subseq.id = gene.id
+            mRNA = gene.copy()
+            mRNA.ann_type = 'mRNA'
+            mRNA.id = gene.id+"_mRNA"
+            mRNA.parent = gene.id
+            mRNAs.append(mRNA)
+        seq_infos.add(mRNAs)
+        for mRNA in mRNAs:
+            subseq = ann.get_subseq(mRNA.start,mRNA.end)
+            subseq.id = mRNA.id
             subregions = self._extractor.extract(subseq)
-            seq_infos.add(subregions)
+            for region in subregions:
+                temp = region.copy()
+                temp.start += mRNA.start
+                temp.end += mRNA.start
+                seq_infos.add(temp)
         return seq_infos

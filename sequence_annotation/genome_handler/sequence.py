@@ -59,6 +59,11 @@ class Sequence(metaclass=ABCMeta):
         attr_validator = AttrValidator(self,False,False,False,self._checked_attr())
         attr_validator.validate()
 
+    def copy(self):
+        new_seq = self.__class__()
+        new_seq.from_dict(self.to_dict())
+        return new_seq
+
 class SeqInformation(Sequence):
     def __init__(self):
         self._start = None
@@ -67,9 +72,10 @@ class SeqInformation(Sequence):
         self.extra_index_name = None
         self.ann_status = None
         self.ann_type = None
+        self.parent = None
         super().__init__()
     def _copied_public_attrs(self):
-        return super()._copied_public_attrs()+['ann_type','ann_status','extra_index_name']
+        return super()._copied_public_attrs()+['ann_type','ann_status','extra_index_name','parent']
     def _copied_protected_attrs(self):
         return super()._copied_protected_attrs()+['_start','_end','_extra_index']
     def _validated_for_length(self):
@@ -130,7 +136,7 @@ class AnnSequence(Sequence):
     def ANN_TYPES(self,value):
         if self._ANN_TYPES is None or not self._has_space:
             if len(set(value))!=len(value):
-                raise Exception('Input types has duplicated')
+                raise Exception('Input types has duplicated data')
             self._ANN_TYPES = list(value)
             self._ANN_TYPES.sort()
         else:
@@ -177,9 +183,12 @@ class AnnSequence(Sequence):
         self._has_space = False
         self._data = {}
         self.processed_status = None
+        return self
+
     @property
     def has_space(self):
         return self._has_space
+
     def init_space(self, dtype='float32'):
         self._data = {}
         self._validate()

@@ -69,16 +69,16 @@ class RNN(nn.Module):
         else:
             self.output_names = ['new_h']
         self.reset_parameters()
+
     def reset_parameters(self):
         self._rnn.reset_parameters()
         init_value = [self._init_value]*self._rnn.hidden_size
         self.init_states.data = torch.Tensor(init_value)
-    def forward(self,x,lengths, batch_first=True):
+
+    def forward(self,x,lengths=None):
         N,L,C = x.size()
-        #lengths=None
         if lengths is None:
             lengths = [L for _ in range(N)]
-        #input shape should be (N,L,C)
         if self._bidirectional:
             x,lengths = to_bidirection(x.transpose(1,2),lengths)
             x = x.transpose(1,2)
@@ -87,11 +87,11 @@ class RNN(nn.Module):
         else:
             x = _reverse(x.transpose(1,2),lengths).transpose(1,2)
         all_states = []
-        x,num,batch_sizes = self._preprocess(x,batch_first,lengths)
-        outputs = self._forward(x,num,batch_sizes)
+        x,batch_sizes = self._preprocess(x,batch_first,lengths)
+        outputs = self._forward(x,batch_sizes)
         for output in outputs:
-            output = PackedSequence(output, batch_sizes)
-            output,_ = pad_packed_sequence(output, batch_first=batch_first)
+            #output = PackedSequence(output, batch_sizes)
+            output,_ = pad_packed_sequence(output, batch_first=True)
             if self._bidirectional:
                 output,_ = from_bidirection(output.transpose(1,2),lengths)
                 output = output.transpose(1,2)
@@ -101,16 +101,18 @@ class RNN(nn.Module):
                 output = _forward(output.transpose(1,2),lengths).transpose(1,2)
             all_states.append(output)
         return all_states
-    def _preprocess(self,x, batch_first,lengths):
+
+    def _preprocess(self,x,lengths):
         N,L,C = x.size()
         lengths = torch.LongTensor(lengths)
         if lengths is not None:
             x,batch_sizes = pack_padded_sequence(x,lengths,batch_first=True)
         else:
             batch_sizes = [N for _ in range(L)]
-        return x,N,batch_sizes
-    def _forward(self,x,num,batch_sizes):
-        previous_h = self.init_states.repeat(num,self._state_number)
+        return x,batch_sizes
+
+    def _forward(self,x,batch_sizes):
+        previous_h = self.init_states.repeat(len(x),self._state_number)
         all_states = [[] for _ in self.output_names]
         count = 0 
         for batch_size in batch_sizes:

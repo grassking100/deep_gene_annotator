@@ -17,7 +17,6 @@ def unique_site(data,by,ref_value):
     return df
 
 def consist_(data,by,ref_value,drop_duplicated):
-    #data.reset_index(inplace=True)
     returned = []
     ref_names = set(data[by])
     ref_names = [name for name in ref_names if str(name)!='nan']
@@ -51,14 +50,14 @@ def consist(data,by,ref_value,drop_duplicated):
     return  df
 
 def coordinate_consist_filter_(data,group_by,site_name):
-    #data.reset_index(drop=True)
     returned = []
     ref_names = set(data[group_by])
     ref_names = [name for name in ref_names if str(name)!='nan']
     sectors = data.groupby(group_by)
     for name in ref_names:
         sector = sectors.get_group(name)
-        max_data = sector.loc[sector[site_name].idxmax()]
+        max_index = sector[site_name].idxmax()
+        max_data = sector.loc[max_index]
         true_count = sum(sector[site_name] == max_data[site_name])
         if true_count==len(sector):
             returned += sector.to_dict('record')
@@ -278,7 +277,11 @@ def read_bed(path):
     return df
 
 def write_bed(bed,path):
-    bed = bed[BED_COLUMNS[:len(bed.columns)]]
+    columns = []
+    for column in BED_COLUMNS:
+        if column in bed.columns:
+            columns.append(column)
+    bed = bed[columns]
     bed = bed.astype(str)
     for name in ['start','end','orf_start','orf_end','count']:
         if name in bed.columns:

@@ -91,7 +91,7 @@ def ann_count(ann_seqs):
             ann_count[type_] += np.sum(seq.get_ann(type_))
     return ann_count
 
-def loader(fasta,ann_seqs,min_len=None,max_len=None,ratio=None,outlier_coef=1.5,simplify_map=None,num_max=None):
+def select_seq(fasta,ann_seqs,min_len=None,max_len=None,ratio=None,outlier_coef=1.5,num_max=None):
     seqs_len = [len(seq) for seq in ann_seqs]
     seqs_len.sort()
     min_len = min_len or 0
@@ -110,28 +110,17 @@ def loader(fasta,ann_seqs,min_len=None,max_len=None,ratio=None,outlier_coef=1.5,
     if num_max is not None:
         keys = keys[:num_max]
     selected_seqs = AnnSeqContainer()
-    if simplify_map is not None:
-        selected_seqs.ANN_TYPES = list(simplify_map.keys())
-    else:
-        selected_seqs.ANN_TYPES = ann_seqs.ANN_TYPES
+    selected_seqs.ANN_TYPES = ann_seqs.ANN_TYPES
     selected_fasta = {}
-    number = 0
     for seq_id in keys:
         seq = ann_seqs.get(seq_id)
-        if simplify_map is not None:
-            seq = ann_seq_processor.mixed_typed_seq_generate(seq)
-            seq = ann_seq_processor.simplify_seq(seq,simplify_map)
         selected_seqs.add(seq)
         selected_fasta[seq_id]=inner_fasta[seq_id]
-        number += 1
     outlier_seq = None
     outlier_fasta = None
     if outlier_name is not None:
         outlier_seq = ann_seqs.get(outlier_name)
         outlier_fasta = fasta[outlier_name]
-        if simplify_map is not None:
-            outlier_seq = ann_seq_processor.mixed_typed_seq_generate(outlier_seq)
-            outlier_seq = ann_seq_processor.simplify_seq(outlier_seq,simplify_map)
     return selected_fasta,selected_seqs,outlier_fasta,outlier_seq
 
 def get_subseqs(ids,ann_seqs):
@@ -139,3 +128,10 @@ def get_subseqs(ids,ann_seqs):
     sub_seqs.ANN_TYPES = ann_seqs.ANN_TYPES
     sub_seqs.add([ann_seqs[id_] for id_ in ids])
     return sub_seqs
+
+def sa2gff(seq_anns,simplify_map=None):
+    gffs = AnnSeqContainer()
+    for ann in seq_anns:
+        ann_informs = self.extractor.extract_per_seq(ann,simplify_map)
+        gffs.add(ann_informs)
+    return self._answers.to_gff()

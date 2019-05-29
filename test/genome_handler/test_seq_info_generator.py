@@ -5,11 +5,6 @@ from sequence_annotation.genome_handler.seq_container import SeqInfoContainer
 from sequence_annotation.genome_handler.seq_info_generator import SeqInfoGenerator
 class TestSeqInfoGenerator(unittest.TestCase):
     def test_total_number(self):
-        principle = {'remove_end_of_strand':True,'with_random_choose':True,
-                     'replaceable':True,
-                     "each_region_number":{'intron':10,'exon':20},
-                     "region_number_per_seed":6,'half_length':4,
-                     'max_diff':3,'length_constant':False,"modes":['5\'']}
         chroms_info = {'chr1':100,'chr2':35}
         #Create sequence to test
         regions = SeqInfoContainer()
@@ -18,7 +13,6 @@ class TestSeqInfoGenerator(unittest.TestCase):
             region.chromosome_id = 'chr1'
             region.strand = 'plus'
             region.id = str(i)
-            region.source = 'test'
             regions.add(region)
         region = regions.get('0')
         region.start = 0
@@ -37,8 +31,6 @@ class TestSeqInfoGenerator(unittest.TestCase):
         region.end = 99
         region.ann_type = 'exon'
         generator = SeqInfoGenerator()
-        seeds,seqs_info = generator.generate(regions,principle,chroms_info,"seed","seq")
-        seed_number = sum(principle['each_region_number'].values())
-        self.assertEqual(seed_number,len(seeds.data))
-        seq_number = seed_number*principle['region_number_per_seed']
-        self.assertEqual(seq_number,len(seqs_info.data))        
+        seeds,seqs_info = generator.generate(regions,chroms_info,half_length=4,modes=['five_prime','middle'])
+        self.assertEqual(4,len(seeds.data))
+        self.assertEqual(4,len(seqs_info.data))        

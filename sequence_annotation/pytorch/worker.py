@@ -1,68 +1,92 @@
 """This submodule provides trainer to train model"""
 import torch
 from ..process.worker import Worker
-from ..pytorch.callback import Accumulator, Recorder
+from ..pytorch.callback import Accumulator, Recorder, Callbacks
 from ..process.data_generator import DataGenerator
+from ..pytorch.executer import ModelExecutor
+
 import numpy as np
 import time
 import json
 
 def train_per_batch(model,inputs,labels,extra,executor,callbacks):
-    for callback in callbacks:
-        callback.on_batch_begin()
+    callbacks.on_batch_begin()
     torch.cuda.empty_cache()
     inputs = torch.from_numpy(inputs).float().cuda()
     labels = torch.from_numpy(labels).long().cuda()
-    loss_ = executor.fit(model,inputs,labels,**extra)
-    for callback in callbacks:
-        callback.on_batch_end(outputs=model.saved_outputs,
-                              index_outputs=model.saved_index_outputs,
-                              labels=labels,
-                              lengths=model.saved_lengths,
-                              metric=loss_,
-                              ids=extra['ids'],
-                              parmeters=model.named_parameters())
+    #print("Origin length",extra['lengths'])
+    loss_,outputs = executor.fit(model,inputs,labels,**extra)
+    if executor.inference is not None:
+        outputs = executor.inference(outputs,labels)
+    #print("Saved length",model.saved_lengths)
+    callbacks.on_batch_end(outputs=outputs,
+                           labels=labels,
+                           lengths=model.saved_lengths,
+                           metric=loss_,
+                           ids=extra['ids'],
+                           parmeters=model.named_parameters())
 
 def evaluate_per_batch(model,inputs,labels,extra,executor,callbacks):
-    for callback in callbacks:
-        callback.on_batch_begin()
+    callbacks.on_batch_begin()
     torch.cuda.empty_cache()
     inputs = torch.from_numpy(inputs).float().cuda()
     labels = torch.from_numpy(labels).long().cuda()
-    loss_ = executor.evaluate(model,inputs,labels,**extra)
-    for callback in callbacks:
-        callback.on_batch_end(outputs=model.saved_outputs,
-                              index_outputs=model.saved_index_outputs,
-                              labels=labels,
-                              lengths=model.saved_lengths,
-                              metric=loss_,
-                              ids=extra['ids'],
-                              parmeters=model.named_parameters())
+    loss_,outputs = executor.evaluate(model,inputs,labels,**extra)
+    if executor.inference is not None:
+        outputs = executor.inference(outputs,labels)
+    callbacks.on_batch_end(outputs=outputs,
+                           labels=labels,
+                           lengths=model.saved_lengths,
+                           metric=loss_,
+                           ids=extra['ids'],
+                           parmeters=model.named_parameters())
 
 class PyWorker(Worker):
-    def __init__(self,model_executor=None):
+    def __init__(self,executor=None):
         super().__init__()
-        self._settings = locals()
-        self._data = {}
-        self.executor = model_executor or ModelExecutor()
-    def _validate(self):
-        """Validate required data"""
-        super()._validate()
+        if executor is None:
+            self._executor = ModelExecutor()
+        else:
+            self._executor = executor
 
+def _init_generator(generator):
+    generator.return_extra_info = True
+    generator.order = 'NCL'
+    generator.order_target=['answers','inputs']
+    generator.pad_value={'answers':-1,'inputs':0}
+        
 class TrainWorker(PyWorker):
     """a worker which will train and evaluate the model"""
-    def __init__(self,train_generator=None,val_generator=None,model_executor=None):
-        super().__init__(model_executor=model_executor)
-        self._train_generator = train_generator or DataGenerator()
-        self._val_generator = val_generator or DataGenerator()
-        self.train_callbacks = []
-        self.val_callbacks = []
-        self.other_callbacks = []
-        self.writer = None
-        self.epoch_start = 0
-        self.epoch_num = 1
+    def __init__(self,executor=None,train_generator=None,val_generator=None,
+                 train_callbacks=None,val_callbacks=None,other_callbacks=None,
+                 writer=None,epoch_start=None,epoch_num=None):
+        super().__init__(executor)
+        if train_generator is None:
+            self._train_generator = DataGenerator()
+        else:
+            self._train_generator = train_generator
+        if val_generator is None:
+            self._val_generator = DataGenerator()
+        else:
+            self._val_generator = val_generator
+        if train_callbacks is None:
+            self._train_callbacks = Callbacks()
+        else:
+            self._train_callbacks = train_callbacks
+        if val_callbacks is None:
+            self._val_callbacks = Callbacks()
+        else:
+            self._val_callbacks = val_callbacks
+        if other_callbacks is None:
+            self._other_callbacks = Callbacks()
+        else:
+            self._other_callbacks = other_callbacks
+        self._writer = writer
+        self._epoch_start = epoch_start or 0
+        self._epoch_num = epoch_num or 1
         self.is_running = True
-
+        self._recoder = None
+        
     def before_work(self,path=None):
         self._train_generator.x_data = self.data['training']['inputs']
         self._train_generator.y_data = self.data['training']['answers']
@@ -74,13 +98,15 @@ class TrainWorker(PyWorker):
             acc = Accumulator()
             acc.prefix='val'
             acc.name='loss'
-            self.val_callbacks.append(acc)
+            self._val_callbacks.add_callbacks(acc)
         acc = Accumulator()
         acc.name='loss'
-        self.train_callbacks.append(acc)
+        self._train_callbacks.add_callbacks(acc)
+        self._recoder = Recorder()
         record_saved_path = None
         if path is not None:
-            for key in ['train_callbacks','val_callbacks','other_callbacks','epoch_start','epoch_num']:
+            for key in ['_train_callbacks','_val_callbacks','_other_callbacks',
+                        '_epoch_start','_epoch_num','_executor','_writer']:
                 self._settings[key] = getattr(self,key)
             record_saved_path = path+'/train_record.json'
             json_path = path + "/train_worker_setting.json"
@@ -89,66 +115,79 @@ class TrainWorker(PyWorker):
                     json.dump(self._settings,fp)
                 except TypeError:
                      fp.write(str(self._settings))
-            self._recoder = Recorder()
-            self._recoder.path=record_saved_path
+            self._recoder.path=record_saved_path 
+        self._executor.process(self.model)
+        _init_generator(self._train_generator)
+        _init_generator(self._val_generator)
+        self.is_running = True
 
     def work(self):
         """Train model"""
         self._validate()
-        self.executor.process()
-        callbacks = self.train_callbacks+self.val_callbacks + self.other_callbacks
-        all_callbacks = callbacks + [self._recoder]
-        for callback in all_callbacks:
-            callback.on_work_begin(worker=self)
-        for epoch in range(self.epoch_start+1,self.epoch_start+1+self.epoch_num):
+        callbacks = Callbacks(self._train_callbacks)
+        callbacks.add_callbacks(self._val_callbacks)
+        callbacks.add_callbacks(self._other_callbacks)
+        all_callbacks = Callbacks(callbacks)
+        all_callbacks.add_callbacks(self._recoder)
+        all_callbacks.on_work_begin(worker=self)
+        start = self._epoch_start+1
+        end = start+self._epoch_num
+        for epoch in range(start,end):
             pre_time = time.time()
-            self.writer.counter = epoch
-            for callback in all_callbacks:
-                callback.on_epoch_begin(counter=epoch)
+            if self._writer is not None:
+                self._writer.counter = epoch
+            all_callbacks.on_epoch_begin(counter=epoch)
             for item in self._train_generator:
                 inputs, labels, extra = item
                 train_per_batch(self.model,inputs,labels,extra,
-                                self.executor,self.train_callbacks)
+                                self._executor,self._train_callbacks)
             for item in self._val_generator:
                 inputs, labels, extra = item
                 evaluate_per_batch(self.model,inputs,labels,extra,
-                                   self.executor,self.val_callbacks)
-            record = {}
-            for callback in callbacks:
-                if hasattr(callback,'data'):
-                    for type_,value in callback.data.items():
-                        record[type_]=value
-            if record['loss'] is None or record['val_loss'] is None:
+                                   self._executor,self._val_callbacks)
+            train_record = self._train_callbacks.get_data()
+            val_record = self._val_callbacks.get_data()
+            other_record = self._other_callbacks.get_data()
+            if train_record['loss'] is None or val_record['val_loss'] is None:
                 self.is_running = False
+            record = {}
+            record.update(train_record)
+            record.update(val_record)
             self._train_generator.on_epoch_end()
             self._val_generator.on_epoch_end()
-            for callback in all_callbacks:
-                callback.on_epoch_end(metric=record)
+            self._train_callbacks.on_epoch_end(metric=train_record)
+            self._val_callbacks.on_epoch_end(metric=val_record)
+            self._other_callbacks.on_epoch_end(metric=other_record)
+            self._recoder.on_epoch_end(metric=record)
             if self.is_verbose_visible:
-                time_cost = time.time()-pre_time
+                time_cost = round(time.time()-pre_time,3)
                 print(epoch ,time_cost, record)
             if not self.is_running:
                 print("Early stop at "+str(epoch))
                 break
-        for callback in all_callbacks:
-            callback.on_work_end()
+        all_callbacks.on_work_end()
+
+    def after_work(self,path=None):
         self.result = self._recoder.data
 
 class TestWorker(PyWorker):
     """a worker which will train and evaluate the model"""
-    def __init__(self,generator=None):
-        super().__init__()
-        self._generator = generator
-        self.callbacks = []
-        if self._generator is None:
+    def __init__(self,executor=None,generator=None,callbacks=None):
+        super().__init__(executor)
+        if generator is None:
             self._generator = DataGenerator()
-
+        else:
+            self._generator = generator
+        if callbacks is None:
+            self._callbacks = Callbacks()
+        else:
+            self._callbacks = callbacks
     def before_work(self,path=None):
         item = self.data['testing']
         self._generator.x_data = item['inputs']
         self._generator.y_data = item['answers']
         self._generator.extra = item['extra']
-        self._callbacks.append(Accumulator(prefix='test',name='loss'))
+        self._callbacks.add_callbacks(Accumulator(prefix='test',name='loss'))
         record_saved_path = None
         if path is not None:
             record_saved_path = path+'/test_record.json'
@@ -162,28 +201,28 @@ class TestWorker(PyWorker):
                      fp.write(str(self._settings))
         self._recoder = Recorder()
         self._recoder.path=record_saved_path
+        self._executor.process(self.model)
 
     def work(self):
         """Test model"""
         self._validate()
-        self.executor.process()
-        callbacks = self.callbacks + [self._recoder]
-        for callback in callbacks:
-            callback.on_work_begin(model=self.model)
+        callbacks = Callbacks(self._callbacks)
+        self._recoder.on_work_begin(worker=self)
+        callbacks.on_work_begin(worker=self)
         record = {}
-        for callback in callbacks:
-            callback.on_epoch_begin(worker=self)
+        self._recoder.on_epoch_begin()
+        callbacks.on_epoch_begin()
+        _init_generator(self._generator)
         for item in self._generator:
             inputs, labels, extra = item
             evaluate_per_batch(self.model,inputs,labels,extra,
-                               self.executor,self.callbacks)
-        for callback in self.callbacks:
-            if hasattr(callback,'data'):
-                for type_,value in callback.data.items():
-                    record[type_]=value
+                               self._executor,self.callbacks)
+        record = callbacks.get_data()
         self._generator.on_epoch_end()
-        for callback in callbacks:
-            callback.on_epoch_end(metric=record)
-        for callback in callbacks:
-            callback.on_work_end()
+        self._recoder.on_epoch_end(metric=record)
+        callbacks.on_epoch_end(metric=record)
+        callbacks.on_work_end()   
+        self._recoder.on_work_end()
+
+    def after_work(self,path=None):
         self.result = self._recoder.data

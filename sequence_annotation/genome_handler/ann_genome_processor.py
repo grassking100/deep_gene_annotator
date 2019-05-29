@@ -38,6 +38,15 @@ def get_one_hot_genome(ann_genome,method='max',focus_types=None):
         one_hot_genome.add(one_hot_item)
     return one_hot_genome
 
+def get_mixed_types_genome(ann_genome):
+    """Make genome into one-hot encoded"""
+    mixed_types_genome = AnnSeqContainer()
+    mixed_types_genome.ANN_TYPES = list(ann_genome.ANN_TYPES) + ['mix']
+    for ann_seq in ann_genome:
+        mixed_types_seq = ann_seq_processor.get_mixed_types(ann_seq)
+        mixed_types_genome.add(mixed_types_seq)
+    return mixed_types_genome
+
 def simplify_genome(ann_genome,replace):
     simplied_genome = AnnSeqContainer()
     simplied_genome.ANN_TYPES = list(replace.keys())

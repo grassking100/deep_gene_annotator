@@ -5,6 +5,7 @@ import torch
 import noisy_sigmoid_cuda
 from torch.nn.init import ones_,zeros_,uniform_,normal_, constant_
 from torch.nn import Hardtanh, Sigmoid,Tanh,ReLU
+
 class NoisyHardSigmoidFunction(Function):
     @staticmethod
     def forward(ctx,x,alpha,c,p,alpha_complement,alpha_complement_sgn,random):

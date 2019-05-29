@@ -12,8 +12,14 @@ def gff_info2bed_info(mRNA,exon,orf_info):
     indice = np.argsort(exon_starts)
     exon_starts = [exon_starts[index] for index in indice]
     exon_ends = [exon_ends[index] for index in indice]
-    exon_size = [str(end-start+1) for start,end in zip(exon_starts,exon_ends)]
+    exon_sizes = [str(end-start+1) for start,end in zip(exon_starts,exon_ends)]
+    for size in exon_sizes:
+        if int(size) <= 0:
+            raise Exception("Exon size shold be positive")
     exon_rel_starts = [str(start-mRNA_start) for start in exon_starts]
+    for start in exon_rel_starts:
+        if int(start) < 0:
+            raise Exception("Exon relative start site shold be nonnegative",mRNA,exon_starts,exon_rel_starts)
     info = {}
     info['id'] = mRNA['id']
     info['start'] = mRNA_start - 1
@@ -21,8 +27,8 @@ def gff_info2bed_info(mRNA,exon,orf_info):
     info['strand'] = mRNA[6]
     info['rgb'] = '.'
     info['chr'] = mRNA[0]
-    info['count'] = len(exon_size)
-    info['block_size'] = ",".join(exon_size)
+    info['count'] = len(exon_sizes)
+    info['block_size'] = ",".join(exon_sizes)
     info['block_related_start'] = ",".join(exon_rel_starts)
     info['score'] = '.'
     info['orf_start'] = orf_info['orf_start'] - 1
@@ -50,13 +56,16 @@ def gff2bed(gff_path,bed_path):
     bed_info_list = []
     for id_ in ids:
         mRNA = mRNAs.get_group(id_).to_dict('record')[0]
-        exon = exons.get_group(id_).to_dict('list')
         try:
-            orf = extract_orf(CDSs,id_)
+            exon = exons.get_group(id_).to_dict('list')
+            try:
+                orf = extract_orf(CDSs,id_)
+            except KeyError:
+                orf = {'id':id_,'orf_start':mRNA[3],'orf_end':mRNA[4]}    
+            bed_info = gff_info2bed_info(mRNA,exon,orf)
+            bed_info_list.append(bed_info)
         except KeyError:
-            orf = {'id':id_,'orf_start':mRNA[3],'orf_end':mRNA[4]}
-        bed_info = gff_info2bed_info(mRNA,exon,orf)
-        bed_info_list.append(bed_info)
+            pass
     bed = pd.DataFrame.from_dict(bed_info_list)
     bed = bed[BED_COLUMNS]
     bed.to_csv(bed_path,header=None,index=None,sep='\t')
@@ -65,5 +74,3 @@ if __name__ =='__main__':
     gff_path=sys.argv[1]
     bed_path=sys.argv[2]
     gff2bed(gff_path,bed_path)
-    
-    

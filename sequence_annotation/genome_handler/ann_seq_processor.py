@@ -67,15 +67,19 @@ def is_value_sum_to_length(seq, focus_types=None):
         values += seq.get_ann(type_)
     return sum(values)==seq.length
 
-def is_one_hot(seq, focus_types=None):
+def is_binary(seq, focus_types=None):
     focus_types = focus_types or seq.ANN_TYPES
     values = []
     for type_ in focus_types:
         values.append(seq.get_ann(type_))
-    is_0_1 = np.all(np.isin(np.array(values), [0,1]))
+    is_binary = np.all(np.isin(np.array(values), [0.0,1.0]))
+    return is_binary
+
+def is_one_hot(seq, focus_types=None):
+    _is_binary = is_binary(seq, focus_types)
     _is_full_annotated = is_full_annotated(seq, focus_types)
-    is_sum_to_length = is_value_sum_to_length(seq, focus_types)
-    return is_0_1 and _is_full_annotated and is_sum_to_length
+    _is_sum_to_length = is_value_sum_to_length(seq, focus_types)
+    return _is_binary and _is_full_annotated and _is_sum_to_length
 
 def _get_one_hot_by_max(seq, focus_types=None):
     focus_types = focus_types or seq.ANN_TYPES
@@ -183,6 +187,9 @@ def seq2vecs(ann_seq,ann_types=None):
             " but the minus strand sequence will be flipped!\n"
             "!!!\n")
     warnings.warn(warn)
+    if ann_types is not None:
+        if not (ann_types[0]=='exon' and ann_types[1]=='intron' and ann_types[2]=='other'):
+            raise Exception()
     ann_types = ann_types or ann_seq.ANN_TYPES
     ann = []
     for type_ in ann_types:
@@ -195,34 +202,49 @@ def seq2vecs(ann_seq,ann_types=None):
             raise InvalidStrandType(ann_seq.strand)
     return np.transpose(ann)
 
-def vecs2seq(vecs,id_,strand,ann_types):
+def vecs2seq(vecs,id_,strand,ann_types,length=None):
     #vecs shape is channel,length
     if vecs.shape[0] != len(ann_types):
         raise Exception("The number of annotation type is not match with the channel number.")
     ann_seq = AnnSequence()
     ann_seq.ANN_TYPES = ann_types
     ann_seq.id=id_
-    ann_seq.length = vecs.shape[1]
+    if length is None:
+        ann_seq.length = vecs.shape[1]
+    else:
+        ann_seq.length = length
     ann_seq.strand=strand
     ann_seq.init_space()
+    length = ann_seq.length
     for index,type_ in  enumerate(ann_types):
-        ann_seq.set_ann(type_,vecs[index])
+        ann_seq.set_ann(type_,vecs[index][:length])
     return ann_seq
 
-def mixed_typed_seq_generate(seq):
-    if set(seq.ANN_TYPES)!=set(['exon','intron','other']):
-        raise Exception("Error ANN_TYPES,it should be 'exon','intron','other'.")
+def get_binary(seq):
+    binary_seq = seq.copy().clean_space().init_space()
+    for type_ in binary_seq.ANN_TYPES:
+        temp = np.array(seq.get_ann(type_))
+        binary_seq.set_ann(type_,np.nan_to_num(temp/temp))
+    return binary_seq
+
+def get_mixed_types(seq):
     vecs = []
-    for ann_type in ['exon','intron','other']:
-        temp = np.array(seq.get_ann(ann_type))
+    maps = {}
+    kernel = [0]*len(seq.ANN_TYPES)
+    for type_ in seq.ANN_TYPES:
+        temp = np.array(seq.get_ann(type_))
         vecs.append(np.nan_to_num(temp/temp))
+        index = seq.ANN_TYPES.index(type_)
+        kernel_ = list(kernel)
+        kernel_ [index] = 1
+        maps[type_] = kernel_
     t_vecs = np.array(vecs).transpose()
-    mixed_type_seq = AnnSequence().from_dict(seq.to_dict())
-    mixed_type_seq.clean_space()
-    mixed_type_seq.ANN_TYPES =  ['exon','intron','mix','other']
+    mixed_type_seq = seq.copy().clean_space()
+    mixed_type_seq.ANN_TYPES =  list(seq.ANN_TYPES) + ['mix']
     mixed_type_seq.init_space()
-    mixed_type_seq.add_ann('exon',np.all(t_vecs==[1,0,0],1).astype('int'))
-    mixed_type_seq.add_ann('intron',np.all(t_vecs==[0,1,0],1).astype('int'))
-    mixed_type_seq.add_ann('mix',np.all(t_vecs==[1,1,0],1).astype('int'))
-    mixed_type_seq.add_ann('other',np.all(t_vecs==[0,0,1],1).astype('int'))
+    for type_,kernel in maps.items():
+        mixed_type_seq.set_ann(type_,np.all(t_vecs==kernel,1).astype('int'))
+    mixed_type_seq.set_ann('mix',get_background(mixed_type_seq))
+    if is_one_hot(mixed_type_seq):
+        seq.processed_status ='one_hot'
     return mixed_type_seq

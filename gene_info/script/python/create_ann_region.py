@@ -43,7 +43,6 @@ if __name__ == "__main__":
     araound_data = pd.read_csv(selected_region_path,header=None,sep='\t').to_dict('record')
     #Read chromosome length file
     chrom_info = pd.read_csv(fai_path,header=None,sep='\t')
-    #chrom_id = [chr_.replace('Chr','') for chr_ in chrom_info[0]]
     chrom_id = chrom_info[0]
     chrom_length = chrom_info[1]
     chrom_info = {}
@@ -85,6 +84,6 @@ if __name__ == "__main__":
     region_num = len(extracted)
     print("Region number:"+str(region_num))
     dd.io.save(output_path,extracted.to_dict())
-    with open(saved_root+'/recurrent_count.stats','w') as fp:
+    with open(saved_root+'/parsed.stats','w') as fp:
         fp.write("Parsed number:"+str(parsed_num)+"\n")
         fp.write("Region number:"+str(region_num)+"\n")

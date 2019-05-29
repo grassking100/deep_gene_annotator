@@ -22,7 +22,7 @@ def read_fasta(paths):
 
 def write_fasta(path,seqs):
     """Read dictionary of sequneces into fasta file"""
-    with open(path) as file:
+    with open(path,"w") as file:
         for id_,seq in seqs.items():
             file.write(">" + id_ + "\n")
             file.write(seq + "\n")
