@@ -30,7 +30,6 @@ class TestRegionExtractor(SeqInfoTestCase):
             seqinfo.id = id_
             seqinfo.start = start
             seqinfo.end = end
-            seqinfo.source = 'region_1'
             seqinfos.add(seqinfo)
         for region in regions:
             seqinfo = seqinfos.get(region.id)

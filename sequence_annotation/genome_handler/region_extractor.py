@@ -25,7 +25,15 @@ class RegionExtractor:
 
     def _create_seq_info(self, seq, ann_type, start, end):
         self._region_id += 1
-        target = seq.copy()
+        target = SeqInformation()
+        target.note = seq.note
+        target.source = seq.source
+        target.chromosome_id = seq.chromosome_id
+        target.strand = seq.strand
+        target.start = start
+        target.end = end
+        target.ann_type = ann_type
+        target.ann_status = 'whole'
         target.parent = seq.id
         target.id = str(seq.id)+"_"+str(ann_type)+"_"+str(self._region_id)
         return target
@@ -55,8 +63,8 @@ class RegionExtractor:
         return seq_infos
 
 class GeneInfoExtractor:
-    def __init__(self,extractor=None):
-        self._extractor = extractor or RegionExtractor()
+    def __init__(self):
+        self.extractor = RegionExtractor()
 
     def extract(self,anns,simply_map):
         seq_infos = SeqInfoContainer()
@@ -68,7 +76,7 @@ class GeneInfoExtractor:
         seq_infos = SeqInfoContainer()
         simple_seq = simplify_seq(ann,simply_map)
         simple_seq.chromosome_id = ann.chromosome_id or ann.id
-        genes = [region for region in self._extractor.extract(simple_seq) if region.ann_type=='gene']
+        genes = [region for region in self.extractor.extract(simple_seq) if region.ann_type=='gene']
         seq_infos.add(genes)
         mRNAs = []
         for gene in genes:
@@ -81,7 +89,7 @@ class GeneInfoExtractor:
         for mRNA in mRNAs:
             subseq = ann.get_subseq(mRNA.start,mRNA.end)
             subseq.id = mRNA.id
-            subregions = self._extractor.extract(subseq)
+            subregions = self.extractor.extract(subseq)
             for region in subregions:
                 temp = region.copy()
                 temp.start += mRNA.start

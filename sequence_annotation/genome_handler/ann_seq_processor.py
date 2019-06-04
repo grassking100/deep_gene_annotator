@@ -187,9 +187,6 @@ def seq2vecs(ann_seq,ann_types=None):
             " but the minus strand sequence will be flipped!\n"
             "!!!\n")
     warnings.warn(warn)
-    if ann_types is not None:
-        if not (ann_types[0]=='exon' and ann_types[1]=='intron' and ann_types[2]=='other'):
-            raise Exception()
     ann_types = ann_types or ann_seq.ANN_TYPES
     ann = []
     for type_ in ann_types:
