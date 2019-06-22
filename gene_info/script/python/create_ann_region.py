@@ -20,13 +20,7 @@ if __name__ == "__main__":
                         help="Path of output file",required=True)
     parser.add_argument("--saved_root",
                         help="Path of saved_root file",required=True)
-    args = vars(parser.parse_args())
-    mRNA_bed12_path = args['mRNA_bed12_path']
-    selected_region_path = args['selected_region_path']
-    fai_path = args['fai_path']
-    source_name = args['source_name']
-    output_path = args['output_path']
-    saved_root = args['saved_root']
+    args = parser.parse_args()
     
     #Load library
     from sequence_annotation.genome_handler.sequence import AnnSequence,SeqInformation
@@ -39,12 +33,11 @@ if __name__ == "__main__":
     import pandas as pd
     import deepdish as dd
     #Read bed files of selected mRNA and selected region
-    data = pd.read_csv(mRNA_bed12_path,header=None,sep='\t').to_dict('record')
-    araound_data = pd.read_csv(selected_region_path,header=None,sep='\t').to_dict('record')
+    data = pd.read_csv(args.mRNA_bed12_path,header=None,sep='\t').to_dict('record')
+    araound_data = pd.read_csv(args.selected_region_path,header=None,sep='\t').to_dict('record')
     #Read chromosome length file
-    chrom_info = pd.read_csv(fai_path,header=None,sep='\t')
-    chrom_id = chrom_info[0]
-    chrom_length = chrom_info[1]
+    chrom_info = pd.read_csv(args.fai_path,header=None,sep='\t')
+    chrom_id, chrom_length = chrom_info[0], chrom_info[1]
     chrom_info = {}
     for id_,length in zip(chrom_id,chrom_length):
         chrom_info[str(id_)] = length
@@ -54,15 +47,15 @@ if __name__ == "__main__":
     converter = CodingBedSeqConverter()
     ann_seqs = AnnSeqContainer()
     ann_seqs.ANN_TYPES = converter.ANN_TYPES
-    print("AnnSeq number:"+str(len(parsed)))
+    print("AnnSeq number: {}".format(len(parsed)))
     for index,item in enumerate(parsed):
         seq = converter.convert(item)
         ann_seqs.add(seq)
     chroms = set()
     for seq in ann_seqs:
-        chroms.add(seq.chromosome_id+"_"+seq.strand)
+        chroms.add("{}_{}".format(seq.chromosome_id,seq.strand))
     genome_creator = AnnGenomeCreator()
-    genome = genome_creator.create(ann_seqs,{'chromosome':chrom_info,'source':source_name})
+    genome = genome_creator.create(ann_seqs,{'chromosome':chrom_info,'source':args.source_name})
     backgrounded_genome = get_backgrounded_genome(genome,'other')
     #Parse the bed file and convert its data to SeqInfoContainer
     parser_6 = BedInfoParser(bed_type='bed_6')
@@ -77,13 +70,13 @@ if __name__ == "__main__":
         seq_info.id = item['name']
         seq_infos.add(seq_info)
     parsed_num = len(seq_infos)
-    print("Parsed number:"+str(parsed_num))
+    print("Parsed number: {}".format(parsed_num))
     #Extract selected AnnSeqContainer
     extractor = AnnSeqExtractor()
     extracted = extractor.extract(backgrounded_genome,seq_infos)
     region_num = len(extracted)
-    print("Region number:"+str(region_num))
-    dd.io.save(output_path,extracted.to_dict())
-    with open(saved_root+'/parsed.stats','w') as fp:
-        fp.write("Parsed number:"+str(parsed_num)+"\n")
-        fp.write("Region number:"+str(region_num)+"\n")
+    print("Region number: {}".format(region_num))
+    dd.io.save(args.output_path,extracted.to_dict())
+    with open(os.path.join(args.saved_root,'parsed.stats'),'w') as fp:
+        fp.write("Parsed number: {}\n".format(parsed_num))
+        fp.write("Region number: {}\n".format(region_num))

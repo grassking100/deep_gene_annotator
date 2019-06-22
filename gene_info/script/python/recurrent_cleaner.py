@@ -13,33 +13,26 @@ if __name__ == "__main__":
     parser.add_argument("-r", "--raw_bed_path",help="raw_bed_path",required=True)
     parser.add_argument("-c", "--coordinate_consist_bed_path",help="coordinate_consist_bed_path",required=True)
     parser.add_argument("-f", "--fai_path",help="fai_path",required=True)
-    parser.add_argument("-u", "--upstream_dist",help="upstream_dist",required=True)
-    parser.add_argument("-d", "--downstream_dist",help="downstream_dist",required=True)
-    args = vars(parser.parse_args())
-    saved_root = args['saved_root']
-    id_convert_path = args['id_convert_path']
-    raw_bed_path = args['raw_bed_path']
-    coordinate_consist_bed_path = args['coordinate_consist_bed_path']
-    fai_path = args['fai_path']
-    upstream_dist = int(args['upstream_dist'])
-    downstream_dist = int(args['downstream_dist'])
-    output_path = saved_root+"/recurrent_cleaned.bed"
+    parser.add_argument("-u", "--upstream_dist",help="upstream_dist",type=int,required=True)
+    parser.add_argument("-d", "--downstream_dist",help="downstream_dist",type=int,required=True)
+    args = parser.parse_args()
+    output_path = os.path.join(args.saved_root,"recurrent_cleaned.bed")
     if os.path.exists(output_path):
         print("Result files are already exist, procedure will be skipped.")
     else:
         ###Read data###
         id_convert = None
-        if id_convert_path is not None:
-            id_convert = get_id_table(id_convert_path)
-        raw_bed = read_bed(raw_bed_path)
-        coordinate_consist_bed = read_bed(coordinate_consist_bed_path)
+        if args.id_convert_path is not None:
+            id_convert = get_id_table(args.id_convert_path)
+        raw_bed = read_bed(args.raw_bed_path)
+        coordinate_consist_bed = read_bed(args.coordinate_consist_bed_path)
         raw_bed['chr'] = raw_bed['chr'].str.replace('Chr', '')
         want_id = set(coordinate_consist_bed['id'])
         all_id = set(raw_bed['id'])
         left_bed = raw_bed[~raw_bed['id'].isin(want_id)]
         all_bed = pd.concat([coordinate_consist_bed,left_bed])
-        want_bed_path = saved_root+'/want.bed'
-        unwant_bed_path = saved_root+'/unwant.bed'
+        want_bed_path = os.path.join(args.saved_root,'want.bed')
+        unwant_bed_path = os.path.join(args.saved_root,'unwant.bed')
         saved_nums = []
         saved_num = -1
         index = 0
@@ -51,15 +44,17 @@ if __name__ == "__main__":
             write_bed(unwant_bed,unwant_bed_path)
             if len(want_bed)==0:
                 break
-            id_path = saved_root+'/region_upstream_'+str(upstream_dist)+'_downstream_'+\
-            str(downstream_dist)+'_safe_zone_id'
-            command = "bash "+root_path+"/../bash/safe_filter.sh "+ want_bed_path+\
-            " "+unwant_bed_path+" "+fai_path+" "+str(upstream_dist)+" "+str(downstream_dist)+" "+saved_root
+            path = 'region_upstream_{}_downstream_{}_safe_zone_id'.format(args.upstream_dist,args.downstream_dist)
+            id_path = os.path.join(args.saved_root,path)
+            command = "bash {}/../bash/safe_filter.sh {} {} {} {} {} {}"
+            command = command.format(root_path,want_bed_path,unwant_bed_path,
+                                     args.fai_path,args.upstream_dist,
+                                     args.downstream_dist,args.saved_root)
             print("Execute command:"+command)
             os.system(command)
             #break
-            want_id = [id_ for id_ in open(id_path+'.txt').read().split('\n')if id_ != '']
-            with open(id_path+"_"+str(index)+'.txt',"w") as fp:
+            want_id = [id_ for id_ in open(id_path+'.txt').read().split('\n') if id_ != '']
+            with open('{}_{}.txt'.format(id_path,index),"w") as fp:
                 for id_ in want_id:
                     fp.write(id_+"\n")
             num = len(want_id)
@@ -69,14 +64,14 @@ if __name__ == "__main__":
                 break
             else:
                 saved_num = num
-                want_bed_path = saved_root+'/want_iter_'+str(index)+'.bed'
-                unwant_bed_path = saved_root+'/unwant_iter_'+str(index)+'.bed'
+                want_bed_path = os.path.join(args.saved_root,'want_iter_{}.bed'.format(index))
+                unwant_bed_path = os.path.join(args.saved_root,'unwant_iter_{}.bed'.format(index))
 
         ###Write data###
         want_bed = coordinate_consist_bed[coordinate_consist_bed['id'].isin(want_id)]
         want_bed = want_bed[~ want_bed.duplicated()]
         write_bed(want_bed,output_path)
-        with open(saved_root+'/recurrent_count.stats','w') as fp:
+        with open(os.path.join(args.saved_root,'recurrent_count.stats'),'w') as fp:
             for index,num in  enumerate(saved_nums):
                 fp.write("Iterate "+str(index+1)+":left "+str(num)+" transcript.\n")
         

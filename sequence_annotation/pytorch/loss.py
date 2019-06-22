@@ -34,19 +34,24 @@ class CCELoss(nn.Module):
             loss = loss_.mean()
         return loss
 
+def bce(outputs,answers):
+    return BCE(outputs,answers,reduction='none')
+    
 #Rename it from CodingLoss
 class SeqAnnLoss(nn.Module):
-    def __init__(self,exon_coef=None,other_coef=None,nonoverlap_coef=None):#intron_coef=None
+    def __init__(self,intron_coef=None,other_coef=None,nonoverlap_coef=None):
         super().__init__()
         self.ignore_value = -1
-        self.exon_coef = exon_coef or 1
-        #Remove intron coef,because intron_loss will be removed
-        #self.intron_coef = intron_coef or 1
-        self.other_coef = other_coef or 2
-        self.nonoverlap_coef = nonoverlap_coef or 0.5
+        self.intron_coef = intron_coef or 1
+        self.other_coef = other_coef or 1
+        self.nonoverlap_coef = nonoverlap_coef or 1
 
     def forward(self, output, answer,**kwargs):
-        """Data shape is N,C,L.Output channel order:Transcrioutput,Exon"""
+        """
+            Data shape is N,C,L.
+            Output channel order: Transcription, Intron
+            Answe channel order: Exon, Intron, Other
+        """
         if len(output.shape) != 3 or len(answer.shape) != 3:
             raise Exception("Wrong input shape",output.shape,answer.shape)
         if output.shape[0] != answer.shape[0] or output.shape[1] != 2 or answer.shape[1] != 3:
@@ -57,29 +62,26 @@ class SeqAnnLoss(nn.Module):
         answer = answer.float()
         if self.ignore_value is not None:
             mask = (answer.max(1)[0] != self.ignore_value).float()
+        #Get data    
+        #exon_answer = answer[:,0,:]
+        intron_answer = answer[:,1,:]
         other_answer = answer[:,2,:]
-        transcrioutput_answer = 1-other_answer
-        transcrioutput_answer_mask = (transcrioutput_answer >= 0.5).float()
-        transcrioutput_output = output[:,0,:]
-        other_output = 1-transcrioutput_output
-        transcrioutput_output_mask = (transcrioutput_output >= 0.5).float()
-        exon_answer = answer[:,0,:]
-        #intron_answer = answer[:,1,:]
-        exon_output = output[:,1,:]
-        #intron_output = (1-exon_output)
-        overlap_mask = transcrioutput_output_mask*transcrioutput_answer_mask*mask
+        transcript_output = output[:,0,:]
+        intron_output = output[:,1,:]
+        transcript_answer = 1 - other_answer
+        other_output = 1-transcript_output
+        #Get mask
+        transcript_output_mask = (transcript_output >= 0.5).float()
+        overlap_mask = transcript_output_mask*transcript_answer*mask
         non_overlap_mask = (1-overlap_mask)*mask
-        other_loss = BCE(other_output,other_answer,reduction='none')*self.other_coef*mask
-        exon_loss = BCE(exon_output,exon_answer,reduction='none')*self.exon_coef*overlap_mask
-        #Remove intron_loss will be removed, becuase it is equal exon_loss
-        #intron_loss = BCE(intron_output,intron_answer,reduction='none')*self.intron_coef*overlap_mask
-        non_overlap_loss = BCE(exon_output,torch.ones_like(exon_output))*non_overlap_mask*self.nonoverlap_coef
+        #Calculate loss
+        other_loss = bce(other_output,other_answer)*self.other_coef*mask
+        intron_loss = bce(intron_output,intron_answer)*self.intron_coef*overlap_mask
+        non_overlap_loss = bce(intron_output,torch.zeros_like(intron_output))*non_overlap_mask*self.nonoverlap_coef
         if self.ignore_value is not None:
             loss = other_loss.sum()/(mask.sum())
-            loss += exon_loss.sum()/(overlap_mask.sum()+1e-32)
-            #loss += (intron_loss+exon_loss).sum()/(overlap_mask.sum()+1e-32)
+            loss += intron_loss.sum()/(overlap_mask.sum()+1e-32)
             loss += non_overlap_loss.sum()/(non_overlap_mask.sum()+1e-32)
         else:
-            #loss = (other_loss+intron_loss+exon_loss+non_overlap_loss).mean()
-            loss = (other_loss+exon_loss+non_overlap_loss).mean()
+            loss = (other_loss+intron_loss+non_overlap_loss).mean()
         return loss

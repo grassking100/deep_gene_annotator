@@ -14,10 +14,6 @@ class BasicModel(nn.Module,metaclass=ABCMeta):
         self._settings = {}
         self._out_channels = None
 
-    @abstractmethod
-    def reset_parameters(self):
-        pass
-
     @property
     def saved_lengths(self):
         return self._lengths
@@ -48,26 +44,23 @@ def init_GRU(gru):
         elif 'bias' in name:
             param.data.fill_(0)
 
-def seq_ann_inference(outputs,answers=None,ignore_value=-1):
+def seq_ann_inference(outputs,answers=None,ignore_value = -1):
     #N,C,L
     if outputs.shape[1]!=2:
         raise Exception("Channel size should be two")
     transcript_potential = outputs[:,0,:].unsqueeze(1)
-    exon_potential = outputs[:,1,:].unsqueeze(1)
+    intron_potential = outputs[:,1,:].unsqueeze(1)
     other = 1-transcript_potential
     transcript_mask = (transcript_potential>=0.5).float()
-    exon = transcript_mask*exon_potential
-    intron = transcript_mask*(1-exon_potential)
+    intron = transcript_mask*intron_potential
+    exon = transcript_mask*(1-intron_potential)
     result = torch.cat([exon,intron,other],dim=1)
-    if ignore_value is not None:
-        if answers is not None:
-            max_len = outputs.shape[2]
-            mask = (answers[:,0,:max_len] != ignore_value).unsqueeze(1)
-            mask = torch.cat([mask]*3,dim=1).float().cuda()
-            neg_value = torch.full(result.shape,ignore_value).float().cuda()
-            result = result*mask + neg_value*(1-mask)
-        else:
-            raise Exception("To use mask,please provide answers to the method")
+    if ignore_value is not None and answers is not None:
+        max_len = outputs.shape[2]
+        mask = (answers[:,0,:max_len] != ignore_value).unsqueeze(1)
+        mask = torch.cat([mask]*3,dim=1).float().cuda()
+        neg_value = torch.full(result.shape,ignore_value).float().cuda()
+        result = result*mask + neg_value*(1-mask)
     return result
             
 class FeatureBlock(BasicModel):
@@ -147,7 +140,8 @@ class RelationBlock(BasicModel):
         elif self.rnns_type == 'customized':
             rnn_class = ConcatRNN
         else:
-            raise Exception("Wrong rnns type",self.rnns_type)
+            pass
+            #raise Exception("Wrong rnns type",self.rnns_type)
         self.rnns = rnn_class(input_size=input_size,**self.rnns_setting)
         input_size=self.rnns.hidden_size
         if self.rnns_type in ['LSTM','GRU']:
@@ -169,7 +163,7 @@ class RelationBlock(BasicModel):
             rnn_distribution = {}
             x = x.transpose(1,2)
             x = pack_padded_sequence(x,lengths, batch_first=True)
-            x,_ =self.rnns(x)
+            x,_ = self.rnns(x)
             x,_ = pad_packed_sequence(x, batch_first=True)
             x = x.transpose(1,2)
         else:

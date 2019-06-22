@@ -18,17 +18,12 @@ if __name__ == "__main__":
                         help="cs_path",required=True)
     parser.add_argument("--saved_root",
                         help="saved_root",required=True)
-    args = vars(parser.parse_args())
-    biomart_path = args['biomart_path']
-    bed_path = args['bed_path']
-    gro_1_path = args['gro_1_path']
-    gro_2_path = args['gro_2_path']
-    cs_path = args['cs_path']
-    saved_root = args['saved_root']
-    valid_official_coding_bed_path = saved_root+'/valid_official_coding.bed'
-    valid_gro_path = saved_root+'/valid_gro.tsv'
-    valid_cleavage_site_path = saved_root+'/valid_cleavage_site.tsv'
-    id_convert_path = saved_root+'/id_convert.tsv'
+    args = parser.parse_args()
+
+    valid_official_coding_bed_path = os.path.join(args.saved_root,'valid_official_coding.bed')
+    valid_gro_path = os.path.join(args.saved_root,'valid_gro.tsv')
+    valid_cleavage_site_path = os.path.join(args.saved_root,'valid_cleavage_site.tsv')
+    id_convert_path = os.path.join(args.saved_root,'id_convert.tsv')
     paths = [valid_official_coding_bed_path,
              valid_gro_path,valid_cleavage_site_path]
     exists = [os.path.exists(path) for path in paths]
@@ -36,13 +31,13 @@ if __name__ == "__main__":
         print("Result files are already exist, procedure will be skipped.")
     else:
         ###Read file###
-        biomart_gene_info = pd.read_csv(biomart_path)
+        biomart_gene_info = pd.read_csv(args.biomart_path)
         biomart_gene_info = biomart_gene_info[['Gene stable ID','Transcript stable ID','Transcript type']]
         biomart_gene_info.columns = ['gene_id','transcript_id','transcript_type']
-        official_coding_bed = read_bed(bed_path)
-        gro_1 = pd.read_csv(gro_1_path,comment ='#',sep='\t')
-        gro_2 = pd.read_csv(gro_2_path,comment ='#',sep='\t')
-        cleavage_site = pd.read_csv(cs_path)
+        official_coding_bed = read_bed(args.bed_path)
+        gro_1 = pd.read_csv(args.gro_1_path,comment ='#',sep='\t')
+        gro_2 = pd.read_csv(args.gro_2_path,comment ='#',sep='\t')
+        cleavage_site = pd.read_csv(args.cs_path)
         valid_chrs = [str(chr_) for chr_ in range(1,6)]
         ###Process araport_11_gene_info###
         biomart_coding = biomart_gene_info[biomart_gene_info['transcript_type']=='protein_coding']

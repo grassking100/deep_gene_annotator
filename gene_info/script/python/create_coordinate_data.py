@@ -11,22 +11,19 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--saved_root",
                         help="saved_root",required=True)
     parser.add_argument("-g", "--safe_merged_gro_sites_path",
-                        help="safe_merged_gro_sites_pathe",required=True)
+                        help="safe_merged_gro_sites_path",required=True)
     parser.add_argument("-c", "--safe_merged_cleavage_sites_path",
                         help="safe_merged_cleavage_sites_path",required=True)
     parser.add_argument("-i","--id_convert_path",help="id_convert_path",required=True)
-    args = vars(parser.parse_args())
-    id_convert_path = args['id_convert_path']
-    id_convert = get_id_table(id_convert_path)
-    saved_root = args['saved_root']
-    safe_merged_gro_sites_path = args['safe_merged_gro_sites_path']
-    safe_merged_cleavage_sites_path = args['safe_merged_cleavage_sites_path']
-    consist_data_path = saved_root+'/consist_data.tsv'
+
+    args = parser.parse_args()
+    id_convert = get_id_table(args.id_convert_path)
+    consist_data_path = os.path.join(args.saved_root,'consist_data.tsv')
     if os.path.exists(consist_data_path):
         print("Result files are already exist, procedure will be skipped.")
     else:
-        safe_merged_gro_sites = pd.read_csv(safe_merged_gro_sites_path,sep='\t')
-        safe_merged_cleavage_sites = pd.read_csv(safe_merged_cleavage_sites_path,sep='\t')
+        safe_merged_gro_sites = pd.read_csv(args.safe_merged_gro_sites_path,sep='\t')
+        safe_merged_cleavage_sites = pd.read_csv(args.safe_merged_cleavage_sites_path,sep='\t')
         merged_data = safe_merged_cleavage_sites.merge(safe_merged_gro_sites,
                                                        left_on=['chr','strand','ref_name'],
                                                        right_on=['chr','strand','ref_name'])

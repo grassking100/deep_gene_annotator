@@ -5,7 +5,6 @@ class Worker(metaclass=ABCMeta):
     """The class hold model and handle with data input, model pedict and model result"""
     def __init__(self):
         self.model = None
-        self.compiler = None
         self.data = None
         self.result = {}
         self.is_verbose_visible = True

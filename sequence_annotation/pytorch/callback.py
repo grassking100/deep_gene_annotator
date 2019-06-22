@@ -53,6 +53,8 @@ class TensorboardWriter:
                    colors=None,use_stack=False,*args,**kwargs):
         counter = counter or self.counter
         #data shape is L,C
+        if len(value.shape)!=2:
+            raise Exception("Value shape size should be two",value.shape)
         fig = pyplot.figure(dpi=200)
         if isinstance(value,torch.Tensor):
             value = value.cpu().detach().numpy()
@@ -183,6 +185,7 @@ class GFFCompare(Callback):
         self._path = path
         self._simplify_map = simplify_map
         self._ann_types = ann_types
+        self.prefix = ""
         self._counter = 0
 
     def on_epoch_begin(self,counter,**kwargs):
@@ -206,17 +209,21 @@ class GFFCompare(Callback):
                 self._answers.add(ann_informs)
 
     def on_epoch_end(self,**kwargs):
-        predict_path = self._path+"/predict_"+str(self._counter)+".gff3"
+        if self.prefix != "":
+            path = self._path+"/"+self.prefix+"_gffcompare_"+str(self._counter)
+        else:
+            path = self._path+"/gffcompare_"+str(self._counter)
+        predict_path = path+".gff3"
         answer_path = self._path+"/answers.gff3"
         if self._counter==1:
             self._answers.to_gff().to_csv(answer_path,index=None,header=None,sep='\t')
+            os.system('python3 sequence_annotation/gene_info/script/python/gff2bed.py answers.gff3 answers.bed')
         if not self._outputs.is_empty():
             self._outputs.to_gff().to_csv(predict_path,index=None,header=None,sep='\t')
-            os.system('~/../home/gffcompare/gffcompare -T -r '+answer_path+' '+\
-                      predict_path+' -o '+self._path+"/gffcompare_"+str(self._counter))
-            os.system('rm '+self._path+"/gffcompare_"+str(self._counter)+'.tracking')
-            os.system('rm '+self._path+"/gffcompare_"+str(self._counter)+'.loci')
-            #os.system('python3 sequence_annotation/gene_info/script/python/gff2bed.py  '+self._path+"/gffcompare_"+str(self._counter)+'.gff3 '+self._path+"/gffcompare_"+str(self._counter)+'.bed')
+            os.system('~/../home/gffcompare/gffcompare -T -r '+answer_path+' '+ predict_path+' -o '+path)
+            os.system('rm '+path+'.tracking')
+            os.system('rm '+path+'.loci')
+            os.system('python3 sequence_annotation/gene_info/script/python/gff2bed.py '+path+'.gff3 '+path+'.bed')
             
 class EarlyStop(Callback):
     def __init__(self):
@@ -262,7 +269,7 @@ class EarlyStop(Callback):
         if update:
             if self.save_best_weights:
                 self._model_weights = self._worker.model.state_dict()
-            self.best_epoch = self._counter
+            self._best_epoch = self._counter
             self._best_result = target
         if self.patient is not None:
             if (self._counter-self.best_epoch) > self.patient:
@@ -288,8 +295,8 @@ class TensorboardCallback(Callback):
         self._prefix = ""
         self._model = None
         self._counter = 0
-        self.do_add_grad = True
-        self.do_add_weights = True
+        self.do_add_grad = False
+        self.do_add_weights = False
         self.do_add_scalar = True
     def on_epoch_begin(self,counter,**kwargs):
         self._counter = counter
@@ -318,17 +325,17 @@ class TensorboardCallback(Callback):
         self._model = worker.model
 
 class SeqFigCallback(Callback):
-    def __init__(self,tensorboard_writer,data,answer,inference=None):
+    def __init__(self,tensorboard_writer,data,answer):
         self._writer = tensorboard_writer
         self._data = data
         self._answer = answer
-        self.train = False
         self._model = None
         self.class_names = None
         self._counter = 0
         self.colors = None
-        self.inference = inference
         self._prefix = ""
+        if len(data)!=1 or len(answer)!=1:
+            raise Exception("Data size should be one,",data.shape,answer.shape)
     def on_epoch_begin(self,counter,**kwargs):
         self._counter = counter
     @property
@@ -344,41 +351,37 @@ class SeqFigCallback(Callback):
             
     def on_work_begin(self,worker,**kwargs):
         self._model = worker.model
-        self._writer.add_figure("answer_figure",self._answer,
+        self._executor = worker.executor
+        self._writer.add_figure("answer_figure",self._answer[0],
                                 prefix=self._prefix,colors=self.colors,
                                 labels=self.class_names,title="Answer figure",
                                 use_stack=True)
 
     def on_epoch_end(self,**kwargs):
         #Value's shape should be (1,C,L)
-        self._model.train(self.train)
-        lengths = [self._data.shape[2]]
-        output = self._model(self._data,lengths=lengths)
-        for name,value in self._model.saved_distribution.items():
-            self._writer.add_distribution(name,value,prefix=self._prefix,
-                                          counter=self._counter)
-            if len(value.shape)==3:
-                value = value[0]
-            self._writer.add_figure(name+"_figure",value.transpose(0,1),prefix=self._prefix,
-                                    counter=self._counter,title=name)
-        result = output
-        if self.inference is not None:
-            answers = torch.Tensor([self._answer]).transpose(1,2)
-            result = self.inference(result,answers)
-        result = result[0]
+        result = self._executor.predict(self._model,self._data,[self._data.shape[2]])[0]
+        if hasattr(self._model,'saved_distribution'):
+            for name,value in self._model.saved_distribution.items():
+                self._writer.add_distribution(name,value,prefix=self._prefix,
+                                              counter=self._counter)
+                if len(value.shape)==3:
+                    value = value[0]
+                self._writer.add_figure(name+"_figure",value.transpose(0,1),prefix=self._prefix,
+                                        counter=self._counter,title=name)
         class_num = result.shape[0]
-        index = result.max(0)[1].detach().cpu().numpy()
+        index = result.max(0)[1].cpu().numpy()
         result = index2onehot(index,class_num)
         result = np.transpose(result)
         self._writer.add_figure("result_figure",result,
                                 prefix=self._prefix,colors=self.colors,
                                 labels=self.class_names,title="Result figure",
                                 use_stack=True)
-        if self._model.use_CRF:
-            transitions = self._model.CRF.transitions.cpu().detach().numpy()
-            self._writer.add_matshow("transitions_figure",transitions,
-                                     prefix=self._prefix,
-                                     title="Transitions figure (to row index from column index)")
+        if hasattr(self._model,'use_CRF'):
+            if self._model.use_CRF:
+                transitions = self._model.CRF.transitions.cpu().detach().numpy()
+                self._writer.add_matshow("transitions_figure",transitions,
+                                         prefix=self._prefix,
+                                         title="Transitions figure (to row index from column index)")
 
 class DataCallback(Callback):
     def __init__(self):

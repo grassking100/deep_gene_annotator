@@ -1,8 +1,0 @@
-[I 18:52:02.430 NotebookApp] Serving notebooks from local directory: /home/sequence_annotation
-[I 18:52:02.431 NotebookApp] The Jupyter Notebook is running at:
-[I 18:52:02.431 NotebookApp] http://(8d5a372ee2d3 or 127.0.0.1):8888/
-[I 18:52:02.431 NotebookApp] Use Control-C to stop this server and shut down all kernels (twice to skip confirmation).
-[W 18:52:02.434 NotebookApp] No web browser found: could not locate runnable browser.
-[I 18:52:08.764 NotebookApp] New terminal with specified name: 2
-[C 18:52:36.301 NotebookApp] received signal 15, stopping
-[I 18:52:36.302 NotebookApp] Shutting down 0 kernels

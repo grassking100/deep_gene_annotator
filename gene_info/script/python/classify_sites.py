@@ -4,6 +4,7 @@ import pandas as pd
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__))
 from utils import belong_by_boundary, belong_by_distance, read_bed
+
 if __name__ == "__main__":
     #Reading arguments
     parser = ArgumentParser()
@@ -19,25 +20,17 @@ if __name__ == "__main__":
                         help="Path of valid external three UTR file",required=True)
     parser.add_argument("-s", "--saved_root",
                         help="Path to save",required=True)
-    parser.add_argument("-u", "--upstream_dist",
+    parser.add_argument("-u", "--upstream_dist", type=int,
                         help="upstream_dist",required=True)
-    parser.add_argument("-d", "--downstream_dist",
+    parser.add_argument("-d", "--downstream_dist", type=int,
                         help="downstream_dist",required=True)
-    args = vars(parser.parse_args())
-    valid_official_bed_path = args['valid_official_bed_path']
-    valid_gro_site_path = args['valid_gro_site_path']
-    valid_cleavage_site_path = args['valid_cleavage_site_path']
-    valid_external_five_UTR_path = args['valid_external_five_UTR_path']
-    valid_external_three_UTR_path = args['valid_external_three_UTR_path']
-    saved_root = args['saved_root']
-    upstream_dist = int(args['upstream_dist'])
-    downstream_dist = int(args['downstream_dist'])
-    inner_gro_sites_path = saved_root+'/inner_gro_sites'+'.tsv'
-    inner_cleavage_sites_path = saved_root+'/inner_cleavage_sites'+'.tsv'
-    long_dist_gro_sites_path = saved_root+'/long_dist_gro_sites'+'.tsv'
-    long_dist_cleavage_sites_path = saved_root+'/long_dist_cleavage_sites'+'.tsv'
-    transcript_gro_sites_path = saved_root+'/transcript_gro_sites'+'.tsv'
-    transcript_cleavage_sites_path = saved_root+'/transcript_cleavage_sites'+'.tsv'
+    args = parser.parse_args()
+    inner_gro_sites_path = os.path.join(args.saved_root,'inner_gro_sites.tsv')
+    inner_cleavage_sites_path = os.path.join(args.saved_root,'inner_cleavage_sites.tsv')
+    long_dist_gro_sites_path = os.path.join(args.saved_root,'long_dist_gro_sites.tsv')
+    long_dist_cleavage_sites_path = os.path.join(args.saved_root,'long_dist_cleavage_sites.tsv')
+    transcript_gro_sites_path = os.path.join(args.saved_root,'transcript_gro_sites.tsv')
+    transcript_cleavage_sites_path = os.path.join(args.saved_root,'transcript_cleavage_sites.tsv')
     paths = [inner_gro_sites_path,inner_cleavage_sites_path,
              long_dist_gro_sites_path,long_dist_cleavage_sites_path,
              transcript_gro_sites_path,transcript_cleavage_sites_path]
@@ -47,11 +40,11 @@ if __name__ == "__main__":
     else:
         print('Find TSS and CA sites are belong to which genes')
         ###Read file###
-        valid_official_bed = read_bed(valid_official_bed_path)
-        valid_gro = pd.read_csv(valid_gro_site_path,sep='\t')
-        valid_cleavage_site = pd.read_csv(valid_cleavage_site_path,sep='\t')
-        valid_external_five_UTR = pd.read_csv(valid_external_five_UTR_path,sep='\t')
-        valid_external_three_UTR = pd.read_csv(valid_external_three_UTR_path,sep='\t')
+        valid_official_bed = read_bed(args.valid_official_bed_path)
+        valid_gro = pd.read_csv(args.valid_gro_site_path,sep='\t')
+        valid_cleavage_site = pd.read_csv(args.valid_cleavage_site_path,sep='\t')
+        valid_external_five_UTR = pd.read_csv(args.valid_external_five_UTR_path,sep='\t')
+        valid_external_three_UTR = pd.read_csv(args.valid_external_three_UTR_path,sep='\t')
         print('Classify valid GRO sites and cleavage sites and write data')
         ###Classify valid GRO sites and cleavage sites and write data###
         inner_gro_sites = belong_by_boundary(valid_gro,valid_external_five_UTR,
@@ -63,9 +56,9 @@ if __name__ == "__main__":
         transcript_cleavage_sites = belong_by_boundary(valid_cleavage_site,valid_official_bed,
                                                        'evidence_3_end','start','end','id')
         long_dist_gro_sites = belong_by_distance(valid_gro,valid_official_bed,
-                                                 -upstream_dist,-1,'evidence_5_end','five_end','id')
+                                                 -args.upstream_dist,-1,'evidence_5_end','five_end','id')
         long_dist_cleavage_sites = belong_by_distance(valid_cleavage_site,valid_official_bed,
-                                                      1,downstream_dist,"evidence_3_end",'three_end','id')
+                                                      1,args.downstream_dist,"evidence_3_end",'three_end','id')
         
         inner_gro_sites['gro_source'] = 'inner'
         inner_cleavage_sites['cleavage_source'] = 'inner'

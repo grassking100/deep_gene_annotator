@@ -1,5 +1,5 @@
 """
-    Tools to hadnler with fatsa file
+    Tools to handle with fatsa file
 """
 from Bio import SeqIO
 from pathlib import Path
@@ -16,7 +16,7 @@ def read_fasta(paths):
         with open(path) as file:
             fasta_sequences = SeqIO.parse(file, 'fasta')
             for fasta in fasta_sequences:
-                name, seq = fasta.id, (str)(fasta.seq)
+                name, seq = fasta.id, str(fasta.seq)
                 data[name]=seq
     return data
 

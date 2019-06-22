@@ -87,10 +87,9 @@ class RNN(nn.Module):
         else:
             x = _reverse(x.transpose(1,2),lengths).transpose(1,2)
         all_states = []
-        x,batch_sizes = self._preprocess(x,batch_first,lengths)
+        x,batch_sizes = self._preprocess(x,lengths)
         outputs = self._forward(x,batch_sizes)
         for output in outputs:
-            #output = PackedSequence(output, batch_sizes)
             output,_ = pad_packed_sequence(output, batch_first=True)
             if self._bidirectional:
                 output,_ = from_bidirection(output.transpose(1,2),lengths)

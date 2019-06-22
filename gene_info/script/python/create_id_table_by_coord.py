@@ -12,10 +12,9 @@ if __name__ == "__main__":
                         help="saved_root",required=True)
     parser.add_argument("-b", "--bed_path",
                         help="consist_data_path",required=True)
-    args = vars(parser.parse_args())
-    saved_root = args['saved_root']
-    bed_path = args['bed_path']
-    bed = read_bed(bed_path)
+    args = parser.parse_args()
+
+    bed = read_bed(args.bed_path)
     record = bed.to_dict('record')
     new_df = []
     for item in record:
@@ -24,4 +23,4 @@ if __name__ == "__main__":
         temp['transcript_id'] = item['id']
         new_df += [temp]
     new_df = pd.DataFrame.from_dict(new_df)
-    new_df.to_csv(saved_root+"/id_table.tsv",index=None,sep='\t')
+    new_df.to_csv(os.path.join(args.saved_root,"id_table.tsv"),index=None,sep='\t')

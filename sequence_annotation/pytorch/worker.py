@@ -14,40 +14,34 @@ def train_per_batch(model,inputs,labels,extra,executor,callbacks):
     torch.cuda.empty_cache()
     inputs = torch.from_numpy(inputs).float().cuda()
     labels = torch.from_numpy(labels).long().cuda()
-    #print("Origin length",extra['lengths'])
-    loss_,outputs = executor.fit(model,inputs,labels,**extra)
-    if executor.inference is not None:
-        outputs = executor.inference(outputs,labels)
-    #print("Saved length",model.saved_lengths)
+    loss_,outputs,saved_lengths,named_parameters = executor.fit(model,inputs,labels,**extra)
     callbacks.on_batch_end(outputs=outputs,
                            labels=labels,
-                           lengths=model.saved_lengths,
+                           lengths=saved_lengths,
                            metric=loss_,
                            ids=extra['ids'],
-                           parmeters=model.named_parameters())
+                           parmeters=named_parameters)
 
 def evaluate_per_batch(model,inputs,labels,extra,executor,callbacks):
     callbacks.on_batch_begin()
     torch.cuda.empty_cache()
     inputs = torch.from_numpy(inputs).float().cuda()
     labels = torch.from_numpy(labels).long().cuda()
-    loss_,outputs = executor.evaluate(model,inputs,labels,**extra)
-    if executor.inference is not None:
-        outputs = executor.inference(outputs,labels)
+    loss_,outputs,saved_lengths,named_parameters = executor.evaluate(model,inputs,labels,**extra)
     callbacks.on_batch_end(outputs=outputs,
                            labels=labels,
-                           lengths=model.saved_lengths,
+                           lengths=saved_lengths,
                            metric=loss_,
                            ids=extra['ids'],
-                           parmeters=model.named_parameters())
+                           parmeters=named_parameters)
 
 class PyWorker(Worker):
     def __init__(self,executor=None):
         super().__init__()
         if executor is None:
-            self._executor = ModelExecutor()
+            self.executor = ModelExecutor()
         else:
-            self._executor = executor
+            self.executor = executor
 
 def _init_generator(generator):
     generator.return_extra_info = True
@@ -61,26 +55,26 @@ class TrainWorker(PyWorker):
                  train_callbacks=None,val_callbacks=None,other_callbacks=None,
                  writer=None,epoch_start=None,epoch_num=None):
         super().__init__(executor)
+        self._train_generator = train_generator
+        self._val_generator = val_generator
+        self._train_callbacks = train_callbacks
+        self._val_callbacks = val_callbacks
+        self._other_callbacks = other_callbacks
         if train_generator is None:
             self._train_generator = DataGenerator()
-        else:
-            self._train_generator = train_generator
+            
         if val_generator is None:
             self._val_generator = DataGenerator()
-        else:
-            self._val_generator = val_generator
+            
         if train_callbacks is None:
             self._train_callbacks = Callbacks()
-        else:
-            self._train_callbacks = train_callbacks
+            
         if val_callbacks is None:
             self._val_callbacks = Callbacks()
-        else:
-            self._val_callbacks = val_callbacks
+            
         if other_callbacks is None:
             self._other_callbacks = Callbacks()
-        else:
-            self._other_callbacks = other_callbacks
+            
         self._writer = writer
         self._epoch_start = epoch_start or 0
         self._epoch_num = epoch_num or 1
@@ -106,7 +100,7 @@ class TrainWorker(PyWorker):
         record_saved_path = None
         if path is not None:
             for key in ['_train_callbacks','_val_callbacks','_other_callbacks',
-                        '_epoch_start','_epoch_num','_executor','_writer']:
+                        '_epoch_start','_epoch_num','executor','_writer']:
                 self._settings[key] = getattr(self,key)
             record_saved_path = path+'/train_record.json'
             json_path = path + "/train_worker_setting.json"
@@ -116,7 +110,7 @@ class TrainWorker(PyWorker):
                 except TypeError:
                      fp.write(str(self._settings))
             self._recoder.path=record_saved_path 
-        self._executor.process(self.model)
+        self.executor.process(self.model)
         _init_generator(self._train_generator)
         _init_generator(self._val_generator)
         self.is_running = True
@@ -132,38 +126,56 @@ class TrainWorker(PyWorker):
         all_callbacks.on_work_begin(worker=self)
         start = self._epoch_start+1
         end = start+self._epoch_num
+        batch_info = "Epoch: ({0}/{1}), [{2:.1f}%]"
+        epoch_info = "Epoch: ({}/{}), Time cost of : {} ,{}"
         for epoch in range(start,end):
             pre_time = time.time()
             if self._writer is not None:
                 self._writer.counter = epoch
             all_callbacks.on_epoch_begin(counter=epoch)
-            for item in self._train_generator:
+            
+            for index,item in enumerate(self._train_generator):
                 inputs, labels, extra = item
                 train_per_batch(self.model,inputs,labels,extra,
-                                self._executor,self._train_callbacks)
+                                self.executor,self._train_callbacks)
+                
+                if self.is_verbose_visible:
+                    print(batch_info.format(epoch,self._epoch_num,100*index/len(self._train_generator)),end='\r')
+                    sys.stdout.write('\033[K')
+
             for item in self._val_generator:
                 inputs, labels, extra = item
                 evaluate_per_batch(self.model,inputs,labels,extra,
-                                   self._executor,self._val_callbacks)
+                                   self.executor,self._val_callbacks)
+
+                if self.is_verbose_visible:
+                    print(batch_info.format(epoch,self._epoch_num,100*index/len(self._val_generator)),end='\r')
+                    sys.stdout.write('\033[K')
+
             train_record = self._train_callbacks.get_data()
             val_record = self._val_callbacks.get_data()
             other_record = self._other_callbacks.get_data()
+
             if train_record['loss'] is None or val_record['val_loss'] is None:
                 self.is_running = False
+
             record = {}
             record.update(train_record)
             record.update(val_record)
+            record.update(other_record)
             self._train_generator.on_epoch_end()
             self._val_generator.on_epoch_end()
             self._train_callbacks.on_epoch_end(metric=train_record)
             self._val_callbacks.on_epoch_end(metric=val_record)
-            self._other_callbacks.on_epoch_end(metric=other_record)
+            self._other_callbacks.on_epoch_end(metric=record)
             self._recoder.on_epoch_end(metric=record)
+
             if self.is_verbose_visible:
                 time_cost = round(time.time()-pre_time,3)
-                print(epoch ,time_cost, record)
+                print(epoch_info.format(epoch,self._epoch_num,time_cost,record))
+                
             if not self.is_running:
-                print("Early stop at "+str(epoch))
+                print("Early stop at {}".format(epoch))
                 break
         all_callbacks.on_work_end()
 
@@ -182,17 +194,22 @@ class TestWorker(PyWorker):
             self._callbacks = Callbacks()
         else:
             self._callbacks = callbacks
+
     def before_work(self,path=None):
         item = self.data['testing']
         self._generator.x_data = item['inputs']
         self._generator.y_data = item['answers']
         self._generator.extra = item['extra']
-        self._callbacks.add_callbacks(Accumulator(prefix='test',name='loss'))
+        accum = Accumulator()
+        accum.prefix='test'
+        accum.name='loss'
+        self._callbacks.add_callbacks(accum)
         record_saved_path = None
+
         if path is not None:
             record_saved_path = path+'/test_record.json'
             json_path = path + "/test_worker_setting.json"
-            for key in ['callbacks']:
+            for key in ['_callbacks']:
                 self._settings[key] = getattr(self,key)
             with open(json_path,'w') as fp:
                 try:
@@ -201,7 +218,7 @@ class TestWorker(PyWorker):
                      fp.write(str(self._settings))
         self._recoder = Recorder()
         self._recoder.path=record_saved_path
-        self._executor.process(self.model)
+        self.executor.process(self.model)
 
     def work(self):
         """Test model"""
@@ -211,12 +228,18 @@ class TestWorker(PyWorker):
         callbacks.on_work_begin(worker=self)
         record = {}
         self._recoder.on_epoch_begin()
-        callbacks.on_epoch_begin()
+        callbacks.on_epoch_begin(counter=1)
         _init_generator(self._generator)
-        for item in self._generator:
+        batch_info = "Testing data: {0:.1f}%"
+
+        for index,item in enumerate(self._generator):
             inputs, labels, extra = item
             evaluate_per_batch(self.model,inputs,labels,extra,
-                               self._executor,self.callbacks)
+                               self.executor,self._callbacks)
+            if self.is_verbose_visible:
+                print(batch_info.format(100*index/len(self._generator)),end='\r')
+                sys.stdout.write('\033[K')
+
         record = callbacks.get_data()
         self._generator.on_epoch_end()
         self._recoder.on_epoch_end(metric=record)

@@ -3,8 +3,10 @@ sys.path.append(os.path.dirname(__file__))
 from utils import consist,unique_site
 import pandas as pd
 from argparse import ArgumentParser
+
 def get_gene_names(df,name,convert_table):
     return [convert_table[name] for name in df[name]]
+
 if __name__ == "__main__":
     #Reading arguments
     parser = ArgumentParser(description="This program will used mRNA_bed12 data to create annotated genome\n"+
@@ -24,16 +26,16 @@ if __name__ == "__main__":
                         help="long_dist_cleavage_sites_path",required=True)
     parser.add_argument("-s", "--saved_root",
                         help="saved_root",required=True)
-    args = vars(parser.parse_args())
-    transcript_gro_sites_path = args['tg']
-    transcript_cleavage_sites_path = args['tc']
-    inner_gro_sites_path = args['ig']
-    inner_cleavage_sites_path = args['ic']
-    long_dist_gro_sites_path = args['lg']
-    long_dist_cleavage_sites_path = args['lc']
-    saved_root = args['saved_root']
-    safe_merged_gro_sites_path = saved_root+'/safe_merged_gro_sites'+'.tsv'
-    safe_merged_cleavage_sites_path = saved_root+'/safe_merged_cleavage_sites.tsv'    
+    args = parser.parse_args()
+    transcript_gro_sites_path = args.tg
+    transcript_cleavage_sites_path = args.tc
+    inner_gro_sites_path = args.ig
+    inner_cleavage_sites_path = args.ic
+    long_dist_gro_sites_path = args.lg
+    long_dist_cleavage_sites_path = args.lc
+    saved_root = args.saved_root
+    safe_merged_gro_sites_path = os.path.join(saved_root,'safe_merged_gro_sites.tsv')
+    safe_merged_cleavage_sites_path = os.path.join(saved_root,'safe_merged_cleavage_sites.tsv')
     exists = [os.path.exists(path) for path in [safe_merged_gro_sites_path,safe_merged_cleavage_sites_path]]
     if all(exists):
         print("Result files are already exist, procedure will be skipped.")

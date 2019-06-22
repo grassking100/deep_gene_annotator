@@ -17,8 +17,14 @@ from ..function.work_generator import EvaluateGenerator
 class TestWorker(Worker):
     def __init__(self,test_generator=None,evaluate_generator=None):
         super().__init__()
-        self._evaluate_generator = evaluate_generator or EvaluateGenerator()
-        self._test_generator = test_generator or DataGenerator()
+        if evaluate_generator is None:
+            self._evaluate_generator = EvaluateGenerator()
+        else:
+            self._evaluate_generator = evaluate_generator
+        if test_generator is None:
+            self._test_generator = DataGenerator()
+        else:
+            self._test_generator = test_generator
         
     def before_work(self,path=None):
         if path is not None:

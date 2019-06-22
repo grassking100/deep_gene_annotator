@@ -13,23 +13,21 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--coordinate_consist_bed_path",help="coordinate_consist_bed_path",required=True)
     args = vars(parser.parse_args())
     saved_root = args['saved_root']
-    id_convert_path = args['id_convert_path']
-    coordinate_consist_bed_path = args['coordinate_consist_bed_path']
-    output_path = saved_root+"/nonoverlap.bed"
-    overlap_path = saved_root+"/overlap.bed"
-    gene_bed_path = saved_root+"/gene_coord.bed"
-    nonoverlap_id_path = saved_root+"/gene_coord_nonoverlap_id.txt"
+    output_path = os.path.join(saved_root,"nonoverlap.bed")
+    overlap_path = os.path.join(saved_root,"overlap.bed")
+    gene_bed_path = os.path.join(saved_root,"gene_coord.bed")
+    nonoverlap_id_path = os.path.join(saved_root,"gene_coord_nonoverlap_id.txt")
     if os.path.exists(output_path):
         print("Result files are already exist, procedure will be skipped.")
     else:
         ###Read data###
         id_convert = None
-        if id_convert_path is not None:
-            id_convert = get_id_table(id_convert_path)
-        coordinate_consist_bed = read_bed(coordinate_consist_bed_path)
+        if args.id_convert_path is not None:
+            id_convert = get_id_table(args.id_convert_path)
+        coordinate_consist_bed = read_bed(args.coordinate_consist_bed_path)
         gene_bed = simply_coord_with_gene_id(coordinate_consist_bed,id_convert)
         write_bed(gene_bed,gene_bed_path)
-        command = "bash "+root_path+"/../bash/nonoverlap_filter.sh "+ gene_bed_path
+        command = "bash {}/../bash/nonoverlap_filter.sh {}".format(root_path,gene_bed_path)
         print("Execute "+command)
         os.system(command)
         nonoverlap_id = [id_ for id_ in open(nonoverlap_id_path).read().split('\n') if id_ != '']

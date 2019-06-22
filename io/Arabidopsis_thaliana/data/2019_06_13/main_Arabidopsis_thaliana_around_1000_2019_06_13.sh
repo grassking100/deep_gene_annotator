@@ -1,7 +1,7 @@
 #!/bin/bash
-folder_name=2019_05_11
-upstream_dist=500
-downstream_dist=500
+folder_name=2019_06_13
+upstream_dist=1000
+downstream_dist=1000
 TSS_radius=100
 donor_radius=100
 accept_radius=100
@@ -13,7 +13,6 @@ separate_path=$saved_root/separate
 fasta_root=$saved_root/fasta
 script_root="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"/..
 echo "Start of program"
-#rm -r $saved_root
 mkdir -p $saved_root
 mkdir -p $result_path
 mkdir -p $separate_path
@@ -27,6 +26,7 @@ biomart_path=$root/raw_data/biomart_araport_11_gene_info_2018_11_27.csv
 gro_1=$root/raw_data/tss_peak_SRR3647033_background_SRR3647034_2018_11_04.tsv 
 gro_2=$root/raw_data/tss_peak_SRR3647033_background_SRR3647035_2018_11_04.tsv
 drs=$root/raw_data/NIHMS48846-supplement-2_S10_DRS_peaks_in_coding_genes_private.csv
+peptide_file=$root/raw_data/Araport11_genes.201606.pep.fasta
 id_convert=$saved_root/id_convert.tsv
 result_merged=result_upstream_${upstream_dist}_downstream_${downstream_dist}_merged
 #Preprocess
@@ -53,14 +53,14 @@ python3 $script_root/python/nonoverlap_filter.py -c $saved_root/coordinate_consi
 python3 $script_root/python/recurrent_cleaner.py -r $saved_root/valid_official_coding.bed -c $separate_path/nonoverlap.bed -f $fai -u $upstream_dist -d $downstream_dist -s $separate_path -i $id_convert
 
 cp $separate_path/recurrent_cleaned.bed $fasta_root/result.bed
-python3 $script_root/python/get_around_fasta.py -b $fasta_root/result.bed -t $TSS_radius -d $donor_radius -a $accept_radius -c $cleavage_radius -s $fasta_root -g $genome_file
+python3 $script_root/python/get_around_fasta.py -b $fasta_root/result.bed -t $TSS_radius -d $donor_radius -a $accept_radius -c $cleavage_radius -s $fasta_root -g $genome_file -p $peptide_file
 
 cp $separate_path/recurrent_cleaned.bed $result_path/result.bed
 bash $script_root/bash/get_region.sh $result_path/result.bed $fai $upstream_dist $downstream_dist 
 
-python3 $script_root/python/rename_bed.py -b $result_path/$result_merged.bed -p seq_$folder_name -s $result_path -r selected_region.bed
+python3 $script_root/python/rename_bed.py -b $result_path/$result_merged.bed -p seq -s $result_path -r selected_region.bed
 rm $result_path/$result_merged.bed
-bedtools getfasta -s -name -fi $genome_file -bed $result_path/selected_region.bed -fo $result_path/selected_region.fasta
+bedtools getfasta -s -name -fi $genome_file -bed $result_path/selected_region.bed -fo $fasta_root/selected_region.fasta
 python3 $script_root/python/create_ann_region.py -m $result_path/result.bed -r $result_path/selected_region.bed \
 -f $fai -s $folder_name -o $result_path/selected_region.h5 --saved_root $result_path
 echo "End of program"

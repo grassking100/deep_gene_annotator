@@ -2,7 +2,7 @@ from abc import ABCMeta
 from .sequence import AnnSequence
 from .seq_container import AnnSeqContainer
 
-class AnnSeqExtractor(metaclass=ABCMeta):
+class AnnSeqExtractor:
     def extract(self,ann_seq_container,seq_info_container):
         result = AnnSeqContainer()
         result.ANN_TYPES = ann_seq_container.ANN_TYPES
