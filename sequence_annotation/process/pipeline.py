@@ -4,13 +4,18 @@ from time import strftime, gmtime, time
 from ..utils.utils import create_folder
 
 class Pipeline(metaclass=ABCMeta):
-    def __init__(self,model,data,worker):
+    def __init__(self,model,data,worker,path=None,previous_result=None):
         self.worker = worker
         self.data = data
         self.model = model
-        self.result = None
-        self.path = None
+        self._result = previous_result
+        self.path = path
         self.is_prompt_visible = True
+
+    @property    
+    def result(self):
+        return self._result
+        
     def print_prompt(self,value):
         if self.is_prompt_visible:
             print(value)
@@ -24,7 +29,8 @@ class Pipeline(metaclass=ABCMeta):
         self.print_prompt("Executing...")
         self._execute()
         self._after_execute()
-        self.result = self.worker.result
+        self._result = self.worker.result
+
     def _prepare_worker(self):
         self.worker.model = self.model
         self.worker.data = self.data

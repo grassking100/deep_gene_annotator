@@ -100,23 +100,24 @@ class AnnSeqProcessor:
                 ann_seq_dict[id_] = np.argmax(ann,axis=-1)
         else:
             ann_seq_dict = ann_seq_dict_
-        dict_list = {'inputs':[],'answers':[],'lengths':[],'ids':[]}
+        data = {'inputs':[],'answers':[],'lengths':[],'ids':[]}
         other_key = [key for key in item.keys() if key not in ['inputs','answers']]
         for name in seqs.keys():
             seq = seqs[name]
             answer = ann_seq_dict[name]
-            dict_list['ids'].append(name)
-            dict_list['inputs'].append(seq)
-            dict_list['answers'].append(answer)
-            dict_list['lengths'].append(len(seq))
-        for data_kind in other_key:
-            dict_list[data_kind] = []
-            temp = item[data_kind]
+            data['ids'].append(name)
+            data['inputs'].append(seq)
+            data['answers'].append(answer)
+            data['lengths'].append(len(seq))
+            
+        for kind in other_key:
+            data[kind] = []
+            temp = item[kind]
             if isinstance(temp,AnnSeqContainer):
                 temp = ann_genome_processor.genome2dict_vec(temp)
             for name in seqs.keys():
-                dict_list[data_kind].append(temp[name])
-        return dict_list
+                data[kind].append(temp[name])
+        return data
             
     def process(self):
         self._split()

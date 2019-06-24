@@ -61,6 +61,6 @@ bash $script_root/bash/get_region.sh $result_path/result.bed $fai $upstream_dist
 python3 $script_root/python/rename_bed.py -b $result_path/$result_merged.bed -p seq -s $result_path -r selected_region.bed
 rm $result_path/$result_merged.bed
 bedtools getfasta -s -name -fi $genome_file -bed $result_path/selected_region.bed -fo $fasta_root/selected_region.fasta
-python3 $script_root/python/create_ann_region.py -m $result_path/result.bed -r $result_path/selected_region.bed \
+python3 $script_root/src/create_ann_region.py -m $result_path/result.bed -r $result_path/selected_region.bed \
 -f $fai -s $folder_name -o $result_path/selected_region.h5 --saved_root $result_path
 echo "End of program"

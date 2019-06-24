@@ -44,7 +44,7 @@ def init_GRU(gru):
         elif 'bias' in name:
             param.data.fill_(0)
 
-def seq_ann_inference(outputs,answers=None,ignore_value = -1):
+def seq_ann_inference(outputs):
     #N,C,L
     if outputs.shape[1]!=2:
         raise Exception("Channel size should be two")
@@ -55,12 +55,6 @@ def seq_ann_inference(outputs,answers=None,ignore_value = -1):
     intron = transcript_mask*intron_potential
     exon = transcript_mask*(1-intron_potential)
     result = torch.cat([exon,intron,other],dim=1)
-    if ignore_value is not None and answers is not None:
-        max_len = outputs.shape[2]
-        mask = (answers[:,0,:max_len] != ignore_value).unsqueeze(1)
-        mask = torch.cat([mask]*3,dim=1).float().cuda()
-        neg_value = torch.full(result.shape,ignore_value).float().cuda()
-        result = result*mask + neg_value*(1-mask)
     return result
             
 class FeatureBlock(BasicModel):

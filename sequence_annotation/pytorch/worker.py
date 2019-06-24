@@ -60,18 +60,15 @@ class TrainWorker(PyWorker):
         self._train_callbacks = train_callbacks
         self._val_callbacks = val_callbacks
         self._other_callbacks = other_callbacks
+
         if train_generator is None:
             self._train_generator = DataGenerator()
-            
         if val_generator is None:
             self._val_generator = DataGenerator()
-            
         if train_callbacks is None:
             self._train_callbacks = Callbacks()
-            
         if val_callbacks is None:
             self._val_callbacks = Callbacks()
-            
         if other_callbacks is None:
             self._other_callbacks = Callbacks()
             
@@ -89,12 +86,9 @@ class TrainWorker(PyWorker):
             self._val_generator.x_data = self.data['validation']['inputs']
             self._val_generator.y_data = self.data['validation']['answers']
             self._val_generator.extra = self.data['validation']['extra']
-            acc = Accumulator()
-            acc.prefix='val'
-            acc.name='loss'
+            acc = Accumulator(name='loss',prefix='val')
             self._val_callbacks.add_callbacks(acc)
-        acc = Accumulator()
-        acc.name='loss'
+        acc = Accumulator(name='loss')
         self._train_callbacks.add_callbacks(acc)
         self._recoder = Recorder()
         record_saved_path = None
@@ -140,7 +134,8 @@ class TrainWorker(PyWorker):
                                 self.executor,self._train_callbacks)
                 
                 if self.is_verbose_visible:
-                    print(batch_info.format(epoch,self._epoch_num,100*index/len(self._train_generator)),end='\r')
+                    status = 100*index/len(self._train_generator)
+                    print(batch_info.format(epoch,self._epoch_num,status),end='\r')
                     sys.stdout.write('\033[K')
 
             for item in self._val_generator:
@@ -149,7 +144,8 @@ class TrainWorker(PyWorker):
                                    self.executor,self._val_callbacks)
 
                 if self.is_verbose_visible:
-                    print(batch_info.format(epoch,self._epoch_num,100*index/len(self._val_generator)),end='\r')
+                    status = 100*index/len(self._val_generator
+                    print(batch_info.format(epoch,self._epoch_num,status)),end='\r')
                     sys.stdout.write('\033[K')
 
             train_record = self._train_callbacks.get_data()
@@ -186,23 +182,20 @@ class TestWorker(PyWorker):
     """a worker which will train and evaluate the model"""
     def __init__(self,executor=None,generator=None,callbacks=None):
         super().__init__(executor)
+        self._generator = generator
+        self._callbacks = callbacks
         if generator is None:
             self._generator = DataGenerator()
-        else:
-            self._generator = generator
+            
         if callbacks is None:
             self._callbacks = Callbacks()
-        else:
-            self._callbacks = callbacks
 
     def before_work(self,path=None):
         item = self.data['testing']
         self._generator.x_data = item['inputs']
         self._generator.y_data = item['answers']
         self._generator.extra = item['extra']
-        accum = Accumulator()
-        accum.prefix='test'
-        accum.name='loss'
+        accum = Accumulator(name='loss',prefix='test')
         self._callbacks.add_callbacks(accum)
         record_saved_path = None
 
@@ -237,7 +230,8 @@ class TestWorker(PyWorker):
             evaluate_per_batch(self.model,inputs,labels,extra,
                                self.executor,self._callbacks)
             if self.is_verbose_visible:
-                print(batch_info.format(100*index/len(self._generator)),end='\r')
+                status = 100*index/len(self._generator)
+                print(batch_info.format(status),end='\r')
                 sys.stdout.write('\033[K')
 
         record = callbacks.get_data()

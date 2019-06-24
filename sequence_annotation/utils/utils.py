@@ -24,7 +24,7 @@ def get_protected_attrs_names(object_):
              and not attr.startswith('_'+class_name+'__')]
     return attrs
 
-def reverse_weights(cls, class_counts, epsilon=1):
+def reverse_weights(cls, class_counts, epsilon=1e-6):
     scale = len(class_counts.keys())
     raw_weights = {}
     weights = {}
@@ -89,15 +89,6 @@ def split(ids,ratios):
     if sum_!=id_len:
         raise Exception("Id number is not consist with origin count")
     return ids_list
-
-def index2onehot(index,channel_size):
-    if (np.array(index)<0).any() or (np.array(index)>=channel_size).any():
-        raise Exception("Invalid number")
-    L = len(index)
-    loc = list(range(L))
-    onehot = np.zeros((channel_size,L))
-    onehot[index,loc]=1
-    return onehot
 
 def get_subdict(ids,data):
     return dict(zip(ids,[data[id_] for id_ in ids]))

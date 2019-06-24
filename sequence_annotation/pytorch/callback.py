@@ -1,109 +1,16 @@
 from abc import ABCMeta, abstractmethod, abstractproperty
-import torch.nn.functional as F
 import pandas as pd
-import torch.nn as nn
 import torch
 from  matplotlib import pyplot
 import numpy as np
 import os
 from ..genome_handler.region_extractor import GeneInfoExtractor
 from ..genome_handler.seq_container import SeqInfoContainer
-from ..genome_handler.ann_seq_processor import vecs2seq
-from ..utils.utils import index2onehot
+from ..genome_handler.ann_seq_processor import vecs2seq,index2onehot
+from .tensorboard_writer import TensorboardWriter
+from .metric import F1,accuracy,precision,recall,categorical_metric
 
-class TensorboardWriter:
-    def __init__(self,writer):
-        self._writer = writer
-        self.counter = 0
-
-    def add_scalar(self,record,prefix='',counter=None):
-        for name,val in record.items():
-            if 'val' in name:
-                name = '_'.join(name.split('_')[1:])
-            self._writer.add_scalar(prefix+name, np.array(val), counter)
-
-    def add_grad(self,named_parameters,prefix='',counter=None):
-        counter = counter or self.counter
-        for name,param in named_parameters:
-            if param.grad is not None:
-                grad = param.grad.cpu().detach().numpy()
-                if  np.isnan(grad).any():
-                    print(grad)
-                    raise Exception(name+" has at least one NaN in it.")
-                self._writer.add_histogram("layer_"+prefix+'grad_'+name, grad, counter)
-
-    def add_distribution(self,name,data,prefix='',counter=None):
-        counter = counter or self.counter
-        values = data.contiguous().view(-1).cpu().detach().numpy()
-        if  np.isnan(values).any():
-            print(values)
-            raise Exception(name+" has at least one NaN in it.")
-        self._writer.add_histogram(prefix+name, values,counter)
-
-    def add_weights(self,named_parameters,prefix='',counter=None):
-        counter = counter or self.counter
-        for name,param in named_parameters:
-            w = param.cpu().detach().numpy()
-            if  np.isnan(w).any():
-                print(w)
-                raise Exception(name+" has at least one NaN in it.")
-            self._writer.add_histogram("layer_"+prefix+name, w, counter)
-
-    def add_figure(self,name,value,prefix='',counter=None,title='',labels=None,
-                   colors=None,use_stack=False,*args,**kwargs):
-        counter = counter or self.counter
-        #data shape is L,C
-        if len(value.shape)!=2:
-            raise Exception("Value shape size should be two",value.shape)
-        fig = pyplot.figure(dpi=200)
-        if isinstance(value,torch.Tensor):
-            value = value.cpu().detach().numpy()
-        if  np.isnan(value).any():
-            raise Exception(title+" has at least one NaN in it.")
-        length = value.shape[0]
-        if labels is not None:
-            value = value.transpose()
-            if len(value) != len(labels):
-                raise Exception("Labels' size is not same as data's size")
-            if colors is not None:
-                if len(colors) != len(labels):
-                    raise Exception("Labels' size is not same as colors's size")    
-            if use_stack:
-                pyplot.stackplot(list(range(length)),value,labels=labels,colors=colors)
-            else:
-                for index in range(len(labels)):
-                    item = value[index]
-                    label = labels[index]
-                    if colors is not None:
-                        color = colors[index]
-                    else:
-                        color = None
-                    pyplot.plot(item,label=label,color=color)
-            pyplot.legend()
-        else:
-            if use_stack:
-                pyplot.stackplot(list(range(length)),value)
-            else:
-                pyplot.plot(value)
-        pyplot.xlabel("Sequence (from 5' to 3')")
-        pyplot.ylabel("Value")
-        pyplot.title(title)
-        pyplot.close(fig)
-        self._writer.add_figure(prefix+name,fig,global_step=counter,*args,**kwargs)
-
-    def add_matshow(self,name,value,prefix,counter=None,title='',*args,**kwargs):
-        counter = counter or self.counter
-        fig = pyplot.figure(dpi=200)
-        if  np.isnan(value).any():
-            print(value)
-            raise Exception(title+" has at least one NaN in it.")
-        cax = pyplot.matshow(value,fignum=0)
-        fig.colorbar(cax)
-        pyplot.title(title)
-        pyplot.close(fig)
-        self._writer.add_figure(prefix+name,fig,global_step=counter,*args,**kwargs)
-
-class Callback(metaclass=ABCMeta):
+class ICallback(metaclass=ABCMeta):
     def on_work_begin(self,**kwargs):
         pass
     def on_work_end(self):
@@ -117,7 +24,24 @@ class Callback(metaclass=ABCMeta):
     def on_batch_end(self,**kwargs):
         pass
     
-class Callbacks(Callback):
+class Callback(ICallback):
+    def __init__(self,prefix)
+        self._prefix = ""
+        if prefix is None:
+            self.prefix = prefix
+    @property
+    def prefix(self):
+        return self._prefix
+
+    @prefix.setter
+    def prefix(self,value):
+        if value is not None and len(value)>0:
+            value+="_"
+        else:
+            value=""
+        self._prefix = value
+    
+class Callbacks(ICallback):
     def __init__(self,callbacks=None):
         self._callbacks = []
         if callbacks is not None:
@@ -179,13 +103,14 @@ class Callbacks(Callback):
                     record[type_]=value
         return record
 
+    
 class GFFCompare(Callback):
-    def __init__(self,ann_types,path,simplify_map):
+    def __init__(self,ann_types,path,simplify_map,prefix=None):
+        super().__init__(prefix)
         self.extractor = GeneInfoExtractor()
         self._path = path
         self._simplify_map = simplify_map
         self._ann_types = ann_types
-        self.prefix = ""
         self._counter = 0
 
     def on_epoch_begin(self,counter,**kwargs):
@@ -226,14 +151,16 @@ class GFFCompare(Callback):
             os.system('python3 sequence_annotation/gene_info/script/python/gff2bed.py '+path+'.gff3 '+path+'.bed')
             
 class EarlyStop(Callback):
-    def __init__(self):
-        self.target = 'val_loss'
-        self.optimize_min = True
+    def __init__(self,target=None,optimize_min=None,patient=None,path=None,period=None,
+                 save_best_weights=None,restore_best_weights=None,prefix=prefix):
+        super().__init__(prefix)
+        self.target = target or 'val_loss'
+        self.optimize_min = optimize_min or True
         self.patient = 16
-        self.path = None
-        self.period = None
-        self.save_best_weights = False
-        self.restore_best_weights = False
+        self.path = path
+        self.period = period
+        self.save_best_weights = save_best_weights or False
+        self.restore_best_weights = restore_best_weights or False
         self._counter = 0
         self._best_result = None
         self._best_epoch = 0
@@ -290,24 +217,17 @@ class EarlyStop(Callback):
         self._worker = worker
 
 class TensorboardCallback(Callback):
-    def __init__(self,tensorboard_writer):
+    def __init__(self,tensorboard_writer,prefix=None):
+        super().__init__(prefix)
         self.tensorboard_writer = tensorboard_writer
-        self._prefix = ""
         self._model = None
         self._counter = 0
         self.do_add_grad = False
         self.do_add_weights = False
         self.do_add_scalar = True
+
     def on_epoch_begin(self,counter,**kwargs):
         self._counter = counter
-    @property
-    def prefix(self):
-        return self._prefix
-    @prefix.setter
-    def prefix(self,value=''):
-        if value != '':
-            value+="_"
-        self._prefix = value
         
     def on_epoch_end(self,metric,**kwargs):
         if self.do_add_grad:
@@ -325,7 +245,8 @@ class TensorboardCallback(Callback):
         self._model = worker.model
 
 class SeqFigCallback(Callback):
-    def __init__(self,tensorboard_writer,data,answer):
+    def __init__(self,tensorboard_writer,data,answer,prefix=None):
+        super().__init__(prefix)
         self._writer = tensorboard_writer
         self._data = data
         self._answer = answer
@@ -333,21 +254,11 @@ class SeqFigCallback(Callback):
         self.class_names = None
         self._counter = 0
         self.colors = None
-        self._prefix = ""
         if len(data)!=1 or len(answer)!=1:
             raise Exception("Data size should be one,",data.shape,answer.shape)
+
     def on_epoch_begin(self,counter,**kwargs):
         self._counter = counter
-    @property
-    def prefix(self):
-        return self._prefix
-    @prefix.setter
-    def prefix(self,value):
-        if value is not None and len(value)>0:
-            value+="_"
-        else:
-            value=""
-        self._prefix = value
             
     def on_work_begin(self,worker,**kwargs):
         self._model = worker.model
@@ -384,20 +295,10 @@ class SeqFigCallback(Callback):
                                          title="Transitions figure (to row index from column index)")
 
 class DataCallback(Callback):
-    def __init__(self):
+    def __init__(self,prefix=None):
+        super().__init__(prefix)
         self._data = None
-        self._prefix = ""
         self._reset()
-    @property
-    def prefix(self):
-        return self._prefix
-    @prefix.setter
-    def prefix(self,value):
-        if value is not None and len(value)>0:
-            value+="_"
-        else:
-            value=""
-        self._prefix = value
     @abstractproperty
     def data(self):
         pass
@@ -408,8 +309,8 @@ class DataCallback(Callback):
         self._reset()
 
 class Recorder(DataCallback):
-    def __init__(self):
-        super().__init__()
+    def __init__(self,prefix=None):
+        super().__init__(prefix)
         self.path = None
     def _reset(self):
         self._data = {}
@@ -427,9 +328,9 @@ class Recorder(DataCallback):
         return self._data
 
 class Accumulator(DataCallback):
-    def __init__(self):
-        super().__init__()
-        self.name = ""
+    def __init__(self,name=None,prefix=None):
+        super().__init__(prefix)
+        self.name = name or ""
         self._batch_count = 0
         self.round_value = 3
 
@@ -453,9 +354,9 @@ class Accumulator(DataCallback):
             return None
 
 class CategoricalMetric(DataCallback):
-    def __init__(self):
+    def __init__(self,prefix=None):
+        super().__init__(prefix)
         self.class_num = 2
-        self.ignore_value = -1
         self.show_precision = False
         self.show_recall = False
         self.show_f1 = True
@@ -467,6 +368,7 @@ class CategoricalMetric(DataCallback):
     @property
     def class_names(self):
         return self._class_names
+
     @class_names.setter
     def class_names(self,names):
         if len(names)==self.class_num:
@@ -479,52 +381,22 @@ class CategoricalMetric(DataCallback):
         
     def on_batch_begin(self,**kwargs):
         self._reset()
-    def on_batch_end(self,outputs,labels,**kwargs):
-        #N,C,L
-        if len(outputs.shape) != 3 or len(labels.shape) != 3:
-            raise Exception("Wrong input shape",outputs.shape,labels.shape)
-        if outputs.shape[0] != labels.shape[0] or outputs.shape[1] != labels.shape[1]:
-            raise Exception("Inconsist batch size or channel size",outputs.shape,labels.shape)
-        with torch.no_grad():
-            max_length = outputs.shape[2]
-            outputs = outputs.max(1)[1].contiguous().view(-1)
-            labels = labels.transpose(0,2)[:max_length].transpose(0,2)
-            if self.ignore_value is not None:
-                mask = (labels.max(1)[0] != self.ignore_value).view(-1)
-            else:
-                mask = torch.ones(len(outputs))
-            labels = labels.max(1)[1].contiguous().view(-1)    
-            T_ = (outputs == labels)
-            F_ = (outputs != labels)
-            T_ = T_*mask
-            F_ = F_*mask
-            self._data['T'] += T_.sum().item()
-            self._data['F'] += F_.sum().item()
-            for index in range(self.class_num):
-                P = outputs == index
-                R = labels == index
-                TP_ = P & R
-                TN_ = ~P & ~R
-                FP_ = P & ~R
-                FN_ = ~P & R
-                TP_ = (TP_*mask)
-                TN_ = (TN_*mask)
-                FP_ = (FP_*mask)
-                FN_ = (FN_*mask)
-                TP = TP_.sum().item()
-                TN = TN_.sum().item()
-                FP = FP_.sum().item()
-                FN = FN_.sum().item()
-                self._data["TP_"+str(index)] += TP
-                self._data["FP_"+str(index)] += FP
-                self._data["TN_"+str(index)] += TN
-                self._data["FN_"+str(index)] += FN
-            self._result = self._calculate()
 
-    def _calculate(self):
+    def on_batch_end(self,outputs,labels,mask=None,**kwargs):
+        #N,C,L
+        data = categorical_metric(outputs,labels,mask)
+        for key in data.keys():
+            self._data[key] = data[key]
+        self._result = self._calculate()
+
+    def _calculate(self,T,F,TPs,FPs,TNs,FNs):
+        recall_ = recall(TPs,FNs)
+        precision_ = precision(TPs,FPs)
+        accuracy_ = accuracy(T,F)
+        f1 = F1(TPs,FPs,FNs)
         data = {}
         macro_precision_sum = 0
-        for index,val in enumerate(self.precision):
+        for index,val in enumerate(precision_):
             macro_precision_sum += val
             if self.show_precision:
                 if self._class_names is not None:
@@ -536,7 +408,7 @@ class CategoricalMetric(DataCallback):
         if self.show_precision:
             data[self._prefix+"macro_precision"] = round(macro_precision,self.round_value)
         macro_recall_sum = 0
-        for index,val in enumerate(self.recall):
+        for index,val in enumerate(recall_):
             macro_recall_sum += val
             if self.show_recall:
                 if self.class_names is not None:
@@ -548,9 +420,9 @@ class CategoricalMetric(DataCallback):
         if self.show_recall:
             data[self.prefix+"macro_recall"] = round(macro_recall,self.round_value)
         if self.show_acc:
-            data[self.prefix+"accuracy"] = round(self.accuracy,self.round_value)
+            data[self.prefix+"accuracy"] = round(accuracy_,self.round_value)
         if self.show_f1:
-            for index,val in enumerate(self.F1):
+            for index,val in enumerate(f1):
                 if self._class_names is not None:
                     postfix = self.class_names[index]
                 else:
@@ -566,56 +438,10 @@ class CategoricalMetric(DataCallback):
     @property
     def data(self):
         return self._result
+
     def _reset(self):
         self._data = {}
         for type_ in ['TP','FP','TN','FN']:
-            for index in range(self.class_num):
-                self._data[type_+"_"+str(index)] = 0
+            self._data[type_] = [0]*self.class_num
         self._data['T'] = 0
         self._data['F'] = 0
-    @property
-    def accuracy(self):
-        T = self._data['T']
-        F = self._data['F']
-        acc = T/(T+F)
-        return acc
-    @property
-    def precision(self):
-        precisions = []
-        for index in range(self.class_num):
-            TP = self._data["TP_"+str(index)]
-            FP = self._data["FP_"+str(index)]
-            P = (TP+FP)
-            if P!=0:
-                precision = TP/P
-            else:
-                precision = 0
-            precisions.append(precision)
-        return precisions
-    @property
-    def recall(self):
-        recalls = []
-        for index in range(self.class_num):
-            TP = self._data["TP_"+str(index)]
-            FN = self._data["FN_"+str(index)]
-            RP = (TP+FN)
-            if RP!=0:
-                recall = TP/RP
-            else:
-                recall = 0
-            recalls.append(recall)
-        return recalls
-    @property
-    def F1(self):
-        f1s = []
-        for index in range(self.class_num):
-            TP = self._data["TP_"+str(index)]
-            FP = self._data["FP_"+str(index)]
-            FN = self._data["FN_"+str(index)]
-            denominator = (2*TP+FP+FN)
-            if denominator!=0:
-                f1 = 2*TP/denominator
-            else:
-                f1 = 0
-            f1s.append(f1)
-        return f1s

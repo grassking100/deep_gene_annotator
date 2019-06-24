@@ -129,9 +129,25 @@ def get_subseqs(ids,ann_seqs):
     sub_seqs.add([ann_seqs[id_] for id_ in ids])
     return sub_seqs
 
-def sa2gff(seq_anns,simplify_map=None):
+def ann2gff(seq_anns,simplify_map=None):
     gffs = AnnSeqContainer()
     for ann in seq_anns:
         ann_informs = self.extractor.extract_per_seq(ann,simplify_map)
         gffs.add(ann_informs)
     return self._answers.to_gff()
+
+def get_seq_mask(lengths,max_lengths=None):
+    max_lengths = max_lengths or max(lengths)
+    mask = np.zeros((len(lengths),max_lengths))
+    for index,length in enumerate(lengths):
+        mask[index,:length]=1
+    return mask
+
+def index2onehot(index,channel_size):
+    if (np.array(index)<0).any() or (np.array(index)>=channel_size).any():
+        raise Exception("Invalid number")
+    L = len(index)
+    loc = list(range(L))
+    onehot = np.zeros((channel_size,L))
+    onehot[index,loc]=1
+    return onehot

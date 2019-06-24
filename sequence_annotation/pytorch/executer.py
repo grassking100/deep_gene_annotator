@@ -56,7 +56,7 @@ class ModelExecutor:
         if self.optimizer is None:
             self.optimizer = torch.optim.Adam(model.parameters())
 
-class GANExecutor():
+class GANExecutor:
     def __init__(self):
         self.loss = CCELoss()
         self.inference = None

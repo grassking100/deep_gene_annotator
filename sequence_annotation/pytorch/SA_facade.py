@@ -170,9 +170,8 @@ class SeqAnnFacade:
         if self._path is not None:
             with open(self._path+"/facade_train_setting.json",'w') as fp:
                 fp.write(str(self._settings))
-        train_gen = SeqGenerator()
-        val_gen = SeqGenerator()
-        train_gen.batch_size = val_gen.batch_size = batch_size
+        train_gen = SeqGenerator(batch_size)
+        val_gen = SeqGenerator(batch_size)
         worker = TrainWorker(train_generator=train_gen,val_generator=val_gen,
                              executor=self.executor,train_callbacks=train_callbacks,
                              val_callbacks=val_callbacks,other_callbacks=self._other_callbacks,
@@ -180,8 +179,7 @@ class SeqAnnFacade:
         data_ = {'training':{'inputs':self.train_seqs,'answers':self.train_ann_seqs},
                  'validation':{'inputs':self.val_seqs,'answers':self.val_ann_seqs}}
         data = AnnSeqProcessor(data_,discard_invalid_seq=True).process()
-        pipeline = Pipeline(model,data,worker)
-        pipeline.path=self._path
+        pipeline = Pipeline(model,data,worker,path=self._path)
         pipeline.execute()
         record = pipeline.result
         self.clean_callbacks()
@@ -201,13 +199,11 @@ class SeqAnnFacade:
         if self._path is not None:
             with open(self._path+"/facade_test_setting.json",'w') as fp:
                 fp.write(str(self._settings))
-        gen = SeqGenerator()
-        gen.batch_size = batch_size
+        gen = SeqGenerator(batch_size)
         worker = TestWorker(generator = gen,callbacks=callbacks,executor=self.executor)
         data_ = {'testing':{'inputs':self.test_seqs,'answers':self.test_ann_seqs}}
         data = AnnSeqProcessor(data_,discard_invalid_seq=True).process()
-        pipeline = Pipeline(model,data,worker)
-        pipeline.path=self._path
+        pipeline = Pipeline(model,data,worker,path=self._path)
         pipeline.execute()
         record = pipeline.result
         if self._path is not None:
