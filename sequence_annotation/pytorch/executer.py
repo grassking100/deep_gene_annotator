@@ -1,6 +1,7 @@
 from .loss import CCELoss
 import torch.nn as nn
 import torch
+from abc import abstractmethod
 
 bce_loss = nn.BCELoss(reduction='mean')
 
@@ -10,8 +11,8 @@ def _evaluate(loss,model,inputs, labels,lengths,inference=None,**kwargs):
         outputs = model(inputs,lengths=lengths)
         loss_ = loss(outputs, labels,**kwargs)
         if inference is not None:
-            outputs = inference(outputs,labels)
-    return loss_.item(),outputs,model.saved_lengths,model.named_parameters()
+            outputs = inference(outputs)
+    return loss_.item(),outputs
 
 def _predict(model,inputs,lengths,inference=None,**kwargs):
     model.train(False)
@@ -21,13 +22,52 @@ def _predict(model,inputs,lengths,inference=None,**kwargs):
             outputs = inference(outputs)
     return outputs
 
-class ModelExecutor:
+class IExecutor:
+    @abstractmethod
+    def fit(self,**kwargs):
+        pass
+    @abstractmethod
+    def evaluate(self,**kwargs):
+        pass
+    @abstractmethod
+    def predict(self,**kwargs):
+        pass
+    @abstractmethod
+    def process(self,**kwargs):
+        pass
+    @abstractmethod
+    def get_config(self,**kwargs):
+        pass
+
+class _Executor(IExecutor):
     def __init__(self):
         self.loss = CCELoss()
         self.inference = None
+
+    def get_config(self,**kwargs):
+        config = {}
+        config['loss'] = self.loss
+        config['inference'] = self.inference
+        return config
+
+    def evaluate(self,model,inputs,labels,lengths,**kwargs):
+        loss, outputs = _evaluate(self.loss,model,inputs,labels,lengths,self.inference,**kwargs)
+        return {'loss':loss},outputs
+    
+    def predict(self,model,inputs,lengths,**kwargs):
+        return _predict(model,inputs,lengths,self.inference,**kwargs)
+    
+class BasicExecutor(_Executor):
+    def __init__(self):
         self.grad_clip = None
         self.grad_norm = None
         self.optimizer = None
+
+    def get_config(self,**kwargs):
+        config = super().get_config(**kwargs)
+        config['grad_clip'] = self.grad_clip
+        config['grad_norm'] = self.grad_norm
+        config['optimizer'] = self.optimizer.state_dict()
         
     def fit(self,model,inputs, labels, lengths,**kwargs):
         if self.optimizer is None:
@@ -43,27 +83,25 @@ class ModelExecutor:
             torch.nn.utils.clip_grad_norm_(model.parameters(),self.grad_norm)
         self.optimizer.step()
         if self.inference is not None:
-            outputs = self.inference(outputs,labels)
-        return loss_.item(),outputs,model.saved_lengths,model.named_parameters()
-
-    def evaluate(self,model,inputs, labels,lengths,**kwargs):
-        return _evaluate(self.loss,model,inputs, labels,lengths,self.inference)
-    
-    def predict(self,model,inputs,lengths,**kwargs):
-        return _predict(model,inputs,lengths,self.inference)
+            outputs = self.inference(outputs)
+        return {'loss':loss_.item()},outputs
 
     def process(self,model):
         if self.optimizer is None:
-            self.optimizer = torch.optim.Adam(model.parameters())
-
-class GANExecutor:
+            self.optimizer = torch.optim.Adam(model.parameters())        
+            
+class GANExecutor(_Executor):
     def __init__(self):
-        self.loss = CCELoss()
-        self.inference = None
         self.reverse_inference = None
         self.optimizer = None
         self._label_optimizer = None
         self._discrim_optimizer = None
+
+    def get_config(self,**kwargs):
+        config = super().get_config(**kwargs)
+        config['reverse_inference'] = self.reverse_inference
+        config['label_optimizer'] = self._label_optimizer.state_dict()
+        config['discrim_optimizer'] = self._discrim_optimizer.state_dict()
         
     def fit(self,model,inputs, labels, lengths,**kwargs):
         if self._label_optimizer is None or self._discrim_optimizer is None:
@@ -87,17 +125,17 @@ class GANExecutor:
         self._discrim_optimizer.zero_grad()
         outputs = label_model(inputs,lengths=lengths)
         outputs_status = discrim_model(inputs,outputs,lengths=lengths)
-        loss_ = self.loss(outputs, labels, **kwargs) + bce_loss(outputs_status,torch.ones(len(outputs_status)).cuda())
-        loss_.backward()
+        disrim_loss = self.loss(outputs, labels, **kwargs) + bce_loss(outputs_status,torch.ones(len(outputs_status)).cuda())
+        disrim_loss.backward()
         if self.inference is not None:
             outputs = self.inference(outputs,labels)
-        return loss_.item(),outputs,label_model.saved_lengths,label_model.named_parameters()
+        return {'loss':loss_.item(),'disrim_loss':disrim_loss.item()},outputs
 
     def evaluate(self,model,inputs,labels,lengths,**kwargs):
-        return _evaluate(self.loss,model.gan,inputs,labels,lengths,self.inference)
+        return super().evaluate(model.gan,inputs,lengths,kwargs)
     
     def predict(self,model,inputs,lengths,**kwargs):
-        return _predict(model.gan,inputs,lengths,self.inference)
+        return super().predict(model.gan,inputs,lengths,kwargs)
         
     def process(self,model):
         if self.optimizer is None:

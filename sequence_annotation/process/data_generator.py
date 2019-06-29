@@ -5,6 +5,9 @@ from ..utils.utils import create_folder
 from keras.preprocessing.sequence import pad_sequences
 from ..genome_handler.utils import get_seq_mask
 
+def _order(data,indice):
+    return np.array([data[index] for index in indice])
+
 class DataGenerator(Sequence):
 
     def __init__(self,batch_size=None):
@@ -37,27 +40,28 @@ class DataGenerator(Sequence):
 
     def __getitem__(self, idx):
         indice = self._indice[idx*self.batch_size : (idx+1)*self.batch_size]
-        batch_x = np.array([self.x_data[index] for index in indice])
-        batch_y = np.array([self.y_data[index] for index in indice])
+        batch_x = _order(self.x_data,indice)
+        batch_y = _order(self.y_data,indice)
         extra_info = {}
         for key,item in self.extra.items():
-            ordered_item = np.array([item[index] for index in indice])
+            ordered_item = _order(item,indice)
             extra_info[key] = ordered_item
         if self.return_extra_info:
             return batch_x,batch_y,extra_info
         else:
             return batch_x,batch_y
-
-def _order(data,indice):
-    return np.array([data[index] for index in indice])
         
 class SeqGenerator(DataGenerator):
     """NLC means Number, Length, Channel; NCL means Number, Channel, Length"""
-    def __init__(self,batch_size=None,pad_value=None,order_target=None):
+    def __init__(self,batch_size=None,pad_value=None,order_target=None,augmentation_max=None):
         super().__init__(batch_size=None)
         self._order = 'NLC'
         self.pad_value = pad_value or {}
         self.order_target = order_target or []
+        if augmentation_max is not None and augmentation_max < 0:
+            raise Exception("Augmentation_max should not be negative.")
+        self.augmentation_max = augmentation_max or 0
+        self.augmentation = self.augmentation_max != 0
 
     @property
     def order(self):
@@ -74,6 +78,21 @@ class SeqGenerator(DataGenerator):
             batch_x,batch_y,extra_info = super().__getitem__(idx)
         else:
             batch_x,batch_y = super().__getitem__(idx)
+        if self.augmentation:
+            xs = []
+            ys = []
+            lengths = []
+            for x,y in zip(batch_x,batch_y):
+                start_diff = np.random.randint(0,self.augmentation_max+1)
+                end_diff = np.random.randint(0,self.augmentation_max+1)
+                length = len(x) - start_diff - end_diff
+                x = x[start_diff:length]
+                y = y[start_diff:length]
+                xs.append(x)
+                ys.append(y)
+                lengths.append(length)
+            batch_x,batch_y = xs,ys
+            extra_info['lengths'] = lengths
         if 'inputs' in self.pad_value.keys():
             batch_x = pad_sequences(batch_x,padding='post',value=self.pad_value['inputs'])
         if 'answers' in self.pad_value.keys():
@@ -84,13 +103,13 @@ class SeqGenerator(DataGenerator):
             if 'answers' in self.order_target:
                 batch_y = np.transpose(batch_y,[0,2,1])
         if self.return_extra_info:
-            indice = self._indice[idx*self.batch_size : (idx+1)*self.batch_size]
-            lengths = _order(self.extra['lengths'],indice)
+            lengths = extra_info['lengths']
             length_order = np.flip(np.argsort(lengths))
             batch_x = _order(batch_x,length_order)
             batch_y = _order(batch_y,length_order)
             new_extra_info = {}
-            extra_info['mask'] = get_seq_mask(lengths)
+            mask = get_seq_mask(lengths)
+            extra_info['mask'] = mask
             for key,items in extra_info.items():
                 for item in items:
                     ordered_items = _order(items,length_order)

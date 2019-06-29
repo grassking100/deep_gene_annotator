@@ -2,6 +2,7 @@ from abc import ABCMeta, abstractmethod,abstractproperty
 import json
 import numpy as np
 import random
+import warnings
 from keras.preprocessing.sequence import pad_sequences
 from ..genome_handler.sequence import AnnSequence
 from ..genome_handler.seq_container import AnnSeqContainer
@@ -121,8 +122,14 @@ class AnnSeqProcessor:
             
     def process(self):
         self._split()
+        warning = "{} data have {} of sequneces, it left {} of sequnces after filtering"
         for purpose in self._data.keys():
-            self._data[purpose] = self._to_dict(self._data[purpose])
+            item = self._data[purpose]
+            origin_num = len(item['inputs'])
+            item = self._to_dict(item)
+            new_num = len(item['inputs'])
+            warnings.warn(warning.format(purpose,origin_num,new_num),UserWarning)
+            self._data[purpose] = item
             if self._padding is not None:
                 self._data[purpose] = self._pad(self._data[purpose])
             self._data[purpose] = self._handle_extra(self._data[purpose])

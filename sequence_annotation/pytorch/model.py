@@ -9,22 +9,15 @@ import torch
 class BasicModel(nn.Module,metaclass=ABCMeta):
     def __init__(self):
         super().__init__()
-        self._settings = None
-        self._lengths = None
-        self._settings = {}
         self._out_channels = None
-
-    @property
-    def saved_lengths(self):
-        return self._lengths
         
     @property
     def saved_distribution(self):
         return self._distribution
 
-    @property
-    def settings(self):
-        return self._settings
+    @abstractmethod
+    def get_config(self):
+        pass
 
     @property
     def out_channels(self):
@@ -58,28 +51,31 @@ def seq_ann_inference(outputs):
     return result
             
 class FeatureBlock(BasicModel):
-    def __init__(self,input_size,
-                 cnns_setting=None,reduce_cnn_ratio=None,reduced_cnn_number=None):
+    def __init__(self,input_size,cnns_setting,reduce_cnn_ratio=None,reduced_cnn_number=None):
         super().__init__()
-        param = locals()
-        del param['self']
-        self._settings = param
         self.input_size=input_size
-        self.cnns_setting = cnns_setting or {'num_layers':0}
-        self.cnn_num = self.cnns_setting['num_layers']
+        self.cnns_setting = cnns_setting
         if self.cnns_setting['num_layers'] <= 0:
             raise Exception("CNN layer size sould be positive")
         self.reduced_cnn_number = reduced_cnn_number
         self.reduce_cnn_ratio = reduce_cnn_ratio or 1
         if self.reduce_cnn_ratio <= 0:
             raise Exception("Reduce_cnn_ratio should be larger than zero")
-        self._lengths = None
         self._distribution = {}
         self._reduce_cnn = self.reduce_cnn_ratio < 1 or self.reduced_cnn_number is not None
         self._build_layers()
         self.reset_parameters()
-        self.write_cnn = True
+        self.save_distribution = True
 
+    def get_config(self):
+        config = {}
+        config['input_size'] = self.input_size
+        config['cnns_setting'] = self.cnns_setting
+        config['reduce_cnn_ratio'] = self.reduce_cnn_ratio
+        config['reduced_cnn_number'] = self.reduced_cnn_number
+        config['save_distribution'] = self.save_distribution
+        return config
+        
     def _build_layers(self):
         input_size=self.input_size
         self.cnns = ConcatCNN(input_size,**self.cnns_setting)
@@ -102,29 +98,32 @@ class FeatureBlock(BasicModel):
         x = self.cnn_ln(x.transpose(1,2)).transpose(1,2)
         if self._reduce_cnn:
             x,lengths = self.cnn_merge(x,lengths)
-        if self.write_cnn:
+        if self.save_distribution:
             self._distribution.update(cnn_distribution)
-        self._lengths = lengths
         return x,lengths
 
 class RelationBlock(BasicModel):
-    def __init__(self,input_size,rnns_setting=None,rnns_type=None):
+    def __init__(self,input_size,rnns_setting,rnns_type=None):
         super().__init__()
-        param = locals()
-        del param['self']
-        self._settings = param
         self.input_size=input_size
-        self.rnns_setting = rnns_setting or {'num_layers':0}
+        self.rnns_setting = rnns_setting
         self.rnn_num = self.rnns_setting['num_layers']
         if self.rnns_setting['num_layers'] <= 0:
             raise Exception("RNN layer size sould be positive")
         self.rnns_type = rnns_type or 'LSTM'
-        self._lengths = None
         self._distribution = {}
         self._build_layers()
         self.reset_parameters()
-        self.write_rnn = True
+        self.save_distribution = True
 
+    def get_config(self):
+        config = {}
+        config['input_size'] = self.input_size
+        config['rnns_setting'] = self.rnns_setting
+        config['rnns_type'] = self.rnns_type
+        config['save_distribution'] = self.save_distribution
+        return config
+        
     def _build_layers(self):
         input_size=self.input_size
         if self.rnns_type == 'LSTM':
@@ -133,9 +132,6 @@ class RelationBlock(BasicModel):
             rnn_class = nn.GRU
         elif self.rnns_type == 'customized':
             rnn_class = ConcatRNN
-        else:
-            pass
-            #raise Exception("Wrong rnns type",self.rnns_type)
         self.rnns = rnn_class(input_size=input_size,**self.rnns_setting)
         input_size=self.rnns.hidden_size
         if self.rnns_type in ['LSTM','GRU']:
@@ -163,73 +159,54 @@ class RelationBlock(BasicModel):
         else:
             x,lengths,rnn_distribution =self.rnns(x,lengths)
         self._distribution["pre_last_result"] = x
-        if self.write_rnn:
+        if self.save_distribution:
             self._distribution.update(rnn_distribution)
         return x,lengths
 
 class SeqAnnModel(BasicModel):
-    def __init__(self,input_size,out_channels,
-                 cnns_setting=None,
-                 rnns_setting=None,
-                 reduce_cnn_ratio=None,
-                 pwm_before_rnns=None,
-                 reduced_cnn_number=None,
-                 last_kernel_size=None,
-                 rnns_type=None,use_sigmoid=None):
+    def __init__(self,feature_block,relation_block,project_layer,use_sigmoid=None):
         super().__init__()
-        param = locals()
-        del param['self']
-        self._settings = param
-        self.pwm_before_rnns = pwm_before_rnns or False
         self.use_sigmoid = use_sigmoid or False
-        self.input_size = input_size
-        self._out_channels = out_channels
-        self._lengths = None
         self._distribution = {}
-        input_size=self.input_size
-        self.cnns_setting = cnns_setting
-        self.rnns_setting = rnns_setting
-        if cnns_setting is not None:
-            self.feature_block = FeatureBlock(input_size,
-                                              cnns_setting=cnns_setting,
-                                              reduce_cnn_ratio=reduce_cnn_ratio,
-                                              reduced_cnn_number=reduced_cnn_number)
-            input_size = self.feature_block.out_channels
-        if rnns_setting is not None:
-            self.relation_block = RelationBlock(input_size,
-                                                rnns_setting=rnns_setting,
-                                                rnns_type=rnns_type)
-            input_size = self.relation_block.out_channels
-        self.last = Conv1d(in_channels=input_size,
-                           kernel_size=last_kernel_size or 1,
-                           out_channels=out_channels)
-        if self.pwm_before_rnns:
-            self.pwm = PWM()
+        self.feature_block = feature_block
+        self.relation_block = relation_block
+        self.project_layer = project_layer
+        self._out_channels = self.project_layer.out_channels
         self.reset_parameters()
-        self.use_CRF=False
-    def reset_parameters(self):
-        super().reset_parameters()
-        constant_(self.last.bias,0)
-        normal_(self.last.weight)
-        
+
+    def get_config(self):
+        config = {}
+        config['use_sigmoid'] = self.use_sigmoid
+        config['feature_block'] = self.feature_block.get_config()
+        config['relation_block'] = self.relation_block.get_config()
+        config['project_layer'] = {'out_channels':self.project_layer.out_channels,
+                                   'kernel_size':self.project_layer.kernel_size}
+        return config
+
     def forward(self, x, lengths):
         #X shape : N,C,L
-        if self.cnns_setting is not None:
-            x,lengths = self.feature_block(x, lengths)
-            self._distribution.update(self.feature_block.saved_distribution)
-        if self.rnns_setting is not None:
-            if self.pwm_before_rnns:
-                x = self.pwm(x)
-            x,lengths = self.relation_block(x, lengths)
-            self._distribution.update(self.relation_block.saved_distribution)
-        x,lengths = self.last(x,lengths)
+        x,lengths = self.feature_block(x, lengths)
+        x,lengths = self.relation_block(x, lengths)
+        x,lengths = self.project_layer(x,lengths)   
+        self._distribution.update(self.feature_block.saved_distribution)
+        self._distribution.update(self.relation_block.saved_distribution)
         self._distribution["last"] = x
         if not self.use_sigmoid:
-            x = nn.LogSoftmax(dim=1)(x)
-            x = x.exp()
+            x = nn.LogSoftmax(dim=1)(x).exp()
             self._distribution["softmax"] = x
         else:
             x = torch.sigmoid(x)
             self._distribution["sigmoid"] = x
-        self._lengths = lengths
         return x
+
+    def reset_parameters(self):
+        super().reset_parameters()
+        constant_(self.project_layer.bias,0)
+        normal_(self.project_layer.weight)
+
+class SAGAN(nn.Module):
+    """Sequence annotation GAN model"""
+    def __init__(self,gan,discrim):
+        super().__init__()
+        self.gan = gan
+        self.discrim = discrim

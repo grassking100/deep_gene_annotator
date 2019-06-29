@@ -16,11 +16,11 @@ class Worker(metaclass=ABCMeta):
         """Work"""
         pass
 
-    def after_work(self,path=None):
+    def after_work(self,**kwargs):
         """Do something after worker work"""
         pass
 
-    def before_work(self,path=None):
+    def before_work(self,**kwargs):
         """Do something before worker work"""
         pass
 

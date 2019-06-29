@@ -1,6 +1,6 @@
 import sys
 import os
-sys.path.append(os.path.dirname(__file__)+"/../../..")
+sys.path.append(os.path.dirname(__file__)+"/../..")
 from argparse import ArgumentParser
 
 if __name__ == "__main__":

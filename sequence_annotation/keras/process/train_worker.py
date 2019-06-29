@@ -29,6 +29,7 @@ class TrainWorker(Worker):
             self._val_generator = DataGenerator()
         else:
             self._val_generator = val_generator
+
     def before_work(self,path=None):
         if path is not None:
             create_folder(path+"/model")

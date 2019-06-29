@@ -292,8 +292,8 @@ def write_bed(bed,path):
 
 def simply_coord(bed):
     bed = bed[BED_COLUMNS[:6]]
-    bed['id'] = '.'
-    bed['score'] = '.'
+    bed.assign(id = pd.Series('.', index=bed.index))
+    bed.assign(score = pd.Series('.', index=bed.index))
     bed = bed.drop_duplicates()
     return bed
 
@@ -302,7 +302,7 @@ def simply_coord_with_gene_id(bed,id_convert=None):
     if id_convert is not None:
         gene_ids = [id_convert[id_] for id_ in bed['id']]
         bed = bed.assign(id=pd.Series(gene_ids).values)
-    bed['score'] = '.'
+    bed.assign(score = pd.Series('.', index=bed.index))
     bed = bed.drop_duplicates()
     return bed
 

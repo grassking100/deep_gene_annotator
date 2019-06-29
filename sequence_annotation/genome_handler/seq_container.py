@@ -12,16 +12,21 @@ class SeqContainer(metaclass=ABCMeta):
         self.note = ""
         self._keys = None
         self._index = None
+
+    @property
+    def ids(self):
+        return list(self._data.keys())
+
     def __len__(self):
         return len(self._data)
     def __iter__(self):
         self._index = 0
-        self._keys = sorted(list(self._data.keys()))
+        self._keys = sorted(self.ids)
         return self  
     def __next__(self):
         if self._index >= len(self._data) or self.is_empty():
             self._index = 0
-            self._keys = sorted(list(self._data.keys()))
+            self._keys = sorted(self.ids)
             raise StopIteration  
         else:
             key = self._keys[self._index]
@@ -106,6 +111,7 @@ class SeqInfoContainer(SeqContainer):
             raise Exception("Container is empty")
         df = self.to_data_frame()
         selected_df = df[['id','source','strand']].copy()
+        selected_df['source']=selected_df['source'].str.replace("", '.')
         selected_df['seqname'] = df['chromosome_id']
         selected_df['start'] = df['start'] + 1
         selected_df['end'] = df['end'] + 1

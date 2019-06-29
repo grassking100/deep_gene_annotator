@@ -6,11 +6,17 @@ import numpy as np
 import os
 from ..genome_handler.region_extractor import GeneInfoExtractor
 from ..genome_handler.seq_container import SeqInfoContainer
-from ..genome_handler.ann_seq_processor import vecs2seq,index2onehot
+from ..genome_handler.ann_seq_processor import vecs2seq
+from ..genome_handler.utils import index2onehot
 from .tensorboard_writer import TensorboardWriter
 from .metric import F1,accuracy,precision,recall,categorical_metric
 
-class ICallback(metaclass=ABCMeta):
+gene_info_root = 'sequence_annotation/gene_info'
+
+class ICallback:
+    @abstractmethod
+    def get_config(self,**kwargs):
+        pass
     def on_work_begin(self,**kwargs):
         pass
     def on_work_end(self):
@@ -25,28 +31,40 @@ class ICallback(metaclass=ABCMeta):
         pass
     
 class Callback(ICallback):
-    def __init__(self,prefix)
+    def __init__(self,prefix,**kwargs):
         self._prefix = ""
-        if prefix is None:
-            self.prefix = prefix
+        self.prefix = prefix
+
     @property
     def prefix(self):
         return self._prefix
 
     @prefix.setter
-    def prefix(self,value):
-        if value is not None and len(value)>0:
-            value+="_"
+    def prefix(self,prefix):
+        if prefix is not None and len(prefix)>0:
+            prefix+="_"
         else:
-            value=""
-        self._prefix = value
-    
+            prefix=""   
+        self._prefix = prefix
+
+    def get_config(self,**kwargs):
+        config = {}
+        config['prefix'] = self._prefix
+        return config
+
 class Callbacks(ICallback):
     def __init__(self,callbacks=None):
         self._callbacks = []
         if callbacks is not None:
-            self.add_callbacks(callbacks)
+            self.add(callbacks)
 
+    def get_config(self,**kwargs):
+        config = {}
+        for callback in self._callbacks:
+            name = callback.__class__.__name__
+            config[name] = callback.get_config()
+        return config
+            
     def clean(self):
         self._callbacks = []
 
@@ -54,12 +72,7 @@ class Callbacks(ICallback):
     def callbacks(self):
         return self._callbacks
 
-    @callbacks.setter
-    def callbacks(self,callbacks):
-        self._callbacks = []
-        self._callbacks = self.add_callbacks(callbacks)
-
-    def add_callbacks(self,callbacks):
+    def add(self,callbacks):
         list_ = []
         if isinstance(callbacks,Callbacks):
             for callback in callbacks.callbacks:
@@ -102,7 +115,6 @@ class Callbacks(ICallback):
                 for type_,value in callback.data.items():
                     record[type_]=value
         return record
-
     
 class GFFCompare(Callback):
     def __init__(self,ann_types,path,simplify_map,prefix=None):
@@ -113,46 +125,60 @@ class GFFCompare(Callback):
         self._ann_types = ann_types
         self._counter = 0
 
+    def get_config(self,**kwargs):
+        config = super().get_config(**kwargs)
+        config['path'] = self._path
+        config['simplify_map'] = self._simplify_map
+        config['ann_types'] = self._ann_types
+        config['extractor'] = str(self.extractor)
+        return config
+        
     def on_epoch_begin(self,counter,**kwargs):
         self._outputs = SeqInfoContainer()
         self._answers = SeqInfoContainer()
         self._counter = counter
 
     def on_batch_end(self,outputs,labels,ids,lengths,**kwargs):
+        N,C,L = outputs.shape
         C = len(self._ann_types)
         indice = list(range(C))
         for id_,output, label, length in zip(ids,outputs,labels,lengths):
-            output = output.max(0)[1][:length]
+            output = output.max(0)[1][:min(length,L)]
             output = index2onehot(output.cpu().numpy(),C)
             seq = vecs2seq(output,id_,'plus',self._ann_types)
             seq_informs = self.extractor.extract_per_seq(seq,self._simplify_map)
             self._outputs.add(seq_informs)
-            if self._counter==1:
-                label = label.transpose(0,1)[:length].transpose(0,1).cpu().numpy()
+            if self._counter == 1:
+                label = label.transpose(0,1)[:min(length,L)].transpose(0,1).cpu().numpy()
                 ann = vecs2seq(label,id_,'plus',self._ann_types)
                 ann_informs = self.extractor.extract_per_seq(ann,self._simplify_map)
                 self._answers.add(ann_informs)
 
     def on_epoch_end(self,**kwargs):
-        if self.prefix != "":
-            path = self._path+"/"+self.prefix+"_gffcompare_"+str(self._counter)
-        else:
-            path = self._path+"/gffcompare_"+str(self._counter)
-        predict_path = path+".gff3"
-        answer_path = self._path+"/answers.gff3"
+        path = os.path.join(self._path,"{}gffcompare_{}").format(self.prefix,self._counter)
+        answer_path = os.path.join(self._path,"answers")
+        to_bed_command = 'python3 {}/src/gff2bed.py {}.gff3 {}.bed'
+        gffcompare_command = '~/../home/gffcompare/gffcompare --strict-match --no-merge -T -d 0 -e 0 -r {}.gff3 {}.gff3  -o {}'
+
         if self._counter==1:
-            self._answers.to_gff().to_csv(answer_path,index=None,header=None,sep='\t')
-            os.system('python3 sequence_annotation/gene_info/script/python/gff2bed.py answers.gff3 answers.bed')
+            self._answers.to_gff().to_csv(self._path+"/answers.gff3",index=None,header=None,sep='\t')
+            command = to_bed_command.format(gene_info_root,answer_path,answer_path)
+            os.system(command)
+            
         if not self._outputs.is_empty():
-            self._outputs.to_gff().to_csv(predict_path,index=None,header=None,sep='\t')
-            os.system('~/../home/gffcompare/gffcompare -T -r '+answer_path+' '+ predict_path+' -o '+path)
-            os.system('rm '+path+'.tracking')
-            os.system('rm '+path+'.loci')
-            os.system('python3 sequence_annotation/gene_info/script/python/gff2bed.py '+path+'.gff3 '+path+'.bed')
+            self._outputs.to_gff().to_csv(path+".gff3",index=None,header=None,sep='\t')
+            command = gffcompare_command.format(answer_path,path,path)
+            #print(command)
+            os.system(command)
+            os.system('rm {}.annotated.gtf'.format(path))
+            os.system('rm {}.loci'.format(path))
+            #os.system('rm {}.tracking'.format(path))
+            command = to_bed_command.format(gene_info_root,path,path)
+            os.system(command)
             
 class EarlyStop(Callback):
     def __init__(self,target=None,optimize_min=None,patient=None,path=None,period=None,
-                 save_best_weights=None,restore_best_weights=None,prefix=prefix):
+                 save_best_weights=None,restore_best_weights=None,prefix=None):
         super().__init__(prefix)
         self.target = target or 'val_loss'
         self.optimize_min = optimize_min or True
@@ -167,6 +193,16 @@ class EarlyStop(Callback):
         self._model_weights = None
         self._worker = None
 
+    def get_config(self,**kwargs):
+        config = super().get_config(**kwargs)
+        config['target'] = self.target
+        config['optimize_min'] = self.optimize_min
+        config['patient'] = self.patient
+        config['period'] = self.period
+        config['save_best_weights'] = self.save_best_weights
+        config['restore_best_weights'] = self.restore_best_weights
+        return config
+
     @property
     def best_result(self):
         return self._best_result
@@ -178,7 +214,7 @@ class EarlyStop(Callback):
         self._counter = counter
         if self.path is not None and self.period is not None:
             if (self._counter%self.period) == 0:
-                model_path = self.path+'/model_epoch_'+str(self._counter)+'.pth'
+                model_path = os.path.join(self.path,'model_epoch_{}.pth').format(self._counter)
                 print("Save model at "+model_path)
                 torch.save(self._worker.model.state_dict(),model_path)
 
@@ -207,7 +243,7 @@ class EarlyStop(Callback):
         if self.save_best_weights and self.restore_best_weights:
             self._worker.model.load_state_dict(self._model_weights)
         if self.path is not None:
-            model_path =  self.path+'/model_last_epoch_'+str(self._counter+1)+'.pth'
+            model_path =  os.path.join(self.path,'model_last_epoch_{}.pth').format(self._counter)
             print("Save model at "+model_path)
             torch.save(self._worker.model.state_dict(),model_path)
 
@@ -226,6 +262,13 @@ class TensorboardCallback(Callback):
         self.do_add_weights = False
         self.do_add_scalar = True
 
+    def get_config(self,**kwargs):
+        config = super().get_config(**kwargs)
+        config['do_add_grad'] = self.do_add_grad
+        config['do_add_weights'] = self.do_add_weights
+        config['do_add_scalar'] = self.do_add_scalar
+        return config
+        
     def on_epoch_begin(self,counter,**kwargs):
         self._counter = counter
         
@@ -245,18 +288,25 @@ class TensorboardCallback(Callback):
         self._model = worker.model
 
 class SeqFigCallback(Callback):
-    def __init__(self,tensorboard_writer,data,answer,prefix=None):
+    def __init__(self,tensorboard_writer,data,answer,label_names=None,colors=None,prefix=None):
         super().__init__(prefix)
         self._writer = tensorboard_writer
         self._data = data
         self._answer = answer
         self._model = None
-        self.class_names = None
         self._counter = 0
-        self.colors = None
+        self.label_names = label_names
+        self.colors = colors
+        self.do_add_distribution = False
         if len(data)!=1 or len(answer)!=1:
             raise Exception("Data size should be one,",data.shape,answer.shape)
 
+    def get_config(self,**kwargs):
+        config = super().get_config(**kwargs)
+        config['label_names'] = self.label_names
+        config['colors'] = self.colors
+        return config
+            
     def on_epoch_begin(self,counter,**kwargs):
         self._counter = counter
             
@@ -265,13 +315,13 @@ class SeqFigCallback(Callback):
         self._executor = worker.executor
         self._writer.add_figure("answer_figure",self._answer[0],
                                 prefix=self._prefix,colors=self.colors,
-                                labels=self.class_names,title="Answer figure",
+                                labels=self.label_names,title="Answer figure",
                                 use_stack=True)
 
     def on_epoch_end(self,**kwargs):
         #Value's shape should be (1,C,L)
         result = self._executor.predict(self._model,self._data,[self._data.shape[2]])[0]
-        if hasattr(self._model,'saved_distribution'):
+        if self.do_add_distribution and hasattr(self._model,'saved_distribution'):
             for name,value in self._model.saved_distribution.items():
                 self._writer.add_distribution(name,value,prefix=self._prefix,
                                               counter=self._counter)
@@ -279,32 +329,36 @@ class SeqFigCallback(Callback):
                     value = value[0]
                 self._writer.add_figure(name+"_figure",value.transpose(0,1),prefix=self._prefix,
                                         counter=self._counter,title=name)
-        class_num = result.shape[0]
+        label_num = result.shape[0]
         index = result.max(0)[1].cpu().numpy()
-        result = index2onehot(index,class_num)
-        result = np.transpose(result)
-        self._writer.add_figure("result_figure",result,
-                                prefix=self._prefix,colors=self.colors,
-                                labels=self.class_names,title="Result figure",
-                                use_stack=True)
+        onehot = index2onehot(index,label_num)
+        onehot = np.transpose(onehot)
+        self._writer.add_figure("result_figure",onehot,prefix=self._prefix,colors=self.colors,
+                                labels=self.label_names,title="Result figure",use_stack=True)
+        result = result.cpu().numpy()
+        C,L = result.shape
+        diff = np.transpose(result) - self._answer[0][:L,:]
+        self._writer.add_figure("diff_figure",diff,prefix=self._prefix,colors=self.colors,
+                                labels=self.label_names,title="Predict - Answer figure",use_stack=False)
+
         if hasattr(self._model,'use_CRF'):
             if self._model.use_CRF:
                 transitions = self._model.CRF.transitions.cpu().detach().numpy()
-                self._writer.add_matshow("transitions_figure",transitions,
-                                         prefix=self._prefix,
-                                         title="Transitions figure (to row index from column index)")
+                title = "Transitions figure (to row index from column index)"
+                self._writer.add_matshow("transitions_figure",transitions,prefix=self._prefix,title=title)
 
 class DataCallback(Callback):
     def __init__(self,prefix=None):
         super().__init__(prefix)
         self._data = None
-        self._reset()
+
     @abstractproperty
     def data(self):
         pass
     @abstractmethod
     def _reset(self):
         pass
+
     def on_work_begin(self,**kwargs):
         self._reset()
 
@@ -312,6 +366,12 @@ class Recorder(DataCallback):
     def __init__(self,prefix=None):
         super().__init__(prefix)
         self.path = None
+        
+    def get_config(self,**kwargs):
+        config = super().get_config(**kwargs)
+        config['path'] = self.path
+        return config
+        
     def _reset(self):
         self._data = {}
     def on_epoch_end(self,metric,**kwargs):
@@ -328,52 +388,81 @@ class Recorder(DataCallback):
         return self._data
 
 class Accumulator(DataCallback):
-    def __init__(self,name=None,prefix=None):
+    def __init__(self,prefix=None):
+        
         super().__init__(prefix)
-        self.name = name or ""
         self._batch_count = 0
         self.round_value = 3
+        self._epoch_count = 0
 
+    def get_config(self,**kwargs):
+        config = super().get_config(**kwargs)
+        config['round_value'] = self.round_value
+        return config
+        
     def _reset(self):
-        self._data = 0
+        self._data = {}
         self._batch_count = 0
+        self._epoch_count = 0
 
     def on_epoch_begin(self,**kwargs):
         self._reset()
+        self._epoch_count += 1
 
     def on_batch_end(self,metric,**kwargs):
+        if self._batch_count == 0:
+            for key in metric.keys():
+                self._data[key] = 0
         with torch.no_grad():
-            self._data += metric
+            for key,value in metric.items():
+                self._data[key] += value
             self._batch_count += 1
+
     @property
     def data(self):
         if self._batch_count > 0:
-            value = round(self._data/self._batch_count,self.round_value)
-            return {self._prefix+self.name:value}
+            data = {}
+            for key,value in self._data.items():
+                value = round(value/self._batch_count,self.round_value)
+                data[self._prefix+key] = value
+            return data
         else:
             return None
 
 class CategoricalMetric(DataCallback):
-    def __init__(self,prefix=None):
+    def __init__(self,label_num,label_names=None,prefix=None):
         super().__init__(prefix)
-        self.class_num = 2
+        self.label_num = label_num or 3
         self.show_precision = False
         self.show_recall = False
         self.show_f1 = True
         self.show_acc = True
-        self._class_names = None
+        self._label_names = None
+        if label_names is not None:
+            self.label_names = label_names
         self._result = None
         self.round_value = 3
-        super().__init__()
-    @property
-    def class_names(self):
-        return self._class_names
+        
+    def get_config(self,**kwargs):
+        config = super().get_config(**kwargs)
+        config['label_num'] = self.label_num
+        config['show_precision'] = self.show_precision
+        config['show_recall'] = self.show_recall
+        config['show_f1'] = self.show_f1
+        config['show_acc'] = self.show_acc
+        config['label_names'] = self._label_names
+        config['round_value'] = self.round_value
+        return config
 
-    @class_names.setter
-    def class_names(self,names):
-        if len(names)==self.class_num:
+    @property
+    def label_names(self):
+        return self._label_names
+
+    @label_names.setter
+    def label_names(self,names):
+        if len(names)==self.label_num:
             if names[0]=='exon' and names[1]=='intron' and names[2]=='other':
-                self._class_names = list(names)
+                self._label_names = list(names)
             else:
                 raise Exception('Currently supported tpye should be exon,intron,other')
         else:
@@ -385,11 +474,18 @@ class CategoricalMetric(DataCallback):
     def on_batch_end(self,outputs,labels,mask=None,**kwargs):
         #N,C,L
         data = categorical_metric(outputs,labels,mask)
-        for key in data.keys():
-            self._data[key] = data[key]
+        for type_ in ['TPs','FPs','TNs','FNs']:
+            for index in range(self.label_num):
+                self._data[type_][index] += data[type_][index]
+        self._data['T'] += data['T']
+        self._data['F'] += data['F']
         self._result = self._calculate()
 
-    def _calculate(self,T,F,TPs,FPs,TNs,FNs):
+    def _calculate(self):
+        T,F = self._data['T'], self._data['F']
+        TPs,FPs = self._data['TPs'], self._data['FPs']
+        TNs,FNs = self._data['TNs'], self._data['FNs']
+
         recall_ = recall(TPs,FNs)
         precision_ = precision(TPs,FPs)
         accuracy_ = accuracy(T,F)
@@ -399,32 +495,32 @@ class CategoricalMetric(DataCallback):
         for index,val in enumerate(precision_):
             macro_precision_sum += val
             if self.show_precision:
-                if self._class_names is not None:
-                    postfix = self.class_names[index]
+                if self._label_names is not None:
+                    postfix = self.label_names[index]
                 else:
                     postfix = str(index)
                 data[self.prefix+"precision_"+postfix] = round(val,self.round_value)
-        macro_precision = macro_precision_sum/self.class_num
+        macro_precision = macro_precision_sum/self.label_num
         if self.show_precision:
             data[self._prefix+"macro_precision"] = round(macro_precision,self.round_value)
         macro_recall_sum = 0
         for index,val in enumerate(recall_):
             macro_recall_sum += val
             if self.show_recall:
-                if self.class_names is not None:
-                    postfix = self.class_names[index]
+                if self.label_names is not None:
+                    postfix = self.label_names[index]
                 else:
                     postfix = str(index)
                 data[self._prefix+"recall_"+postfix] = round(val,self.round_value)
-        macro_recall = macro_recall_sum/self.class_num
+        macro_recall = macro_recall_sum/self.label_num
         if self.show_recall:
             data[self.prefix+"macro_recall"] = round(macro_recall,self.round_value)
         if self.show_acc:
             data[self.prefix+"accuracy"] = round(accuracy_,self.round_value)
         if self.show_f1:
             for index,val in enumerate(f1):
-                if self._class_names is not None:
-                    postfix = self.class_names[index]
+                if self._label_names is not None:
+                    postfix = self.label_names[index]
                 else:
                     postfix = str(index)
                 data[self.prefix+"F1_"+postfix] = round(val,self.round_value)
@@ -441,7 +537,7 @@ class CategoricalMetric(DataCallback):
 
     def _reset(self):
         self._data = {}
-        for type_ in ['TP','FP','TN','FN']:
-            self._data[type_] = [0]*self.class_num
+        for type_ in ['TPs','FPs','TNs','FNs']:
+            self._data[type_] = [0]*self.label_num
         self._data['T'] = 0
         self._data['F'] = 0

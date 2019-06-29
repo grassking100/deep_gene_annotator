@@ -106,13 +106,13 @@ class PWM(nn.Module):
 
 class ConcatCNN(nn.Module):
     def __init__(self,input_size,num_layers,kernel_sizes,out_channels,
-                 ln_mode=None,with_pwm=True):
+                 ln_mode=None,with_pwm=None):
         super().__init__()
         self.input_size = input_size
         self.num_layers = num_layers
         self.kernel_sizes = kernel_sizes
         self.out_channels = out_channels
-        self.with_pwm = with_pwm
+        self.with_pwm = with_pwm or False
         
         if ln_mode in ["before_cnn","after_cnn","after_activation",None]:
             self.ln_mode = ln_mode

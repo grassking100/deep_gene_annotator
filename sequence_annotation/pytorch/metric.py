@@ -1,6 +1,6 @@
 import torch
 
-def categorical_metric(outputs,labels,mask=None):
+def categorical_metric(outputs,labels,mask):
     #N,C,L
     N,C,L = outputs.shape
     if len(outputs.shape) != 3 or len(labels.shape) != 3:
@@ -9,22 +9,21 @@ def categorical_metric(outputs,labels,mask=None):
         raise Exception("Inconsist batch size or channel size",outputs.shape,labels.shape)
     data = {}
     with torch.no_grad():
-        if mask is None:
-            mask = torch.ones(*outputs.shape)
-        mask = mask[:,:L]
-        labels = labels[:,:,:L]
+        #if mask is None:
+        #    mask = torch.ones(*outputs.shape).cuda()
         outputs = outputs.max(1)[1].contiguous().view(-1)
-        labels = labels.max(1)[1].contiguous().view(-1)    
+        labels = labels[:,:,:L].max(1)[1].contiguous().view(-1)
+        mask = mask[:,:L].contiguous().view(-1).byte()
         T_ = (outputs == labels)
         F_ = (outputs != labels)
         T_ = T_*mask
         F_ = F_*mask
         data['T'] = T_.sum().item()
         data['F'] = F_.sum().item()
-        data["TP"] = []
-        data["FP"] = []
-        data["TN"] = []
-        data["FN"] = []
+        data["TPs"] = []
+        data["FPs"] = []
+        data["TNs"] = []
+        data["FNs"] = []
         for index in range(C):
             P = outputs == index
             R = labels == index
@@ -36,10 +35,10 @@ def categorical_metric(outputs,labels,mask=None):
             TN = (TN*mask).sum().item()
             FP = (FP*mask).sum().item()
             FN = (FN*mask).sum().item()
-            data["TP"].append(TP)
-            data["FP"].append(FP)
-            data["TN"].append(TN)
-            data["FN"].append(FN)
+            data["TPs"].append(TP)
+            data["FPs"].append(FP)
+            data["TNs"].append(TN)
+            data["FNs"].append(FN)
 
     return data
 

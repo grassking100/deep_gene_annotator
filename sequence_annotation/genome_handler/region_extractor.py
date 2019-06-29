@@ -89,10 +89,12 @@ class GeneInfoExtractor:
         for mRNA in mRNAs:
             subseq = ann.get_subseq(mRNA.start,mRNA.end)
             subseq.id = mRNA.id
-            subregions = self.extractor.extract(subseq)
-            for region in subregions:
-                temp = region.copy()
-                temp.start += mRNA.start
-                temp.end += mRNA.start
-                seq_infos.add(temp)
+            subseq.chromosome_id = mRNA.chromosome_id
+            subseq.source = mRNA.source
+            regions = self.extractor.extract(subseq)
+            for region in regions:
+                copied = region.copy()
+                copied.start += mRNA.start
+                copied.end += mRNA.start
+                seq_infos.add(copied)
         return seq_infos

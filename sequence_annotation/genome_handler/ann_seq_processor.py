@@ -229,8 +229,9 @@ def get_mixed_types(seq):
     maps = {}
     kernel = [0]*len(seq.ANN_TYPES)
     for type_ in seq.ANN_TYPES:
-        temp = np.array(seq.get_ann(type_))
-        vecs.append(np.nan_to_num(temp/temp))
+        val = np.array(seq.get_ann(type_)) != 0.0
+        
+        vecs.append(val)
         index = seq.ANN_TYPES.index(type_)
         kernel_ = list(kernel)
         kernel_ [index] = 1
