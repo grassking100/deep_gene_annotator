@@ -21,7 +21,7 @@ class SubplotHelper():
                 ax=self.axes[row_index,col_index]
         return ax
     def set_axes_setting(self,title_params=None,xlabel_params=None,ylabel_params=None,
-                 tick_params=None,legends_params=None):
+                         tick_params=None,legends_params=None):
         for sub_axes in self.axes:
             for ax in sub_axes:
                 if title_params is not None:

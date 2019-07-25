@@ -1,129 +1,133 @@
+from abc import ABCMeta,abstractmethod,abstractproperty
 import numpy as np
-from abc import ABCMeta
-from abc import abstractmethod
 from .sequence import AnnSequence
 from .ann_seq_processor import is_one_hot
-from .exception import NotOneHotException
+from .exception import NotOneHotException,InvalidStrandType
+from ..utils.exception import NotPositiveException
 
-class AnnSeqConverter(metaclass=ABCMeta):
-    def __init__(self,foucus_type,extra_types=None):
-        self._foucus_type = foucus_type
-        self._extra_types = extra_types or []
-        self._ANN_TYPES = list(set(self._foucus_type).union(set(self._extra_types)))
+class AnnSeqConverter:
+    """Converter to convert zero-based dicitonary data into AnnSequence"""
+    def __init__(self):
+        self._ANN_TYPES = None
+    
     @property
     def ANN_TYPES(self):
         return self._ANN_TYPES
+
     def _create_seq(self,name,chrom_id,strand,tx_start,tx_end):
+        """Create annotation sequence for returning"""
         length = tx_end-tx_start+1
-        nt_number = length
         ann_seq = AnnSequence()
         ann_seq.absolute_index = tx_start
         ann_seq.id = name
-        ann_seq.length = nt_number
+        ann_seq.length = length
         ann_seq.ANN_TYPES = self.ANN_TYPES
         ann_seq.chromosome_id = chrom_id
         ann_seq.strand = strand
         ann_seq.init_space()
         return ann_seq
+
     @abstractmethod
-    def _validate(self,ann_seq,focus_types=None):
-        pass
-    @abstractmethod
-    def _get_template_ann_seq(self,length):
-        pass
-    @abstractmethod
-    def convert(self,data):
-        """Convert zero-based dicitonary data into AnnSequence"""
+    def _validate(self,ann_seq):
         pass
 
-class GeneticAnnSeqConverter(AnnSeqConverter):
-    def __init__(self,foucus_type=None,extra_types=None):
-        foucus_type = foucus_type or ['exon','intron']
-        extra_types = extra_types or []
-        super().__init__(foucus_type,extra_types)
-    def _get_template_ann_seq(self,length):
-        """Get template container"""
+    @abstractmethod
+    def _create_template_ann_seq(self,length):
+        """Create template annotation sequence"""
+        pass
+
+    @abstractmethod
+    def convert(self,data):
+        pass
+
+class _GeneticSeqConverter(AnnSeqConverter):
+    """Converter to convert zero-based dicitonary data into AnnSequence with exon and intron type"""
+    def __init__(self):
+        super().__init__()
+        self._ANN_TYPES = ['exon','intron']
+
+    def _create_template_ann_seq(self,length):
         ann_seq = AnnSequence()
         ann_seq.length = length
         ann_seq.strand = 'plus'
-        ann_seq.id = 'template'
+        #ann_seq.id = 'template'
         ann_seq.ANN_TYPES = set(self.ANN_TYPES + ['gene'])
         ann_seq.init_space()
         return ann_seq
-    def _validate(self,ann_seq,focus_types=None):
-        if not is_one_hot(ann_seq,focus_types):
+
+    def _validate(self,ann_seq):
+        if not is_one_hot(ann_seq,self._ANN_TYPES):
             raise NotOneHotException(ann_seq.id)
 
-class GeneticBedSeqConverter(GeneticAnnSeqConverter):
+class GeneticBedSeqConverter(_GeneticSeqConverter):
     def convert(self,data):
         """Convert zero-based dicitonary data into AnnSequence"""
-        tx_start = data['chromStart']
-        tx_end = data['chromEnd']
-        """Create template"""
+        tx_start = data['start']
+        tx_end = data['end']
+        #Create template
         length = tx_end-tx_start+1
-        template_ann_seq = self._get_template_ann_seq(length)
-        """Annotation"""
+        template_ann_seq = self._create_template_ann_seq(length)
+        #Annotation
         template_ann_seq.set_ann("gene",1)
-        site_info = {'exon':(data['blockStarts'],data['blockSizes'])}
-        for type_,sites in site_info.items():
-            starts,sizes = sites
-            if len(starts) != len(sizes):
-                raise Exception("Start and end sites number is not same")
-            for (start,size) in zip(starts,sizes):
-                template_ann_seq.add_ann(type_,1,start,start+size-1)
+        for start,end in zip(data['block_related_start'],data['block_related_end']):
+            template_ann_seq.add_ann('exon',1,start,end)
+
         template_ann_seq.op_not_ann("intron","gene","exon")
-        ann_seq = self._create_seq(data['name'],data['chrom'],data['strand'],tx_start,tx_end)
+        ann_seq = self._create_seq(data['id'],data['chr'],data['strand'],tx_start,tx_end)
+
         for type_ in ann_seq.ANN_TYPES:
             data = template_ann_seq.get_ann(type_)
             ann_seq.add_ann(type_,data)
-        self._validate(ann_seq,self._foucus_type)
+        self._validate(ann_seq)
         return ann_seq
 
+class _CodingSeqConverter(AnnSeqConverter):
+    """Converter to convert zero-based dicitonary data into AnnSequence with coding annotation"""
+    def __init__(self):
+        super().__init__()
+        self._ANN_TYPES = ['cds','intron','utr_5','utr_3']
 
-class CodingAnnSeqConverter(AnnSeqConverter):
-    def __init__(self,foucus_type=None,extra_types=None):
-        foucus_type = foucus_type or ['cds','intron','utr_5','utr_3']
-        extra_types = extra_types or []
-        super().__init__(foucus_type,extra_types)
-    def _get_template_ann_seq(self,length):
-        """Get template container"""
+    def _create_template_ann_seq(self,length):
         ann_seq = AnnSequence()
         ann_seq.length = length
         ann_seq.strand = 'plus'
-        ann_seq.id = 'template'
+        #ann_seq.id = 'template'
         extra_type = ['exon','ORF','utr','utr_5_potential','utr_3_potential','gene']
         ann_seq.ANN_TYPES = set(self.ANN_TYPES + extra_type)
         ann_seq.init_space()
         return ann_seq
-    def _validate(self,ann_seq,focus_types=None):      
-        if not is_one_hot(ann_seq,focus_types):
-            raise NotOneHotException(ann_seq.id)
-        if 'exon' in ann_seq.ANN_TYPES:
-            added_exon = np.array([0]*ann_seq.length,dtype='float64')
-            for type_ in ['utr_5','utr_3','cds']:
-                added_exon += ann_seq.get_ann(type_)   
-            if not np.all(added_exon==ann_seq.get_ann('exon')):
-                raise Exception("Exon status is not consistent with UTR and CDS")
 
-class CodingBedSeqConverter(CodingAnnSeqConverter):
+    def _validate(self,ann_seq):
+        if not is_one_hot(ann_seq,self._ANN_TYPES):
+            raise NotOneHotException(ann_seq.id)
+
+    def _validate_exon_status(self,ann_seq):
+        added_exon = np.array([0]*ann_seq.length,dtype='float64')
+        for type_ in ['utr_5','utr_3','cds']:
+            added_exon += ann_seq.get_ann(type_)
+        if not np.all(added_exon==ann_seq.get_ann('exon')):
+            raise Exception("Exon status is not consistent with UTR and CDS")
+
+class CodingBedSeqConverter(_CodingSeqConverter):
     def convert(self,data):
-        tx_start = data['chromStart']
-        tx_end = data['chromEnd']
+        """Convert zero-based dicitonary data into AnnSequence"""
+        tx_start = data['start']
+        tx_end = data['end']
         gene = GeneticBedSeqConverter().convert(data)
         length = gene.length
-        template_ann_seq = self._get_template_ann_seq(gene.length)
-        cds_start = data['thickStart'] - data['chromStart']
-        cds_end = data['thickEnd'] - data['chromStart']
+        template_ann_seq = self._create_template_ann_seq(gene.length)
+        cds_start = data['thick_start'] - data['start']
+        cds_end = data['thick_end'] - data['start']
         if cds_start <= cds_end:
             template_ann_seq.set_ann('ORF', 1 ,cds_start,cds_end)
         template_ann_seq.set_ann('exon',gene.get_ann('exon'))
         template_ann_seq.set_ann('intron',gene.get_ann('intron'))
-        template_ann_seq.op_and_ann('cds','exon','ORF')    
+        template_ann_seq.op_and_ann('cds','exon','ORF')
         template_ann_seq.op_not_ann('utr','exon','ORF')
         utr = template_ann_seq.get_ann('utr')
         utr = template_ann_seq.get_ann('utr')
         if np.any(utr==1):
-            if  gene.strand== 'plus':
+            if  gene.strand == 'plus':
                 if cds_start-1 >= 0:
                     template_ann_seq.set_ann('utr_5_potential',1,0,cds_start-1)
                 if cds_end+1 <= length-1:
@@ -139,17 +143,17 @@ class CodingBedSeqConverter(CodingAnnSeqConverter):
             template_ann_seq.op_and_ann('utr_3','utr_3_potential','utr')
         else:
             template_ann_seq.set_ann('utr_5',utr)
-        name = data['name']
-        chrom_id = data['chrom']
+
+        self._validate_exon_status(template_ann_seq)
         ann_seq = self._create_seq(gene.id,gene.chromosome_id,gene.strand,tx_start,tx_end)
         for type_ in ann_seq.ANN_TYPES:
             data = template_ann_seq.get_ann(type_)
             ann_seq.set_ann(type_,data)
-        #print(ann_seq.to_dict())
-        self._validate(ann_seq,self._foucus_type)
+        self._validate(ann_seq)
         return ann_seq
 
-class UscuSeqConverter(CodingAnnSeqConverter):
+class UCSCSeqConverter(_CodingSeqConverter):
+    """Converter to convert zero-based UCSC data into AnnSequence with coding annotation"""
     def convert(self,data):
         """Convert zero-based dicitonary data into AnnSequence"""
         tx_start = data['txStart']
@@ -159,21 +163,21 @@ class UscuSeqConverter(CodingAnnSeqConverter):
         cds_end=data['cdsEnd'] - tx_start
         length = tx_end-tx_start+1
         strand = data['strand']
-        template_ann_seq = self._get_template_ann_seq(length)
+        template_ann_seq = self._create_template_ann_seq(length)
         template_ann_seq.set_ann('gene',1)
         if data['exonCount'] <= 0:
             raise NotPositiveException("exonCount",data['exonCount'])
         else:
             exonStarts = [start_index - tx_start for start_index in data['exonStarts']]
             exonEnds = [end_index - tx_start for end_index in data['exonEnds']]
-        #if exon exist,it will add cds,utr(if exists),intron(if exists) in template container.
+        #if exon exist, it will add cds, utr (if exists), intron (if exists) in template container.
         for exon_index in range(data['exonCount']):
             start = exonStarts[exon_index]
             end = exonEnds[exon_index]
             template_ann_seq.set_ann('exon', 1, start, end)
         if cds_start <= cds_end:
             template_ann_seq.set_ann('ORF', 1 ,cds_start,cds_end)
-        template_ann_seq.op_and_ann('cds','exon','ORF')    
+        template_ann_seq.op_and_ann('cds','exon','ORF')
         template_ann_seq.op_not_ann('utr','exon','ORF')
         template_ann_seq.op_not_ann('intron','gene','exon')
         utr = template_ann_seq.get_ann('utr')
@@ -198,22 +202,24 @@ class UscuSeqConverter(CodingAnnSeqConverter):
         #add template annotated chromosmome to whole annotated chromosmome
         name = data['name']
         chrom_id = data['chrom']
+        self._validate_exon_status(template_ann_seq)
         ann_seq = self._create_seq(name,chrom_id,strand,tx_start,tx_end)
         for type_ in ann_seq.ANN_TYPES:
             data = template_ann_seq.get_ann(type_)
             ann_seq.set_ann(type_,data)
-        self._validate(ann_seq,self._foucus_type)
+        self._validate(ann_seq)
         return ann_seq
 
-class EnsemblSeqConverter(CodingAnnSeqConverter):
+class EnsemblSeqConverter(_CodingSeqConverter):
+    """Converter to convert zero-based Ensembl data into AnnSequence with coding annotation"""
     def convert(self,data):
-        """Convert zero-based dicitonary data into AnnSequence"""
+        #Convert zero-based dicitonary data into AnnSequence
         tx_start = data['tx_start']
         tx_end = data['tx_end']
-        """Create template"""
+        #Create template
         length = tx_end-tx_start+1
-        template_ann_seq = self._get_template_ann_seq(length)
-        """Annotation"""
+        template_ann_seq = self._create_template_ann_seq(length)
+        #Set Annotation
         template_ann_seq.set_ann("gene",1)
         site_info = {'exon':(data['exons_start'],data['exons_end']),
                      'cds':(data['cdss_start'],data['cdss_end']),
@@ -226,10 +232,12 @@ class EnsemblSeqConverter(CodingAnnSeqConverter):
             for (start,end) in zip(starts,ends):
                 template_ann_seq.add_ann(type_,1,start-tx_start,end-tx_start)
         template_ann_seq.op_not_ann("intron","gene","exon")
+        self._validate_exon_status(template_ann_seq)
         ann_seq = self._create_seq(data['protein_id'],data['chrom'],
                                    data['strand'],tx_start,tx_end)
         for type_ in ann_seq.ANN_TYPES:
             data = template_ann_seq.get_ann(type_)
             ann_seq.add_ann(type_,data)
-        self._validate(ann_seq,self._foucus_type)
+        self._validate(ann_seq)
         return ann_seq
+    

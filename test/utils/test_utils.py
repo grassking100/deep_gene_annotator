@@ -1,7 +1,8 @@
 import unittest
-from sequence_annotation.utils.utils import process_tensor
+from sequence_annotation.keras.utils import process_tensor
 import tensorflow as tf
 import numpy as np
+
 class TestUtils(unittest.TestCase):
     def test_process_tensor_with_ignore(self):
         init = tf.global_variables_initializer() 

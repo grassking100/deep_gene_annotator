@@ -11,7 +11,10 @@ class TensorboardWriter:
         for name,val in record.items():
             if 'val' in name:
                 name = '_'.join(name.split('_')[1:])
-            self._writer.add_scalar(prefix+name, np.array(val), counter)
+            try:
+                self._writer.add_scalar(prefix+name, np.array(val), counter)
+            except:
+                pass
 
     def add_grad(self,named_parameters,prefix='',counter=None):
         counter = counter or self.counter

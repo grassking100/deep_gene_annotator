@@ -1,7 +1,8 @@
-from .loss import CCELoss
 import torch.nn as nn
 import torch
 from abc import abstractmethod
+from .loss import CCELoss
+
 
 bce_loss = nn.BCELoss(reduction='mean')
 
@@ -53,12 +54,13 @@ class _Executor(IExecutor):
     def evaluate(self,model,inputs,labels,lengths,**kwargs):
         loss, outputs = _evaluate(self.loss,model,inputs,labels,lengths,self.inference,**kwargs)
         return {'loss':loss},outputs
-    
+
     def predict(self,model,inputs,lengths,**kwargs):
         return _predict(model,inputs,lengths,self.inference,**kwargs)
-    
+
 class BasicExecutor(_Executor):
     def __init__(self):
+        super().__init__()
         self.grad_clip = None
         self.grad_norm = None
         self.optimizer = None
@@ -68,7 +70,7 @@ class BasicExecutor(_Executor):
         config['grad_clip'] = self.grad_clip
         config['grad_norm'] = self.grad_norm
         config['optimizer'] = self.optimizer.state_dict()
-        
+
     def fit(self,model,inputs, labels, lengths,**kwargs):
         if self.optimizer is None:
             raise Exception("Exectutor must set optimizer for fitting")
@@ -78,9 +80,9 @@ class BasicExecutor(_Executor):
         loss_ = self.loss(outputs, labels, **kwargs)
         loss_.backward()
         if self.grad_clip is not None:
-            torch.nn.utils.clip_grad_value_(model.parameters(),self.grad_clip)
+            nn.utils.clip_grad_value_(model.parameters(),self.grad_clip)
         if self.grad_norm is not None:
-            torch.nn.utils.clip_grad_norm_(model.parameters(),self.grad_norm)
+            nn.utils.clip_grad_norm_(model.parameters(),self.grad_norm)
         self.optimizer.step()
         if self.inference is not None:
             outputs = self.inference(outputs)
@@ -88,10 +90,11 @@ class BasicExecutor(_Executor):
 
     def process(self,model):
         if self.optimizer is None:
-            self.optimizer = torch.optim.Adam(model.parameters())        
-            
+            self.optimizer = torch.optim.Adam(model.parameters())
+
 class GANExecutor(_Executor):
     def __init__(self):
+        super().__init__()
         self.reverse_inference = None
         self.optimizer = None
         self._label_optimizer = None
@@ -102,13 +105,13 @@ class GANExecutor(_Executor):
         config['reverse_inference'] = self.reverse_inference
         config['label_optimizer'] = self._label_optimizer.state_dict()
         config['discrim_optimizer'] = self._discrim_optimizer.state_dict()
-        
+
     def fit(self,model,inputs, labels, lengths,**kwargs):
         if self._label_optimizer is None or self._discrim_optimizer is None:
             raise Exception("Exectutor must set optimizer for fitting")
-        model.train(True)    
+        model.train(True)
         label_model, discrim_model = model.gan,model.discrim
-        
+
         self._discrim_optimizer.zero_grad()
         predict_labels = label_model(inputs,lengths=lengths)
         if self.reverse_inference is not None:
@@ -133,10 +136,10 @@ class GANExecutor(_Executor):
 
     def evaluate(self,model,inputs,labels,lengths,**kwargs):
         return super().evaluate(model.gan,inputs,lengths,kwargs)
-    
+
     def predict(self,model,inputs,lengths,**kwargs):
         return super().predict(model.gan,inputs,lengths,kwargs)
-        
+
     def process(self,model):
         if self.optimizer is None:
             self._label_optimizer = torch.optim.Adam(model.gan.parameters())

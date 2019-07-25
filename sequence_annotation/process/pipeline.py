@@ -10,7 +10,7 @@ class Pipeline(metaclass=ABCMeta):
         self.model = model
         self.path = path
         self.is_prompt_visible = True
-        
+
     def print_prompt(self,value):
         if self.is_prompt_visible:
             print(value)

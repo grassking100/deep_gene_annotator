@@ -8,28 +8,12 @@ class DuplicateIdException(Exception):
         msg = "ID," + str(duplicated_id) + ", is duplicated"
         super().__init__(msg)
 
-class ProcessedStatusNotSatisfied(Exception):
-    def __init__(self,get_status,predict_status):
-        msg = ("Get "+str(get_status)+""
-               ",but it is expect to be "
-               ""+str(predict_status))
-        super().__init__(msg)
-
 class ChangeConstValException(Exception):
     def __init__(self, name = None):
         type_=""
         if name is not None:
             type_ = ","+str(name)
         msg = ("Try to change constant value"+str(type_))
-        super().__init__(msg)
-
-class InvalidAnnotation(Exception):
-    def __init__(self, ann_type = None):
-        type_=""
-        if ann_type is not None:
-            type_ = ","+str(ann_type)+","
-        msg = ("Annotation type"+str(type_)+" "
-               "is not expected")
         super().__init__(msg)
 
 class ValueOutOfRange(Exception):
@@ -48,18 +32,6 @@ class NotPositiveException(ValueError):
         msg =(value_name+","+str(value)+", must be positive")
         super().__init__(msg)
 
-class DictKeyNotExistException(Exception):
-    def __init__(self, key):
-        msg = ("Key,"+str(key)+", doesn't exist in "
-               "dictionary")
-        super().__init__(msg)
-
-class MissingExpectDictKey(Exception):
-    def __init__(self, missing_key):
-        msg = ("Passed dictionary needs data about "
-               ""+str(missing_key)+" to complete the quest")
-        super().__init__(msg)
-
 class InvalidValueInDict(Exception):
     def __init__(self, key, invalid_value):
         msg = ("Passed dictionary has invilad value"
@@ -73,15 +45,6 @@ class AttrIsNoneException(Exception):
         msg = (str(class_name) + "'s attribute"
                "," + str(attr_name) + ", should "
                "not be None")
-        super().__init__(msg)
-
-class InvalidStrandType(Exception):
-    def __init__(self, strand_type= None):
-        type_=""
-        if strand_type is not None:
-            type_ = ","+ str(strand_type)+","
-        msg = ("Strand type"+str(type_)+" "
-               "is not expected")
         super().__init__(msg)
 
 class LengthNotEqualException(Exception):
@@ -115,7 +78,7 @@ class UninitializedException(Exception):
         super().__init__(msg)
 
 class CodeException(Exception):
-    """Raise when input code is not in in defined space"""
+    """Raising when input code is not in in defined space"""
     def __init__(self,invalid_code,valid_codes=None):
         self._invalid_code = invalid_code
         self._valid_codes = valid_codes
@@ -131,7 +94,7 @@ class CodeException(Exception):
         return self._valid_codes
 
 class SeqException(Exception):
-    """Raise when input sequences has at least a code is not in in defined space"""
+    """Raising when input sequences has at least a code is not in in defined space"""
     def __init__(self,invalid_code,valid_codes=None):
         mess = "Seqeunce has a invalid code,"+str(invalid_code)
         if valid_codes is not None:

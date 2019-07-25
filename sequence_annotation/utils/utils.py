@@ -1,10 +1,12 @@
 import os
 import errno
-import keras.backend as K
-import tensorflow as tf
-import numpy as np
-from keras.preprocessing.sequence import pad_sequences
 import math
+import numpy as np
+import pandas as pd
+
+BED_COLUMNS = ['chr','start','end','id','score','strand','thick_start','thick_end',
+               'rgb','count','block_size','block_related_start']
+GFF_COLUMNS = ['chr','source','feature','start','end','score','strand','frame','attribute']
 
 def logical_not(lhs, rhs):
     return np.logical_and(lhs,np.logical_not(rhs))
@@ -19,12 +21,12 @@ def create_folder(path):
 
 def get_protected_attrs_names(object_):
     class_name = object_.__class__.__name__
-    attrs = [attr for attr in dir(object_) if attr.startswith('_') 
+    attrs = [attr for attr in dir(object_) if attr.startswith('_')
              and not attr.endswith('__')
              and not attr.startswith('_'+class_name+'__')]
     return attrs
 
-def reverse_weights(cls, class_counts, epsilon=1e-6):
+def reverse_weights(class_counts, epsilon=1e-6):
     scale = len(class_counts.keys())
     raw_weights = {}
     weights = {}
@@ -42,37 +44,6 @@ def reverse_weights(cls, class_counts, epsilon=1e-6):
         weights[type_] = scale * weight / (sum_raw_weights)
     return weights
 
-def process_tensor(answer, prediction,values_to_ignore=None):
-    """Remove specific ignored singal and concatenate them into a two dimension tensors"""
-    true_shape = K.int_shape(answer)
-    pred_shape = K.int_shape(prediction)
-    if len(true_shape)!=3 or len(pred_shape)!=3:
-        raise Exception("Shape must be 3 dimensions")
-    if values_to_ignore is not None:
-        if not isinstance(values_to_ignore,list):
-            values_to_ignore=[values_to_ignore]
-        index = tf.where(K.any(K.not_equal(answer,values_to_ignore),-1))
-        clean_answer = tf.gather_nd(answer, index)
-        clean_prediction = tf.gather_nd(prediction, index)
-    else:
-        true_label_number = K.shape(answer)[-1]
-        pred_label_number = K.shape(prediction)[-1]
-        clean_answer = K.reshape(answer, [-1, true_label_number])
-        clean_prediction = K.reshape(prediction, [-1,pred_label_number])
-    true_shape = K.int_shape(clean_answer)
-    pred_shape = K.int_shape(clean_prediction)
-    if true_shape != pred_shape:
-        raise LengthNotEqualException(true_shape, pred_shape)
-    return (clean_answer, clean_prediction)
-
-def padding(inputs, answers, padding_signal):
-    align_inputs = pad_sequences(inputs, padding='post',value=0)
-    align_answers = pad_sequences(answers, padding='post',value=padding_signal)
-    return (align_inputs, align_answers)
-
-def model_method(model,input_index,output_index):
-    return K.function([model.layers[input_index].input], [model.layers[output_index].output])
-
 def split(ids,ratios):
     if round(sum(ratios))!=1:
         raise Exception("Ratio sum should be one")
@@ -80,8 +51,8 @@ def split(ids,ratios):
     ids_list=[]
     id_len = len(ids)
     sum_=0
-    for index in range(len(ratios)):
-        ub += ratios[index]
+    for ratio in ratios:
+        ub += ratio
         item = ids[math.ceil(lb*id_len):math.ceil(ub*id_len)]
         sum_+=len(item)
         ids_list.append(item)
@@ -92,3 +63,90 @@ def split(ids,ratios):
 
 def get_subdict(ids,data):
     return dict(zip(ids,[data[id_] for id_ in ids]))
+
+def read_bed(path,convert_to_one_base=True):
+    #Read bed data into one-based DataFrame format
+    bed = pd.read_csv(path,sep='\t',header=None)
+    bed.columns = BED_COLUMNS[:len(bed.columns)]
+    data = []
+    for item in bed.to_dict('record'):
+        temp = dict(item)
+        if temp['strand'] == '+':
+            temp['five_end'] = temp['start']
+            if convert_to_one_base:
+                temp['five_end'] += 1
+            temp['three_end'] = temp['end']
+        else:
+            temp['five_end'] = temp['end']
+            temp['three_end'] = temp['start']
+            if convert_to_one_base:
+                temp['three_end'] += 1
+                
+        data.append(temp)
+    df = pd.DataFrame.from_dict(data)
+    df = df.astype(str)
+    for name in ['start','end','thick_start','thick_end','count']:
+        if name in df.columns:
+            df[name] = df[name].astype(float).astype(int)
+            if name in ['start','thick_start'] and convert_to_one_base:
+                df[name] += 1
+    return df
+
+def write_bed(bed,path,from_one_base=True):
+    columns = BED_COLUMNS[:len(bed.columns)]
+    bed = bed[columns]
+    bed = bed.astype(str)
+    for name in ['start','end','thick_start','thick_end','count']:
+        if name in bed.columns:
+            bed[name] = bed[name].astype(float).astype(int)
+            if name in ['start','thick_start'] and from_one_base:
+                bed[name] -= 1
+    bed.to_csv(path,sep='\t',index=None,header=None)
+
+def read_gff(path):
+    gff = pd.read_csv(path,sep='\t',header=None,comment ='#')
+    gff.columns = GFF_COLUMNS
+    return gff
+    
+def write_gff(gff,path):
+    fp = open(path, 'w')
+    fp.write("##gff-version 3\n")
+    gff[GFF_COLUMNS].to_csv(fp,header=None,sep='\t',index=None)
+    fp.close()
+
+def get_gff_with_seq_id(gff):
+    df_dict = gff.to_dict('record')
+    data = []
+    for item in df_dict:
+        ids = item['attribute'].split(';')
+        type_ = item['feature']
+        item_id = ""
+        item_name = ""
+        item_parent = ""
+        for id_ in ids:
+            if id_.startswith("Parent"):
+                item_parent = id_[7:]
+            if id_.startswith("ID"):
+                item_id = id_[3:]
+            if id_.startswith("Name"):
+                item_name = id_[5:]
+        item_parent = item_parent.split(",")
+        item_id = item_id.split(",")
+        for parent in item_parent:
+            for id_ in item_id:
+                copied = dict(item)
+                copied['id'] = id_
+                copied['parent'] = parent
+                copied['name'] = item_name
+                data.append(copied)
+    gff = pd.DataFrame.from_dict(data)
+    return gff
+    
+def read_fai(path):
+    chrom_info = pd.read_csv(path,header=None,sep='\t')
+    chrom_id, chrom_length = chrom_info[0], chrom_info[1]
+    chrom_info = {}
+    for id_,length in zip(chrom_id,chrom_length):
+        chrom_info[str(id_)] = length
+
+    return chrom_info

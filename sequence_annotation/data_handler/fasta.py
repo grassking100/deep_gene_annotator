@@ -26,7 +26,3 @@ def write_fasta(path,seqs):
         for id_,seq in seqs.items():
             file.write(">" + id_ + "\n")
             file.write(seq + "\n")
-
-def get_fasta(gtf,fasta,saved_name):
-    command = 'bedtools getfasta -s -name -bed '+gtf+' -fi '+fasta+' -fo '+saved_name
-    return subprocess.call(command, shell=True)

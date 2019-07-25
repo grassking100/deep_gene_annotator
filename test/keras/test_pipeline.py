@@ -97,7 +97,7 @@ class TestPipeline(unittest.TestCase):
             test_pipeline = Pipeline(model,test_data,test_worker)
             test_pipeline.is_prompt_visible=False
             test_pipeline.execute()
-            self.assertEqual(test_pipeline.result['loss'] <= 0.05,True)
+            self.assertEqual(test_worker.result['loss'] <= 0.05,True)
         except Exception as e:
             raise e
             self.fail("There are some unexpected exceptions occur.")
@@ -125,7 +125,7 @@ class TestPipeline(unittest.TestCase):
         train_pipeline = Pipeline(model,data,train_worker)
         train_pipeline.is_prompt_visible=False
         train_pipeline.execute()
-        result = train_pipeline.result
+        result = train_worker.result
         self.assertTrue(np.all(np.array(result['batch_count'])==2))
         self.assertTrue(np.all(np.array(result['val_batch_count'])==2))
 
@@ -152,6 +152,6 @@ class TestPipeline(unittest.TestCase):
         train_pipeline = Pipeline(model,data,train_worker)
         train_pipeline.is_prompt_visible=False
         train_pipeline.execute()
-        result = train_pipeline.result
+        result = train_worker.result
         self.assertTrue(np.all(np.array(result['sample_count'])==3))
         self.assertTrue(np.all(np.array(result['val_sample_count'])==3))

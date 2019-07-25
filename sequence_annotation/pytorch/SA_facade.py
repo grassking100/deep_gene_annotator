@@ -1,14 +1,14 @@
 import json
-import torch
 import random
 import numpy as np
+import torch
 import os
 from tensorboardX import SummaryWriter
 from .worker import TrainWorker,TestWorker
 from .callback import CategoricalMetric,TensorboardCallback,TensorboardWriter
-from .callback import GFFCompare,SeqFigCallback, Callbacks
+from .callback import GFFCompare,SeqFigCallback, Callbacks,ContagionMatrix
 from .executer import BasicExecutor
-from ..process.pipeline import Pipeline 
+from ..process.pipeline import Pipeline
 from ..process.data_processor import AnnSeqProcessor
 from ..utils.utils import split,get_subdict
 from ..genome_handler.utils import get_subseqs,ann_count
@@ -42,13 +42,15 @@ class SeqAnnFacade:
         self._writer = None
         self._train_writer = self._val_writer = self._test_writer = None
         self.simplify_map = None
+        self.alt = False
+        self.use_gffcompare = True
+        self.alt_num = 0
 
     def update_settings(self,key,params):
-        if key not in self._settings.keys():
-            params = dict(params)
-            if 'self' in params.keys():
-                del params['self']
-            self._settings[key] = params
+        params = dict(params)
+        if 'self' in params.keys():
+            del params['self']
+        self._settings[key] = params
 
     @property
     def ann_types(self):
@@ -60,13 +62,17 @@ class SeqAnnFacade:
             raise Exception("Object has not set train_ann_seqs or test_ann_seqs yet.")
 
     def _validate_ann_seqs(self,ann_seq_list):
+        counts = []
         for ann_seqs in ann_seq_list:
             if not ann_seqs.is_empty():
                 count = ann_count(ann_seqs)
+                counts.append(count)
                 print(len(ann_seqs),count)
                 count = np.array([int(val) for val in count.values()])
+
                 if (count==0).any():
                     raise Exception("There are some annotations missing is the dataset")
+        return counts
 
     def add_seq_fig(self,seq,ann_seq,color_settings=None,prefix=None):
         if self._writer is None:
@@ -94,10 +100,12 @@ class SeqAnnFacade:
             fp = os.path.join(path,"test")
             self._test_writer = TensorboardWriter(SummaryWriter(fp))
 
-    def _create_gff_compare(self,path):
+    def _create_gff_compare(self,path,prefix=None):
         if self.simplify_map is None:
             raise Exception("The simplify_map must be set first")
-        gff_compare = GFFCompare(self.ann_types,path,simplify_map=self.simplify_map)
+        gff_compare = GFFCompare(self.ann_types,path,simplify_map=self.simplify_map,prefix=prefix)
+        gff_compare.extractor.alt = self.alt
+        gff_compare.extractor.alt_num = self.alt_num
         return gff_compare
 
     def _create_categorical_metric(self,prefix=None):
@@ -106,34 +114,49 @@ class SeqAnnFacade:
                                    prefix=prefix)
         return metric
 
+    def _create_contagion_matrix(self,prefix=None):
+        metric = ContagionMatrix(len(self.ann_types),
+                                 label_names=self.ann_types,
+                                 prefix=prefix)
+        return metric
+
+
     def _create_default_train_callbacks(self,path=None):
         train_callbacks = Callbacks()
         val_callbacks = Callbacks()
         train_metric = self._create_categorical_metric()
-        val_metric = self._create_categorical_metric(prefix='val')  
+        val_metric = self._create_categorical_metric(prefix='val')
+        train_matrix = self._create_contagion_matrix()
+        val_matrix = self._create_contagion_matrix(prefix='val')
         train_callbacks.add(train_metric)
+        train_callbacks.add(train_matrix)
         val_callbacks.add(val_metric)
+        val_callbacks.add(val_matrix)
         if path is not None:
-            gff_compare = self._create_gff_compare(path)
-            gff_compare.prefix='val'
-            val_callbacks.add(gff_compare)
+            if self.use_gffcompare:
+                gff_compare = self._create_gff_compare(path,prefix='val')
+                val_callbacks.add(gff_compare)
         return train_callbacks,val_callbacks
 
     def _create_default_test_callbacks(self,path=None):
         callbacks = Callbacks()
-        test_metric = self._create_categorical_metric(prefix='test')  
+        test_metric = self._create_categorical_metric(prefix='test')
+        test_matrix = self._create_contagion_matrix(prefix='test')
         callbacks.add(test_metric)
+        callbacks.add(test_matrix)
         if path is not None:
-            gff_compare = self._create_gff_compare(path)
-            gff_compare.prefix='test'
-            callbacks.add(gff_compare)
+            if self.use_gffcompare:
+                gff_compare = self._create_gff_compare(path,prefix='test')
+                callbacks.add(gff_compare)
         return callbacks
 
     def train(self,model,epoch_num=100,batch_size=32,augmentation_max=None):
         self.update_settings('train_setting',{'epoch_num':epoch_num,'batch_size':batch_size})
         fp = os.path.join(self._path,"val")
         train_callbacks, val_callbacks = self._create_default_train_callbacks(fp)
-        self._validate_ann_seqs([self.train_ann_seqs,self.val_ann_seqs])
+        train_ann_count,val_ann_count = self._validate_ann_seqs([self.train_ann_seqs,self.val_ann_seqs])
+        self.update_settings('train_ann_counut',train_ann_count)
+        self.update_settings('val_ann_count',val_ann_count)
         writers = [self._train_writer,self._val_writer,None]
         callbacks_list = [train_callbacks,val_callbacks,self.other_callbacks]
         for writer,callback in zip(writers,callbacks_list):
@@ -154,25 +177,25 @@ class SeqAnnFacade:
         filtered_train_num = len(data['training']['extra']['ids'])
         filtered_val_num  = len(data['validation']['extra']['ids'])
         self.update_settings('train_seq',{'origin count':origin_train_num,
-                                         'filtered count':filtered_train_num})
+                                          'filtered count':filtered_train_num})
         self.update_settings('val_seq',{'origin count':origin_val_num,
-                                         'filtered count':filtered_val_num})
+                                        'filtered count':filtered_val_num})
         pipeline = Pipeline(model,data,worker,path=self._path)
         if self._path is not None:
             fp = os.path.join(self._path,"train_facade_setting.json")
             with open(fp,'w') as fp:
                 json.dump(self._settings,fp)
         pipeline.execute()
-        record = worker.result
         if self._path is not None:
             fp = os.path.join(self._path,"train_record.json")
             with open(fp,'w') as fp:
-                fp.write(str(record))
-        return record
+                json.dump(worker.result,fp)
+        return worker.result
 
     def test(self,model,batch_size=32):
         self.update_settings('test_setting',{'batch_size':batch_size})
-        self._validate_ann_seqs([self.test_ann_seqs])
+        test_ann_count = self._validate_ann_seqs([self.test_ann_seqs])[0]
+        self.update_settings('test_ann_count',test_ann_count)
         fp = os.path.join(self._path,"test")
         callbacks = self._create_default_test_callbacks(fp)
         if self._test_writer is not None:
@@ -192,9 +215,8 @@ class SeqAnnFacade:
             with open(fp,'w') as fp:
                 json.dump(self._settings,fp)
         pipeline.execute()
-        record = worker.result
         if self._path is not None:
             fp = os.path.join(self._path,"test_record.json")
             with open(fp,'w') as fp:
-                fp.write(str(record))
-        return record
+                json.dump(worker.result,fp)
+        return worker.result

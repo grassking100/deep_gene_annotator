@@ -1,13 +1,11 @@
 import torch.nn as nn
-from torch.nn.utils.rnn import PackedSequence,pack_padded_sequence,pad_packed_sequence
+from torch.nn.utils.rnn import pack_padded_sequence,pad_packed_sequence
 import torch
-from torch.nn.init import constant_, normal_,uniform_
 
 def _reverse(x,lengths):
     #Convert forward data data to reversed data with N-C-L shape to N-C-L shape
     N,C,L = x.shape
     concat_data=[]
-    new_lengths = []
     for item,length in zip(x,lengths):
         reversed_core = item.transpose(0,1).flip(0)[:length].transpose(0,1)
         zeros = torch.zeros(C,L-length).cuda()
@@ -19,7 +17,7 @@ def _forward(x,lengths):
     #Convert reversed data to forward data with N-C-L shape to N-C-L shape
     N,C,L = x.shape
     concat_data=[]
-    for item,length in zip(x,lengths):    
+    for item,length in zip(x,lengths):
         forward_core = item.transpose(0,1)[:length].transpose(0,1).flip(1)
         zeros=torch.zeros(C,L-length).cuda()
         temp = torch.cat([zeros,forward_core],dim=1).reshape(1,C,L)
@@ -63,7 +61,12 @@ class RNN(nn.Module):
         self._go_backward = go_backward
         self.init_states = torch.nn.Parameter(requires_grad=train_init_value)
         self._init_value = init_value
+
         self._state_number = state_number or 1
+        if bidirectional:
+            self.out_channel = self._state_number*2
+        else:
+            self.out_channel = self._state_number
         if hasattr(self._rnn,'output_names'):
             self.output_names = self._rnn.output_names
         else:
@@ -113,7 +116,7 @@ class RNN(nn.Module):
     def _forward(self,x,batch_sizes):
         previous_h = self.init_states.repeat(len(x),self._state_number)
         all_states = [[] for _ in self.output_names]
-        count = 0 
+        count = 0
         for batch_size in batch_sizes:
             outputs = self._rnn(x[count:count+batch_size],(previous_h[:batch_size]))
             if not isinstance(outputs,tuple):

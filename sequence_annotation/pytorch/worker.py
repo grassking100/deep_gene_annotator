@@ -1,14 +1,12 @@
 """This submodule provides trainer to train model"""
+import os,sys
+import time
+import json
 import torch
 from ..process.worker import Worker
 from ..pytorch.callback import Accumulator, Recorder, Callbacks
 from ..process.data_generator import DataGenerator
 from ..pytorch.executer import BasicExecutor
-
-import os,sys
-import numpy as np
-import time
-import json
 
 def train_per_batch(model,ids,inputs,labels,lengths,mask,executor,callbacks):
     callbacks.on_batch_begin()
@@ -50,7 +48,7 @@ def _init_generator(generator):
     generator.order = 'NCL'
     generator.order_target=['answers','inputs']
     generator.pad_value={'answers':0,'inputs':0}
-        
+
 class TrainWorker(PyWorker):
     """a worker which will train and evaluate the model"""
     def __init__(self,executor=None,train_generator=None,val_generator=None,
@@ -73,13 +71,13 @@ class TrainWorker(PyWorker):
             self._val_callbacks = Callbacks()
         if other_callbacks is None:
             self._other_callbacks = Callbacks()
-            
+
         self._writer = writer
         self._epoch_start = epoch_start or 0
         self._epoch_num = epoch_num or 1
         self.is_running = True
         self._recoder = None
-        
+
     def before_work(self,path=None,**kwargs):
         self._train_generator.x_data = self.data['training']['inputs']
         self._train_generator.y_data = self.data['training']['answers']
@@ -108,7 +106,7 @@ class TrainWorker(PyWorker):
             with open(os.path.join(path,"train_worker_setting.json"),'w') as fp:
                 json.dump(self._settings,fp)
 
-            self._recoder.path = os.path.join(path,'train_record.json') 
+            self._recoder.path = os.path.join(path,'train_record.json')
 
     def work(self):
         """Train model"""
@@ -128,13 +126,13 @@ class TrainWorker(PyWorker):
             if self._writer is not None:
                 self._writer.counter = epoch
             all_callbacks.on_epoch_begin(counter=epoch)
-            
+
             for index,item in enumerate(self._train_generator):
                 inputs, labels, extra = item
                 ids,lengths,mask = extra['ids'],extra['lengths'],extra['mask']
                 train_per_batch(self.model,ids,inputs,labels,lengths,mask,
                                 self.executor,self._train_callbacks)
-                
+
                 if self.is_verbose_visible:
                     status = 100*index/len(self._train_generator)
                     print(batch_info.format(epoch,self._epoch_num,'training',status),end='\r')
@@ -171,7 +169,7 @@ class TrainWorker(PyWorker):
             if self.is_verbose_visible:
                 time_cost = round(time.time()-pre_time,3)
                 print(epoch_info.format(epoch,self._epoch_num,time_cost,record))
-                
+
             if not self.is_running:
                 print("Early stop at {}".format(epoch))
                 break
@@ -188,9 +186,9 @@ class TestWorker(PyWorker):
         self._generator = generator
         self._callbacks = callbacks
         self._recoder = None
-        
+
         if generator is None:
-            self._generator = DataGenerator()    
+            self._generator = DataGenerator()
         if callbacks is None:
             self._callbacks = Callbacks()
 
@@ -240,7 +238,7 @@ class TestWorker(PyWorker):
         self._generator.on_epoch_end()
         self._recoder.on_epoch_end(metric=record)
         callbacks.on_epoch_end(metric=record)
-        callbacks.on_work_end()   
+        callbacks.on_work_end()
         self._recoder.on_work_end()
 
     def after_work(self,**kwargs):

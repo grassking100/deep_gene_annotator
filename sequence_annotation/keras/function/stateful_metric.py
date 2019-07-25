@@ -1,8 +1,8 @@
 """A submodule about metric layer"""
-from keras.engine.topology import Layer
 from abc import ABCMeta
-from keras import backend as K
 import tensorflow as tf
+from keras import backend as K
+from keras.engine.topology import Layer
 
 class StatefulMetric(Layer,metaclass=ABCMeta):
     """A layer can be called to calculate stateful metric"""

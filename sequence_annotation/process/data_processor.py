@@ -1,20 +1,17 @@
-from abc import ABCMeta, abstractmethod,abstractproperty
-import json
-import numpy as np
-import random
 import warnings
+import random
+import numpy as np
 from keras.preprocessing.sequence import pad_sequences
-from ..genome_handler.sequence import AnnSequence
 from ..genome_handler.seq_container import AnnSeqContainer
 from ..genome_handler.utils import get_subseqs
 from ..data_handler.seq_converter import SeqConverter
-from ..genome_handler import ann_genome_processor,ann_seq_processor
+from ..genome_handler import ann_genome_processor
 from ..utils.exception import LengthNotEqualException,DimensionNotSatisfy
-from ..utils.utils import create_folder,get_subdict
+from ..utils.utils import get_subdict
 
 class AnnSeqProcessor:
-    def __init__(self,data,padding=None,seq_converter=None,answer_by_index=None,
-                 discard_invalid_seq=None,validation_split=None):
+    def __init__(self,data,padding=None,seq_converter=None,answer_by_index=False,
+                 discard_invalid_seq=False,validation_split=None):
         self._data = data
         if 'training' in data.keys():
             self._ann_types = data['training']['answers'].ANN_TYPES
@@ -29,8 +26,8 @@ class AnnSeqProcessor:
             self._padding = {}
         else:
             self._padding = padding
-        self._discard_invalid_seq = discard_invalid_seq or False
-        self._answer_by_index = answer_by_index or False
+        self._discard_invalid_seq = discard_invalid_seq
+        self._answer_by_index = answer_by_index
 
     def _validate(self,data_dict):
         for input_,answer in zip(data_dict['inputs'],data_dict['answers']):
@@ -110,7 +107,7 @@ class AnnSeqProcessor:
             data['inputs'].append(seq)
             data['answers'].append(answer)
             data['lengths'].append(len(seq))
-            
+
         for kind in other_key:
             data[kind] = []
             temp = item[kind]
@@ -119,10 +116,10 @@ class AnnSeqProcessor:
             for name in seqs.keys():
                 data[kind].append(temp[name])
         return data
-            
+
     def process(self):
         self._split()
-        warning = "{} data have {} of sequneces, it left {} of sequnces after filtering"
+        warning = "{} data have {} sequences, it left {} sequences after filtering"
         for purpose in self._data.keys():
             item = self._data[purpose]
             origin_num = len(item['inputs'])

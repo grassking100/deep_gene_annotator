@@ -5,7 +5,7 @@ import numpy as np
 DNA_CODE = 'ATCG'
 AA_CODES = 'ARNDCQEGHILKMFPSTWYV'
 
-class SeqConverter():
+class SeqConverter:
     def __init__(self,code_vec_dictionay=None,codes=None,
                  is_case_sensitivity=False,with_soft_masked_status=False):
         if code_vec_dictionay is not None:

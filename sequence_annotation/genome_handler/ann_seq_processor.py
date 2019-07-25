@@ -1,9 +1,7 @@
-import numpy as np
 import warnings
-from ..utils.exception import ProcessedStatusNotSatisfied
-from ..utils.exception import InvalidStrandType
+import numpy as np
+from .exception import ProcessedStatusNotSatisfied,InvalidStrandType
 from .sequence import AnnSequence
-from .exception import NotOneHotException
 
 def is_dirty(seq, dirty_types):
     for dirty_type in dirty_types:
@@ -50,14 +48,14 @@ def get_normalized(seq, focus_types=None):
                 norm_seq.set_ann(type_,result)
         for type_ in other_types:
             norm_seq.set_ann(type_,seq.get_ann(type_))
-        return norm_seq   
-    
+        return norm_seq
+
 def is_full_annotated(seq, focus_types=None):
     focus_types = focus_types or seq.ANN_TYPES
     values = []
     for type_ in focus_types:
         values.append(seq.get_ann(type_))
-    status = not np.any(np.array(values).sum(0)==0) 
+    status = not np.any(np.array(values).sum(0)==0)
     return status
 
 def is_value_sum_to_length(seq, focus_types=None):
@@ -72,14 +70,14 @@ def is_binary(seq, focus_types=None):
     values = []
     for type_ in focus_types:
         values.append(seq.get_ann(type_))
-    is_binary = np.all(np.isin(np.array(values), [0.0,1.0]))
-    return is_binary
+    is_binary_ = np.all(np.isin(np.array(values), [0.0,1.0]))
+    return is_binary_
 
 def is_one_hot(seq, focus_types=None):
-    _is_binary = is_binary(seq, focus_types)
-    _is_full_annotated = is_full_annotated(seq, focus_types)
-    _is_sum_to_length = is_value_sum_to_length(seq, focus_types)
-    return _is_binary and _is_full_annotated and _is_sum_to_length
+    is_binary_ = is_binary(seq, focus_types)
+    is_full_annotated_ = is_full_annotated(seq, focus_types)
+    is_sum_to_length_ = is_value_sum_to_length(seq, focus_types)
+    return is_binary_ and is_full_annotated_ and is_sum_to_length_
 
 def _get_one_hot_by_max(seq, focus_types=None):
     focus_types = focus_types or seq.ANN_TYPES
@@ -132,7 +130,7 @@ def get_one_hot(seq, focus_types=None, method='max'):
             return _get_one_hot_by_order(seq,focus_types)
         else:
             raise Exception("Method ,"+str(method)+", is not supported")
-            
+
 def get_background(seq, frontground_types=None):
     frontground_types = frontground_types or seq.ANN_TYPES
     return  np.logical_not(get_frontground(seq,frontground_types))
@@ -158,26 +156,20 @@ def get_frontground(seq,frontground_types=None):
         frontground_seq = np.logical_or(frontground_seq,seq.get_ann(type_))
     return frontground_seq
 
-def simplify_seq(seq,replace,focus_types=None):
-    if seq.processed_status=='one_hot' or is_one_hot(seq,focus_types=focus_types):
-        ann_seq = AnnSequence().from_dict(seq.to_dict())
-        ann_seq.clean_space()
-        ann_seq.ANN_TYPES = list(replace.keys())
-        ann_seq.init_space()
-        for key_ in ann_seq.ANN_TYPES:
-            for type_ in replace[key_]:
-                ann_seq.add_ann(key_,seq.get_ann(type_))
-        return ann_seq
-    else:
-        raise NotOneHotException(seq.id)
+def simplify_seq(seq,replace):
+    ann_seq = seq.copy()
+    ann_seq.clean_space()
+    ann_seq.ANN_TYPES = list(replace.keys())
+    ann_seq.init_space()
+    for key_ in ann_seq.ANN_TYPES:
+        for type_ in replace[key_]:
+            ann_seq.add_ann(key_,seq.get_ann(type_))
+    return ann_seq
 
 def class_count(ann_seq):
     ann_count = {}
-    ANN_TYPES = ann_genome.ANN_TYPES
-    for type_ in ANN_TYPES:
-        ann_count[type_] = 0
-    for type_ in ANN_TYPES:
-        ann_count[type_] += np.sum(ann_seq.get_ann(type_))
+    for type_ in ann_seq.ANN_TYPES:
+        ann_count[type_] = np.sum(ann_seq.get_ann(type_))
     return ann_count
 
 def seq2vecs(ann_seq,ann_types=None):
@@ -221,28 +213,50 @@ def get_binary(seq):
     binary_seq = seq.copy().clean_space().init_space()
     for type_ in binary_seq.ANN_TYPES:
         temp = np.array(seq.get_ann(type_))
-        binary_seq.set_ann(type_,np.nan_to_num(temp/temp))
+        temp = (temp > 0).astype(int)
+        binary_seq.set_ann(type_,temp)
     return binary_seq
 
-def get_mixed_types(seq):
+def get_mixed_seq(seq,map_=None):
+    if 'DANGER' in seq.ANN_TYPES:
+        raise Exception("Sequence {} has invalid annotation type, DANGER".format(seq.id))
+    if map_ is not None and 'DANGER' not in map_.keys():
+        raise Exception("Map must have key, DANGER")
     vecs = []
-    maps = {}
-    kernel = [0]*len(seq.ANN_TYPES)
     for type_ in seq.ANN_TYPES:
         val = np.array(seq.get_ann(type_)) != 0.0
-        
-        vecs.append(val)
-        index = seq.ANN_TYPES.index(type_)
-        kernel_ = list(kernel)
-        kernel_ [index] = 1
-        maps[type_] = kernel_
+        vecs.append(val.astype(int))
+    if map_ is None:
+        map_ = {}
+        max_val = 2**len(seq.ANN_TYPES)-1
+        format_ = "0{}b".format(len(seq.ANN_TYPES))
+        for id_ in range(0,max_val+1):
+            bits = list(format(id_,format_))
+            name = ""
+            for bit,type_ in zip(bits,seq.ANN_TYPES):
+                if bit == '1':
+                    if name == "":
+                        name = type_
+                    else:
+                        name = name + "_" + type_
+            if name == "":
+                name = 'DANGER'
+            map_[name] = [int(bit) for bit in bits]
     t_vecs = np.array(vecs).transpose()
     mixed_type_seq = seq.copy().clean_space()
-    mixed_type_seq.ANN_TYPES =  list(seq.ANN_TYPES) + ['mix']
+    mixed_type_seq.ANN_TYPES = list(map_.keys())
     mixed_type_seq.init_space()
-    for type_,kernel in maps.items():
-        mixed_type_seq.set_ann(type_,np.all(t_vecs==kernel,1).astype('int'))
-    mixed_type_seq.set_ann('mix',get_background(mixed_type_seq))
+    for type_,kernel in map_.items():
+        ann = np.all(t_vecs==kernel,1).astype('int')
+        mixed_type_seq.set_ann(type_,ann)
+    valid_types = []
+    for type_ in mixed_type_seq.ANN_TYPES:
+        sum_ = sum(np.array(mixed_type_seq.get_ann(type_)) != 0.0)
+        if sum_ > 0:
+            valid_types.append(type_)
+
     if is_one_hot(mixed_type_seq):
-        seq.processed_status ='one_hot'
+        mixed_type_seq.processed_status = 'one_hot'
+    else:
+        raise Exception("Sequence {} cannot convert to one-hot sequence".format(seq.id))
     return mixed_type_seq

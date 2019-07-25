@@ -1,10 +1,11 @@
-if (( $# != 2 )); then
+if (( $# != 3 )); then
     echo "Usage:"
-    echo "    bash splice_accept_site.sh BEDFILES RADIUS"
+    echo "    bash splice_accept_site.sh BEDFILES upstream downstream"
     exit 1
 fi
 bed_file="${1%.*}"
-radius=$2
+upstream=$2
+downstream=$3
 
 awk -F'\t' -v OFS="\t"  '
                          {   
@@ -16,6 +17,7 @@ awk -F'\t' -v OFS="\t"  '
                                  size = sizes[i]
                                  related_start = related_starts[i]
                                  related_end = related_starts[i] + size - 1
+                                 splice_accept_site=-1
                                  if($6=="+")
                                  {
                                      if(related_start>0)
@@ -30,12 +32,21 @@ awk -F'\t' -v OFS="\t"  '
                                          splice_accept_site = related_end
                                      }
                                  }
-                                 start = splice_accept_site+transcrtipt_start-'$radius'
-                                 end = splice_accept_site+transcrtipt_start+'$radius'
-                                 if(start>=0)
+                                 site = splice_accept_site+transcrtipt_start
+                                 if($6=="+")
+                                 {
+                                     start = site-'$upstream' -1
+                                     end = site+'$downstream' -1
+                                 }
+                                 else
+                                 {
+                                     end = site+'$upstream' + 1
+                                     start = site-'$downstream' + 1
+                                 }
+                                 if(splice_accept_site!=-1 && start>=0)
                                  {
                                      print($1,start-1,end,$4,$5,$6)
                                  }
                              }
-                         }'  "$bed_file.bed" > "${bed_file}_splice_accept_site_with_radius_${radius}.bed"
-exit 0                   
+                         }'  "$bed_file.bed"
+ 

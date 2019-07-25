@@ -1,5 +1,7 @@
 """This submodule provides trainer to train model"""
 import warnings
+import json
+import pandas as pd
 import tensorflow as tf
 from keras import backend as K
 config = tf.ConfigProto()
@@ -7,8 +9,6 @@ if hasattr(config,"gpu_options"):
     config.gpu_options.allow_growth=True
 sess = tf.Session(config=config)
 K.set_session(sess)
-import json
-import pandas as pd
 from ...process.worker import Worker
 from ...process.data_generator import DataGenerator
 from ..function.work_generator import EvaluateGenerator

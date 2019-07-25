@@ -5,14 +5,14 @@ from .real_genome import RealGenome
 from . import ucsc_file_prefix
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
 from sequence_annotation.genome_handler.seq_info_parser import UCSCInfoParser
-from sequence_annotation.genome_handler.ann_seq_converter import UscuSeqConverter
+from sequence_annotation.genome_handler.ann_seq_converter import UCSCSeqConverter
 from sequence_annotation.genome_handler.ann_genome_creator import AnnGenomeCreator
 
 class TestAnnGenomeCreator(unittest.TestCase):
     real_genome = RealGenome()
-    def _uscu_convert(self,data):
+    def _ucsc_convert(self,data):
         parser = UCSCInfoParser()
-        converter = UscuSeqConverter()
+        converter = UCSCSeqConverter()
         parsed_seqs = parser.parse(data)
         ann_seqs = []
         for parsed_seq in parsed_seqs:
@@ -26,8 +26,7 @@ class TestAnnGenomeCreator(unittest.TestCase):
         return result
     def test_create_type(self):
         file_path = ucsc_file_prefix + 'one_plus_strand_all_utr_5.tsv'
-        data = pd.read_csv(file_path,sep='\t').to_dict('record')
-        result = self._uscu_convert(data)
+        result = self._ucsc_convert(file_path)
         self.assertEqual(AnnSeqContainer,type(result))
     def _test_seq(self, real_seq,test_seq):
         self.assertEqual(real_seq.id,test_seq.id)
@@ -45,37 +44,31 @@ class TestAnnGenomeCreator(unittest.TestCase):
             self._test_seq(real_seq,test_seq)
     def test_one_plus_strand_all_utr_5(self):
         file_path = ucsc_file_prefix + 'one_plus_strand_all_utr_5.tsv'
-        real_genome = TestAnnGenomeCreator.real_genome.one_plus_strand_all_utr_5(False)  
-        data = pd.read_csv(file_path,sep='\t').to_dict('record')
-        result = self._uscu_convert(data)
+        real_genome = TestAnnGenomeCreator.real_genome.one_plus_strand_all_utr_5(False)
+        result = self._ucsc_convert(file_path)
         self._test_genome(real_genome,result)
     def test_two_plus_strand(self):
         file_path = ucsc_file_prefix + 'two_plus_strand.tsv'
-        real_genome = TestAnnGenomeCreator.real_genome.two_plus_strand(False)  
-        data = pd.read_csv(file_path,sep='\t').to_dict('record')
-        result = self._uscu_convert(data)
+        real_genome = TestAnnGenomeCreator.real_genome.two_plus_strand(False)
+        result = self._ucsc_convert(file_path)
         self._test_genome(real_genome,result)
     def test_two_seq_on_same_plus(self):
         file_path = ucsc_file_prefix + 'two_seq_on_same_plus_strand.tsv'
-        real_genome = TestAnnGenomeCreator.real_genome.two_seq_on_same_plus_strand(False)  
-        data = pd.read_csv(file_path,sep='\t').to_dict('record')
-        result = self._uscu_convert(data)
+        real_genome = TestAnnGenomeCreator.real_genome.two_seq_on_same_plus_strand(False)
+        result = self._ucsc_convert(file_path)
         self._test_genome(real_genome,result)
     def test_one_plus_strand_both(self):
         file_path = ucsc_file_prefix + 'one_plus_strand_both_utr.tsv'
-        real_genome = TestAnnGenomeCreator.real_genome.one_plus_strand_both_utr(False)  
-        data = pd.read_csv(file_path,sep='\t').to_dict('record')
-        result = self._uscu_convert(data)
+        real_genome = TestAnnGenomeCreator.real_genome.one_plus_strand_both_utr(False)
+        result = self._ucsc_convert(file_path)
         self._test_genome(real_genome,result)
     def test_minus_strand(self):
         file_path = ucsc_file_prefix + 'minus_strand.tsv'
-        real_genome = TestAnnGenomeCreator.real_genome.minus_strand(False)  
-        data = pd.read_csv(file_path,sep='\t').to_dict('record')
-        result = self._uscu_convert(data)
+        real_genome = TestAnnGenomeCreator.real_genome.minus_strand(False)
+        result = self._ucsc_convert(file_path)
         self._test_genome(real_genome,result)
     def test_multiple_utr_intron_cds(self):
         file_path = ucsc_file_prefix + 'multiple_utr_intron_cds.tsv'
-        real_genome = TestAnnGenomeCreator.real_genome.multiple_utr_intron_cds(False)  
-        data = pd.read_csv(file_path,sep='\t').to_dict('record')
-        result = self._uscu_convert(data)
+        real_genome = TestAnnGenomeCreator.real_genome.multiple_utr_intron_cds(False)
+        result = self._ucsc_convert(file_path)
         self._test_genome(real_genome,result)

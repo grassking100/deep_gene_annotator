@@ -1,10 +1,7 @@
 import math
+import random
 import numpy as np
 import pandas as pd
-import random
-from . import ann_seq_processor
-from ..utils.exception import LengthNotEqualException
-from .sequence import AnnSequence
 from .seq_container import AnnSeqContainer
 
 def merge_data(data,groupby,raise_duplicated_excpetion=True):
@@ -32,7 +29,7 @@ def merge_data(data,groupby,raise_duplicated_excpetion=True):
         return result
     else:
         raise Exception("Columns is not the same")
-        
+
 def gene_boundary(data,raise_duplicated_excpetion=True):
     def sort_aggregate(x):
         value_list = []
@@ -82,14 +79,14 @@ def preprocess_ensembl_data(parsed_file_path,valid_chroms_id,
     return merged_data
 
 def ann_count(ann_seqs):
-    ann_count = {}
+    count = {}
     types = ann_seqs.ANN_TYPES
     for seq in ann_seqs:
         for type_ in types:
-            if type_ not in ann_count.keys():
-                ann_count[type_] = 0
-            ann_count[type_] += np.sum(seq.get_ann(type_))
-    return ann_count
+            if type_ not in count.keys():
+                count[type_] = 0
+            count[type_] += np.sum(seq.get_ann(type_))
+    return count
 
 def select_seq(fasta,ann_seqs,min_len=None,max_len=None,ratio=None,outlier_coef=1.5,num_max=None):
     seqs_len = [len(seq) for seq in ann_seqs]
@@ -129,12 +126,12 @@ def get_subseqs(ids,ann_seqs):
     sub_seqs.add([ann_seqs[id_] for id_ in ids])
     return sub_seqs
 
-def ann2gff(seq_anns,simplify_map=None):
-    gffs = AnnSeqContainer()
-    for ann in seq_anns:
-        ann_informs = self.extractor.extract_per_seq(ann,simplify_map)
-        gffs.add(ann_informs)
-    return self._answers.to_gff()
+#def ann2gff(seq_anns,simplify_map=None):
+#    gffs = AnnSeqContainer()
+#    for ann in seq_anns:
+#        ann_informs = self.extractor.extract_per_seq(ann,simplify_map)
+#        gffs.add(ann_informs)
+#    return self._answers.to_gff()
 
 def get_seq_mask(lengths,max_lengths=None):
     max_lengths = max_lengths or max(lengths)

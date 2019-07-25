@@ -1,18 +1,15 @@
 import warnings
 from .seq_container import AnnSeqContainer
 from .sequence import AnnSequence
-from ..utils.validator import DictValidator
 
 class AnnChromCreator:
-    """Map annotated sequences belong to specific chromosome on the chromosome"""
+    """Mapping annotated sequences belong to specific chromosome on the chromosome"""
     def __init__(self):
         super().__init__()
         warnings.warn(("\n!!!\n\tCoordinate will be 5' to 3' of plus strand"
                        " on both PLUS and MINUS strand'\n!!!\n"), UserWarning)
-    def _validate(self):
-        pass
+
     def create(self,ann_seqs,chrom_id,length,source):
-        self._validate()
         for ann_seq in ann_seqs:
             if str(chrom_id)!=str(ann_seq.chromosome_id):
                 err = "Chromosome id and sequence id are not the same"
@@ -21,8 +18,9 @@ class AnnChromCreator:
         chrom = self._get_init_chrom(chrom_id,ann_types,length,source)
         self._add_seqs(chrom,ann_seqs,source)
         return chrom
+
     def _get_init_chrom(self,chrom_id,ann_types,length,source):
-        """Get initialized chromosome"""      
+        """Get initialized chromosome"""
         chrom = AnnSeqContainer()
         chrom.ANN_TYPES = ann_types
         for strand in ['plus','minus']:
@@ -36,13 +34,15 @@ class AnnChromCreator:
             ann_seq.init_space()
             chrom.add(ann_seq)
         return chrom
+
     def _add_seqs(self,chrom,ann_seqs,source):
         for ann_seq in ann_seqs:
             one_strand_chrom = chrom.get(str(ann_seq.chromosome_id)+"_"+ann_seq.strand)
             self._add_seq(one_strand_chrom,ann_seq,source)
+
     def _add_seq(self,one_strand_chrom,ann_seq,source):
         """
-            Coordinate will be 5' to 3' of plus strand 
+            Coordinate will be 5' to 3' of plus strand
             on both PLUS and MINUS strand
         """
         txStart = ann_seq.absolute_index
@@ -55,22 +55,18 @@ class AnnChromCreator:
             one_strand_chrom.add_ann(type_,seq,gene_start_index,gene_end_index)
 
 class AnnGenomeCreator:
-    """Map annotated sequences on the genome"""
+    """Mapping annotated sequences on the genome"""
     def __init__(self):
         super().__init__()
         self._chrom_creator = AnnChromCreator()
-    def _validate(self):
-        pass
+
     def create(self,ann_seqs,genome_information):
-        validator = DictValidator(genome_information,['source','chromosome'],[],[])
-        validator.validate()
         seqs_collect = {}
         genome = AnnSeqContainer()
-        ann_types = list(ann_seqs.ANN_TYPES)
-        genome.ANN_TYPES = ann_types
+        genome.ANN_TYPES = ann_seqs.ANN_TYPES
         for chrom_id in genome_information['chromosome'].keys():
             container = AnnSeqContainer()
-            container.ANN_TYPES = ann_types
+            container.ANN_TYPES = ann_seqs.ANN_TYPES
             seqs_collect[chrom_id] = container
         for ann_seq in ann_seqs:
             chrom_id = str(ann_seq.chromosome_id)

@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 from . import SubplotHelper
 
-def visual_ann_seq(seq,length=None):
-    """visualize the count of each type along sequence"""    
+def visual_ann_seq(seq):
+    """Visualize the count of each type along sequence"""
     answer_vec = []
     for type_ in seq.ANN_TYPES:
         answer_vec.append(np.array([0.0]*seq.length))
@@ -19,7 +19,7 @@ def visual_ann_seq(seq,length=None):
     plt.legend(loc='upper right')
 
 def visual_ann_genome(seqs):
-    """visualize the count of each type along sequences"""    
+    """Visualize the count of each type along sequences"""
     answer_vec = []
     max_len = 0
     for seq in seqs:
@@ -34,27 +34,48 @@ def visual_ann_genome(seqs):
                 answer_vec[index][0:seq.length] += np.flip(seq.get_ann(type_),0)
     x = list(range(np.array(answer_vec).shape[1]))
     plt.stackplot(x,answer_vec, labels=seqs.ANN_TYPES)
-    plt.legend(loc='upper right')    
+    plt.legend(loc='upper right')
 
-def position_error(predict, answer, annotation_types):
-    """calculate the error of each type along sequence"""
-    predict = np.transpose(predict)[0]
+def position_error(predict, answer,check_length=True):
+    """Calculate the error of each type along sequence"""
+    if predict.ANN_TYPES != answer.ANN_TYPES:
+        err = "Predicted sequence and answer should have same annotation type, get {} and {}."
+        raise Exception(err.format(predict.ANN_TYPES,answer.ANN_TYPES))
+
+    if check_length and len(predict)!=len(answer):
+        err = "Prediction and answer should have same length, get {} and {}."
+        raise Exception(err.format(len(predict),len(answer)))
+
+    if predict.strand != answer.strand:
+        err = "Prediction and answer should have same strand, get {} and {}."
+        raise Exception(err.format(predict.strand,answer.strand))
+
+    if predict.chromosome_id != answer.chromosome_id:
+        err = "Prediction and answer should have same chromosome id, get {} and {}."
+        raise Exception(err.format(predict.chromosome_id,answer.chromosome_id))
+
     error = {}
-    for index,type_ in enumerate(annotation_types):
-        error[type_]=predict[index] - answer[type_]
+    for type_ in predict.ANN_TYPES:
+        status = np.zeros(max(len(predict),len(answer)),dtype=np.float32)
+        status[:len(predict)] = predict.get_ann(type_)
+        status[:len(answer)] -= answer.get_ann(type_)
+        if predict.strand != 'plus':
+            status = np.flip(status)
+        error[type_] = status
     return  error
 
-def visual_error(predict, answer, annotation_types):
-    """visualize the error of each type along sequence"""
-    error_status = position_error(predict, answer, annotation_types)
-    for type_ in annotation_types:
+def visual_error(predict, answer,check_length=None):
+    """Visualize the error of each type along sequence"""
+    error_status = position_error(predict, answer,check_length=check_length)
+    for type_ in predict.ANN_TYPES:
         error = error_status[type_]
         plt.plot(error, label=type_)
+    plt.legend(loc='upper right')
 
 def metric_mean_converter(df):
     "Get mean of each metric in dataframe form"
     mean_list = []
-    for metric_type in set(df['metric_type']): 
+    for metric_type in set(df['metric_type']):
         for ann_type in set(df['ann_type']):
             if (ann_type=='global')!= (metric_type in ['loss','accuracy']):
                 continue
@@ -118,8 +139,7 @@ def draw_metric_curve(data,annotations,sources,line_types,scale_y_axis=True):
             tick.label.set_fontsize(30)
         for tick in ax.yaxis.get_major_ticks():
             tick.label.set_fontsize(30)
-    for type_ in annotations:
-        helper.fig.legend(sources, prop={'size': 40})
+    helper.fig.legend(sources, prop={'size': 40})
     return helper.fig,helper.axes
 
 def draw_each_class_barplot(df,soruces):
@@ -131,7 +151,7 @@ def draw_each_class_barplot(df,soruces):
             ylim=[0,1]
             if metric_type=='loss':
                 ylim=None
-            selected_df = get_sub_dataframe(df,metric_type=metric_type,id_=id_) 
+            selected_df = get_sub_dataframe(df,metric_type=metric_type,id_=id_)
             pivot_df = selected_df.pivot('ann_type','source','value')[soruces]
             ax = helper.get_ax()
             pivot_df.plot.bar(ax=ax,rot=0,ylim=ylim)
@@ -142,7 +162,7 @@ def draw_each_class_barplot(df,soruces):
             ax.tick_params(axis='both',labelsize=30)
             ax.tick_params(axis='x',rotation=10)
             ax.legend(fontsize=30,mode="expand",bbox_to_anchor=(0.,-.5, 1., -.5),
-                      borderaxespad=0.,ncol=2, loc='lower center')   
+                      borderaxespad=0.,ncol=2, loc='lower center')
 
 def draw_each_setting_barplot(df,soruces):
     ann_types = set(df['ann_type'])
@@ -154,7 +174,7 @@ def draw_each_setting_barplot(df,soruces):
                 ylim=[0,1]
                 if metric_type=='loss':
                     ylim=None
-                selected_df = get_sub_dataframe(df,metric_type=metric_type,ann_type=ann_type) 
+                selected_df = get_sub_dataframe(df,metric_type=metric_type,ann_type=ann_type)
                 pivot_df = selected_df.pivot('id','source','value')[soruces]
                 ax = helper.get_ax()
                 pivot_df.plot.bar(ax=ax,rot=0,ylim=ylim)
@@ -166,7 +186,7 @@ def draw_each_setting_barplot(df,soruces):
                 ax.legend(fontsize=30,mode="expand",bbox_to_anchor=(0.,-.3, 1., -.3),
                           borderaxespad=0.,ncol=2, loc='lower center')
 
-def draw_loss_curve(df,line_type,colors):
+def draw_loss_curve(df,colors):
     modes = set(df['mode_id'])
     helper = SubplotHelper(len(modes),2,20,10*len(modes))
     helper.set_axes_setting(xlabel_params={'xlabel':'epoch','fontsize':30},
@@ -186,7 +206,7 @@ def draw_loss_curve(df,line_type,colors):
                 ax.semilogy(list(item['value']),label = id_, color=color_setting[item['id']])
                 ax.ylabel="loss"
                 ax.xlabel='epoch'
-                ax.legend(loc='best')  
+                ax.legend(loc='best')
     return helper.fig,helper.axes
 
 def metric_converter(df,sources,prefixes,annotation_types=None,id_=None,mode_id=None):
@@ -210,7 +230,7 @@ def metric_converter(df,sources,prefixes,annotation_types=None,id_=None,mode_id=
                 for metric_type,value in metric_value.items():
                     metrics.append({'value':value,'ann_type':type_,'metric_type':metric_type,
                                     'source':source,'id':id_,'mode_id':mode_id})
-        metric_value = {}            
+        metric_value = {}
         metric_value['loss']=df[prefix+'loss']
         metric_value['accuracy']=df[prefix+'accuracy']
         for metric_type,value in metric_value.items():

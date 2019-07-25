@@ -9,8 +9,6 @@ def categorical_metric(outputs,labels,mask):
         raise Exception("Inconsist batch size or channel size",outputs.shape,labels.shape)
     data = {}
     with torch.no_grad():
-        #if mask is None:
-        #    mask = torch.ones(*outputs.shape).cuda()
         outputs = outputs.max(1)[1].contiguous().view(-1)
         labels = labels[:,:,:L].max(1)[1].contiguous().view(-1)
         mask = mask[:,:L].contiguous().view(-1).byte()
@@ -78,3 +76,20 @@ def F1(TPs,FPs,FNs):
             f1 = 0
         f1s.append(f1)
     return f1s
+
+def contagion_matrix(outputs,labels,mask):
+    #N,C,L
+    N,C,L = outputs.shape
+    if len(outputs.shape) != 3 or len(labels.shape) != 3:
+        raise Exception("Wrong input shape",outputs.shape,labels.shape)
+    if outputs.shape[0] != labels.shape[0] or outputs.shape[1] != labels.shape[1]:
+        raise Exception("Inconsist batch size or channel size",outputs.shape,labels.shape)
+    data = [[0]*C for _ in range(C)]
+    with torch.no_grad():
+        outputs = outputs.argmax(1).contiguous().view(-1)
+        labels = labels[:,:,:L].argmax(1).contiguous().view(-1)
+        mask = mask[:,:L].contiguous().view(-1).byte()
+        for output,label,mask_bit in zip(outputs,labels,mask):
+            if mask_bit == 1:
+                data[label][output] += 1
+    return data

@@ -2,7 +2,6 @@ from keras.callbacks import Callback,ModelCheckpoint
 from keras.utils import plot_model
 import pandas as pd
 from ..utils.exception import NotPositiveException
-import pandas as pd
 
 class ResultHistory(Callback):
     def __init__(self,file_path, period, verbose=True, previous_results=None):

@@ -1,12 +1,10 @@
 from abc import ABCMeta,abstractproperty
-import numpy as np
 from copy import deepcopy
-from tempfile import mkdtemp
-import os.path as path
-from ..utils.validator import AttrValidator, DictValidator
+import numpy as np
 from ..utils.utils import get_protected_attrs_names,logical_not
-from ..utils.exception import UninitializedException,NegativeNumberException,InvalidStrandType
-from ..utils.exception import InvalidAnnotation,ChangeConstValException,ValueOutOfRange
+from ..utils.exception import UninitializedException,NegativeNumberException
+from ..utils.exception import ChangeConstValException,ValueOutOfRange
+from .exception import InvalidAnnotation,InvalidStrandType
 
 class Sequence(metaclass=ABCMeta):
     def __init__(self):
@@ -29,8 +27,8 @@ class Sequence(metaclass=ABCMeta):
 
     def _validate_dict_keys(self, dict_):
         names = get_protected_attrs_names(dict_)
-        validator = DictValidator(dict_,names,[],[])
-        validator.validate()
+        status = all(name in dict_.keys() for name in names)
+        return status
 
     def from_dict(self, dict_):
         self._validate_dict_keys(dict_)
@@ -64,12 +62,13 @@ class Sequence(metaclass=ABCMeta):
     def length(self):
         pass
 
+    @property
     def _checked_attr(self):
         return ['id','_strand']
 
     def _validate(self):
-        attr_validator = AttrValidator(self,False,False,False,self._checked_attr())
-        attr_validator.validate()
+        status = all(getattr(self,attr) is not None for attr in self._checked_attr)
+        return status
 
     def copy(self):
         new_seq = self.__class__()
@@ -94,8 +93,9 @@ class SeqInformation(Sequence):
         return super()._copied_protected_attrs()+['_start','_end','_extra_index']
 
     def _validated_for_length(self):
-        attr_validator = AttrValidator(self,False,False,False,['_start','_end'])
-        attr_validator.validate()
+        for attr in ['_start','_end']:
+            if getattr(self,attr) is None:
+                raise Exception("{}'s {} should not be None".format(self.id,attr))
 
     @property
     def length(self):
@@ -142,8 +142,9 @@ class AnnSequence(Sequence):
         self.processed_status = None
         super().__init__()
 
+    @property
     def _checked_attr(self):
-        return super()._checked_attr()+['_ANN_TYPES','_length']
+        return super()._checked_attr+['_ANN_TYPES','_length']
 
     @property
     def absolute_index(self):

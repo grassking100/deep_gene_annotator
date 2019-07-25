@@ -1,7 +1,7 @@
-from keras.layers import Layer, Conv1D, Activation
 import tensorflow as tf
 import keras
 from keras import backend as K
+from keras.layers import Layer, Conv1D, Activation
 
 class GetMask(Layer):
     """Get mask of the previous layer"""

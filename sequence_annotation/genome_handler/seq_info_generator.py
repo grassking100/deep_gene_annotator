@@ -1,6 +1,5 @@
 from .sequence import SeqInformation
 from .seq_container import SeqInfoContainer
-from ..utils.exception import NegativeNumberException
 
 def _group_by_type(seqs):
     tree = {}
@@ -22,14 +21,14 @@ def _remove_end_regions(regions,chroms_info,max_length):
             clean_regions.append(item)
         else:
             not_used_regions.append(item)
-    if len(not_used_regions) > 0:
+    if not_used_regions:
         print("Following regions won't be used to generate data:")
         for item in not_used_regions:
             print(item.id)
     return clean_regions
 
 class SeqInfoGenerator:
-    """Extract selected regions' annotation information"""
+    """Extract selected regions' annotation information and create to SeqInfoContainer"""
     def __init__(self):
         self._seed_id = 0
         self._seq_id = 0
