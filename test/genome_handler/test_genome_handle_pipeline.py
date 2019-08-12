@@ -17,7 +17,7 @@ from sequence_annotation.genome_handler.ann_genome_creator import AnnGenomeCreat
 from sequence_annotation.genome_handler.seq_info_generator import SeqInfoGenerator
 from sequence_annotation.genome_handler.ann_genome_processor import get_sub_ann_seqs
 from sequence_annotation.genome_handler.sequence import SeqInformation
-from sequence_annotation.data_handler.seq_converter import SeqConverter
+from sequence_annotation.utils.seq_converter import SeqConverter
 
 class TestGenomeHandlePipeline(unittest.TestCase):
     def test_runable(self):

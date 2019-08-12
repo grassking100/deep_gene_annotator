@@ -15,6 +15,7 @@ awk -F'\t' -v OFS="\t"  '
                                      start_codon_start = $8
                                  }
                                  split($12, related_starts, ",")
+                                 valid=0
                                  if($6=="+")
                                  {
                                      len=0
@@ -26,6 +27,7 @@ awk -F'\t' -v OFS="\t"  '
                                          if(start<=start_codon_start && start_codon_start<=end)
                                          {
                                              len = len + start_codon_start - start
+                                             valid=1
                                              break
                                          }
                                          len = len + size
@@ -42,12 +44,13 @@ awk -F'\t' -v OFS="\t"  '
                                          if(start<=start_codon_start && start_codon_start<=end)
                                          {
                                              len = len + end - start_codon_start
+                                             valid=1
                                              break
                                          }
                                          len = len + size
                                      }
                                  }
-                                 if(len==0)
+                                 if(!valid)
                                  {
                                      print("Error")
                                  }

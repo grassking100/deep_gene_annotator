@@ -1,101 +1,95 @@
-class ConcatRNN(nn.Module):
-    def __init__(self,input_size,num_layers,rnn_cell_class,
-                 rnns_as_output=True,rnn_setting=None):
-        super().__init__()
-        self.num_layers = num_layers
-        self.hidden_size = hidden_size
-        self.rnn_setting = rnn_setting or {}
-        self.rnn_cell_class = rnn_cell_class
-        self.rnns_as_output = rnns_as_output
-        in_num = input_size
-        self.rnns = []
-        for index in range(self.num_layers):
-            hidden_size = self.hidden_size[index]
-            rnn_cell = self.rnn_cell_class(input_size=in_num,hidden_size=hidden_size)
-            rnn = RNN(rnn_cell,**rnn_setting)
-            self.rnns.append(rnn)
-            setattr(self, 'rnn_'+str(index), rnn)
-            in_num += hidden_size*2
-        if self.rnns_as_output:
-            self.hidden_size = hidden_size*2*self.num_layers
-        else:
-            self.hidden_size = in_num
-        self._build_layers()
-        self.reset_parameters()
-            
-    def reset_parameters(self):
-        for layer in self.children():
-            layer.reset_parameters()
+import torch
+from torch import nn
+import torch.nn.functional as F
+from torch.nn.init import constant_,uniform_
+from .customized_layer import BasicModel
+from .rnn import _RNN,ConcatRNN,BidirectionalRNN,LSTM,GRU
 
-    def forward(self, x, lengths):
-        #X shape : N,C,L
-        x_ = x.transpose(1, 2)
-        distribution_output = {}
-        rnn_output = {}
-        for name in self.rnns[0].output_names:
-            if name not in rnn_output.keys():
-                rnn_output[name] = []
-        rnn_output['after_rnn'] = []
-        for index in range(self.num_layers):
-            rnn = self.rnns[index]
-            pre_x = x_
-            x_ = rnn(x_,lengths)
-            if hasattr(rnn,'output_names'):
-                for name,item in zip(rnn.output_names,x_):
-                    rnn_output[name].append(item)
-                    values = item.transpose(1,2)
-                    distribution_output["rnn_"+str(index)+"_"+name] = values
-                x_ = x_[rnn.output_names.index('new_h')]
-            rnn_output['after_rnn'].append(x_)
-            x_,lengths = Concat(dim=1)([pre_x.transpose(1,2),x_.transpose(1,2)],lengths)
-            x_ = x_.transpose(1,2)
-        for name,value in rnn_output.items():
-            value = [item.transpose(1,2) for item in value]
-            temp,lengths = Concat(dim=1)(value,lengths)
-            rnn_output[name] = temp
-        if self.rnns_as_output:
-            x = rnn_output['after_rnn']
-        else:
-            x = x_.transpose(1, 2)
-        distribution_output['rnn_result'] = rnn_output['after_rnn']
-        return x,lengths,distribution_output
+class RNN(_RNN):
+    def __init__(self,cell,**rnn_setting):
+        self.cell = cell
+        super().__init__(**rnn_setting)
 
-class GatedIndRnnCell(nn.Module):
-    def __init__(self, input_size, hidden_size):
+    def _create_rnn(self,in_channels,**rnn_setting):
+        return self.cell(in_channels,rnn_setting)
+
+    def forward(self,x,lengths,state=None):
+        #Input:N,C,L, Output: N,C,L
+        if not self.batch_first:
+            x = x.transpose(0,1)
+        x = x.transpose(1,2)
+        if state is None:
+            state = self.init_states.repeat(len(x),1).cuda()
+        outputs = []
+        N,L,C = x.shape
+        for i in range(L):
+            out, state = cell(x[:,i].squeeze(1), state)
+            outputs += [out.unsqueeze(1)]
+        x = torch.cat(outputs,1)
+        x = x.transpose(1,2)
+        if not self.batch_first:
+            x = x.transpose(0,1)
+        return x
+
+    def get_config(self):
+        config = super().get_config()
+        config['cell'] = str(self.cell)
+        return config
+
+class IndyGRUCell(BasicModel):
+    def __init__(self, in_channels, hidden_size):
         super().__init__()
-        self._gate_num = 1
-        self.input_size = input_size
+        self.in_channels = in_channels
         self.hidden_size = hidden_size
-        self.gate_weights_ih = nn.Parameter(torch.empty(hidden_size, input_size))
-        self.gate_weights_hh = nn.Parameter(torch.empty(hidden_size, hidden_size))
-        self.weights_i = nn.Parameter(torch.empty(hidden_size, input_size))
-        self.i_gate_bias = nn.Parameter(torch.empty(hidden_size))
-        self.f_gate_bias = nn.Parameter(torch.empty(hidden_size))
-        self.input_bias = nn.Parameter(torch.empty(hidden_size))
-        self.gate_function =  NoisyHardSigmoid()
-        self.ln = nn.LayerNorm(hidden_size)
-        self.recurrent_function = NoisyReLU()
+        self.gate_weights = nn.Parameter(torch.empty(hidden_size*2, in_channels+hidden_size))
+        self.weights = nn.Parameter(torch.empty(hidden_size, in_channels))
+        self.bias = nn.Parameter(torch.empty(hidden_size))
+        self.gate_bias = nn.Parameter(torch.empty(hidden_size*2))
         self.reset_parameters()
-        self.output_names = ['new_h','pre_gate_f','pre_gate_i','gate_f','gate_i','values_i','pre_h']
+
     def reset_parameters(self):
-        gate_bound_ih = (1/((self.input_size**0.5)))
-        gate_bound_hh = (1/((self.input_size**0.5)))
-        input_bound = (1/(self.input_size**0.5))
-        uniform_(self.gate_weights_ih,-gate_bound_ih,gate_bound_ih)
-        uniform_(self.gate_weights_hh,-gate_bound_hh,gate_bound_hh)
-        uniform_(self.weights_i,-input_bound,input_bound)
-        constant_(self.i_gate_bias,1)
-        constant_(self.f_gate_bias,1)
-        constant_(self.input_bias,0)
-    def forward(self, input, state):
+        gate_bound = (2/(self.hidden_size*3+self.in_channels))**0.5
+        input_bound = (2/(self.in_channels+self.hidden_size))**0.5
+        uniform_(self.gate_weights,-gate_bound,gate_bound)
+        uniform_(self.weights,-input_bound,input_bound)
+        constant_(self.gate_bias,0.5)
+        constant_(self.bias,0)
+
+    def forward(self, x, state):
         #input shape should be (number,feature size)
-        values_i = F.linear(input, self.weights_i,self.input_bias)
-        pre_gate_ih = F.linear(input, self.gate_weights_ih)
-        pre_gate_hh = F.linear(self.ln(state), self.gate_weights_hh)
-        pre_gate_f = pre_gate_ih + self.f_gate_bias
-        pre_gate_i = pre_gate_hh + self.i_gate_bias
-        gate_f = self.gate_function(pre_gate_f,training=self.training)
-        gate_i = self.gate_function(pre_gate_i,training=self.training)
-        pre_h = state*gate_f+ values_i*gate_i
-        new_h = self.recurrent_function(pre_h,self.training)
-        return new_h,pre_gate_f,pre_gate_i,gate_f,gate_i,values_i,pre_h
+        concated = torch.cat([x,state],1)
+        values = torch.tanh(F.linear(x, self.weights, self.bias))
+        pre_gate = F.linear(concated, self.gate_weights, self.gate_bias)
+        gate = torch.sigmoid(pre_gate)
+        gate_f, gate_i = torch.chunk(gate, 2, dim=1)
+        new_state = state*gate_f+ values*gate_i
+        return new_state,new_state
+    
+class IndyGRU(BasicModel):
+    def __init__(self,in_channels, hidden_size,**rnn_setting):
+        super().__init__()
+        self.out_channels = hidden_size
+        cell = IndyGRUCell(in_channels, hidden_size)
+        self.rnn = RNN(cell,**rnn_setting)
+
+    def forward(self,x,lengths,state=None):
+        return self.rnn(x,lengths,state)
+    
+class ConcatGRU(BasicModel):
+    def __init__(self,in_channels,hidden_size,num_layers,**rnn_setting):
+        super().__init__()
+        rnn = ConcatRNN(in_channels,hidden_size,num_layers,rnn_type='GRU',**rnn_setting)
+        self.out_channels = rnn.out_channels
+        self.rnn = rnn
+
+    def forward(self,x,lengths):
+        return self.rnn(x, lengths)
+    
+    def get_config(self):
+        config = {'rnn':self.rnn.get_config(),
+                  'in_channels':self.rnn.in_channels,
+                  'out_channels':self.out_channels,
+                 }
+        return config
+    
+RNN_TYPES = {'GRU':GRU,'LSTM':LSTM,'ConcatGRU':ConcatGRU}

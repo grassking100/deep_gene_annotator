@@ -7,9 +7,9 @@ from keras import optimizers
 from keras.models import Sequential
 from keras.layers import Dense, Activation,Input,RNN
 from keras.models import Model
-from sequence_annotation.data_handler.fasta import read_fasta
-from sequence_annotation.data_handler.json import read_json
-from sequence_annotation.data_handler.seq_converter import SeqConverter
+from sequence_annotation.utils.fasta import read_fasta
+from sequence_annotation.utils.json import read_json
+from sequence_annotation.utils.seq_converter import SeqConverter
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
 from sequence_annotation.process.data_processor import AnnSeqProcessor
 from sequence_annotation.process.pipeline import Pipeline

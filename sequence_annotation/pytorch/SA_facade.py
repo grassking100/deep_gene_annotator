@@ -5,14 +5,15 @@ import torch
 import os
 from tensorboardX import SummaryWriter
 from .worker import TrainWorker,TestWorker
-from .callback import CategoricalMetric,TensorboardCallback,TensorboardWriter
+from .tensorboard_writer import TensorboardWriter
+from .callback import CategoricalMetric,TensorboardCallback
 from .callback import GFFCompare,SeqFigCallback, Callbacks,ContagionMatrix
 from .executer import BasicExecutor
 from ..process.pipeline import Pipeline
 from ..process.data_processor import AnnSeqProcessor
 from ..utils.utils import split,get_subdict
 from ..genome_handler.utils import get_subseqs,ann_count
-from ..data_handler.seq_converter import SeqConverter
+from ..utils.seq_converter import SeqConverter
 from ..genome_handler import ann_seq_processor
 from ..process.data_generator import SeqGenerator
 
@@ -45,6 +46,7 @@ class SeqAnnFacade:
         self.alt = False
         self.use_gffcompare = True
         self.alt_num = 0
+        self.is_verbose_visible = True
 
     def update_settings(self,key,params):
         params = dict(params)
@@ -69,7 +71,6 @@ class SeqAnnFacade:
                 counts.append(count)
                 print(len(ann_seqs),count)
                 count = np.array([int(val) for val in count.values()])
-
                 if (count==0).any():
                     raise Exception("There are some annotations missing is the dataset")
         return counts
@@ -150,46 +151,71 @@ class SeqAnnFacade:
                 callbacks.add(gff_compare)
         return callbacks
 
-    def train(self,model,epoch_num=100,batch_size=32,augmentation_max=None):
-        self.update_settings('train_setting',{'epoch_num':epoch_num,'batch_size':batch_size})
+    def train(self,model,epoch=100,batch_size=32,augmentation_max=None):
+        self.update_settings('train_setting',{'epoch':epoch,'batch_size':batch_size})
         fp = os.path.join(self._path,"val")
         train_callbacks, val_callbacks = self._create_default_train_callbacks(fp)
-        train_ann_count,val_ann_count = self._validate_ann_seqs([self.train_ann_seqs,self.val_ann_seqs])
-        self.update_settings('train_ann_counut',train_ann_count)
-        self.update_settings('val_ann_count',val_ann_count)
+        train_ann_count = self._validate_ann_seqs([self.train_ann_seqs])
+        self.update_settings('train_ann_counut',train_ann_count[0])
+        
+        if self.val_ann_seqs is not None:
+            val_ann_count = self._validate_ann_seqs([self.val_ann_seqs])
+            self.update_settings('val_ann_count',val_ann_count[0])
         writers = [self._train_writer,self._val_writer,None]
         callbacks_list = [train_callbacks,val_callbacks,self.other_callbacks]
         for writer,callback in zip(writers,callbacks_list):
             if writer is not None and callback is not None:
                 tensorboard = TensorboardCallback(writer)
-                callback.add(tensorboard)
+                callback.add(tensorboard)        
         train_gen = SeqGenerator(batch_size,augmentation_max=augmentation_max)
         val_gen = SeqGenerator(batch_size)
+        if self.val_ann_seqs is None:
+            val_callbacks = None
         worker = TrainWorker(train_generator=train_gen,val_generator=val_gen,
                              executor=self.executor,train_callbacks=train_callbacks,
                              val_callbacks=val_callbacks,other_callbacks=self.other_callbacks,
-                             writer=self._writer,epoch_num=epoch_num)
-        data_ = {'training':{'inputs':self.train_seqs,'answers':self.train_ann_seqs},
-                 'validation':{'inputs':self.val_seqs,'answers':self.val_ann_seqs}}
+                             writer=self._writer,epoch=epoch)
+        worker.is_verbose_visible = self.is_verbose_visible
+        data_ = {'training':{'inputs':self.train_seqs,'answers':self.train_ann_seqs}}
+        if self.val_ann_seqs is not None:
+             data_['validation'] = {'inputs':self.val_seqs,'answers':self.val_ann_seqs}
         data = AnnSeqProcessor(data_,discard_invalid_seq=True).process()
         origin_train_num = len(self.train_ann_seqs.ids)
-        origin_val_num = len(self.val_ann_seqs.ids)
         filtered_train_num = len(data['training']['extra']['ids'])
-        filtered_val_num  = len(data['validation']['extra']['ids'])
         self.update_settings('train_seq',{'origin count':origin_train_num,
                                           'filtered count':filtered_train_num})
-        self.update_settings('val_seq',{'origin count':origin_val_num,
-                                        'filtered count':filtered_val_num})
+        if self.val_ann_seqs is not None:
+            origin_val_num = len(self.val_ann_seqs.ids)
+            filtered_val_num  = len(data['validation']['extra']['ids'])
+            self.update_settings('val_seq',{'origin count':origin_val_num,
+                                            'filtered count':filtered_val_num})
+
         pipeline = Pipeline(model,data,worker,path=self._path)
         if self._path is not None:
-            fp = os.path.join(self._path,"train_facade_setting.json")
-            with open(fp,'w') as fp:
+            setting_path = os.path.join(self._path,"train_facade_setting.json")
+            with open(setting_path,'w') as fp:
                 json.dump(self._settings,fp)
+            config_path = os.path.join(self._path,"model_config.json")
+            with open(config_path,'w') as fp:
+                json.dump(model.get_config(),fp)
+            model_component_path = os.path.join(self._path,"model_component.txt")
+            with open(model_component_path,'w') as fp:
+                fp.write(str(model))
         pipeline.execute()
         if self._path is not None:
-            fp = os.path.join(self._path,"train_record.json")
-            with open(fp,'w') as fp:
+            record_path = os.path.join(self._path,"train_record.json")
+            with open(record_path,'w') as fp:
                 json.dump(worker.result,fp)
+            if worker.best_epoch is None:
+                model_path =  os.path.join(self.path,'last_model.pth')
+                torch.save(worker.model.state_dict(),model_path)
+            else:    
+                best_path = os.path.join(self._path,"best_record.json")
+                best_result = {'best_epoch':worker.best_epoch,
+                               'best_result':worker.best_result}
+            with open(best_path,'w') as fp:
+                json.dump(best_result,fp)
+                 
         return worker.result
 
     def test(self,model,batch_size=32):

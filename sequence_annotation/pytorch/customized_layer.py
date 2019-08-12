@@ -1,8 +1,9 @@
+from abc import ABCMeta
+import torch
 from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence,pad_packed_sequence
 from torch.nn.utils.rnn import PackedSequence
 import torch.nn.functional as F
-import torch
 
 def init_GRU(gru):
     for name, param in gru.named_parameters():
@@ -72,4 +73,22 @@ class PaddedBatchNorm1d(nn.Module):
         x = pad_packed_sequence(packed)[0]
         x = x.transpose(0,1).transpose(1,2)
         return x
+    
+class BasicModel(nn.Module,metaclass=ABCMeta):
+    def __init__(self):
+        super().__init__()
+        self.out_channels = None
+        self._distribution = {}
+
+    @property
+    def saved_distribution(self):
+        return self._distribution
+
+    def get_config(self):
+        return {}
+
+    def reset_parameters(self):
+        for layer in self.children():
+            if hasattr(layer,'reset_parameters'):
+                layer.reset_parameters()
             

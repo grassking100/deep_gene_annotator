@@ -2,8 +2,9 @@ import os,sys
 sys.path.append(os.path.dirname(__file__)+"/../..")
 import pandas as pd
 from argparse import ArgumentParser
-from utils import coordinate_consist_filter, create_coordinate_bed, read_bed, write_bed, get_id_table
-from sequence_annotation.utils.utils import BED_COLUMNS
+from sequence_annotation.utils.utils import BED_COLUMNS, read_bed, write_bed
+from utils import coordinate_consist_filter, create_coordinate_bed, get_id_table
+
 
 if __name__ == "__main__":
     #Reading arguments
@@ -16,9 +17,10 @@ if __name__ == "__main__":
                         help="valid_official_bed_path",required=True)
     parser.add_argument("-i", "--id_convert_path",
                         help="id_convert_path",required=True)
+    parser.add_argument("-s", "--single_orf_start_end",type=lambda x: x=='true' or x=='T' or x=='t',
+                        default='F',required=False)
     args = parser.parse_args()
     id_convert = get_id_table(args.id_convert_path)
-    #coordinate_consist_bed_path = os.path.join(args.output_path,'coordinate_consist.bed')
     if os.path.exists(args.output_path):
         print("Result files are already exist, procedure will be skipped.")
     else:
@@ -27,8 +29,9 @@ if __name__ == "__main__":
         coordinate_consist_data = valid_official_bed.merge(consist_data,left_on='id', right_on='ref_name')
         new_data = create_coordinate_bed(consist_data,valid_official_bed)
         new_data['gene_id'] = [id_convert[id_] for id_ in new_data['id']]
-        #new_data = coordinate_consist_filter(new_data,'gene_id','orf_start')
-        #new_data = coordinate_consist_filter(new_data,'gene_id','orf_end')
+        if args.single_orf_start_end:
+            new_data = coordinate_consist_filter(new_data,'gene_id','thick_start')
+            new_data = coordinate_consist_filter(new_data,'gene_id','thick_end')
         new_data = new_data[BED_COLUMNS]
         coord_info = new_data[['chr','start','end','strand','thick_start','thick_end',
                                'count','block_size','block_related_start']]

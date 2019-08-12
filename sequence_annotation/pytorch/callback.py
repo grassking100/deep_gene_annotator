@@ -1,4 +1,6 @@
+import warnings
 from abc import abstractmethod, abstractproperty
+import json
 import pandas as pd
 import torch
 import numpy as np
@@ -8,6 +10,7 @@ from ..genome_handler.seq_container import SeqInfoContainer
 from ..genome_handler.ann_seq_processor import vecs2seq
 from ..genome_handler.utils import index2onehot
 from .metric import F1,accuracy,precision,recall,categorical_metric,contagion_matrix
+from .warning import WorkerProtectedWarning
 
 gene_info_root = 'sequence_annotation/gene_info'
 
@@ -176,7 +179,7 @@ class EarlyStop(Callback):
         super().__init__(prefix)
         self.target = target or 'val_loss'
         self.optimize_min = optimize_min
-        self.patient = 16
+        self.patient = patient or 16
         self.path = path
         self.period = period
         self.save_best_weights = save_best_weights
@@ -214,32 +217,47 @@ class EarlyStop(Callback):
 
     def on_epoch_end(self,metric,**kwargs):
         target = metric[self.target]
+        if str(target) == 'nan':
+            return
         update = False
         if self._best_result is None:
             update = True
-        elif self.optimize_min:
-            if self._best_result > target:
-                update = True
         else:
-            if self._best_result < target:
-                update = True
+            if self.optimize_min:
+                if self._best_result > target:
+                    update = True
+            else:
+                if self._best_result < target:
+                    update = True
+
         if update:
             if self.save_best_weights:
                 self._model_weights = self._worker.model.state_dict()
             self._best_epoch = self._counter
             self._best_result = target
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore",category=WorkerProtectedWarning)
+                self._worker.best_epoch = self._best_epoch
+        
         if self.patient is not None:
             if (self._counter-self.best_epoch) > self.patient:
-                self._worker.is_running = False
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore",category=WorkerProtectedWarning)
+                    self._worker.is_running = False
 
     def on_work_end(self):
         print("Best "+str(self.target)+": "+str(self._best_result))
         if self.save_best_weights and self.restore_best_weights:
             self._worker.model.load_state_dict(self._model_weights)
             if self.path is not None:
-                model_path =  os.path.join(self.path,'model_best_epoch_{}.pth').format(self._best_epoch)
+                model_path =  os.path.join(self.path,'best_model.pth').format(self._best_epoch)
+                best_status_path =  os.path.join(self.path,'best_model.status')
                 print("Save best model at "+model_path)
                 torch.save(self._worker.model.state_dict(),model_path)
+                with open(best_status_path,"w") as fp:
+                    best_status = {'best_epoch':self.best_epoch,'path':model_path}
+                    json.dump(best_status,fp)
+
 
     def on_work_begin(self, worker,**kwargs):
         if self.save_best_weights:
@@ -571,7 +589,7 @@ class ContagionMatrix(DataCallback):
 
     @property
     def data(self):
-        return {'contagion_matrix':self._data}
+        return {self.prefix+'contagion_matrix':self._data}
 
     def _reset(self):
         self._data = [[0]*self.label_num for _ in range(self.label_num)]

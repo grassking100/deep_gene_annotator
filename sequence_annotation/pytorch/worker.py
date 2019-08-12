@@ -1,12 +1,14 @@
 """This submodule provides trainer to train model"""
+import warnings
 import os,sys
 import time
 import json
 import torch
 from ..process.worker import Worker
-from ..pytorch.callback import Accumulator, Recorder, Callbacks
 from ..process.data_generator import DataGenerator
-from ..pytorch.executer import BasicExecutor
+from .executer import BasicExecutor
+from .callback import Accumulator, Recorder, Callbacks
+from .warning import WorkerProtectedWarning
 
 def train_per_batch(model,ids,inputs,labels,lengths,mask,executor,callbacks):
     callbacks.on_batch_begin()
@@ -36,12 +38,18 @@ def evaluate_per_batch(model,ids,inputs,labels,lengths,mask,executor,callbacks):
                            mask=mask,
                            ids=ids)
 
+
 class PyWorker(Worker):
     def __init__(self,executor=None):
         super().__init__()
         self.executor = executor
         if executor is None:
             self.executor = BasicExecutor()
+            
+    def print_verbose(self,info):
+        if self.is_verbose_visible:
+            print(info,end='\r')
+            sys.stdout.write('\033[K')
 
 def _init_generator(generator):
     generator.return_extra_info = True
@@ -53,7 +61,7 @@ class TrainWorker(PyWorker):
     """a worker which will train and evaluate the model"""
     def __init__(self,executor=None,train_generator=None,val_generator=None,
                  train_callbacks=None,val_callbacks=None,other_callbacks=None,
-                 writer=None,epoch_start=None,epoch_num=None):
+                 writer=None,epoch_start=None,epoch=None):
         super().__init__(executor)
         self._train_generator = train_generator
         self._val_generator = val_generator
@@ -74,9 +82,33 @@ class TrainWorker(PyWorker):
 
         self._writer = writer
         self._epoch_start = epoch_start or 0
-        self._epoch_num = epoch_num or 1
-        self.is_running = True
+        self._epoch = epoch or 1
+        self._best_epoch = None
+        self._is_running = True
         self._recoder = None
+        self._best_result = None
+
+    @property
+    def best_result(self):
+        return self._best_result
+    
+    @property
+    def is_running(self):
+        return self._is_running
+    
+    @is_running.setter
+    def is_running(self,value):
+        warnings.warn("Is_running SHOULD only be called by callback", WorkerProtectedWarning)
+        self._is_running = value
+        
+    @property
+    def best_epoch(self):
+        return self._best_epoch
+    
+    @best_epoch.setter
+    def best_epoch(self,value):
+        warnings.warn("Best_epoch SHOULD only be called by callback", WorkerProtectedWarning)
+        self._best_epoch = value
 
     def before_work(self,path=None,**kwargs):
         self._train_generator.x_data = self.data['training']['inputs']
@@ -94,10 +126,11 @@ class TrainWorker(PyWorker):
         self.executor.process(self.model)
         _init_generator(self._train_generator)
         _init_generator(self._val_generator)
-        self.is_running = True
+        self._is_running = True
+
         if path is not None:
             for key in ['_train_callbacks','_val_callbacks','_other_callbacks',
-                        '_epoch_start','_epoch_num','executor']:
+                        '_epoch_start','_epoch','executor']:
                 attr = getattr(self,key)
                 if hasattr(attr,'get_config'):
                     attr = attr.get_config()
@@ -118,7 +151,7 @@ class TrainWorker(PyWorker):
         all_callbacks.add(self._recoder)
         all_callbacks.on_work_begin(worker=self)
         start = self._epoch_start+1
-        end = start+self._epoch_num
+        end = start+self._epoch
         batch_info = "Epoch: ({}/{}), {} {:.1f}% of data"
         epoch_info = "Epoch: ({}/{}), Time cost of: {}, {}"
         for epoch in range(start,end):
@@ -132,28 +165,24 @@ class TrainWorker(PyWorker):
                 ids,lengths,mask = extra['ids'],extra['lengths'],extra['mask']
                 train_per_batch(self.model,ids,inputs,labels,lengths,mask,
                                 self.executor,self._train_callbacks)
-
-                if self.is_verbose_visible:
-                    status = 100*index/len(self._train_generator)
-                    print(batch_info.format(epoch,self._epoch_num,'training',status),end='\r')
-                    sys.stdout.write('\033[K')
+                status = 100*index/len(self._train_generator)
+                self.print_verbose(batch_info.format(epoch,self._epoch,'training',status))
 
             for index,item in enumerate(self._val_generator):
                 inputs, labels, extra = item
                 ids,lengths,mask = extra['ids'],extra['lengths'],extra['mask']
                 evaluate_per_batch(self.model,ids,inputs,labels,lengths,mask,
                                    self.executor,self._val_callbacks)
-
-                if self.is_verbose_visible:
-                    status = 100*index/len(self._val_generator)
-                    print(batch_info.format(epoch,self._epoch_num,'validating',status),end='\r')
-                    sys.stdout.write('\033[K')
+                status = 100*index/len(self._val_generator)
+                self.print_verbose(batch_info.format(epoch,self._epoch,'validating',status))
 
             train_record = self._train_callbacks.get_data()
             val_record = self._val_callbacks.get_data()
             other_record = self._other_callbacks.get_data()
-            if train_record['loss'] is None or val_record['val_loss'] is None:
-                self.is_running = False
+            if str(train_record['loss']) == 'nan':
+                self._is_running = False
+            if 'val_loss' in val_record.keys() and str(val_record['val_loss']) == 'nan':
+                self._is_running = False
 
             record = {}
             record.update(train_record)
@@ -166,18 +195,21 @@ class TrainWorker(PyWorker):
             self._other_callbacks.on_epoch_end(metric=record)
             self._recoder.on_epoch_end(metric=record)
 
-            if self.is_verbose_visible:
-                time_cost = round(time.time()-pre_time,3)
-                print(epoch_info.format(epoch,self._epoch_num,time_cost,record))
+            time_cost = round(time.time()-pre_time,3)
+            self.print_verbose(epoch_info.format(epoch,self._epoch,time_cost,record))
 
             if not self.is_running:
-                print("Early stop at {}".format(epoch))
+                self.print_verbose("Early stop at {}".format(epoch))
                 break
 
         all_callbacks.on_work_end()
 
     def after_work(self,**kwargs):
         self.result = self._recoder.data
+        if self.best_epoch is not None:
+            self._best_result = {}
+            for key,value in self.result.items():
+                self._best_result[key] = self.result[key][self.best_epoch - 1]
 
 class TestWorker(PyWorker):
     """a worker which will train and evaluate the model"""
@@ -209,7 +241,7 @@ class TestWorker(PyWorker):
                 self._settings[key] = attr
             with open(os.path.join(path,"test_worker_setting.json"),'w') as fp:
                 json.dump(self._settings,fp)
-            self._recoder.path=os.path.join(path,'test_record.json')
+            self._recoder.path = os.path.join(path,'test_record.json')
 
 
     def work(self):
@@ -229,10 +261,8 @@ class TestWorker(PyWorker):
             ids,lengths,mask = extra['ids'],extra['lengths'],extra['mask']
             evaluate_per_batch(self.model,ids,inputs,labels,lengths,mask,
                                self.executor,self._callbacks)
-            if self.is_verbose_visible:
-                status = 100*index/len(self._generator)
-                print(batch_info.format(status),end='\r')
-                sys.stdout.write('\033[K')
+            status = 100*index/len(self._generator)
+            self.print_verbose(batch_info.format(status))
 
         record = callbacks.get_data()
         self._generator.on_epoch_end()

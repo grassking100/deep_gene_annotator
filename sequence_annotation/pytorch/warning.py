@@ -1,0 +1,2 @@
+class WorkerProtectedWarning(UserWarning):
+    pass

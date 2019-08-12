@@ -76,7 +76,7 @@ if [ ! "$accept_radius" ]; then
 fi
 
 bash_root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
-sa_root=$bash_root/../..
+sa_root=$bash_root/..
 src_root=$sa_root/sequence_annotation/gene_info
 
 #Create folder
@@ -105,7 +105,8 @@ fi
 
 if [ -e "$peptide_path" ]; then
     subpeptide=$output_root/peptide.fasta
-    python3 $src_root/get_subfasta.py -i $peptide_path -b $bed_path -o $subpeptide
+    awk -F'\t' -v OFS="\t"  '{print($4)}' $bed_path > $output_root.id
+    python3 $src_root/get_subfasta.py -i $peptide_path -d $output_root.id -o $subpeptide
 fi
 
 bash $bash_root/transcription_start_site.sh $bed_path $tss_radius > $tss_path.bed
@@ -123,7 +124,6 @@ for name in $tss_path $ca_path $splice_donor_path $splice_accept_path $donor_sig
 do
     python3 $src_root/simply_coord.py -i $name.bed -o $name.bed
     bedtools getfasta -s -fi $genome_path -bed $name.bed -fo $name.fasta
-    rm $name.bed
 done
 
 bedtools getfasta -s -fi $genome_path -name -split -bed $bed_path  -fo $cDNA_path.fasta

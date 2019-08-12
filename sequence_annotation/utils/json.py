@@ -9,4 +9,3 @@ def read_json(path):
     with open(path) as file:    
         setting = json.load(file) 
     return setting
-

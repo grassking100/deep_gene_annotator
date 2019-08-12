@@ -1,7 +1,9 @@
-import os
+import os, sys
+sys.path.append(os.path.dirname(__file__)+"/../..")
 import pandas as pd
 from argparse import ArgumentParser
-from utils import belong_by_boundary, belong_by_distance, read_bed
+from utils import belong_by_boundary, belong_by_distance 
+from sequence_annotation.utils.utils import read_bed
 
 if __name__ == "__main__":
     #Reading arguments

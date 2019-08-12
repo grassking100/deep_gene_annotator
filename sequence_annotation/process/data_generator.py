@@ -52,7 +52,7 @@ class DataGenerator(Sequence):
 class SeqGenerator(DataGenerator):
     """NLC means Number, Length, Channel; NCL means Number, Channel, Length"""
     def __init__(self,batch_size=None,pad_value=None,order_target=None,augmentation_max=None):
-        super().__init__(batch_size=None)
+        super().__init__(batch_size=batch_size)
         self._order = 'NLC'
         self.pad_value = pad_value or {}
         self.order_target = order_target or []
@@ -108,15 +108,14 @@ class SeqGenerator(DataGenerator):
             new_extra_info = {}
             mask = get_seq_mask(lengths)
             extra_info['mask'] = mask
-            for key,items in extra_info.items():
-                for item in items:
-                    ordered_item = _order(item,length_order)
-                    if key in self.pad_value.keys():
-                        ordered_item = pad_sequences(ordered_item,padding='post',value=self.pad_value[key])
-                    if key in self.order_target:
-                        if self.order == 'NCL':
-                            ordered_item = np.transpose(ordered_item,[0,2,1])
-                    new_extra_info[key] = ordered_item
+            for key,item in extra_info.items():
+                ordered_item = _order(item,length_order)
+                if key in self.pad_value.keys():
+                    ordered_item = pad_sequences(ordered_item,padding='post',value=self.pad_value[key])
+                if key in self.order_target:
+                    if self.order == 'NCL':
+                        ordered_item = np.transpose(ordered_item,[0,2,1])
+                new_extra_info[key] = ordered_item
 
             return batch_x,batch_y,new_extra_info
         else:

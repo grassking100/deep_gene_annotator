@@ -1,7 +1,13 @@
-import os, sys
+import os,sys
+sys.path.append(os.path.dirname(__file__)+"/../..")
 import pandas as pd
 from argparse import ArgumentParser
-from utils import classify_data_by_id, get_id_table, read_bed, write_bed
+from sequence_annotation.utils.utils import read_bed, write_bed
+from utils import classify_data_by_id, get_id_table
+
+work_dir = "/".join(sys.argv[0].split('/')[:-1])
+BASH_ROOT = "{}/../../bash".format(work_dir)
+SAFE_FILTER_BASH_PATH = os.path.join(BASH_ROOT,'safe_filter.sh')
 
 if __name__ == "__main__":
     root_path = "/".join(sys.argv[0].split('/')[:-1])
@@ -17,7 +23,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     output_path = os.path.join(args.saved_root,"recurrent_cleaned.bed")
     id_path = 'region_upstream_{}_downstream_{}_safe_zone_id_{}.txt'
-    safe_filter = "bash {}/../../gene_info/bash/safe_filter.sh -i {} -x {} -f {} -u {} -d {} -o {}"
+    safe_filter = "bash {} -i {} -x {} -f {} -u {} -d {} -o {}"
     if os.path.exists(output_path):
         print("Result files are already exist, procedure will be skipped.")
     else:
@@ -46,8 +52,9 @@ if __name__ == "__main__":
             if len(want_bed)==0:
                 break
             id_path_ = os.path.join(args.saved_root,id_path.format(args.upstream_dist,args.downstream_dist,index))
-            command = safe_filter.format(root_path,want_bed_path,unwant_bed_path,args.fai_path,
-                                         args.upstream_dist,args.downstream_dist,id_path_)
+            command = safe_filter.format(SAFE_FILTER_BASH_PATH,want_bed_path,unwant_bed_path,
+                                         args.fai_path,args.upstream_dist,
+                                         args.downstream_dist,id_path_)
             print("Execute command:"+command)
             os.system(command)
             #break

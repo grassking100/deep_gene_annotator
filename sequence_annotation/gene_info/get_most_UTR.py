@@ -1,6 +1,8 @@
-import os
+import os, sys
+sys.path.append(os.path.dirname(__file__)+"/../..")
 from argparse import ArgumentParser
-from utils import get_bed_most_UTR,read_bed,write_bed
+from utils import get_bed_most_UTR
+from sequence_annotation.utils.utils import read_bed,write_bed
 
 if __name__ == "__main__":
     #Reading arguments

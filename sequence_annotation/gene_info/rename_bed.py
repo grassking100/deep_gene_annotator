@@ -1,17 +1,21 @@
-import os, sys
+import os,sys
+sys.path.append(os.path.dirname(__file__)+"/../..")
 import pandas as pd
 from argparse import ArgumentParser
-from utils import read_bed,write_bed
+from sequence_annotation.utils.utils import read_bed,write_bed
 
 if __name__ == "__main__":
     #Reading arguments
-    parser = ArgumentParser(description="This program will rename bed file")
+    parser = ArgumentParser(description="This program will rename bed id field")
     parser.add_argument("-i", "--bed_path",help="Bed file to be renamed",required=True)
     parser.add_argument("-p", "--id_prefix",help="Prefix of new id",required=True)
-    parser.add_argument("-t", "--saved_table_path",help="Path to saved renamed table",required=True)
+    parser.add_argument("-t", "--saved_table_path",help="Path to saved one-based renamed table",required=True)
     parser.add_argument("-o", "--renamed_bed_path",help="Path to saved renamed bed file",required=True)
     args = parser.parse_args()
-    bed = read_bed(args.bed_path).sort_values(by=['chr','start','end','strand']).to_dict('record')
+    try:
+        bed = read_bed(args.bed_path).sort_values(by=['chr','start','end','strand']).to_dict('record')
+    except:
+        raise Exception("Wrong format in {}".format(args.bed_path))
     renamed_table = []
     renamed_bed = []
     index_length = len(str(len(bed)))
@@ -35,6 +39,6 @@ if __name__ == "__main__":
 
     renamed_table = pd.DataFrame.from_dict(renamed_table).sort_values(by=['new_id'])
     renamed_bed = pd.DataFrame.from_dict(renamed_bed).sort_values(by=['id'])
-    renamed_table = renamed_table[['new_id','chr','strand','start','end','old_id']]
+    renamed_table = renamed_table[['new_id','old_id','chr','strand','start','end']]
     renamed_table.to_csv(args.saved_table_path,index=None,sep='\t')
     write_bed(renamed_bed,args.renamed_bed_path)

@@ -1,4 +1,5 @@
 from abc import abstractmethod
+import numpy as np
 from .seq_container import SeqInfoContainer
 from .sequence import SeqInformation
 from .ann_seq_processor import is_binary,simplify_seq
@@ -42,24 +43,17 @@ class RegionExtractor:
     def _parse_of_region(self,seq,ann_type):
         self._region_id = 0
         seq_infos = SeqInfoContainer()
-        one_type_seq = seq.get_ann(ann_type)
-        start = None
-        end = None
-        for index, sub_seq in enumerate(one_type_seq):
-            if start is None:
-                if sub_seq==1:
-                    start = index
-            if start is not None:
-                if sub_seq==0:
-                    end = index - 1
-            if start is not None and end is not None:
-                target = self._create_seq_info(seq,ann_type,start,end)
-                seq_infos.add(target)
-                start = None
-                end = None
-        #handle special case
-        if start is not None and end is None:
-            target = self._create_seq_info(seq, ann_type, start, seq.length - 1)
+        one_type_seq =list(seq.get_ann(ann_type))
+        extended_seq=np.array([0,0] + one_type_seq + [0,0])
+        zero_indice = np.where(extended_seq==0)[0][1:-1]
+        previous_indice = zero_indice - 1
+        next_indice = zero_indice + 1
+        previous_sites = extended_seq[previous_indice]
+        next_sites = extended_seq[next_indice]
+        end_sites = previous_indice[previous_sites == 1] -2
+        start_sites = next_indice[next_sites == 1] - 2
+        for start, end in zip(start_sites,end_sites):
+            target = self._create_seq_info(seq, ann_type, start, end)
             seq_infos.add(target)
         return seq_infos
 

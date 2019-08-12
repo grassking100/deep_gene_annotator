@@ -1,10 +1,15 @@
-import os, sys
+import os,sys
+sys.path.append(os.path.dirname(__file__)+"/../..")
 import pandas as pd
 from argparse import ArgumentParser
-from utils import get_id_table, read_bed, write_bed, simply_coord_with_gene_id
+from sequence_annotation.utils.utils import read_bed, write_bed
+from utils import get_id_table, simply_coord_with_gene_id
+
+work_dir = "/".join(sys.argv[0].split('/')[:-1])
+BASH_ROOT = "{}/../../bash".format(work_dir)
+NONOVERLAP_BASH_PATH = os.path.join(BASH_ROOT,'nonoverlap_filter.sh')
 
 if __name__ == "__main__":
-    root_path = "/".join(sys.argv[0].split('/')[:-1])
     #Reading arguments
     parser = ArgumentParser()
     parser.add_argument("-s", "--saved_root",help="saved_root",required=True)
@@ -25,7 +30,7 @@ if __name__ == "__main__":
         coordinate_consist_bed = read_bed(args.coordinate_consist_bed_path)
         gene_bed = simply_coord_with_gene_id(coordinate_consist_bed,id_convert)
         write_bed(gene_bed,gene_bed_path)
-        command = "bash {}/../../gene_info/bash/nonoverlap_filter.sh -i {} -o {}".format(root_path,gene_bed_path,nonoverlap_id_path)
+        command = "bash {} -i {} -o {}".format(NONOVERLAP_BASH_PATH,gene_bed_path,nonoverlap_id_path)
         print("Execute "+command)
         os.system(command)
         nonoverlap_id = [id_ for id_ in open(nonoverlap_id_path).read().split('\n') if id_ != '']

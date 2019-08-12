@@ -15,7 +15,7 @@ awk -F'\t' -v OFS="\t"  '
                                  {
                                      stop_codon_stop = $7 + 1
                                  }
-                                 
+                                 valid=0
                                  if($6=="+")
                                  {
                                      len=0
@@ -27,6 +27,7 @@ awk -F'\t' -v OFS="\t"  '
                                          if(start<=stop_codon_stop && stop_codon_stop<=end)
                                          {
                                              len = len + stop_codon_stop - start
+                                             valid=1
                                              break
                                          }
                                          len = len + size
@@ -43,12 +44,13 @@ awk -F'\t' -v OFS="\t"  '
                                          if(start<=stop_codon_stop && stop_codon_stop<=end)
                                          {
                                              len = len + end - stop_codon_stop
+                                             valid=1
                                              break
                                          }
                                          len = len + size
                                      }
                                  }
-                                 if(len==0)
+                                 if(!valid)
                                  {
                                      print("Error")
                                  }

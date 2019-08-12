@@ -5,9 +5,10 @@ import numpy as np
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__)+"/../..")
 from sequence_annotation.gene_info.utils import GFF_COLUMNS
-from sequence_annotation.utils.utils import get_gff_with_seq_id, read_gff, write_bed
+from sequence_annotation.utils.utils import get_gff_with_attribute, read_gff, write_bed
 
 def gff_info2bed_info(mRNA,exons,orf_info):
+    #input one based data, return one based data
     mRNA_start = mRNA['start']
     exon_starts = exons['start']
     exon_ends = exons['end']
@@ -23,24 +24,22 @@ def gff_info2bed_info(mRNA,exons,orf_info):
         if int(start) < 0:
             raise Exception("Exon relative start site shold be nonnegative",mRNA,exon_starts,exon_rel_starts)
     info = dict(mRNA)
-    info['start'] -= 1
     info['rgb'] = '.'
     info['count'] = len(exon_sizes)
     info['block_size'] = ",".join(exon_sizes)
     info['block_related_start'] = ",".join(exon_rel_starts)
-    info['thick_start'] = orf_info['thick_start'] - 1
+    info['thick_start'] = orf_info['thick_start']
     info['thick_end'] = orf_info['thick_end']
     return info
 
-def extract_orf(CDS_df,selected_id):
-    group = CDS_df.get_group(selected_id)
-    info_ = dict(group.iloc[0,:].to_dict())
+def extract_orf(selected_CDSs):
+    info_ = dict(selected_CDSs.iloc[0,:].to_dict())
     id_ = info_['id']
-    thick_start = min(group['start'])
-    thick_end = max(group['end'])
+    thick_start = min(selected_CDSs['start'])
+    thick_end = max(selected_CDSs['end'])
     return {'id':id_,'thick_start':thick_start,'thick_end':thick_end}
 
-def simple_gff2bed(gff,bed_path):
+def simple_gff2bed(gff):
     gff = gff.to_dict('record')
     bed_info_list = []
     for item in gff:
@@ -52,8 +51,8 @@ def simple_gff2bed(gff,bed_path):
         bed_info_list.append(bed_item)
     bed = pd.DataFrame.from_dict(bed_info_list)
     
-def gff2bed(gff,bed_path):
-    gff = get_gff_with_seq_id(gff)
+def gff2bed(gff):
+    gff = get_gff_with_attribute(gff)
     mRNAs = gff[gff['feature']=='mRNA']
     if len(mRNAs) == 0:
         mRNAs = gff[gff['feature']=='gene']
@@ -66,12 +65,13 @@ def gff2bed(gff,bed_path):
     bed_info_list = []
     for id_ in ids:
         mRNA = mRNAs.get_group(id_).to_dict('record')[0]
-        exons_ = exons.get_group(id_).to_dict('list')
+        selected_exons = exons.get_group(id_).to_dict('list')
         try:
-            orf = extract_orf(CDSs,id_)
+            selected_CDSs = CDSs.get_group(id_)
+            orf = extract_orf(selected_CDSs)
         except KeyError:
             orf = {'id':id_,'thick_start':mRNA['start'],'thick_end':mRNA['start']-1}
-        bed_info = gff_info2bed_info(mRNA,exons_,orf)
+        bed_info = gff_info2bed_info(mRNA,selected_exons,orf)
         bed_info_list.append(bed_info)
     bed = pd.DataFrame.from_dict(bed_info_list)
     return bed
@@ -80,7 +80,7 @@ if __name__ =='__main__':
     parser = ArgumentParser(description="This program will convert gff file to bed file")
     parser.add_argument("-i", "--gff_path", help="Path of input gff file",required=True)
     parser.add_argument("-o", "--bed_path", help="Path of output bed file",required=True)
-    parser.add_argument("-m", "--simple_mode",type=lambda x: x=='true',
+    parser.add_argument("-m", "--simple_mode",action='store_true',
                         default=False,help="Use simple mode or not")
     args = parser.parse_args()
     gff = read_gff(args.gff_path)

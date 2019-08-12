@@ -1,85 +1,11 @@
-from abc import ABCMeta
+import torch
 from torch import nn
 from torch.nn.init import normal_,constant_
 from torch.nn.utils.rnn import pack_padded_sequence,pad_packed_sequence
-import torch
 from .noisy_activation import NoisyReLU
-from .customize_layer import Conv1d, Concat,PaddedBatchNorm1d
-
-class BasicModel(nn.Module,metaclass=ABCMeta):
-    def __init__(self):
-        super().__init__()
-        self._out_channels = None
-        self._distribution = {}
-    @property
-    def saved_distribution(self):
-        return self._distribution
-
-    def get_config(self):
-        return {}
-
-    @property
-    def out_channels(self):
-        return self._out_channels
-
-    def reset_parameters(self):
-        for layer in self.children():
-            if hasattr(layer,'reset_parameters'):
-                layer.reset_parameters()
-
-class BranchRNN(BasicModel):
-    def __init__(self,in_channels,rnn_class,rnn_setting):
-        super().__init__()
-        self.rnn = rnn_class(in_channels,**rnn_setting)
-        if hasattr(self.rnn,'out_channels'):
-            out_size = self.rnn.out_channels
-        else:
-            out_size = self.rnn.hidden_size
-        if self.rnn.bidirectional:
-            out_size *= 2
-        self.project_layer = Conv1d(out_size,out_channels=1,kernel_size=1)
-        self._out_channels = out_size
-
-    def forward(self,x):
-        x,_ = self.rnn(x)
-        projected_x = x
-        projected_x,_ = pad_packed_sequence(projected_x, batch_first=True)
-        projected_x = projected_x.transpose(1,2)
-        projected_x = self.project_layer(projected_x)
-        return projected_x,x
-
-class HierachyRNN(BasicModel):
-    def __init__(self,in_channels,rnns_type,rnn_setting,num_layers):
-        super().__init__()
-        self.rnns = []
-        self.in_channels = in_channels
-        for index in range(num_layers):
-            rnn = BranchRNN(in_channels,rnns_type,rnn_setting)
-            setattr(self,"rnn_{}".format(index),rnn)
-            self.rnns.append(rnn)
-            in_channels = rnn.out_channels
-        self._out_channels = num_layers
-        self.rnns_type = rnns_type
-        self.rnn_setting = rnn_setting
-        self.num_layers = num_layers
-        self.norm = PaddedBatchNorm1d(num_layers)#nn.LayerNorm(self.out_channels)
-
-    def forward(self,x,lengths):
-        self._distribution["pre_rnn_result"] = x
-        x = x.transpose(1,2)
-        x = pack_padded_sequence(x,lengths, batch_first=True)
-        projected_xs = []
-        for rnn in self.rnns:
-            projected_x,x = rnn(x)
-            projected_xs.append(projected_x)
-        result = torch.cat(projected_xs,dim=1)
-        result = self.norm(result,lengths)
-        self._distribution["rnn_result"] = result
-        return result,lengths
-
-    def get_config(self):
-        return {'in_channels':self.in_channels,'rnns_type':str(self.rnns_type),
-                'rnn_setting':self.rnn_setting,'num_layers':self.num_layers}
+from .customized_layer import Conv1d, Concat,PaddedBatchNorm1d, BasicModel
+from .rnn import GRU,LSTM
+from .customized_rnn import RNN_TYPES
 
 class CANBlock(BasicModel):
     def __init__(self,in_channels,kernel_size,out_channels,
@@ -87,6 +13,9 @@ class CANBlock(BasicModel):
                  activation_function=None):
         super().__init__()
         self.name = ""
+        self.in_channels = in_channels
+        self.kernel_size = kernel_size
+        self.out_channels = out_channels
         self.norm_type = norm_type
         if norm_mode in ["before_cnn","after_cnn","after_activation",None]:
             self.norm_mode = norm_mode
@@ -97,24 +26,18 @@ class CANBlock(BasicModel):
         else:
             self.activation_function = activation_function
         use_bias = self.norm_mode != "after_cnn"
-        self.cnn = Conv1d(in_channels=in_channels,kernel_size=kernel_size,
-                          out_channels=out_channels,bias=use_bias)
+        self.cnn = Conv1d(in_channels=self.in_channels,kernel_size=self.kernel_size,
+                          out_channels=self.out_channels,bias=use_bias)
         if self.norm_mode is not None:
-            in_channel = {"before_cnn":in_channels,"after_cnn":out_channels,"after_activation":out_channels}
+            in_channel = {"before_cnn":self.in_channels,"after_cnn":self.out_channels,
+                          "after_activation":self.out_channels}
             if self.norm_type is None:
                 self.norm = PaddedBatchNorm1d(in_channel[self.norm_mode])
             else:
                 self.norm = self.norm_type(in_channel[self.norm_mode])
-        self._out_channels = out_channels
+        
         self._distribution = {}
         self.reset_parameters()
-
-    def reset_parameters(self):
-        super().reset_parameters()
-        for layer in self.children():
-            if isinstance(layer,Conv1d):
-                constant_(layer.bias,0)
-                normal_(layer.weight,0,0.01)
 
     def _normalized(self,x,lengths):
         x = self.norm(x,lengths)
@@ -123,28 +46,40 @@ class CANBlock(BasicModel):
 
     def forward(self, x, lengths):
         #X shape : N,C,L
-        x_ = x
         if self.norm_mode=='before_cnn':
-            x_ = self._normalized(x_,lengths)
-        x_,lengths = self.cnn(x_,lengths)
-        self._distribution['cnn_x_{}'.format(self.name)] = x_
+            x = self._normalized(x,lengths)
+        x,lengths = self.cnn(x,lengths)
+        self._distribution['cnn_x_{}'.format(self.name)] =x
         if self.norm_mode=='after_cnn':
-            x_ = self._normalized(x_,lengths)
-        x_ = self.activation_function(x_)
-        self._distribution['post_act_x_{}'.format(self.name)] = x_
+            x = self._normalized(x,lengths)
+        x = self.activation_function(x)
+        self._distribution['post_act_x_{}'.format(self.name)] = x
         if self.norm_mode=='after_activation':
-            x_ = self._normalized(x_,lengths)
-        return x_,lengths
+            x = self._normalized(x,lengths)
+        return x,lengths
+    
+    def get_config(self):
+        config = {}
+        config['name'] = self.name
+        config['in_channels'] = self.in_channels
+        config['kernel_size'] = self.kernel_size
+        config['out_channels'] = self.out_channels
+        config['norm_type'] = self.norm_type
+        config['norm_mode'] = self.norm_mode
+        config['activation_function'] = str(self.activation_function)
+        return config
 
 class ConcatCNN(BasicModel):
-    def __init__(self,in_channels,num_layers,cnns_setting):
+    def __init__(self,in_channels,num_layers,cnn_setting):
         super().__init__()
+        self.in_channels = in_channels
         self.num_layers = num_layers
+        self.cnn_setting = cnn_setting
         in_num = in_channels
         self.cnns = []
         for index in range(self.num_layers):
             setting = {}
-            for key,value in cnns_setting.items():
+            for key,value in cnn_setting.items():
                 if isinstance(value,list):
                     setting[key] = value[index]
                 else:
@@ -154,7 +89,7 @@ class ConcatCNN(BasicModel):
             self.cnns.append(cnn)
             setattr(self, 'cnn_'+str(index), cnn)
             in_num += cnn.out_channels
-        self._out_channels = in_num
+        self.out_channels = in_num
         self.concat = Concat(dim=1)
         self.reset_parameters()
 
@@ -168,32 +103,39 @@ class ConcatCNN(BasicModel):
             x,lengths = self.concat([pre_x,x],lengths)
         self._distribution['cnn_result'] = x
         return x,lengths
+    
+    def get_config(self):
+        config = {'cnn_setting':self.cnn_setting,
+                  'num_layers':self.num_layers,
+                  'in_channels':self._in_channels,
+                  'out_channels':self.out_channels}
+        return config
 
 class ProjectLayer(BasicModel):
     def __init__(self,in_channels,out_channels,kernel_size=None):
         super().__init__()
-        self.cnn = Conv1d(in_channels=in_channels,out_channels=out_channels,kernel_size=kernel_size or 1)
-        self._out_channels = out_channels
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size or 1
+        self.cnn = Conv1d(in_channels=in_channels,out_channels=out_channels,
+                          kernel_size=self.kernel_size)
 
     def forward(self,x,lengths):
         x = self.cnn(x)
         return x,lengths
 
     def get_config(self):
-        config = {'out_channels':self.cnn.out_channels,
-                  'kernel_size':self.cnn.kernel_size}
+        config = {'out_channels':self.out_channels,
+                  'kernel_size':self.kernel_size,
+                  'in_channels':self.in_channels}
         return config
 
-    def reset_parameters(self):
-        constant_(self.cnn.bias,0)
-        normal_(self.cnn.weight,0,0.1)
-
-
 class FeatureBlock(BasicModel):
-    def __init__(self,input_size,num_layers,cnns_setting,reduce_cnn_ratio=None,reduced_cnn_number=None):
+    def __init__(self,in_channels,num_layers,cnn_setting,reduce_cnn_ratio=None,
+                 reduced_cnn_number=None):
         super().__init__()
-        self.input_size=input_size
-        self.cnns_setting = cnns_setting
+        self.in_channels=in_channels
+        self.cnn_setting = cnn_setting
         self.num_layers = num_layers
         if self.num_layers <= 0:
             raise Exception("CNN layer size sould be positive")
@@ -208,21 +150,21 @@ class FeatureBlock(BasicModel):
 
     def get_config(self):
         config = {}
-        config['input_size'] = self.input_size
-        setting = self.cnns_setting
+        config['in_channels'] = self.in_channels
+        setting = self.cnn_setting
         for type_ in ['norm_type','activation_function']:
             if type_ in setting.keys():
                 setting[type_] = str(setting[type_])
-        config['cnns_setting'] = setting
+        config['cnn_setting'] = setting
         config['reduce_cnn_ratio'] = self.reduce_cnn_ratio
+        config['num_layers'] = self.num_layers
         config['reduced_cnn_number'] = self.reduced_cnn_number
-        config['save_distribution'] = self.save_distribution
+        config['out_channels'] = self.out_channels
         return config
 
     def _build_layers(self):
-        input_size=self.input_size
-        self.cnns = ConcatCNN(input_size,self.num_layers,self.cnns_setting)
-        self.cnn_ln = nn.LayerNorm(self.cnns.out_channels)
+        in_channels=self.in_channels
+        self.cnns = ConcatCNN(in_channels,self.num_layers,self.cnn_setting)
         if self._reduce_cnn:
             if self.reduce_cnn_ratio < 1:
                 hidden_size = int(self.cnns.hidden_size*self.reduce_cnn_ratio)
@@ -230,16 +172,15 @@ class FeatureBlock(BasicModel):
                 hidden_size = self.reduced_cnn_number
             self.cnn_merge = Conv1d(in_channels=self.cnns.hidden_size,
                                     kernel_size=1,out_channels=hidden_size)
-            input_size = hidden_size
+            in_channels = hidden_size
         else:
-            input_size = self.cnns.out_channels
-        self._out_channels = input_size
+            in_channels = self.cnns.out_channels
+        self.out_channels = in_channels
 
     def forward(self, x, lengths):
         #X shape : N,C,L
         x,lengths = self.cnns(x,lengths)
         cnn_distribution = self.cnns.saved_distribution
-        x = self.cnn_ln(x.transpose(1,2)).transpose(1,2)
         if self._reduce_cnn:
             x,lengths = self.cnn_merge(x,lengths)
         if self.save_distribution:
@@ -247,62 +188,59 @@ class FeatureBlock(BasicModel):
         return x,lengths
 
 class RelationBlock(BasicModel):
-    def __init__(self,input_size,rnns_setting,rnns_type=None):
+    def __init__(self,in_channels,rnn_setting,rnn_type=None):
         super().__init__()
-        self.input_size=input_size
-        self.rnns_setting = rnns_setting
-        self.rnn_num = self.rnns_setting['num_layers']
-        if self.rnns_setting['num_layers'] <= 0:
+        self.in_channels=in_channels
+        self.rnn_setting = rnn_setting
+        self.rnn_num = self.rnn_setting['num_layers']
+        if self.rnn_setting['num_layers'] <= 0:
             raise Exception("RNN layer size sould be positive")
-        self.rnns_type = rnns_type
+        if isinstance(rnn_type,str):
+            try:
+                self.rnn_type = RNN_TYPES[rnn_type]
+            except:
+                raise Exception("{} is not supported".format(rnn_type))
+        else:        
+            self.rnn_type = rnn_type
         self._build_layers()
         self.reset_parameters()
         self.save_distribution = True
 
     def get_config(self):
         config = {}
-        config['input_size'] = self.input_size
-        rnns_setting = self.rnns_setting
-        if 'rnns_type' in rnns_setting.keys():
-            rnns_setting['rnns_type'] = str(rnns_setting['rnns_type'])
-        config['rnns_setting'] = rnns_setting
-        config['rnns_type'] = str(self.rnns_type)
-        config['save_distribution'] = self.save_distribution
+        config['in_channels'] = self.in_channels
+        config['out_channels'] = self.out_channels
+        rnn_setting = self.rnn_setting
+        if 'rnn_type' in rnn_setting.keys():
+            rnn_setting['rnn_type'] = str(rnn_setting['rnn_type'])
+        config['rnn_setting'] = rnn_setting
+        config['rnn_type'] = str(self.rnn_type)
         return config
 
     def _build_layers(self):
-        input_size=self.input_size
-        self.rnns = self.rnns_type(input_size=input_size,**self.rnns_setting)
-        if hasattr(self.rnns,'out_channels'):
-            input_size = self.rnns.out_channels
-        else:
-            input_size=self.rnns.hidden_size
-            if self.rnns.bidirectional:
-                input_size *= 2
-        self._out_channels = input_size
+        in_channels=self.in_channels
+        self.rnn = self.rnn_type(in_channels=in_channels,**self.rnn_setting)
+        self.out_channels = self.rnn.out_channels
 
     def forward(self, x, lengths):
         #X shape : N,C,L
         self._distribution["pre_rnn_result"] = x
         rnn_distribution = {}
-        x = x.transpose(1,2)
-        x = pack_padded_sequence(x,lengths, batch_first=True)
-        x,_ = self.rnns(x)
-        x,_ = pad_packed_sequence(x, batch_first=True)
-        x = x.transpose(1,2)
+        x = self.rnn(x,lengths)
         self._distribution["pre_last_result"] = x
         if self.save_distribution:
             self._distribution.update(rnn_distribution)
         return x,lengths
 
 class SeqAnnModel(BasicModel):
-    def __init__(self,feature_block,relation_block,project_layer,use_sigmoid=False):
+    def __init__(self,feature_block,relation_block,
+                 project_layer,use_sigmoid=False):
         super().__init__()
         self.use_sigmoid = use_sigmoid
         self.feature_block = feature_block
         self.relation_block = relation_block
         self.project_layer = project_layer
-        self._out_channels = self.project_layer.out_channels
+        self.out_channels = self.project_layer.out_channels
         self.reset_parameters()
 
     def get_config(self):
@@ -311,9 +249,11 @@ class SeqAnnModel(BasicModel):
         config['feature_block'] = self.feature_block.get_config()
         config['relation_block'] = self.relation_block.get_config()
         config['project_layer'] = self.project_layer.get_config()
+        config['out_channels'] = self.out_channels
+        config['in_channels'] = self.feature_block.in_channels
         return config
 
-    def forward(self, x, lengths):
+    def forward(self, x, lengths,return_length=False):
         #X shape : N,C,L
         x,lengths = self.feature_block(x, lengths)
         x,lengths = self.relation_block(x, lengths)
@@ -328,49 +268,169 @@ class SeqAnnModel(BasicModel):
         else:
             x = torch.sigmoid(x)
             self._distribution["sigmoid"] = x
-        return x
+        if return_length:
+            return x,lengths
+        else:
+            return x
 
-class SAGAN(nn.Module):
+class Disrim(BasicModel):
+    def __init__(self,label_channels,rnn_size,rnn_num=None,seq_channels=None,
+                 cnn_out=None,kernel_size=None,**kwargs):
+        super().__init__()
+        self.seq_channels = seq_channels or 4
+        self.label_channels = label_channels
+        self.rnn_size = rnn_size
+        self.kernel_size = kernel_size or 3
+        self.rnn_num = rnn_num or 1
+        self.cnn_out = cnn_out or 1
+        self.concat = Concat(dim=1)
+        self.out_channels = 1
+        if self.cnn_out > 0:
+            self.cnn = CANBlock(self.label_channels,self.kernel_size,self.cnn_out,
+                                norm_mode='after_activation')
+            in_channels = self.cnn.out_channels
+        else:
+            in_channels = self.label_channels
+        
+        in_channels += self.seq_channels
+        self.rnn = ConcatGRU(in_channels,self.rnn_size,bidirectional=True,
+                             num_layers=self.rnn_num, batch_first=True,**kwargs)
+        self.project = Conv1d(in_channels=self.rnn.out_channels,
+                              out_channels=1,kernel_size=1)
+
+    def get_config(self):
+        config = {}
+        config['seq_channels'] = self.seq_channels
+        config['label_channels'] = self.label_channels
+        config['kernel_size'] = self.kernel_size
+        config['rnn_size'] = self.rnn_size
+        config['rnn_num'] = self.rnn_num
+        config['cnn_out'] = self.cnn_out
+        config['out_channels'] = self.out_channels
+        return config
+        
+    def forward(self, seq, label, lengths):
+        seq = seq.float()
+        label = label.float()
+        if self.cnn_out > 0:
+            label, lengths = self.cnn(label,lengths)
+        x,lengths = self.concat([seq,label],lengths)
+        x = self.rnn(x,lengths)
+        x = self.project(x)
+        x = x.squeeze(1)
+        x = torch.sigmoid(x)
+        return x
+    
+class SAGAN(BasicModel):
     """Sequence annotation GAN model"""
     def __init__(self,gan,discrim):
         super().__init__()
         self.gan = gan
         self.discrim = discrim
-
-def seq_ann_inference(outputs):
+        self._distribution = self.gan.saved_distribution
+        
+    def get_config(self):
+        config = {'GAN':self.gan.get_config(),
+                  'discriminator':self.discrim.get_config()}
+        return config
+        
+def seq_ann_inference(outputs,mask):
     """
         Data shape is N,C,L
-        Output channel order: Transcription potential, Intron potential
+        Input channel order: Transcription potential, Intron potential
+        Output channel order: Exon, Intron , Other
     """
     if outputs.shape[1]!=2:
         raise Exception("Channel size should be two")
     transcript_potential = outputs[:,0,:].unsqueeze(1)
     intron_potential = outputs[:,1,:].unsqueeze(1)
     other = 1-transcript_potential
+    if mask is not None:
+        mask = mask[:,:outputs.shape[2]].unsqueeze(1)
+        other = other * mask.float()
     transcript_mask = (transcript_potential>=0.5).float()
-    intron = transcript_mask*intron_potential
-    exon = transcript_mask*(1-intron_potential)
+    intron = transcript_mask * intron_potential
+    exon = transcript_mask * (1-intron_potential)
     result = torch.cat([exon,intron,other],dim=1)
     return result
 
-def seq_ann_alt_inference(outputs):
+def seq_ann_reverse_inference(outputs,mask):
     """
         Data shape is N,C,L
-        Inputs channel order: Transcription potential, Intron|Transcription potential,
-                              Alternative intron|Intron potential
+        Output channel order: Exon, Intron , Other
+        Output channel order: Transcription potential, Intron potential
     """
     if outputs.shape[1] != 3:
-        raise Exception("Channel size should be three")
-    transcript_potential = (outputs[:,0,:].unsqueeze(1)>=0.5).float().cuda()
-    intron_trans_potential = (outputs[:,1,:].unsqueeze(1)>=0.5).float().cuda()
-    alt_intron_potential = (outputs[:,2,:].unsqueeze(1)>=0.5).float().cuda()
-
-    other = 1-transcript_potential
-    exon = transcript_potential*(1-intron_trans_potential)
-    intron = transcript_potential*intron_trans_potential
-    nonalt_intron = intron * (1-alt_intron_potential)
-    alt_intron = intron * alt_intron_potential
-
-    result = torch.cat([alt_intron,exon,nonalt_intron,other],dim=1)
-    #print(transcript_potential[0,0,0],intron_trans_potential[0,0,0],alt_intron_potential[0,0,0],result[0,:,0])
+        raise Exception("Channel size should be two")
+    intron_potential = outputs[:,1,:].unsqueeze(1)
+    other_potential = outputs[:,2,:].unsqueeze(1)
+    transcript_potential = 1 - other_potential
+    result = torch.cat([transcript_potential,intron_potential],dim=1)
     return result
+
+class SeqAnnBuilder:
+    def __init__(self):
+        self.feature_block_config = None
+        self.relation_block_config = None
+        self.project_layer_config = None
+        self.in_channels = None
+        self.out_channels = None
+        self.use_sigmoid = None
+        self.discrim_config = None
+        self.use_discrim = None
+        self.reset()
+
+    @property
+    def config(self):
+        config = {}
+        config['feature_block_config'] = self.feature_block_config
+        config['relation_block_config'] = self.relation_block_config
+        config['project_layer_config'] = self.project_layer_config
+        config['in_channels'] = self.in_channels
+        config['out_channels'] = self.out_channels
+        config['use_sigmoid'] = self.use_sigmoid
+        config['discrim_config'] = self.discrim_config
+        config['use_discrim'] = self.use_discrim
+        return config
+   
+    @config.setter
+    def config(self,config):
+        self.feature_block_config = config['feature_block_config']
+        self.relation_block_config = config['relation_block_config']
+        self.project_layer_config = config['project_layer_config']
+        self.in_channels = config['in_channels']
+        self.out_channels = config['out_channels']
+        self.use_sigmoid = config['use_sigmoid']
+        self.discrim_config = config['discrim_config']
+        self.use_discrim = config['use_discrim']
+        
+    def reset(self):
+        self.feature_block_config = {'cnn_setting':{"norm_mode":"after_activation",
+                                                     'out_channels':16,
+                                                     'kernel_size':16},
+                                     'num_layers':4}
+        self.relation_block_config = {'rnn_setting':{'num_layers':4,'hidden_size':16,
+                                                     'batch_first':True,
+                                                     'bidirectional':True},
+                                      'rnn_type':'GRU'}
+        self.discrim_config = {'rnn_num':16}
+        self.project_layer_config = {}
+        self.in_channels = 4
+        self.out_channels = 3
+        self.use_sigmoid = True
+        self.use_discrim = False
+        
+    def build(self):
+        feature_block = FeatureBlock(self.in_channels,**self.feature_block_config)
+        relation_block = RelationBlock(feature_block.out_channels,
+                                       **self.relation_block_config)
+        project_layer = ProjectLayer(relation_block.out_channels,self.out_channels,
+                                     **self.project_layer_config)
+        
+        model = SeqAnnModel(feature_block,relation_block,project_layer,
+                            use_sigmoid=self.use_sigmoid)
+        if self.use_discrim:
+            gan = model
+            discrim = Disrim(self.out_channels,**self.discrim_config).cuda()
+            model = SAGAN(model,discrim)
+        return model

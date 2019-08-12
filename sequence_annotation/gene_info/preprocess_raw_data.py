@@ -1,8 +1,9 @@
-import os
+import os, sys
+sys.path.append(os.path.dirname(__file__)+"/../..")
 import pandas as pd
 import csv
 from argparse import ArgumentParser
-from utils import read_bed, write_bed
+from sequence_annotation.utils.utils import read_bed, write_bed
 
 if __name__ == "__main__":
     #Reading arguments
@@ -23,10 +24,11 @@ if __name__ == "__main__":
 
     official_bed_path = os.path.join(args.output_root,'official.bed')
     valid_official_coding_bed_path = os.path.join(args.output_root,'valid_official_coding.bed')
+    valid_official_noncoding_bed_path = os.path.join(args.output_root,'valid_official_noncoding.bed')
     valid_gro_path = os.path.join(args.output_root,'valid_gro.tsv')
     valid_cleavage_site_path = os.path.join(args.output_root,'valid_cleavage_site.tsv')
     id_convert_path = os.path.join(args.output_root,'id_convert.tsv')
-    paths = [valid_official_coding_bed_path,valid_gro_path,
+    paths = [valid_official_coding_bed_path,valid_gro_path,valid_official_noncoding_bed_path,
              valid_cleavage_site_path,official_bed_path,id_convert_path]
     exists = [os.path.exists(path) for path in paths]
     if all(exists):
@@ -54,6 +56,9 @@ if __name__ == "__main__":
         valid_gene_ids = [id_convert[id_] for id_ in valid_transcript_ids]
         ###Create valid_official_araport11_coding###
         valid_official_coding_bed = official_bed[official_bed['id'].isin(valid_transcript_ids)]
+        ###Create valid_official_araport11_noncoding###
+        valid_official_noncoding_bed = official_bed[~official_bed['id'].isin(valid_transcript_ids)]
+        
         ###Process GRO sites data###
         gro_columns = ['chr','strand','Normalized Tag Count','start','end']
         gro_1 = gro_1[gro_columns]
@@ -76,6 +81,7 @@ if __name__ == "__main__":
         ###Write data##
         write_bed(official_bed,official_bed_path)
         write_bed(valid_official_coding_bed,valid_official_coding_bed_path)
+        write_bed(valid_official_noncoding_bed,valid_official_noncoding_bed_path)
         valid_gro = valid_gro.drop('start', 1)
         valid_gro = valid_gro.drop('end', 1)
         valid_gro.to_csv(valid_gro_path,sep='\t',index=None)

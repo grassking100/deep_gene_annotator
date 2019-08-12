@@ -93,9 +93,11 @@ def read_bed(path,convert_to_one_base=True):
     return df
 
 def write_bed(bed,path,from_one_base=True):
-    columns = BED_COLUMNS[:len(bed.columns)]
-    bed = bed[columns]
-    bed = bed.astype(str)
+    columns = []
+    for name in BED_COLUMNS:
+        if name in bed.columns:
+            columns.append(name) 
+    bed = bed[columns].astype(str)
     for name in ['start','end','thick_start','thick_end','count']:
         if name in bed.columns:
             bed[name] = bed[name].astype(float).astype(int)
@@ -114,31 +116,23 @@ def write_gff(gff,path):
     gff[GFF_COLUMNS].to_csv(fp,header=None,sep='\t',index=None)
     fp.close()
 
-def get_gff_with_seq_id(gff):
+def get_gff_item_with_attribute(item):
+    attributes = item['attribute'].split(';')
+    type_ = item['feature']
+    attribute_dict = {}
+    for attribute in attributes:
+        lhs,rhs = attribute.split('=')
+        attribute_dict[lhs.lower()] = rhs
+    data = []
+    copied = dict(item)
+    copied.update(attribute_dict)
+    return copied        
+    
+def get_gff_with_attribute(gff):
     df_dict = gff.to_dict('record')
     data = []
     for item in df_dict:
-        ids = item['attribute'].split(';')
-        type_ = item['feature']
-        item_id = ""
-        item_name = ""
-        item_parent = ""
-        for id_ in ids:
-            if id_.startswith("Parent"):
-                item_parent = id_[7:]
-            if id_.startswith("ID"):
-                item_id = id_[3:]
-            if id_.startswith("Name"):
-                item_name = id_[5:]
-        item_parent = item_parent.split(",")
-        item_id = item_id.split(",")
-        for parent in item_parent:
-            for id_ in item_id:
-                copied = dict(item)
-                copied['id'] = id_
-                copied['parent'] = parent
-                copied['name'] = item_name
-                data.append(copied)
+        data += [get_gff_item_with_attribute(item)]
     gff = pd.DataFrame.from_dict(data)
     return gff
     
@@ -148,5 +142,4 @@ def read_fai(path):
     chrom_info = {}
     for id_,length in zip(chrom_id,chrom_length):
         chrom_info[str(id_)] = length
-
     return chrom_info

@@ -1,11 +1,16 @@
+import sys
+import os
 import pandas as pd
-from ..utils.utils import GFF_COLUMNS
-from .seq_info_parser import BedInfoParser
-from .ann_seq_converter import GeneticBedSeqConverter
-from .region_extractor import RegionExtractor
-from .ann_seq_processor import get_mixed_seq,get_binary
-from .seq_container import SeqInfoContainer,AnnSeqContainer
-from .sequence import AnnSequence
+sys.path.append(os.path.dirname(__file__)+"/../..")
+from argparse import ArgumentParser
+from sequence_annotation.utils.utils import GFF_COLUMNS
+from sequence_annotation.utils.utils import write_gff
+from sequence_annotation.genome_handler.seq_info_parser import BedInfoParser
+from sequence_annotation.genome_handler.ann_seq_converter import GeneticBedSeqConverter
+from sequence_annotation.genome_handler.region_extractor import RegionExtractor
+from sequence_annotation.genome_handler.ann_seq_processor import get_mixed_seq,get_binary
+from sequence_annotation.genome_handler.seq_container import SeqInfoContainer,AnnSeqContainer
+from sequence_annotation.genome_handler.sequence import AnnSequence
 
 def add_to_set(dict_,key,value):
     if key not in dict_.keys():
@@ -251,7 +256,7 @@ def get_cleavage_site(parsed_data):
         id_ = "{}_{}".format(parsed['chr'],parsed['strand'])
         if id_ not in sites.keys():
             sites[id_] = set()
-        if parsed['strand'] == 'plus':    
+        if parsed['strand'] == 'plus':
             sites[id_].add(parsed['end'])
         else:   
             sites[id_].add(parsed['start'])
@@ -391,3 +396,14 @@ def alt_data_to_gff(data):
         regions += _to_gff_item(item)
     gff = pd.DataFrame.from_dict(regions)
     return gff
+
+if __name__ == "__main__":
+    #Reading arguments
+    parser = ArgumentParser()
+    parser.add_argument("-i", "--bed_path",required=True)
+    parser.add_argument("-t", "--id_table_path",required=True)
+    parser.add_argument("-o", "--gff_path",required=True)
+    args = parser.parse_args()
+    paths = parse(args.bed_path,args.id_table_path)
+    gff=alt_data_to_gff(paths)
+    write_gff(gff,args.gff_path)

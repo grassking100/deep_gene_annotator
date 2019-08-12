@@ -4,8 +4,8 @@ import numpy as np
 from keras.preprocessing.sequence import pad_sequences
 from ..genome_handler.seq_container import AnnSeqContainer
 from ..genome_handler.utils import get_subseqs
-from ..data_handler.seq_converter import SeqConverter
 from ..genome_handler import ann_genome_processor
+from ..utils.seq_converter import SeqConverter
 from ..utils.exception import LengthNotEqualException,DimensionNotSatisfy
 from ..utils.utils import get_subdict
 
@@ -90,6 +90,9 @@ class AnnSeqProcessor:
         return padded
 
     def _to_dict(self,item):
+        for seq in item['answers']:
+            if seq.strand != 'plus':
+                raise Exception("Processor cannot handle minus strand for now, because fasta sequences cannot be flipped yet.")
         seqs = self._seq_converter.seqs2dict_vec(item['inputs'],self._discard_invalid_seq)
         ann_seq_dict_ = ann_genome_processor.genome2dict_vec(item['answers'],self._ann_types)
         ann_seq_dict = {}
@@ -125,7 +128,8 @@ class AnnSeqProcessor:
             origin_num = len(item['inputs'])
             item = self._to_dict(item)
             new_num = len(item['inputs'])
-            warnings.warn(warning.format(purpose,origin_num,new_num),UserWarning)
+            if origin_num != new_num:
+                warnings.warn(warning.format(purpose,origin_num,new_num),UserWarning)
             self._data[purpose] = item
             if self._padding is not None:
                 self._data[purpose] = self._pad(self._data[purpose])

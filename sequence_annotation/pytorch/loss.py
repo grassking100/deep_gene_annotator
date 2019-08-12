@@ -6,7 +6,6 @@ class CCELoss(nn.Module):
     #Categorical cross entropy
     def __init__(self):
         super().__init__()
-        self.ignore_value = -1
         self.loss = nn.NLLLoss(reduction='none')
 
     def forward(self, output, answer, mask, **kwargs):
@@ -28,14 +27,24 @@ class CCELoss(nn.Module):
 def bce(outputs,answers):
     return BCE(outputs,answers,reduction='none')
 
-#Rename it from CodingLoss
 class SeqAnnLoss(nn.Module):
-    def __init__(self,intron_coef=None,other_coef=None,nonoverlap_coef=None):
+    def __init__(self,intron_coef=None,other_coef=None,nontranscript_coef=None,
+                 transcript_output_mask=False,transcript_answer_mask=True,
+                 mean_by_mask=False):
         super().__init__()
-        self.intron_coef = intron_coef or 1
-        self.other_coef = other_coef or 1
-        self.nonoverlap_coef = nonoverlap_coef or 1
-
+        self.intron_coef = 1
+        self.other_coef = 1
+        self.nontranscript_coef = 0
+        if intron_coef is not None:
+            self.intron_coef = intron_coef
+        if other_coef is not None:
+            self.other_coef = other_coef
+        if nontranscript_coef is not None:
+            self.nontranscript_coef = nontranscript_coef
+        self.transcript_output_mask = transcript_output_mask
+        self.transcript_answer_mask = transcript_answer_mask
+        self.mean_by_mask = mean_by_mask
+        
     def forward(self, output, answer, mask,**kwargs):
         """
             Data shape is N,C,L.
@@ -51,7 +60,6 @@ class SeqAnnLoss(nn.Module):
         answer = answer[:,:,:L].float()
         mask = mask[:,:L].float()
         #Get data
-        #exon_answer = answer[:,0,:]
         intron_answer = answer[:,1,:]
         other_answer = answer[:,2,:]
         transcript_output = output[:,0,:]
@@ -59,59 +67,34 @@ class SeqAnnLoss(nn.Module):
         transcript_answer = 1 - other_answer
         other_output = 1-transcript_output
         #Get mask
-        transcript_output_mask = (transcript_output >= 0.5).cuda().float()
-        overlap_mask = transcript_output_mask*transcript_answer*mask
-        non_overlap_mask = (1-overlap_mask)*mask
+        transcript_mask = mask
+        if self.transcript_output_mask:
+            transcript_output_mask = (transcript_output >= 0.5).cuda().float()
+            transcript_mask = transcript_mask*transcript_output_mask
+        if self.transcript_answer_mask:
+            transcript_mask = transcript_mask*transcript_answer
+        if self.nontranscript_coef > 0:
+            nontranscript_mask = (1-transcript_mask)*mask
         #Calculate loss
         other_loss = bce(other_output,other_answer)*self.other_coef*mask
-        intron_loss = bce(intron_transcript_output,intron_answer)
-        intron_loss = intron_loss*self.intron_coef*overlap_mask
-        non_overlap_loss = bce(intron_transcript_output,torch.zeros_like(intron_transcript_output))
-        non_overlap_loss = non_overlap_loss*non_overlap_mask*self.nonoverlap_coef
-        loss = other_loss.sum()/(mask.sum())
-        loss += intron_loss.sum()/(overlap_mask.sum()+1e-32)
-        loss += non_overlap_loss.sum()/(non_overlap_mask.sum()+1e-32)
-        return loss
+        intron_loss = bce(intron_transcript_output,intron_answer)*self.intron_coef*transcript_mask
 
-class SeqAnnAltLoss(nn.Module):
-    def __init__(self,intron_coef=None,other_coef=None,alt_coef=None):
-        super().__init__()
-        self.intron_coef = intron_coef or 1
-        self.other_coef = other_coef or 1
-        self.alt_coef = alt_coef or 1
-
-    def forward(self, output, answer, mask,**kwargs):
-        """
-            Data shape is N,C,L.
-            Output channel order: Transcription, Intron|Transcription, Alternative Intron|Intron
-            Answer channel order: Alternative Intron, Exon, Nonalternative Intron, Other
-        """
-        if len(output.shape) != 3 or len(answer.shape) != 3:
-            raise Exception("Wrong input shape",output.shape,answer.shape)
-        if output.shape[0] != answer.shape[0] or output.shape[1] != 3 or answer.shape[1] != 4:
-            raise Exception("Inconsist batch size or channel size",output.shape,answer.shape)
-        N,C,L = output.shape
-        answer = answer[:,:,:L].float()
-        mask = mask[:,:L].float()
-        #Get data
-        alt_intron_answer = answer[:,0,:]
-        nonalt_intron_answer = answer[:,2,:]
-        other_answer = answer[:,3,:]
-        intron_answer = alt_intron_answer+nonalt_intron_answer
-        other_answer = answer[:,3,:]
-        transcript_output = output[:,0,:]
-        intron_trans_output = output[:,1,:]
-        alt_intron_output = output[:,2,:]
-        transcript_answer = 1 - other_answer
-        other_output = 1 - transcript_output
-        #Get mask
-        transcript_overlap_mask = transcript_answer*mask#*(transcript_output >= 0.5).cuda().float()
-        intron_overlap_mask = intron_answer*mask#*((intron_trans_output*transcript_output) >= 0.5).cuda().float()
-        #Calculate loss
-        other_loss = bce(other_output,other_answer)*self.other_coef*mask
-        intron_loss = bce(intron_trans_output,intron_answer)*self.intron_coef*transcript_overlap_mask
-        alt_loss = bce(alt_intron_output,alt_intron_answer)*self.alt_coef*intron_overlap_mask
-        loss = other_loss.sum()/(mask.sum())
-        loss += intron_loss.sum()/(transcript_overlap_mask.sum()+1e-32)
-        loss += alt_loss.sum()/(intron_overlap_mask.sum()+1e-32)
+        if self.nontranscript_coef > 0:
+            zero = torch.zeros_like(intron_transcript_output)
+            nontranscript_loss = bce(intron_transcript_output,zero)*nontranscript_mask*self.nontranscript_coef
+        EPSILON=1e-32
+        
+        other_loss = other_loss.sum()/(mask.sum())
+        if not self.mean_by_mask:
+            intron_loss = intron_loss.sum()/(transcript_mask.sum()+EPSILON)
+        else:
+            intron_loss = intron_loss.sum()/(mask.sum())
+        loss = other_loss
+        loss = loss + intron_loss
+        if self.nontranscript_coef > 0:
+            if not self.mean_by_mask:
+                nontranscript_loss = nontranscript_loss.sum()/(nontranscript_mask.sum()+EPSILON)
+            else:
+                nontranscript_loss = nontranscript_loss.sum()/(mask.sum())
+            loss = loss + nontranscript_loss
         return loss
