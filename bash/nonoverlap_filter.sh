@@ -6,16 +6,18 @@ usage(){
  echo "    -i  <string>  Input path"
  echo "    -o  <string>  Output path"
  echo "  Options:"
+ echo "    -s  <bool>    Filter with same strand [default: false]"
  echo "    -h  Print help message and exit"
  echo "Example: bash nonoverlap_filter.sh -i raw.bed -o nonoverlap_id.txt"
  echo ""
 }
-while getopts i:o:h option
+while getopts i:o:sh option
  do
   case "${option}"
   in
    i )input_path=$OPTARG;;
    o )output_path=$OPTARG;;
+   s )use_strand=true;;
    h )usage; exit 1;;
    : )echo "Option $OPTARG requires an argument"
       usage; exit 1
@@ -37,8 +39,18 @@ if [ ! "$output_path" ]; then
     exit 1
 fi
 
+if [ ! "$use_strand" ]; then
+    use_strand=false
+fi
+
 script_root="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-bash $script_root/sort_merge.sh -i $input_path -o _temp.bed
+
+if $use_strand ; then
+    bash $script_root/sort_merge.sh -i $input_path -o _temp.bed -s
+else    
+    bash $script_root/sort_merge.sh -i $input_path -o _temp.bed
+fi
+
 awk -F '\t' -v OFS='\t' '{
     n = split($4, ids, ",")
     if(n==1)

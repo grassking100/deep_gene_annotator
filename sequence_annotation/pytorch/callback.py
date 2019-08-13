@@ -256,7 +256,7 @@ class EarlyStop(Callback):
                 torch.save(self._worker.model.state_dict(),model_path)
                 with open(best_status_path,"w") as fp:
                     best_status = {'best_epoch':self.best_epoch,'path':model_path}
-                    json.dump(best_status,fp)
+                    json.dump(best_status,fp, indent=4)
 
 
     def on_work_begin(self, worker,**kwargs):

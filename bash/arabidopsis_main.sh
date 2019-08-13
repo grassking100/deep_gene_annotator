@@ -146,7 +146,7 @@ mkdir -p $split_root
 
 python3 sequence_annotation/sequence_annotation/gene_info/split.py --region_bed_path $saved_root/result/selected_region.bed --region_rename_table_path $saved_root/result/region_rename_table.tsv --fai_path $fai_path --splitted_id_root $split_root
 
-for path in $(find io/Arabidopsis_thaliana/data/filter_orf_2019_07_31/result/split/* -name '*.tsv');
+for path in $(find $saved_root/result/split/* -name '*.tsv');
 do
     file_name=$(basename $path)
     file_name="${file_name%.*}"

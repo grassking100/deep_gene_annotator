@@ -13,17 +13,21 @@ if __name__ == "__main__":
     root_path = "/".join(sys.argv[0].split('/')[:-1])
     #Reading arguments
     parser = ArgumentParser()
-    parser.add_argument("-s", "--saved_root",help="saved_root",required=True)
-    parser.add_argument("-i", "--id_convert_path",help="id_convert_path",required=False)
-    parser.add_argument("-r", "--raw_bed_path",help="raw_bed_path",required=True)
-    parser.add_argument("-c", "--coordinate_consist_bed_path",help="coordinate_consist_bed_path",required=True)
-    parser.add_argument("-f", "--fai_path",help="fai_path",required=True)
-    parser.add_argument("-u", "--upstream_dist",help="upstream_dist",type=int,required=True)
-    parser.add_argument("-d", "--downstream_dist",help="downstream_dist",type=int,required=True)
+    parser.add_argument("-s", "--saved_root",required=True)
+    parser.add_argument("-i", "--id_convert_path",required=False)
+    parser.add_argument("-r", "--raw_bed_path",required=True)
+    parser.add_argument("-c", "--coordinate_consist_bed_path",required=True)
+    parser.add_argument("-f", "--fai_path",required=True)
+    parser.add_argument("-u", "--upstream_dist",type=int,required=True)
+    parser.add_argument("-d", "--downstream_dist",type=int,required=True)
+    parser.add_argument("--use_strand",action='store_true',required=False)
     args = parser.parse_args()
     output_path = os.path.join(args.saved_root,"recurrent_cleaned.bed")
     id_path = 'region_upstream_{}_downstream_{}_safe_zone_id_{}.txt'
-    safe_filter = "bash {} -i {} -x {} -f {} -u {} -d {} -o {}"
+    if args.use_strand:
+        safe_filter = "bash {} -i {} -x {} -f {} -u {} -d {} -o {} -s"
+    else:
+        safe_filter = "bash {} -i {} -x {} -f {} -u {} -d {} -o {}"
     if os.path.exists(output_path):
         print("Result files are already exist, procedure will be skipped.")
     else:
@@ -57,7 +61,6 @@ if __name__ == "__main__":
                                          args.downstream_dist,id_path_)
             print("Execute command:"+command)
             os.system(command)
-            #break
             want_id = [id_ for id_ in open(id_path_).read().split('\n') if id_ != '']
             num = len(want_id)
             print("Iter "+str(index)+" get number:"+str(num))

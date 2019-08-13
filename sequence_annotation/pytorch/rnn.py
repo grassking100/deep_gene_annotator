@@ -9,9 +9,9 @@ def _forward(rnn,x,lengths,state=None,batch_first=True):
     if not batch_first:
         x = x.transpose(0,1)    
     x = x.transpose(1,2)
-    x = pack_padded_sequence(x,lengths, batch_first=True)
+    x = pack_padded_sequence(x,lengths, batch_first=batch_first)
     x = rnn(x,state)[0]
-    x,_ = pad_packed_sequence(x, batch_first=True)
+    x,_ = pad_packed_sequence(x, batch_first=batch_first)
     x = x.transpose(1,2)
     if not batch_first:
         x = x.transpose(0,1)
@@ -27,8 +27,8 @@ class _RNN(BasicModel):
         self.train_init_value = train_init_value
         self.init_value = init_value or 0
         direction = 2 if self.rnn.bidirectional else 1
-        val = torch.Tensor([self.init_value]*self.rnn.hidden_size).unsqueeze(0)
-        val = val.repeat(direction,1)
+        val = [self.init_value]*self.rnn.hidden_size
+        val = torch.Tensor(val).unsqueeze(0).repeat(self.rnn.num_layers*direction,1)
         self.init_states = torch.nn.Parameter(val,requires_grad=train_init_value)
         self.batch_first = self.rnn.batch_first
         if self.rnn.bidirectional:

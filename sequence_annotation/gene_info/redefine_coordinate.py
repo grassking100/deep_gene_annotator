@@ -12,7 +12,7 @@ if __name__ == "__main__":
     parser.add_argument("-r", "--region_path",help="Region file to be used as coordinate reference",required=True)
     parser.add_argument("-o", "--output_path",help="Path to saved redefined bed file",required=True)
     parser.add_argument("-f", "--flip",help="Flip sequence info which are minus strand to plus strand",
-                        default='F',required=False,type=lambda x: x=='T')
+                        action="store_true", required=False)
     args = parser.parse_args()
     bed = read_bed(args.bed_path).to_dict('record')
     region = read_bed(args.region_path).to_dict('record')

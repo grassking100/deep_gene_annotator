@@ -3,7 +3,7 @@ import random
 import numpy as np
 import torch
 import os
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from .worker import TrainWorker,TestWorker
 from .tensorboard_writer import TensorboardWriter
 from .callback import CategoricalMetric,TensorboardCallback
@@ -194,10 +194,10 @@ class SeqAnnFacade:
         if self._path is not None:
             setting_path = os.path.join(self._path,"train_facade_setting.json")
             with open(setting_path,'w') as fp:
-                json.dump(self._settings,fp)
+                json.dump(self._settings,fp, indent=4)
             config_path = os.path.join(self._path,"model_config.json")
             with open(config_path,'w') as fp:
-                json.dump(model.get_config(),fp)
+                json.dump(model.get_config(),fp, indent=4)
             model_component_path = os.path.join(self._path,"model_component.txt")
             with open(model_component_path,'w') as fp:
                 fp.write(str(model))
@@ -205,7 +205,7 @@ class SeqAnnFacade:
         if self._path is not None:
             record_path = os.path.join(self._path,"train_record.json")
             with open(record_path,'w') as fp:
-                json.dump(worker.result,fp)
+                json.dump(worker.result,fp, indent=4)
             if worker.best_epoch is None:
                 model_path =  os.path.join(self.path,'last_model.pth')
                 torch.save(worker.model.state_dict(),model_path)
@@ -239,10 +239,10 @@ class SeqAnnFacade:
         if self._path is not None:
             fp = os.path.join(self._path,"facade_test_setting.json")
             with open(fp,'w') as fp:
-                json.dump(self._settings,fp)
+                json.dump(self._settings,fp, indent=4)
         pipeline.execute()
         if self._path is not None:
             fp = os.path.join(self._path,"test_record.json")
             with open(fp,'w') as fp:
-                json.dump(worker.result,fp)
+                json.dump(worker.result,fp, indent=4)
         return worker.result

@@ -12,9 +12,10 @@ NONOVERLAP_BASH_PATH = os.path.join(BASH_ROOT,'nonoverlap_filter.sh')
 if __name__ == "__main__":
     #Reading arguments
     parser = ArgumentParser()
-    parser.add_argument("-s", "--saved_root",help="saved_root",required=True)
-    parser.add_argument("-i", "--id_convert_path",help="id_convert_path",required=False)
-    parser.add_argument("-c", "--coordinate_consist_bed_path",help="coordinate_consist_bed_path",required=True)
+    parser.add_argument("-s", "--saved_root",required=True)
+    parser.add_argument("-i", "--id_convert_path",required=False)
+    parser.add_argument("-c", "--coordinate_consist_bed_path",required=True)
+    parser.add_argument("--use_strand",action='store_true',required=False)
     args = parser.parse_args()
     output_path = os.path.join(args.saved_root,"nonoverlap.bed")
     overlap_path = os.path.join(args.saved_root,"overlap.bed")
@@ -30,7 +31,11 @@ if __name__ == "__main__":
         coordinate_consist_bed = read_bed(args.coordinate_consist_bed_path)
         gene_bed = simply_coord_with_gene_id(coordinate_consist_bed,id_convert)
         write_bed(gene_bed,gene_bed_path)
-        command = "bash {} -i {} -o {}".format(NONOVERLAP_BASH_PATH,gene_bed_path,nonoverlap_id_path)
+        if args.use_strand:
+            command = "bash {} -i {} -o {} -s"
+        else:    
+            command = "bash {} -i {} -o {}"
+        command = command.format(NONOVERLAP_BASH_PATH,gene_bed_path,nonoverlap_id_path)
         print("Execute "+command)
         os.system(command)
         nonoverlap_id = [id_ for id_ in open(nonoverlap_id_path).read().split('\n') if id_ != '']

@@ -53,8 +53,12 @@ class SeqAnnLoss(nn.Module):
         """
         if len(output.shape) != 3 or len(answer.shape) != 3:
             raise Exception("Wrong input shape",output.shape,answer.shape)
-        if output.shape[0] != answer.shape[0] or output.shape[1] != 2 or answer.shape[1] != 3:
-            raise Exception("Inconsist batch size or channel size",output.shape,answer.shape)
+        if output.shape[0] != answer.shape[0]:
+            raise Exception("Inconsist batch size",output.shape,answer.shape)
+        if output.shape[1] != 2:
+            raise Exception("Wrong output channel size, except 2 but got {}".format(output.shape[1]))
+        if answer.shape[1] != 3:
+            raise Exception("Wrong answer channel size, except 3 but got {}".format(answer.shape[1]))
 
         _,_,L = output.shape
         answer = answer[:,:,:L].float()

@@ -106,7 +106,6 @@ result_root=$saved_root/result
 cleaning_root=$saved_root/cleaning
 fasta_root=$saved_root/fasta
 stats_root=$saved_root/stats
-samtools=/home/samtools-1.9/samtools
 bash_root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 script_root=$bash_root/..
 gene_info_root=$script_root/sequence_annotation/gene_info
@@ -122,7 +121,7 @@ mkdir -p $cleaning_root
 mkdir -p $fasta_root
 mkdir -p $stats_root
 
-$samtools faidx $genome_path
+samtools faidx $genome_path
 cp $bed_path $saved_root/data.bed
 
 
@@ -133,7 +132,7 @@ if [ ! "$id_convert_table" ]; then
     
 fi
 
-python3 $gene_info_root/nonoverlap_filter.py -c $saved_root/data.bed -i $id_convert_table -s $cleaning_root
+python3 $gene_info_root/nonoverlap_filter.py -c $saved_root/data.bed -i $id_convert_table -s $cleaning_root --use_strand
 
 echo "Step 3: Remove overlap data with specific distance"
 python3 $gene_info_root/recurrent_cleaner.py -r $background_bed_path -c $cleaning_root/nonoverlap.bed -f $genome_fai \
@@ -190,7 +189,7 @@ if [ -e "$result_root/selected_region.fasta.fai" ]; then
 fi
 #Create region around mRNAs
 bash $bash_root/get_region.sh -i $result_root/cleaned.bed -f $genome_fai -u $upstream_dist \
--d $downstream_dist -o $result_root/selected_region.bed -r true
+-d $downstream_dist -o $result_root/selected_region.bed -r
 
 #get mRNAs in valid region
 bash $bash_root/get_ids.sh -i $result_root/selected_region.bed > $result_root/valid_mRNA.id
@@ -198,16 +197,16 @@ bash $bash_root/get_ids.sh -i $result_root/selected_region.bed > $result_root/va
 python3 $gene_info_root/get_subbed.py -i $orf_clean_root/cleaned.bed -d $result_root/valid_mRNA.id -o $result_root/cleaned.bed
 
 #Rename region
-python3 $gene_info_root/rename_bed.py -i $result_root/selected_region.bed -p sep \
+python3 $gene_info_root/rename_bed.py -i $result_root/selected_region.bed -p region \
 -t $result_root/region_rename_table.tsv -o $result_root/selected_region.bed
 
 #Get region with 5' --> 3' direction
 bedtools getfasta -s -name -fi $genome_path -bed $result_root/selected_region.bed -fo $result_root/selected_region.fasta
-$samtools faidx $result_root/selected_region.fasta
+samtools faidx $result_root/selected_region.fasta
 
 #Get mRNAs with 5' --> 3' direction in region
 python3 $gene_info_root/redefine_coordinate.py -i $result_root/cleaned.bed -t $result_root/region_rename_table.tsv \
--r $result_root/selected_region.bed -o $result_root/cleaned.bed -f T
+-r $result_root/selected_region.bed -o $result_root/cleaned.bed
 
 if [ ! -e "$result_root/alt_region.gff" ]; then
     echo "Canonical path decoding"

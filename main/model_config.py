@@ -2,7 +2,7 @@ import os
 import sys
 from argparse import ArgumentParser
 import json
-sys.path.append("./sequence_annotation")
+sys.path.append("../sequence_annotation")
 from sequence_annotation.pytorch.model import SeqAnnBuilder
 
 if __name__ == '__main__':    

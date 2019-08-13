@@ -5,7 +5,7 @@ from torch.nn.utils.rnn import pack_padded_sequence,pad_packed_sequence
 from .noisy_activation import NoisyReLU
 from .customized_layer import Conv1d, Concat,PaddedBatchNorm1d, BasicModel
 from .rnn import GRU,LSTM
-from .customized_rnn import RNN_TYPES
+from .customized_rnn import RNN_TYPES, ConcatGRU
 
 class CANBlock(BasicModel):
     def __init__(self,in_channels,kernel_size,out_channels,

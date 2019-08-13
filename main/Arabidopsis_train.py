@@ -4,25 +4,13 @@ from argparse import ArgumentParser
 import deepdish as dd
 import pandas as pd
 import json
-import torch
-torch.backends.cudnn.benchmark = True
-from torch import nn
-sys.path.append("./sequence_annotation")
-from sequence_annotation.utils.fasta import write_fasta
-from sequence_annotation.genome_handler.load_data import load_data
-from sequence_annotation.pytorch.SA_facade import SeqAnnFacade
-from sequence_annotation.pytorch.loss import SeqAnnLoss
-from sequence_annotation.pytorch.executer import BasicExecutor, GANExecutor
-from sequence_annotation.pytorch.model import seq_ann_inference, SeqAnnBuilder
-from sequence_annotation.pytorch.model import seq_ann_reverse_inference
-from sequence_annotation.pytorch.callback import EarlyStop
 
 before_mix_simplify_map = {'exon':['exon'],'intron':['intron','alt_accept','alt_donor'],'other':['other']}
 simplify_map = {'exon':['exon'],'intron':['intron'],'other':['other']}
 gene_map = {'gene':['exon','intron'],'other':['other']}
 color_settings={'other':'blue','exon':'red','intron':'yellow'}
 
-def load_data(fasta_path,ann_seqs_path,max_len,train_id_path,val_id_path,saved_root):
+def _load_data(fasta_path,ann_seqs_path,max_len,train_id_path,val_id_path,saved_root):
     print("Load and parse data")
     data_path = os.path.join(saved_root,"data.h5")
     if os.path.exists(data_path):    
@@ -38,7 +26,7 @@ def load_data(fasta_path,ann_seqs_path,max_len,train_id_path,val_id_path,saved_r
     train_data,val_data,_ = data
     return train_data,val_data
 
-def train(model,train_data,val_data,saved_root,executor,epoch,batch_size):
+def train(model,train_data,val_data,saved_root,executor,epoch,batch_size,augmentation_max):
     facade = SeqAnnFacade()
     facade.use_gffcompare = False
     facade.alt = False
@@ -83,7 +71,6 @@ if __name__ == '__main__':
     parser.add_argument("--model_weights_path", type=str, required=False)
     parser.add_argument("--disrim_learning_rate",type=float,default=1e-3,required=False)
     args = parser.parse_args()
-    
     script_path = sys.argv[0]
     os.environ["CUDA_VISIBLE_DEVICES"] =  args.gpu_id
     saved_root = args.saved_root
@@ -100,10 +87,24 @@ if __name__ == '__main__':
     
     command = 'cp -t {} {}'.format(saved_root,args.model_config)
     os.system(command)
+    
+    #Load library
+    import torch
+    torch.backends.cudnn.benchmark = True
+    from torch import nn
+    sys.path.append("../sequence_annotation")
+    from sequence_annotation.utils.fasta import write_fasta
+    from sequence_annotation.genome_handler.load_data import load_data
+    from sequence_annotation.pytorch.SA_facade import SeqAnnFacade
+    from sequence_annotation.pytorch.loss import SeqAnnLoss
+    from sequence_annotation.pytorch.executer import BasicExecutor, GANExecutor
+    from sequence_annotation.pytorch.model import seq_ann_inference, SeqAnnBuilder
+    from sequence_annotation.pytorch.model import seq_ann_reverse_inference
+    from sequence_annotation.pytorch.callback import EarlyStop
 
     builder = SeqAnnBuilder()
     with open(args.model_config,"r") as fp:
-        builder.config = json.load(setting, fp)
+        builder.config = json.load(fp)
     model = builder.build().cuda()
     
     if args.model_weights_path is not None:
@@ -130,7 +131,7 @@ if __name__ == '__main__':
                                    mean_by_mask=args.mean_by_mask)
         executor.inference = seq_ann_inference
         
-    train_data, val_data = load_data(args.fasta_path,args.ann_seqs_path,args.max_len,
-                                     args.train_id_path,args.val_id_path,args.saved_root)
+    train_data, val_data = _load_data(args.fasta_path,args.ann_seqs_path,args.max_len,
+                                      args.train_id_path,args.val_id_path,args.saved_root)
     train(model,train_data,val_data,saved_root,executor,args.epoch,
           args.batch_size,args.augmentation_max)

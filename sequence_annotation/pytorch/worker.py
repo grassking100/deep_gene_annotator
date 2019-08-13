@@ -137,7 +137,7 @@ class TrainWorker(PyWorker):
                 self._settings[key] = attr
 
             with open(os.path.join(path,"train_worker_setting.json"),'w') as fp:
-                json.dump(self._settings,fp)
+                json.dump(self._settings,fp, indent=4)
 
             self._recoder.path = os.path.join(path,'train_record.json')
 
@@ -240,7 +240,7 @@ class TestWorker(PyWorker):
                     attr = attr.get_config()
                 self._settings[key] = attr
             with open(os.path.join(path,"test_worker_setting.json"),'w') as fp:
-                json.dump(self._settings,fp)
+                json.dump(self._settings,fp, indent=4)
             self._recoder.path = os.path.join(path,'test_record.json')
 
 
