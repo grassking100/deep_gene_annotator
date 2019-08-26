@@ -12,7 +12,7 @@ from ..genome_handler.utils import index2onehot
 from .metric import F1,accuracy,precision,recall,categorical_metric,contagion_matrix
 from .warning import WorkerProtectedWarning
 
-gene_info_root = 'sequence_annotation/gene_info'
+gene_info_root = 'sequence_annotation/sequence_annotation/gene_info'
 
 class ICallback:
     @abstractmethod
@@ -157,8 +157,8 @@ class GFFCompare(Callback):
     def on_epoch_end(self,**kwargs):
         path = os.path.join(self._path,"{}gffcompare_{}").format(self.prefix,self._counter)
         answer_path = os.path.join(self._path,"answers")
-        to_bed_command = 'python3 {}/src/gff2bed.py -i {}.gff3 -o {}.bed'
-        gffcompare_command = '~/../home/gffcompare/gffcompare --strict-match --no-merge -T -d 0 -e 0 -r {}.gff3 {}.gff3  -o {}'
+        to_bed_command = 'python3 {}/gff2bed.py -i {}.gff3 -o {}.bed'
+        gffcompare_command = 'gffcompare --strict-match --no-merge -T -r {}.gff3 {}.gff3  -o {}'
         if self._counter == 1:
             self._answers.to_gff().to_csv(self._path+"/answers.gff3",index=None,header=None,sep='\t')
             command = to_bed_command.format(gene_info_root,answer_path,answer_path)

@@ -10,35 +10,27 @@ from .executer import BasicExecutor
 from .callback import Accumulator, Recorder, Callbacks
 from .warning import WorkerProtectedWarning
 
-def train_per_batch(model,ids,inputs,labels,lengths,mask,executor,callbacks):
+def _batch_process(model,ids,inputs,labels,lengths,mask,process,callbacks):
     callbacks.on_batch_begin()
     torch.cuda.empty_cache()
     inputs = torch.from_numpy(inputs).float().cuda()
     labels = torch.from_numpy(labels).long().cuda()
     mask = torch.from_numpy(mask).cuda()
-    metric,outputs = executor.fit(model,inputs,labels,mask=mask,lengths=lengths)
+    returned = process(model,inputs,labels,mask=mask,lengths=lengths)
+    metric,outputs = returned
     callbacks.on_batch_end(outputs=outputs,
                            labels=labels,
                            lengths=lengths,
                            metric=metric,
                            mask=mask,
                            ids=ids)
+
+def train_per_batch(model,ids,inputs,labels,lengths,mask,executor,callbacks):
+    _batch_process(model,ids,inputs,labels,lengths,mask,executor.fit,callbacks)
 
 def evaluate_per_batch(model,ids,inputs,labels,lengths,mask,executor,callbacks):
-    callbacks.on_batch_begin()
-    torch.cuda.empty_cache()
-    inputs = torch.from_numpy(inputs).float().cuda()
-    labels = torch.from_numpy(labels).long().cuda()
-    mask = torch.from_numpy(mask).cuda()
-    metric,outputs = executor.evaluate(model,inputs,labels,mask=mask,lengths=lengths)
-    callbacks.on_batch_end(outputs=outputs,
-                           labels=labels,
-                           lengths=lengths,
-                           metric=metric,
-                           mask=mask,
-                           ids=ids)
-
-
+    _batch_process(model,ids,inputs,labels,lengths,mask,executor.evaluate,callbacks)
+    
 class PyWorker(Worker):
     def __init__(self,executor=None):
         super().__init__()
@@ -212,7 +204,7 @@ class TrainWorker(PyWorker):
                 self._best_result[key] = self.result[key][self.best_epoch - 1]
 
 class TestWorker(PyWorker):
-    """a worker which will train and evaluate the model"""
+    """a worker which will evaluate the model"""
     def __init__(self,executor=None,generator=None,callbacks=None):
         super().__init__(executor)
         self._generator = generator

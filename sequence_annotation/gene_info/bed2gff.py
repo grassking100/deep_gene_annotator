@@ -127,7 +127,7 @@ if __name__ =='__main__':
     parser = ArgumentParser()
     parser.add_argument("-i", "--bed_path",required=True)
     parser.add_argument("-o", "--gff_output",required=True)
-    parser.add_argument("-t", "--id_table_path",required=False)
+    parser.add_argument("-t", "--id_table_path")
     args = parser.parse_args()
     parser = BedInfoParser()
     bed = parser.parse(args.bed_path)

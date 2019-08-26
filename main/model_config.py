@@ -2,23 +2,23 @@ import os
 import sys
 from argparse import ArgumentParser
 import json
-sys.path.append("../sequence_annotation")
+sys.path.append("/home/sequence_annotation")
 from sequence_annotation.pytorch.model import SeqAnnBuilder
 
 if __name__ == '__main__':    
     parser = ArgumentParser()
     parser.add_argument("--config_path",help="Path to save config",required=True)
-    parser.add_argument("--use_naive",action="store_true", required=False)
-    parser.add_argument("--cnn_out",type=int,default=16,required=False)
-    parser.add_argument("--cnn_kernel",type=int,default=16,required=False)
-    parser.add_argument("--cnn_num",type=int,default=4,required=False)
-    parser.add_argument("--rnn_size",type=int,default=16,required=False)
-    parser.add_argument("--rnn_num",type=int,default=4,required=False)
-    parser.add_argument("--rnn_type",type=str,default='GRU',required=False)
-    parser.add_argument("--train_init_value",action="store_true", required=False)
-    parser.add_argument("--use_discrim",action="store_true", required=False)
-    parser.add_argument("--disrim_rnn_size",type=int,default=16,required=False)
-    parser.add_argument("--disrim_rnn_num",type=int,default=1,required=False)
+    parser.add_argument("--use_naive",action="store_true")
+    parser.add_argument("--cnn_out",type=int,default=16)
+    parser.add_argument("--cnn_kernel",type=int,default=16)
+    parser.add_argument("--cnn_num",type=int,default=4)
+    parser.add_argument("--rnn_size",type=int,default=16)
+    parser.add_argument("--rnn_num",type=int,default=4)
+    parser.add_argument("--rnn_type",type=str,default='GRU')
+    parser.add_argument("--train_init_value",action="store_true")
+    parser.add_argument("--use_discrim",action="store_true")
+    parser.add_argument("--disrim_rnn_size",type=int,default=16)
+    parser.add_argument("--disrim_rnn_num",type=int,default=1)
     args = parser.parse_args()
 
     builder = SeqAnnBuilder()

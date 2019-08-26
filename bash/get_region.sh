@@ -1,7 +1,8 @@
 #!/bin/bash
 ## function print usage
 usage(){
- echo "Usage: Get upstream and donwstream region"
+ echo "Usage: Get regions which are upstream and donwstream of the regions,"
+ echi "       if there have overlapped regions, then merge togrther"
  echo "  Arguments:"
  echo "    -i  <string>  Input path"
  echo "    -o  <string>  Output path"
@@ -93,6 +94,7 @@ if $restrict_mode ; then
                                  }
       
                              }'  _merged.tsv > _consist.bed
+    rm _extened.bed
     rm _extened.tsv
     rm _input.tsv
     rm _merged.tsv

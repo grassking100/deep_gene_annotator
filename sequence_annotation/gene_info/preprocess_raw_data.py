@@ -3,62 +3,53 @@ sys.path.append(os.path.dirname(__file__)+"/../..")
 import pandas as pd
 import csv
 from argparse import ArgumentParser
-from sequence_annotation.utils.utils import read_bed, write_bed
+from sequence_annotation.utils.utils import read_bed, write_bed, write_gff
 
 if __name__ == "__main__":
     #Reading arguments
     parser = ArgumentParser()
-    parser.add_argument("--biomart_path",
-                        help="biomart_path",required=True)
-    parser.add_argument("--bed_path",
-                        help="bed_path",required=True)
-    parser.add_argument("--gro_1_path",
-                        help="gro_1_path",required=True)
-    parser.add_argument("--gro_2_path",
-                        help="gro_2_path",required=True)
-    parser.add_argument("--cs_path",
-                        help="cs_path",required=True)
-    parser.add_argument("--output_root",
-                        help="output_root",required=True)
+    parser.add_argument("--biomart_table_path",required=True)
+    parser.add_argument("--bed_path",required=True)
+    parser.add_argument("--gro_1_path",required=True)
+    parser.add_argument("--gro_2_path",required=True)
+    parser.add_argument("--cs_path",required=True)
+    parser.add_argument("--output_root",required=True)
+    #parser.add_argument("--quality_threhold",type=int)
     args = parser.parse_args()
 
-    official_bed_path = os.path.join(args.output_root,'official.bed')
-    valid_official_coding_bed_path = os.path.join(args.output_root,'valid_official_coding.bed')
-    valid_official_noncoding_bed_path = os.path.join(args.output_root,'valid_official_noncoding.bed')
+    official_bed_path = os.path.join(args.output_root,'valid_official.bed')
+    valid_gro_gff_path = os.path.join(args.output_root,'valid_gro.gff')
+    valid_cleavage_site_gff_path = os.path.join(args.output_root,'valid_cleavage_site.gff')
     valid_gro_path = os.path.join(args.output_root,'valid_gro.tsv')
     valid_cleavage_site_path = os.path.join(args.output_root,'valid_cleavage_site.tsv')
     id_convert_path = os.path.join(args.output_root,'id_convert.tsv')
-    paths = [valid_official_coding_bed_path,valid_gro_path,valid_official_noncoding_bed_path,
-             valid_cleavage_site_path,official_bed_path,id_convert_path]
+    paths = [valid_gro_path,valid_cleavage_site_path,official_bed_path,id_convert_path,
+             valid_gro_gff_path,valid_cleavage_site_gff_path]
     exists = [os.path.exists(path) for path in paths]
     if all(exists):
         print("Result files are already exist, procedure will be skipped.")
     else:
         ###Read file###
-        biomart_gene_info = pd.read_csv(args.biomart_path)
+        biomart_gene_info = pd.read_csv(args.biomart_table_path)
         biomart_gene_info = biomart_gene_info[['Gene stable ID','Transcript stable ID','Transcript type']]
         biomart_gene_info.columns = ['gene_id','transcript_id','transcript_type']
+        
         official_bed = read_bed(args.bed_path)
+        valid_chrs = [str(chr_) for chr_ in range(1,6)]
+        official_bed = official_bed[official_bed['chr'].isin(valid_chrs)]
+        #if args.quality_threhold is not None:
+        #    official_bed = official_bed[official_bed['score'].astype(int) >= args.quality_threhold]
+
         gro_1 = pd.read_csv(args.gro_1_path,comment ='#',sep='\t')
         gro_2 = pd.read_csv(args.gro_2_path,comment ='#',sep='\t')
         cleavage_site = pd.read_csv(args.cs_path)
-        valid_chrs = [str(chr_) for chr_ in range(1,6)]
-        ###Process araport_11_gene_info###
-        biomart_coding = biomart_gene_info[biomart_gene_info['transcript_type']=='protein_coding']
-        official_bed['chr'] = official_bed['chr'].str.replace('Chr','')
-        official_bed = official_bed[official_bed['chr'].isin(valid_chrs)]
         ###Create id_convert table###
         id_convert = {}
         for item in biomart_gene_info.to_dict('record'):
             id_convert[item['transcript_id']] = item['gene_id']
-        ###Creatre valid geen and mRNA id###
-        valid_transcript_ids = set(official_bed['id']).intersection(set(biomart_coding['transcript_id']))
+        ###Creatre valid gene and mRNA id###
+        valid_transcript_ids = set(official_bed['id']).intersection(set(biomart_gene_info['transcript_id']))
         valid_gene_ids = [id_convert[id_] for id_ in valid_transcript_ids]
-        ###Create valid_official_araport11_coding###
-        valid_official_coding_bed = official_bed[official_bed['id'].isin(valid_transcript_ids)]
-        ###Create valid_official_araport11_noncoding###
-        valid_official_noncoding_bed = official_bed[~official_bed['id'].isin(valid_transcript_ids)]
-        
         ###Process GRO sites data###
         gro_columns = ['chr','strand','Normalized Tag Count','start','end']
         gro_1 = gro_1[gro_columns]
@@ -68,24 +59,41 @@ if __name__ == "__main__":
         valid_gro.columns = ['chr','strand','tag_count','start','end']
         evidence_5_end = round((valid_gro['end']+ valid_gro['start'])/2)
         valid_gro = valid_gro.assign(evidence_5_end=pd.Series(evidence_5_end).values)
-        ###Process cleavage sites data###
-        cleavage_site = cleavage_site[['Chromosome','Strand','Position','Raw DRS read count']]
-        cleavage_site.loc[cleavage_site['Strand']=='fwd','Strand'] = '+'
-        cleavage_site.loc[cleavage_site['Strand']=='rev','Strand'] = '-'
-        cleavage_site.columns = ['chr','strand','evidence_3_end','read_count']
-        cleavage_site['chr'] = cleavage_site['chr'].str.replace('chr','')
-        valid_cleavage_site = cleavage_site[cleavage_site['chr'].isin(valid_chrs)]
-        ###Drop duplicated ###
-        valid_gro = valid_gro.drop_duplicates()
-        valid_cleavage_site = valid_cleavage_site.drop_duplicates()
-        ###Write data##
-        write_bed(official_bed,official_bed_path)
-        write_bed(valid_official_coding_bed,valid_official_coding_bed_path)
-        write_bed(valid_official_noncoding_bed,valid_official_noncoding_bed_path)
         valid_gro = valid_gro.drop('start', 1)
         valid_gro = valid_gro.drop('end', 1)
+        valid_gro = valid_gro.assign(id=valid_gro.astype(str).apply(lambda x: '_'.join(x), axis=1))
+        ###Process cleavage sites data###
+        ca_site = cleavage_site[['Chromosome','Strand','Position','Raw DRS read count']]
+        ca_site.loc[ca_site['Strand']=='fwd','Strand'] = '+'
+        ca_site.loc[ca_site['Strand']=='rev','Strand'] = '-'
+        ca_site.columns = ['chr','strand','evidence_3_end','read_count']
+        ca_site.loc[:,'chr'] = ca_site['chr'].str.replace('chr','')
+        valid_ca_site = ca_site[ca_site['chr'].isin(valid_chrs)]
+        valid_ca_site = valid_ca_site.assign(id=valid_ca_site.astype(str).apply(lambda x: '_'.join(x), axis=1))
+        ###Drop duplicated ###
+        valid_gro = valid_gro.drop_duplicates()
+        valid_ca_site = valid_ca_site.drop_duplicates()
+        ###Write data##
+        write_bed(official_bed,official_bed_path)
+
         valid_gro.to_csv(valid_gro_path,sep='\t',index=None)
-        valid_cleavage_site.to_csv(valid_cleavage_site_path,sep='\t',index=None)
+        valid_ca_site.to_csv(valid_cleavage_site_path,sep='\t',index=None)
+        
+        valid_gro['source'] = 'Araport11'
+        valid_gro['feature'] = 'GRO site'
+        valid_gro['start'] = valid_gro['end'] = valid_gro['evidence_5_end']
+        valid_gro['score'] = valid_gro['frame'] = '.'
+        valid_gro['attribute'] = 'tag_count=' + valid_gro['tag_count'].astype(str)
+        
+        valid_ca_site['source'] = 'Araport11'
+        valid_ca_site['feature'] = 'cleavage site'
+        valid_ca_site['start'] = valid_ca_site['end'] = valid_ca_site['evidence_3_end']
+        valid_ca_site['score'] = valid_ca_site['frame'] = '.'   
+        valid_ca_site['attribute'] = 'read_count=' + valid_ca_site['read_count'].astype(str)
+        
+        write_gff(valid_gro,valid_gro_gff_path)
+        write_gff(valid_ca_site,valid_cleavage_site_gff_path)
+
         df = pd.DataFrame.from_dict(id_convert,'index')
         df.index.name = 'transcript_id'
         df.columns = ['gene_id']

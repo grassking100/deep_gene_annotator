@@ -174,7 +174,7 @@ def class_count(ann_seq):
 
 def seq2vecs(ann_seq,ann_types=None):
     warn = ("\n\n!!!\n"
-            "\tDNA sequence will be rearranged from 5' to 3'.\n"
+            "\tAnnotation sequence will be rearranged from 5' to 3'.\n"
             "\tThe plus strand sequence will stay the same,"
             " but the minus strand sequence will be flipped!\n"
             "!!!\n")

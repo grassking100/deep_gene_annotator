@@ -47,7 +47,8 @@ if (($num>0)) ;then
         bedtools sort -i $input_path | bedtools merge -s -c 4,5,6 -o distinct,distinct,distinct \
         -delim ","  | awk -F'\t' -v OFS="\t"  '{print($1,$2,$3,$5,$6,$7)}' > $output_path
     else
-        bedtools sort -i $input_path | bedtools merge -c 4,5,6 -o distinct,distinct,distinct -delim ","  > $output_path
+        bedtools sort -i $input_path | bedtools merge -c 4,5,6 -o distinct,distinct,distinct -delim "," \
+        | awk -F'\t' -v OFS="\t"  '{print($1,$2,$3,$4,".",$6)}' > $output_path
     fi
 else
     cp $input_path $output_path

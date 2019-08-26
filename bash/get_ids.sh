@@ -1,9 +1,9 @@
 #!/bin/bash
 ## function print usage
 usage(){
- echo "Usage: Print ids of bed file"
+ echo "Usage: Print ids of BED file"
  echo "  Arguments:"
- echo "    -i  <string>  Bed path"
+ echo "    -i  <string>  BED path"
  echo "  Options:"
  echo "    -h  Print help message and exit"
  echo "Example: bash get_ids.sh -i want.bed"

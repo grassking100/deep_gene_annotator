@@ -8,6 +8,7 @@ from sequence_annotation.genome_handler.ann_seq_processor import is_one_hot
 from sequence_annotation.genome_handler.sequence import AnnSequence
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
 from sequence_annotation.genome_handler.ann_genome_processor import get_backgrounded_genome
+from sequence_annotation.gene_info.utils import GENE_TYPES
 
 strand_convert = {'+':'plus','-':'minus'}
 
@@ -23,11 +24,11 @@ class Gff2AnnSeqs:
     def _create_seq(self,chrom_id,strand,length):
         """Create annotation sequence for returning"""
         ann_seq = AnnSequence()
-        ann_seq.id = chrom_id
+        ann_seq.id = "{}{}".format(chrom_id,strand)
         ann_seq.length = length
+        ann_seq.strand = strand
         ann_seq.ANN_TYPES = self.ANN_TYPES
         ann_seq.chromosome_id = chrom_id
-        ann_seq.strand = strand_convert[strand]
         ann_seq.init_space()
         return ann_seq
 
@@ -38,23 +39,26 @@ class Gff2AnnSeqs:
     def convert(self,gff,genome_info,source):
         if 'parent' not in gff.columns:
             raise Exception('Parent should be in gff data')
+        gff = get_gff_with_attribute(gff)
+        is_gene = gff['feature'].isin(GENE_TYPES)
+        genes = gff[is_gene]
         genome = AnnSeqContainer()
         genome.ANN_TYPES = self.ANN_TYPES
-        for chrom_id,strand in zip(list(gff['chr']),list(gff['strand'])):
-            if chrom_id not in genome.ids:
-                chrom = self._create_seq(chrom_id,strand,genome_info[str(chrom_id)])
+        for chrom_id,length in genome_info.items():
+            for strand in ['plus','minus']:
+                chrom = self._create_seq(chrom_id,strand,length)
                 chrom.source = source
                 genome.add(chrom)
 
-        gff = get_gff_with_attribute(gff)
-        genes = gff[gff['feature']=='gene'].to_dict('record')
-        blocks = gff[gff['feature'] != 'gene'].groupby('parent')
+        genes = genes.to_dict('record')
+        blocks = gff[~is_gene].groupby('parent')
         for gene in genes:
             id_ = gene['id']
             blocks_ = blocks.get_group(id_).to_dict('record')
             for block in blocks_:
                 if block['feature'] in self.ANN_TYPES:
-                    chrom = genome.get(gene['chr'])
+                    chrom_id = "{}{}".format(gene['chr'],strand_convert[gene['strand']])
+                    chrom = genome.get(chrom_id)
                     chrom.set_ann(block['feature'],1,block['start']-1,block['end']-1)
         backgrounded = get_backgrounded_genome(genome,'other',['exon','intron','alt_donor','alt_accept'])
         for chrom in backgrounded:

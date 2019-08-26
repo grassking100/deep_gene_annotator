@@ -5,14 +5,15 @@ from utils import consist, coordinate_consist_filter, get_id_table
 
 if __name__ == "__main__":
     #Reading arguments
-    parser = ArgumentParser()
-    parser.add_argument("-o", "--output_path",
-                        help="output_path",required=True)
-    parser.add_argument("-g", "--safe_merged_gro_sites_path",
-                        help="safe_merged_gro_sites_path",required=True)
-    parser.add_argument("-c", "--safe_merged_cleavage_sites_path",
-                        help="safe_merged_cleavage_sites_path",required=True)
-    parser.add_argument("-i","--id_convert_path",help="id_convert_path",required=True)
+    parser = ArgumentParser(description="This program will output RNA data id, start site and end site "+
+                            "based on GRO and DRS site data")
+    parser.add_argument("-g", "--safe_merged_gro_sites_path",required=True)
+    parser.add_argument("-c", "--safe_merged_cleavage_sites_path",required=True)
+    parser.add_argument("-t","--id_convert_path",required=True)
+    parser.add_argument("-o", "--output_path",required=True)
+    parser.add_argument("--single_start_end",help="If it is selected, then only RNA data "+
+                        "which have start sites and end sites with strongest signal in same gene"+
+                        "will be saved",action='store_true')
 
     args = parser.parse_args()
     id_convert = get_id_table(args.id_convert_path)
@@ -31,9 +32,11 @@ if __name__ == "__main__":
         clean_merged_data['coordinate_end'] =  evidence_sites.max(1)
         print('Consist data with gene id')
         clean_merged_data['gene_id'] = [id_convert[id_] for id_ in list(clean_merged_data['ref_name'])]
-        clean_merged_data_by_id = consist(clean_merged_data,'gene_id','tag_count',False)
-        clean_merged_data_by_id = consist(clean_merged_data_by_id,'gene_id','read_count',False)
-        consist_data = coordinate_consist_filter(clean_merged_data_by_id,'gene_id','coordinate_start')
-        consist_data = coordinate_consist_filter(clean_merged_data_by_id,'gene_id','coordinate_end')
-        consist_data = consist_data[['ref_name','coordinate_start','coordinate_end']]
+
+        if args.single_start_end:
+            clean_merged_data = consist(clean_merged_data,'gene_id','tag_count',False)
+            clean_merged_data = consist(clean_merged_data,'gene_id','read_count',False)
+            clean_merged_data = coordinate_consist_filter(clean_merged_data,'gene_id','coordinate_start')
+            clean_merged_data = coordinate_consist_filter(clean_merged_data,'gene_id','coordinate_end')
+        consist_data = clean_merged_data[['ref_name','coordinate_start','coordinate_end']]
         consist_data.to_csv(args.output_path,index=None,sep='\t')

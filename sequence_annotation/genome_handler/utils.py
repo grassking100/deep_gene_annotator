@@ -88,50 +88,10 @@ def ann_count(ann_seqs):
             count[type_] += np.sum(seq.get_ann(type_))
     return count
 
-def select_seq(fasta,ann_seqs,min_len=None,max_len=None,ratio=None,outlier_coef=1.5,num_max=None):
-    seqs_len = [len(seq) for seq in ann_seqs]
-    seqs_len.sort()
-    min_len = min_len or 0
-    outlier_name = None
-    if max_len is None:
-        ratio = ratio or 0.01
-        max_len = seqs_len[:int(len(seqs_len)*ratio)][-1]
-    inner_fasta = {}
-    for seq in ann_seqs:
-        if min_len <= len(seq) <= max_len:
-            inner_fasta[seq.id]=fasta[seq.id]
-        elif max_len < len(seq) <= max_len*outlier_coef:
-            outlier_name = seq.id
-    keys = list(inner_fasta.keys())
-    random.shuffle(keys)
-    if num_max is not None:
-        keys = keys[:num_max]
-    selected_seqs = AnnSeqContainer()
-    selected_seqs.ANN_TYPES = ann_seqs.ANN_TYPES
-    selected_fasta = {}
-    for seq_id in keys:
-        seq = ann_seqs.get(seq_id)
-        selected_seqs.add(seq)
-        selected_fasta[seq_id]=inner_fasta[seq_id]
-    outlier_seq = None
-    outlier_fasta = None
-    if outlier_name is not None:
-        outlier_seq = ann_seqs.get(outlier_name)
-        outlier_fasta = fasta[outlier_name]
-    return selected_fasta,selected_seqs,outlier_fasta,outlier_seq
-
 def get_subseqs(ids,ann_seqs):
-    sub_seqs = AnnSeqContainer()
-    sub_seqs.ANN_TYPES = ann_seqs.ANN_TYPES
+    sub_seqs = AnnSeqContainer(ann_seqs.ANN_TYPES)
     sub_seqs.add([ann_seqs[id_] for id_ in ids])
     return sub_seqs
-
-#def ann2gff(seq_anns,simplify_map=None):
-#    gffs = AnnSeqContainer()
-#    for ann in seq_anns:
-#        ann_informs = self.extractor.extract_per_seq(ann,simplify_map)
-#        gffs.add(ann_informs)
-#    return self._answers.to_gff()
 
 def get_seq_mask(lengths,max_lengths=None):
     max_lengths = max_lengths or max(lengths)

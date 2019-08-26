@@ -10,21 +10,22 @@ simplify_map = {'exon':['exon'],'intron':['intron'],'other':['other']}
 gene_map = {'gene':['exon','intron'],'other':['other']}
 color_settings={'other':'blue','exon':'red','intron':'yellow'}
 
-def _load_data(fasta_path,ann_seqs_path,max_len,train_id_path,val_id_path,saved_root):
+def _load_data(fasta_path,ann_seqs_path,min_len,max_len,train_id_path,val_id_path,saved_root):
     print("Load and parse data")
     data_path = os.path.join(saved_root,"data.h5")
     if os.path.exists(data_path):    
         data = dd.io.load(data_path)
     else:
         train_ids = list(pd.read_csv(train_id_path,header=None)[0])
-        val_ids = None
+        val_ids = []
+        val_data = None
         if val_id_path is not None:
             val_ids = list(pd.read_csv(val_id_path,header=None)[0])
-        data = load_data(fasta_path,ann_seqs_path,train_ids,val_ids,max_len=max_len,
-                         simplify_map=simplify_map,before_mix_simplify_map=before_mix_simplify_map)
+        data = load_data(fasta_path,ann_seqs_path,[train_ids,val_ids],min_len=min_len,
+                         max_len=max_len,simplify_map=simplify_map,
+                         before_mix_simplify_map=before_mix_simplify_map)
         dd.io.save(data_path,data)
-    train_data,val_data,_ = data
-    return train_data,val_data
+    return data
 
 def train(model,train_data,val_data,saved_root,executor,epoch,batch_size,augmentation_max):
     facade = SeqAnnFacade()
@@ -37,8 +38,19 @@ def train(model,train_data,val_data,saved_root,executor,epoch,batch_size,augment
     write_fasta(os.path.join(saved_root,'train.fasta'),facade.train_seqs)
     
     if val_data is not None:
-        facade.val_seqs,facade.val_ann_seqs = val_data[:2]
-        facade.add_seq_fig(*val_data[2:],color_settings=color_settings)
+        val_seqs,val_ann_seqs = val_data
+        facade.val_seqs,facade.val_ann_seqs = val_seqs,val_ann_seqs
+        max_len = None
+        selected_id = None
+        for seq in val_ann_seqs:
+            if max_len is None:
+                max_len = len(seq)
+                selected_id = seq.id
+            elif max_len < len(seq):
+                max_len = len(seq)
+                selected_id = seq.id
+        facade.add_seq_fig(val_seqs[selected_id],val_ann_seqs[selected_id],
+                           color_settings=color_settings)
         ealry_stop = EarlyStop(target='val_loss',optimize_min=True,patient=5,
                                save_best_weights=True,restore_best_weights=True,
                                path=saved_root)
@@ -54,22 +66,23 @@ if __name__ == '__main__':
     parser.add_argument("-a","--ann_seqs_path",help="Path of AnnSeqContainer",required=True)
     parser.add_argument("-s","--saved_root",help="Root to save file",required=True)
     parser.add_argument("-t","--train_id_path",help="Path of training id data",required=True)
-    parser.add_argument("-v","--val_id_path",help="Path of validation id data",default=None,required=False)
-    parser.add_argument("-g","--gpu_id",type=str,default=0,help="GPU to used",required=False)
-    parser.add_argument("--use_naive",action="store_true", required=False)
-    parser.add_argument("--max_len",type=int,default=10000,help="Seqeunces' max length",required=False)
-    parser.add_argument("--augmentation_max",type=int,default=0,required=False)
-    parser.add_argument("--epoch",type=int,default=100,required=False)
-    parser.add_argument("--batch_size",type=int,default=32,required=False)
-    parser.add_argument("--learning_rate",type=float,default=1e-3,required=False)
-    parser.add_argument("--intron_coef",type=float,default=1,required=False)
-    parser.add_argument("--other_coef",type=float,default=1,required=False)
-    parser.add_argument("--nontranscript_coef",type=float,default=0,required=False)
-    parser.add_argument("--transcript_output_mask",action="store_true", required=False)
-    parser.add_argument("--transcript_answer_mask",action="store_true", required=False)
-    parser.add_argument("--mean_by_mask",action="store_true", required=False)
-    parser.add_argument("--model_weights_path", type=str, required=False)
-    parser.add_argument("--disrim_learning_rate",type=float,default=1e-3,required=False)
+    parser.add_argument("-v","--val_id_path",help="Path of validation id data")
+    parser.add_argument("-g","--gpu_id",type=str,default=0,help="GPU to used")
+    parser.add_argument("--use_naive",action="store_true")
+    parser.add_argument("--max_len",type=int,default=10000,help="Sequences' max length, if it is negative then it will be ignored")
+    parser.add_argument("--min_len",type=int,default=0,help="Sequences' min length")
+    parser.add_argument("--augmentation_max",type=int,default=0)
+    parser.add_argument("--epoch",type=int,default=100)
+    parser.add_argument("--batch_size",type=int,default=32)
+    parser.add_argument("--learning_rate",type=float,default=1e-3)
+    parser.add_argument("--intron_coef",type=float,default=1)
+    parser.add_argument("--other_coef",type=float,default=1)
+    parser.add_argument("--nontranscript_coef",type=float,default=0)
+    parser.add_argument("--transcript_output_mask",action="store_true")
+    parser.add_argument("--transcript_answer_mask",action="store_true")
+    parser.add_argument("--mean_by_mask",action="store_true")
+    parser.add_argument("--model_weights_path")
+    parser.add_argument("--disrim_learning_rate",type=float,default=1e-3)
     args = parser.parse_args()
     script_path = sys.argv[0]
     os.environ["CUDA_VISIBLE_DEVICES"] =  args.gpu_id
@@ -92,7 +105,7 @@ if __name__ == '__main__':
     import torch
     torch.backends.cudnn.benchmark = True
     from torch import nn
-    sys.path.append("../sequence_annotation")
+    sys.path.append("/home/sequence_annotation")
     from sequence_annotation.utils.fasta import write_fasta
     from sequence_annotation.genome_handler.load_data import load_data
     from sequence_annotation.pytorch.SA_facade import SeqAnnFacade
@@ -130,8 +143,13 @@ if __name__ == '__main__':
                                    transcript_output_mask=args.transcript_output_mask,
                                    mean_by_mask=args.mean_by_mask)
         executor.inference = seq_ann_inference
+       
+    max_len = args.max_len
+    if max_len < 0:
+        max_len=None
         
-    train_data, val_data = _load_data(args.fasta_path,args.ann_seqs_path,args.max_len,
+    train_data, val_data = _load_data(args.fasta_path,args.ann_seqs_path,
+                                      args.min_len,max_len,
                                       args.train_id_path,args.val_id_path,args.saved_root)
     train(model,train_data,val_data,saved_root,executor,args.epoch,
           args.batch_size,args.augmentation_max)

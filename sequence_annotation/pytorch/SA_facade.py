@@ -207,14 +207,14 @@ class SeqAnnFacade:
             with open(record_path,'w') as fp:
                 json.dump(worker.result,fp, indent=4)
             if worker.best_epoch is None:
-                model_path =  os.path.join(self.path,'last_model.pth')
+                model_path =  os.path.join(self._path,'last_model.pth')
                 torch.save(worker.model.state_dict(),model_path)
             else:    
                 best_path = os.path.join(self._path,"best_record.json")
                 best_result = {'best_epoch':worker.best_epoch,
                                'best_result':worker.best_result}
-            with open(best_path,'w') as fp:
-                json.dump(best_result,fp)
+                with open(best_path,'w') as fp:
+                    json.dump(best_result,fp)
                  
         return worker.result
 

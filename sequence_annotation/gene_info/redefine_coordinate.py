@@ -8,7 +8,7 @@ if __name__ == "__main__":
     #Reading arguments
     parser = ArgumentParser(description="This program will redefine coordinate based on region file")
     parser.add_argument("-i", "--bed_path",help="Bed file to be redefined coordinate",required=True)
-    parser.add_argument("-t", "--table_path",help="Table about reanamed region",required=True)
+    parser.add_argument("-t", "--table_path",help="Table about renamed region",required=True)
     parser.add_argument("-r", "--region_path",help="Region file to be used as coordinate reference",required=True)
     parser.add_argument("-o", "--output_path",help="Path to saved redefined bed file",required=True)
     parser.add_argument("-f", "--flip",help="Flip sequence info which are minus strand to plus strand",

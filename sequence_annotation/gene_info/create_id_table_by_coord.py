@@ -8,8 +8,8 @@ from sequence_annotation.utils.utils import read_bed
 if __name__ == "__main__":
     #Reading arguments
     parser = ArgumentParser()
-    parser.add_argument("-b", "--input_bed_path",required=True)
-    parser.add_argument("-t", "--table_path",required=True)
+    parser.add_argument("-i", "--input_bed_path",required=True)
+    parser.add_argument("-o", "--table_path",required=True)
     parser.add_argument("-p", "--prefix",required=True)
     args = parser.parse_args()
 

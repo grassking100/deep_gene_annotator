@@ -90,9 +90,6 @@ class AnnSeqProcessor:
         return padded
 
     def _to_dict(self,item):
-        for seq in item['answers']:
-            if seq.strand != 'plus':
-                raise Exception("Processor cannot handle minus strand for now, because fasta sequences cannot be flipped yet.")
         seqs = self._seq_converter.seqs2dict_vec(item['inputs'],self._discard_invalid_seq)
         ann_seq_dict_ = ann_genome_processor.genome2dict_vec(item['answers'],self._ann_types)
         ann_seq_dict = {}

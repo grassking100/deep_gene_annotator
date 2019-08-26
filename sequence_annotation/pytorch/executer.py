@@ -4,6 +4,7 @@ from abc import abstractmethod
 from .loss import CCELoss
 
 bce_loss = nn.BCELoss(reduction='none')
+
 def mean_by_mask(value,mask):
     L = value.shape[1]
     mask = mask[:,:L].float()
@@ -24,9 +25,9 @@ def _evaluate(loss,model,inputs, labels,lengths,mask=None,inference=None):
     model.train(False)
     with torch.no_grad():
         outputs = model(inputs,lengths=lengths).float()
-        loss_ = loss(outputs, labels, mask)
+        loss_ = loss(outputs, labels, mask).item()
         outputs = _inference(outputs,mask,inference)
-    return loss_.item(),outputs
+    return loss_,outputs
 
 def _predict(model,inputs,lengths,mask=None,inference=None):
     model.train(False)
@@ -63,14 +64,17 @@ class _Executor(IExecutor):
         config['inference'] = self.inference
         return config
 
-    def evaluate(self,model,inputs,labels,lengths,**kwargs):
-        loss, outputs = _evaluate(self.loss,model,inputs,labels,lengths,
-                                  inference=self.inference,**kwargs)
-        return {'loss':loss},outputs
-
     def predict(self,model,inputs,lengths,**kwargs):
         return _predict(model,inputs,lengths,
                         inference=self.inference,**kwargs)
+    
+    def evaluate(self,model,inputs,labels,lengths,**kwargs):
+        if self.loss is not None:
+            loss, outputs = _evaluate(self.loss,model,inputs,labels,lengths,
+                                      inference=self.inference,**kwargs)
+            return {'loss':loss},outputs
+        else:
+            return {},self.predict(model,inputs,lengths,**kwargs)
 
 class BasicExecutor(_Executor):
     def __init__(self):

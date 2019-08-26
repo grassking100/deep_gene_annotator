@@ -11,8 +11,8 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--input_path",required=True)
     parser.add_argument("-d", "--id_path",required=True)
     parser.add_argument("-o", "--output_path",required=True)
-    parser.add_argument("-t", "--id_convert_path",required=False)
-    parser.add_argument("--query_column",type=str,default='id',required=False)
+    parser.add_argument("-t", "--id_convert_path")
+    parser.add_argument("--query_column",type=str,default='id')
     
     args = parser.parse_args()
     id_table = None

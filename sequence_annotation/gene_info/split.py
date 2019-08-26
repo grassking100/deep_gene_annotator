@@ -36,6 +36,7 @@ if __name__ == "__main__":
         fp.write(str(threshold))
     
     region_rename_table = pd.read_csv(args.region_rename_table_path,sep='\t')
+    train_val_chrom_ids.sort()
     for val_chrom in train_val_chrom_ids:
         train_chroms = [train_chrom for train_chrom in train_val_chrom_ids if train_chrom != val_chrom]
         train = region_rename_table[region_rename_table['chr'].isin(train_chroms)]['new_id']

@@ -89,16 +89,18 @@ class SeqAnnLoss(nn.Module):
         EPSILON=1e-32
         
         other_loss = other_loss.sum()/(mask.sum())
-        if not self.mean_by_mask:
-            intron_loss = intron_loss.sum()/(transcript_mask.sum()+EPSILON)
-        else:
+        if self.mean_by_mask:
             intron_loss = intron_loss.sum()/(mask.sum())
+            
+        else:
+            intron_loss = intron_loss.sum()/(transcript_mask.sum()+EPSILON)
         loss = other_loss
         loss = loss + intron_loss
         if self.nontranscript_coef > 0:
-            if not self.mean_by_mask:
-                nontranscript_loss = nontranscript_loss.sum()/(nontranscript_mask.sum()+EPSILON)
-            else:
+            if self.mean_by_mask:
                 nontranscript_loss = nontranscript_loss.sum()/(mask.sum())
+                
+            else:
+                nontranscript_loss = nontranscript_loss.sum()/(nontranscript_mask.sum()+EPSILON)
             loss = loss + nontranscript_loss
         return loss

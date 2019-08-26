@@ -142,8 +142,7 @@ class SeqInfoContainer(SeqContainer):
         selected_df['feature'] = df['ann_type']
         selected_df['score'] = '.'
         selected_df['frame'] = '.'
-        selected_df['attribute'] = "ID={};Parent={};Status={}"
-        selected_df['attribute'] = selected_df['attribute'].format(df['id'],df['parent'],df['ann_status'])
+        selected_df['attribute'] = "ID="+df['id'].astype(str)+";Parent="+df['parent'].astype(str)+";Status="+df['ann_status'].astype(str)
         selected_df['strand']=selected_df['strand'].str.replace("plus", '+')
         selected_df['strand']=selected_df['strand'].str.replace("minus", '-')
         return selected_df[GFF_COLUMNS]

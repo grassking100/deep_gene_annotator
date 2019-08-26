@@ -66,7 +66,10 @@ def get_subdict(ids,data):
 
 def read_bed(path,convert_to_one_base=True):
     #Read bed data into one-based DataFrame format
-    bed = pd.read_csv(path,sep='\t',header=None)
+    try:
+        bed = pd.read_csv(path,sep='\t',header=None,dtype={0:str})
+    except:
+        raise Exception("{} has incorrect format".format(path))
     bed.columns = BED_COLUMNS[:len(bed.columns)]
     data = []
     for item in bed.to_dict('record'):
@@ -106,8 +109,11 @@ def write_bed(bed,path,from_one_base=True):
     bed.to_csv(path,sep='\t',index=None,header=None)
 
 def read_gff(path):
-    gff = pd.read_csv(path,sep='\t',header=None,comment ='#')
+    gff = pd.read_csv(path,sep='\t',header=None,skiprows=1,dtype=str)
     gff.columns = GFF_COLUMNS
+    gff = gff[gff['chr']!='###']
+    int_columns = ['start','end']
+    gff.loc[:,int_columns] = gff[int_columns].astype(float).astype(int)
     return gff
     
 def write_gff(gff,path):
@@ -116,24 +122,44 @@ def write_gff(gff,path):
     gff[GFF_COLUMNS].to_csv(fp,header=None,sep='\t',index=None)
     fp.close()
 
-def get_gff_item_with_attribute(item):
+def get_gff_item_with_attribute(item,split_attr=None):
+    split_attr = split_attr or []
     attributes = item['attribute'].split(';')
     type_ = item['feature']
     attribute_dict = {}
     for attribute in attributes:
         lhs,rhs = attribute.split('=')
-        attribute_dict[lhs.lower()] = rhs
+        lhs = lhs.lower()
+        if lhs in split_attr:
+            rhs = rhs.split(',')
+
+        attribute_dict[lhs] = rhs
     data = []
     copied = dict(item)
     copied.update(attribute_dict)
-    return copied        
+    return copied
     
-def get_gff_with_attribute(gff):
+def get_gff_with_attribute(gff,split_attr=None):
     df_dict = gff.to_dict('record')
     data = []
     for item in df_dict:
-        data += [get_gff_item_with_attribute(item)]
+        data += [get_gff_item_with_attribute(item,split_attr)]
     gff = pd.DataFrame.from_dict(data)
+    return gff
+    
+def dupliacte_gff_by_parent(gff):
+    preprocessed = []
+    for item in gff.to_dict('record'):
+        parent = item['parent']
+        #If parent is not NaN
+        if parent == parent:
+            for parent in item['parent']:
+                item_ = dict(item)
+                item_['parent'] = str(parent)
+                preprocessed.append(item_)
+        else:
+            preprocessed.append(item)
+    gff = pd.DataFrame.from_dict(preprocessed)
     return gff
     
 def read_fai(path):
