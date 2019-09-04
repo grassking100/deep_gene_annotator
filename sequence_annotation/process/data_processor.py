@@ -10,7 +10,7 @@ from ..utils.exception import LengthNotEqualException,DimensionNotSatisfy
 from ..utils.utils import get_subdict
 
 class AnnSeqProcessor:
-    def __init__(self,data,padding=None,seq_converter=None,answer_by_index=False,
+    def __init__(self,data,padding=None,seq_converter=None,
                  discard_invalid_seq=False,validation_split=None):
         self._data = data
         if 'training' in data.keys():
@@ -27,26 +27,21 @@ class AnnSeqProcessor:
         else:
             self._padding = padding
         self._discard_invalid_seq = discard_invalid_seq
-        self._answer_by_index = answer_by_index
 
-    def _validate(self,data_dict):
-        for input_,answer in zip(data_dict['inputs'],data_dict['answers']):
-            ann_length = np.shape(input_)[0]
-            seq_length = np.shape(answer)[0]
+    def _validate(self,data):
+        for id_,input_,answer in zip(data['ids'],data['inputs'],data['answers']):
+            seq_length = np.shape(input_)[0]
+            ann_length = np.shape(answer)[0]
             if ann_length != seq_length:
-                raise LengthNotEqualException(ann_length, seq_length)
+                raise LengthNotEqualException(ann_length, seq_length, id_)
         if 'inputs' in self._padding.keys():
-            input_shape = np.shape(data_dict['inputs'])
+            input_shape = np.shape(data['inputs'])
             if len(input_shape) != 3:
                 raise DimensionNotSatisfy(input_shape,3)
         if 'answer' in self._padding.keys():
-            answer_shape = np.shape(data_dict['answers'])
-            if self._answer_by_index:
-                if len(answer_shape) != 3:
-                    raise DimensionNotSatisfy(answer_shape,3)
-            else:
-                if len(answer_shape) != 2:
-                    raise DimensionNotSatisfy(answer_shape,2)
+            answer_shape = np.shape(data['answers'])
+            if len(answer_shape) != 3:
+                raise DimensionNotSatisfy(answer_shape,3)
 
     def _split(self):
         if self._validation_split > 0 and not 'validation' in self._data.keys():
@@ -68,17 +63,6 @@ class AnnSeqProcessor:
             self._data['training'] = train_seqs
             self._data['validation'] = val_seqs
 
-    def _handle_extra(self,data):
-        new_data = {}
-        preserved_key = ['inputs','answers']
-        new_data['extra'] = {}
-        for kind,item in data.items():
-            if kind in preserved_key:
-                new_data[kind] = item
-            else:
-                new_data['extra'][kind] = item
-        return new_data
-
     def _pad(self,data):
         padded = {}
         for kind in data.keys():
@@ -91,15 +75,8 @@ class AnnSeqProcessor:
 
     def _to_dict(self,item):
         seqs = self._seq_converter.seqs2dict_vec(item['inputs'],self._discard_invalid_seq)
-        ann_seq_dict_ = ann_genome_processor.genome2dict_vec(item['answers'],self._ann_types)
-        ann_seq_dict = {}
-        if self._answer_by_index:
-            for id_,ann in ann_seq_dict_.items():
-                ann_seq_dict[id_] = np.argmax(ann,axis=-1)
-        else:
-            ann_seq_dict = ann_seq_dict_
+        ann_seq_dict = ann_genome_processor.genome2dict_vec(item['answers'],self._ann_types)
         data = {'inputs':[],'answers':[],'lengths':[],'ids':[]}
-        other_key = [key for key in item.keys() if key not in ['inputs','answers']]
         for name in seqs.keys():
             seq = seqs[name]
             answer = ann_seq_dict[name]
@@ -107,14 +84,6 @@ class AnnSeqProcessor:
             data['inputs'].append(seq)
             data['answers'].append(answer)
             data['lengths'].append(len(seq))
-
-        for kind in other_key:
-            data[kind] = []
-            temp = item[kind]
-            if isinstance(temp,AnnSeqContainer):
-                temp = ann_genome_processor.genome2dict_vec(temp)
-            for name in seqs.keys():
-                data[kind].append(temp[name])
         return data
 
     def process(self):
@@ -130,6 +99,5 @@ class AnnSeqProcessor:
             self._data[purpose] = item
             if self._padding is not None:
                 self._data[purpose] = self._pad(self._data[purpose])
-            self._data[purpose] = self._handle_extra(self._data[purpose])
             self._validate(self._data[purpose])
         return self._data

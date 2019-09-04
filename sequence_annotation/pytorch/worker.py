@@ -5,31 +5,30 @@ import time
 import json
 import torch
 from ..process.worker import Worker
-from ..process.data_generator import DataGenerator
-from .executer import BasicExecutor
+from .data_generator import SeqDataset,SeqGenerator
+from .executor import BasicExecutor
 from .callback import Accumulator, Recorder, Callbacks
 from .warning import WorkerProtectedWarning
 
-def _batch_process(model,ids,inputs,labels,lengths,mask,process,callbacks):
+def _batch_process(model,ids,inputs,labels,lengths,process,callbacks):
     callbacks.on_batch_begin()
     torch.cuda.empty_cache()
-    inputs = torch.from_numpy(inputs).float().cuda()
-    labels = torch.from_numpy(labels).long().cuda()
-    mask = torch.from_numpy(mask).cuda()
-    returned = process(model,inputs,labels,mask=mask,lengths=lengths)
-    metric,outputs = returned
+    inputs = inputs.cuda()
+    labels = labels.cuda()
+    returned = process(model,inputs,labels,lengths=lengths)
+    metric,outputs,lengths,masks = returned
     callbacks.on_batch_end(outputs=outputs,
                            labels=labels,
                            lengths=lengths,
                            metric=metric,
-                           mask=mask,
+                           masks=masks,
                            ids=ids)
 
-def train_per_batch(model,ids,inputs,labels,lengths,mask,executor,callbacks):
-    _batch_process(model,ids,inputs,labels,lengths,mask,executor.fit,callbacks)
+def train_per_batch(model,ids,inputs,labels,lengths,executor,callbacks):
+    _batch_process(model,ids,inputs,labels,lengths,executor.fit,callbacks)
 
-def evaluate_per_batch(model,ids,inputs,labels,lengths,mask,executor,callbacks):
-    _batch_process(model,ids,inputs,labels,lengths,mask,executor.evaluate,callbacks)
+def evaluate_per_batch(model,ids,inputs,labels,lengths,executor,callbacks):
+    _batch_process(model,ids,inputs,labels,lengths,executor.evaluate,callbacks)
     
 class PyWorker(Worker):
     def __init__(self,executor=None):
@@ -42,12 +41,6 @@ class PyWorker(Worker):
         if self.is_verbose_visible:
             print(info,end='\r')
             sys.stdout.write('\033[K')
-
-def _init_generator(generator):
-    generator.return_extra_info = True
-    generator.order = 'NCL'
-    generator.order_target=['answers','inputs']
-    generator.pad_value={'answers':0,'inputs':0}
 
 class TrainWorker(PyWorker):
     """a worker which will train and evaluate the model"""
@@ -62,9 +55,9 @@ class TrainWorker(PyWorker):
         self._other_callbacks = other_callbacks
 
         if train_generator is None:
-            self._train_generator = DataGenerator()
+            self._train_generator = SeqGenerator()
         if val_generator is None:
-            self._val_generator = DataGenerator()
+            self._val_generator = SeqGenerator(shuffle=False)
         if train_callbacks is None:
             self._train_callbacks = Callbacks()
         if val_callbacks is None:
@@ -103,21 +96,15 @@ class TrainWorker(PyWorker):
         self._best_epoch = value
 
     def before_work(self,path=None,**kwargs):
-        self._train_generator.x_data = self.data['training']['inputs']
-        self._train_generator.y_data = self.data['training']['answers']
-        self._train_generator.extra = self.data['training']['extra']
+        self._train_loader = self._train_generator(SeqDataset(self.data['training']))
         if 'validation' in self.data.keys():
-            self._val_generator.x_data = self.data['validation']['inputs']
-            self._val_generator.y_data = self.data['validation']['answers']
-            self._val_generator.extra = self.data['validation']['extra']
+            self._val_loader = self._val_generator(SeqDataset(self.data['validation']))
             acc = Accumulator(prefix='val')
             self._val_callbacks.add(acc)
         acc = Accumulator()
         self._train_callbacks.add(acc)
         self._recoder = Recorder()
         self.executor.process(self.model)
-        _init_generator(self._train_generator)
-        _init_generator(self._val_generator)
         self._is_running = True
 
         if path is not None:
@@ -152,20 +139,18 @@ class TrainWorker(PyWorker):
                 self._writer.counter = epoch
             all_callbacks.on_epoch_begin(counter=epoch)
 
-            for index,item in enumerate(self._train_generator):
-                inputs, labels, extra = item
-                ids,lengths,mask = extra['ids'],extra['lengths'],extra['mask']
-                train_per_batch(self.model,ids,inputs,labels,lengths,mask,
+            for index,item in enumerate(self._train_loader):
+                ids, inputs, labels, lengths = item
+                train_per_batch(self.model,ids,inputs,labels,lengths,
                                 self.executor,self._train_callbacks)
-                status = 100*index/len(self._train_generator)
+                status = 100*index/len(self._train_loader)
                 self.print_verbose(batch_info.format(epoch,self._epoch,'training',status))
 
-            for index,item in enumerate(self._val_generator):
-                inputs, labels, extra = item
-                ids,lengths,mask = extra['ids'],extra['lengths'],extra['mask']
-                evaluate_per_batch(self.model,ids,inputs,labels,lengths,mask,
+            for index,item in enumerate(self._val_loader):
+                ids, inputs, labels, lengths = item
+                evaluate_per_batch(self.model,ids,inputs,labels,lengths,
                                    self.executor,self._val_callbacks)
-                status = 100*index/len(self._val_generator)
+                status = 100*index/len(self._val_loader)
                 self.print_verbose(batch_info.format(epoch,self._epoch,'validating',status))
 
             train_record = self._train_callbacks.get_data()
@@ -180,8 +165,6 @@ class TrainWorker(PyWorker):
             record.update(train_record)
             record.update(val_record)
             record.update(other_record)
-            self._train_generator.on_epoch_end()
-            self._val_generator.on_epoch_end()
             self._train_callbacks.on_epoch_end(metric=train_record)
             self._val_callbacks.on_epoch_end(metric=val_record)
             self._other_callbacks.on_epoch_end(metric=record)
@@ -212,15 +195,12 @@ class TestWorker(PyWorker):
         self._recoder = None
 
         if generator is None:
-            self._generator = DataGenerator()
+            self._generator = DataGenerator(shuffle=False)
         if callbacks is None:
             self._callbacks = Callbacks()
 
     def before_work(self,path=None,**kwargs):
-        item = self.data['testing']
-        self._generator.x_data = item['inputs']
-        self._generator.y_data = item['answers']
-        self._generator.extra = item['extra']
+        self._loader = self._generator(SeqDataset(self.data['testing']))
         accum = Accumulator(prefix='test')
         self._callbacks.add(accum)
         self._recoder = Recorder()
@@ -235,7 +215,6 @@ class TestWorker(PyWorker):
                 json.dump(self._settings,fp, indent=4)
             self._recoder.path = os.path.join(path,'test_record.json')
 
-
     def work(self):
         """Test model"""
         self._validate()
@@ -245,19 +224,16 @@ class TestWorker(PyWorker):
         record = {}
         self._recoder.on_epoch_begin()
         callbacks.on_epoch_begin(counter=1)
-        _init_generator(self._generator)
         batch_info = "Testing data: {0:.1f}%"
 
-        for index,item in enumerate(self._generator):
-            inputs, labels, extra = item
-            ids,lengths,mask = extra['ids'],extra['lengths'],extra['mask']
-            evaluate_per_batch(self.model,ids,inputs,labels,lengths,mask,
+        for index,item in enumerate(self._loader):
+            ids, inputs, labels, lengths = item
+            evaluate_per_batch(self.model,ids,inputs,labels,lengths,
                                self.executor,self._callbacks)
-            status = 100*index/len(self._generator)
+            status = 100*index/len(self._loader)
             self.print_verbose(batch_info.format(status))
 
         record = callbacks.get_data()
-        self._generator.on_epoch_end()
         self._recoder.on_epoch_end(metric=record)
         callbacks.on_epoch_end(metric=record)
         callbacks.on_work_end()

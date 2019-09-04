@@ -2,44 +2,35 @@ import os
 import sys
 from argparse import ArgumentParser
 import deepdish as dd
-import pandas as pd
 import json
 
-before_mix_simplify_map = {'exon':['exon'],'intron':['intron','alt_accept','alt_donor'],'other':['other']}
-simplify_map = {'exon':['exon'],'intron':['intron'],'other':['other']}
-gene_map = {'gene':['exon','intron'],'other':['other']}
-color_settings={'other':'blue','exon':'red','intron':'yellow'}
+if __name__ != '__main__':
+    import torch
+    torch.backends.cudnn.benchmark = True
+    sys.path.append("/home/sequence_annotation")
+    from sequence_annotation.utils.fasta import write_fasta
+    from sequence_annotation.pytorch.SA_facade import SeqAnnFacade
+    from sequence_annotation.pytorch.callback import EarlyStop
+    from sequence_annotation.pytorch.executor import BasicExecutor
+    from sequence_annotation.pytorch.model import seq_ann_inference
+    from main.utils import load_data, get_model, get_executor, GENE_MAP, BASIC_COLOR_SETTING
+    from main.test_model import test
 
-def _load_data(fasta_path,ann_seqs_path,min_len,max_len,train_id_path,val_id_path,saved_root):
-    print("Load and parse data")
-    data_path = os.path.join(saved_root,"data.h5")
-    if os.path.exists(data_path):    
-        data = dd.io.load(data_path)
-    else:
-        train_ids = list(pd.read_csv(train_id_path,header=None)[0])
-        val_ids = []
-        val_data = None
-        if val_id_path is not None:
-            val_ids = list(pd.read_csv(val_id_path,header=None)[0])
-        data = load_data(fasta_path,ann_seqs_path,[train_ids,val_ids],min_len=min_len,
-                         max_len=max_len,simplify_map=simplify_map,
-                         before_mix_simplify_map=before_mix_simplify_map)
-        dd.io.save(data_path,data)
-    return data
-
-def train(model,train_data,val_data,saved_root,executor,epoch,batch_size,augmentation_max):
+def train(model,executor,train_data,val_data=None,
+          saved_root=None,epoch=None,batch_size=None,augmentation_max=None):
     facade = SeqAnnFacade()
     facade.use_gffcompare = False
     facade.alt = False
-    facade.set_root(saved_root,with_test=False)
+    if saved_root is not None:
+        facade.set_root(saved_root,with_test=False)
     facade.executor = executor
-    facade.simplify_map = gene_map
+    facade.simplify_map = GENE_MAP
     facade.train_seqs,facade.train_ann_seqs = train_data
-    write_fasta(os.path.join(saved_root,'train.fasta'),facade.train_seqs)
-    
     if val_data is not None:
         val_seqs,val_ann_seqs = val_data
         facade.val_seqs,facade.val_ann_seqs = val_seqs,val_ann_seqs
+
+    if saved_root is not None and val_data is not None:
         max_len = None
         selected_id = None
         for seq in val_ann_seqs:
@@ -50,14 +41,14 @@ def train(model,train_data,val_data,saved_root,executor,epoch,batch_size,augment
                 max_len = len(seq)
                 selected_id = seq.id
         facade.add_seq_fig(val_seqs[selected_id],val_ann_seqs[selected_id],
-                           color_settings=color_settings)
-        ealry_stop = EarlyStop(target='val_loss',optimize_min=True,patient=5,
-                               save_best_weights=True,restore_best_weights=True,
-                               path=saved_root)
-        facade.other_callbacks.add(ealry_stop)
-        write_fasta(os.path.join(saved_root,'val.fasta'),facade.val_seqs)
-    
-    train_record = facade.train(model,batch_size=batch_size,epoch=epoch,augmentation_max=augmentation_max)
+                           color_settings=BASIC_COLOR_SETTING)
+
+    ealry_stop = EarlyStop(target='val_loss',optimize_min=True,patient=5,
+                           save_best_weights=True,restore_best_weights=True,
+                           path=saved_root)
+    facade.other_callbacks.add(ealry_stop)    
+    record = facade.train(model,batch_size=batch_size,epoch=epoch,augmentation_max=augmentation_max)
+    return record
 
 if __name__ == '__main__':    
     parser = ArgumentParser()
@@ -69,7 +60,7 @@ if __name__ == '__main__':
     parser.add_argument("-v","--val_id_path",help="Path of validation id data")
     parser.add_argument("-g","--gpu_id",type=str,default=0,help="GPU to used")
     parser.add_argument("--use_naive",action="store_true")
-    parser.add_argument("--max_len",type=int,default=10000,help="Sequences' max length, if it is negative then it will be ignored")
+    parser.add_argument("--max_len",type=int,default=-1,help="Sequences' max length, if it is negative then it will be ignored")
     parser.add_argument("--min_len",type=int,default=0,help="Sequences' min length")
     parser.add_argument("--augmentation_max",type=int,default=0)
     parser.add_argument("--epoch",type=int,default=100)
@@ -83,9 +74,24 @@ if __name__ == '__main__':
     parser.add_argument("--mean_by_mask",action="store_true")
     parser.add_argument("--model_weights_path")
     parser.add_argument("--disrim_learning_rate",type=float,default=1e-3)
+    parser.add_argument("--gamma",type=int,default=0)
+    parser.add_argument("--only_train",action='store_true')
     args = parser.parse_args()
     script_path = sys.argv[0]
     os.environ["CUDA_VISIBLE_DEVICES"] =  args.gpu_id
+    ###Load library
+    import torch
+    torch.backends.cudnn.benchmark = True
+    sys.path.append("/home/sequence_annotation")
+    from sequence_annotation.utils.fasta import write_fasta
+    from sequence_annotation.pytorch.SA_facade import SeqAnnFacade
+    from sequence_annotation.pytorch.callback import EarlyStop
+    from sequence_annotation.pytorch.executor import BasicExecutor
+    from sequence_annotation.pytorch.model import seq_ann_inference
+    from main.utils import load_data, get_model, get_executor, GENE_MAP, BASIC_COLOR_SETTING
+    from main.test_model import test
+    ###
+    
     saved_root = args.saved_root
     setting = vars(args)
     if not os.path.exists(saved_root):
@@ -97,59 +103,47 @@ if __name__ == '__main__':
 
     command = 'cp -t {} {}'.format(saved_root,script_path)
     os.system(command)
-    
     command = 'cp -t {} {}'.format(saved_root,args.model_config)
     os.system(command)
     
-    #Load library
-    import torch
-    torch.backends.cudnn.benchmark = True
-    from torch import nn
-    sys.path.append("/home/sequence_annotation")
-    from sequence_annotation.utils.fasta import write_fasta
-    from sequence_annotation.genome_handler.load_data import load_data
-    from sequence_annotation.pytorch.SA_facade import SeqAnnFacade
-    from sequence_annotation.pytorch.loss import SeqAnnLoss
-    from sequence_annotation.pytorch.executer import BasicExecutor, GANExecutor
-    from sequence_annotation.pytorch.model import seq_ann_inference, SeqAnnBuilder
-    from sequence_annotation.pytorch.model import seq_ann_reverse_inference
-    from sequence_annotation.pytorch.callback import EarlyStop
+    max_len = None if args.max_len < 0 else args.max_len
 
-    builder = SeqAnnBuilder()
-    with open(args.model_config,"r") as fp:
-        builder.config = json.load(fp)
-    model = builder.build().cuda()
-    
-    if args.model_weights_path is not None:
-        weight = torch.load(args.model_weights_path)
-        model.load_state_dict(weight)
-        
-    if builder.use_discrim:
-        executor = GANExecutor()
-        executor.reverse_inference = seq_ann_reverse_inference
-        executor.optimizer = (torch.optim.Adam(model.gan.parameters(),
-                                               lr=args.learning_rate),
-                              torch.optim.Adam(model.discrim.parameters(),
-                                               lr=args.disrim_learning_rate))
+    print("Load and parse data")
+    data_path = os.path.join(saved_root,"data.h5")
+    if os.path.exists(data_path):    
+        train_data, val_data = dd.io.load(data_path)
     else:
-        executor = BasicExecutor()
-        executor.optimizer = torch.optim.Adam(model.parameters(),
-                                              lr=args.learning_rate)
-
-    if not args.use_naive:  
-        executor.loss = SeqAnnLoss(intron_coef=args.intron_coef,other_coef=args.other_coef,
-                                   nontranscript_coef=args.nontranscript_coef,
-                                   transcript_answer_mask=args.transcript_answer_mask,
-                                   transcript_output_mask=args.transcript_output_mask,
-                                   mean_by_mask=args.mean_by_mask)
-        executor.inference = seq_ann_inference
-       
-    max_len = args.max_len
-    if max_len < 0:
-        max_len=None
+        data = load_data(args.fasta_path,args.ann_seqs_path,
+                         args.train_id_path,args.val_id_path,
+                         args.min_len,max_len)
+        dd.io.save(data_path,data)
+        train_data, val_data = data
         
-    train_data, val_data = _load_data(args.fasta_path,args.ann_seqs_path,
-                                      args.min_len,max_len,
-                                      args.train_id_path,args.val_id_path,args.saved_root)
-    train(model,train_data,val_data,saved_root,executor,args.epoch,
-          args.batch_size,args.augmentation_max)
+    model = get_model(args.model_config,args.model_weights_path)
+    model.save_distribution = False
+
+    executor = get_executor(model,**vars(args))
+    write_fasta(os.path.join(saved_root,'train.fasta'),train_data[0])
+    if val_data is not None:
+        write_fasta(os.path.join(saved_root,'val.fasta'),val_data[0])
+
+    train(model,executor,train_data,val_data,saved_root,
+          args.epoch,args.batch_size,args.augmentation_max)
+    
+    if not args.only_train:
+        executor = BasicExecutor()
+        executor.loss = None
+        if not args.use_naive:
+            executor.inference = seq_ann_inference
+        test_on_train_path = os.path.join(args.saved_root,'test_on_train')
+        test_on_val_path = os.path.join(args.saved_root,'test_on_val')
+        
+        if not os.path.exists(test_on_train_path):
+            os.mkdir(test_on_train_path)
+        
+        if not os.path.exists(test_on_val_path):
+            os.mkdir(test_on_val_path)
+
+        test(model,executor,train_data,args.batch_size,test_on_train_path)
+        test(model,executor,val_data,args.batch_size,test_on_val_path)
+    

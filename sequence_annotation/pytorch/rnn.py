@@ -23,16 +23,21 @@ class _RNN(BasicModel):
         self.rnn = self._create_rnn(in_channels,**rnn_setting)
         self.rnn_setting = rnn_setting
         self.in_channels = in_channels
+        self.hidden_size = self.rnn.hidden_size
         self.out_channels = self.rnn.hidden_size
         self.train_init_value = train_init_value
         self.init_value = init_value or 0
-        direction = 2 if self.rnn.bidirectional else 1
-        val = [self.init_value]*self.rnn.hidden_size
-        val = torch.Tensor(val).unsqueeze(0).repeat(self.rnn.num_layers*direction,1)
-        self.init_states = torch.nn.Parameter(val,requires_grad=train_init_value)
-        self.batch_first = self.rnn.batch_first
-        if self.rnn.bidirectional:
+        if hasattr(self.rnn,'bidirectional') and self.rnn.bidirectional:
+            direction_num = 2
             self.out_channels *= 2
+        else:
+            direction_num = 1
+
+        val = [self.init_value]*self.rnn.hidden_size
+        num_layers = self.rnn.num_layers if hasattr(self.rnn,'num_layers') else 1
+        val = torch.Tensor(val).unsqueeze(0).repeat(num_layers*direction_num,1)
+        self.init_states = torch.nn.Parameter(val,requires_grad=train_init_value)
+        self.batch_first = self.rnn.batch_first if hasattr(self.rnn,'batch_first') else True
 
     @abstractmethod
     def _create_rnn(self,in_channels,**rnn_setting):
@@ -69,59 +74,62 @@ class LSTM(_RNN):
 
 RNN_TYPES = {'GRU':GRU,'LSTM':LSTM}
     
-def reverse(x,lengths):
-    #Convert forward data data to reversed data with N-L-C shape to N-L-C shape
+def _reverse(x,lengths):
+    #Convert forward data data to reversed data with N-C-L shape to N-C-L shape
+    x = x.transpose(1,2)
     N,L,C = x.shape
     concat_data=[]
     reversed_ = torch.zeros(*x.shape).cuda()
     for index,(item,length) in enumerate(zip(x,lengths)):
         reversed_core = item[:length].flip(0)
         reversed_[index,:length] = reversed_core
+    reversed_ = reversed_.transpose(1,2)    
     return reversed_
 
-def to_bidirection(x,lengths):
-    #Convert data with N-L-C shape to 2N-L-C shape
+def _to_bidirection(x,lengths):
+    #Convert data with N-C-L shape to two tensors with N-C-L shape
     N,L,C = x.shape
-    bidirection = torch.zeros(2*N,L,C).cuda()
-    reversed_ = reverse(x,lengths)
-    bidirection[:N] = x
-    bidirection[N:] = reversed_
-    new_lengths = []
-    for length in lengths:
-        new_lengths += [length]*2
-    return bidirection,new_lengths
+    reversed_ = _reverse(x,lengths)
+    return x,reversed_
 
-def from_bidirection(x,lengths):
-    #Convert data with 2N-L-C shape to N-L-2C shape
-    N,C,L = x.shape
-    half_N = int(N/2)
-    forward = x[:half_N]
-    reverse = x[half_N:]
-    bidirection = torch.cat([forward,reverse],dim=2)
-    new_lengths = [lengths[index] for index in range(0,len(x),2)]
-    return bidirection, new_lengths
+def _from_bidirection(forward,reversed_,lengths):
+    #Convert two tensors with N-C-L shape to one tensors with N-2C-L shape
+    reversed_ = _reverse(reversed_,lengths)
+    bidirection = torch.cat([forward,reversed_],dim=1)
+    return bidirection
 
 class ReverseRNN(BasicModel):
     def __init__(self,rnn):
         super().__init__()
         self.rnn = rnn
-
+        self.out_channels = self.rnn.out_channels
+        self.hidden_size = self.rnn.hidden_size
+        
     def forward(self,x,lengths,state=None):
-        x = reverse(x,lengths)
+        x = _reverse(x,lengths)
         x = self.rnn(x,lengths, state)
-        x = reverse(x,lengths)
+        x = _reverse(x,lengths)
         return x
                 
 class BidirectionalRNN(BasicModel):
-    def __init__(self,rnn):
+    def __init__(self,forward_rnn,backward_rnn):
         super().__init__()
-        self.rnn = rnn
-        self.out_channels = self.rnn.out_channels * 2
+        self.forward_rnn = forward_rnn
+        self.backward_rnn = backward_rnn
+        if self.forward_rnn.out_channels != self.backward_rnn.out_channels:
+            raise Exception("Forward and backward RNNs' out channels should be the same")
+        self.out_channels = self.forward_rnn.out_channels
+        self.hidden_size = self.forward_rnn.hidden_size
+     
+    @property
+    def bidirectional(self):
+        return True
 
-    def forward(self,x,lengths,state=None):
-        x,lengths = to_bidirection(x,lengths)
-        x = self.rnn(x, lengths, state)
-        x,lengths = from_bidirection(x,lengths)
+    def forward(self,x,lengths,forward_state=None,reverse_state=None):
+        forward_x,reversed_x = _to_bidirection(x,lengths)
+        forward_x = self.forward_rnn(forward_x, lengths, forward_state)
+        reversed_x = self.backward_rnn(reversed_x, lengths, reverse_state)
+        x = _from_bidirection(forward_x,reversed_x,lengths)
         return x
 
 class ConcatRNN(BasicModel):

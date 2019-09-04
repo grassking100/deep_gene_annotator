@@ -6,6 +6,13 @@ from torch import nn
 
 hard_sigmoid = Hardtanh(min_val=0)
 
+class SymHardSigmoid(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.act = Hardtanh(min_val=-0.5,max_val=0.5)
+    def forward(self,x):
+        return self.act(x)+0.5
+
 def sgn(x):
     return (x>0).float()*2-1
 
@@ -36,7 +43,7 @@ class NoisyHardAct(nn.Module):
                 native_result = h
             else:
                 native_result = self._alpha*h+self._alpha_complement*x
-            if self._p == 1:
+            if self._p != 1:
                 diff = self._p*diff
             sigma = self._c*(torch.sigmoid(diff)-0.5)**2
             return native_result+(d*sigma*random)
@@ -50,6 +57,10 @@ class NoisyHardTanh(NoisyHardAct):
 class NoisyHardSigmoid(NoisyHardAct):
     def _get_hard_function(self):
         return hard_sigmoid
+    
+class SymNoisyHardSigmoid(NoisyHardAct):
+    def _get_hard_function(self):
+        return SymHardSigmoid()
 
 class NoisyReLU(NoisyHardAct):
     def _get_hard_function(self):

@@ -2,10 +2,13 @@ import torch
 from torch import nn
 from torch.nn.init import normal_,constant_
 from torch.nn.utils.rnn import pack_padded_sequence,pad_packed_sequence
+from torch.nn import ReLU
 from .noisy_activation import NoisyReLU
-from .customized_layer import Conv1d, Concat,PaddedBatchNorm1d, BasicModel
+from .customized_layer import Conv1d, Concat,PaddedBatchNorm1d, BasicModel, add
 from .rnn import GRU,LSTM
 from .customized_rnn import RNN_TYPES, ConcatGRU
+
+ACTIVATION_FUNC = {'NoisyReLU':NoisyReLU(),'ReLU':ReLU()}
 
 class CANBlock(BasicModel):
     def __init__(self,in_channels,kernel_size,out_channels,
@@ -24,7 +27,10 @@ class CANBlock(BasicModel):
         if activation_function is None:
             self.activation_function = NoisyReLU()
         else:
-            self.activation_function = activation_function
+            if isinstance(str,activation_function):
+                self.activation_function = ACTIVATION_FUNC[activation_function]
+            else:
+                self.activation_function = activation_function
         use_bias = self.norm_mode != "after_cnn"
         self.cnn = Conv1d(in_channels=self.in_channels,kernel_size=self.kernel_size,
                           out_channels=self.out_channels,bias=use_bias)
@@ -49,7 +55,7 @@ class CANBlock(BasicModel):
         if self.norm_mode=='before_cnn':
             x = self._normalized(x,lengths)
         x,lengths = self.cnn(x,lengths)
-        self._distribution['cnn_x_{}'.format(self.name)] =x
+        self._distribution['cnn_x_{}'.format(self.name)] = x
         if self.norm_mode=='after_cnn':
             x = self._normalized(x,lengths)
         x = self.activation_function(x)
@@ -69,12 +75,23 @@ class CANBlock(BasicModel):
         config['activation_function'] = str(self.activation_function)
         return config
 
-class ConcatCNN(BasicModel):
+class StackCNN(BasicModel):
     def __init__(self,in_channels,num_layers,cnn_setting):
         super().__init__()
         self.in_channels = in_channels
         self.num_layers = num_layers
         self.cnn_setting = cnn_setting
+    
+    def get_config(self):
+        config = {'cnn_setting':self.cnn_setting,
+                  'num_layers':self.num_layers,
+                  'in_channels':self._in_channels,
+                  'out_channels':self.out_channels}
+        return config
+    
+class ConcatCNN(StackCNN):
+    def __init__(self,in_channels,num_layers,cnn_setting):
+        super().__init__(in_channels,num_layers,cnn_setting)
         in_num = in_channels
         self.cnns = []
         for index in range(self.num_layers):
@@ -104,12 +121,37 @@ class ConcatCNN(BasicModel):
         self._distribution['cnn_result'] = x
         return x,lengths
     
-    def get_config(self):
-        config = {'cnn_setting':self.cnn_setting,
-                  'num_layers':self.num_layers,
-                  'in_channels':self._in_channels,
-                  'out_channels':self.out_channels}
-        return config
+class ResCNN(StackCNN):
+    def __init__(self,in_channels,num_layers,cnn_setting):
+        super().__init__(in_channels,num_layers,cnn_setting)
+        in_num = in_channels
+        self.cnns = []
+        for index in range(self.num_layers):
+            setting = {}
+            for key,value in cnn_setting.items():
+                if isinstance(value,list):
+                    setting[key] = value[index]
+                else:
+                    setting[key] = value
+            cnn = CANBlock(in_num,**setting)
+            cnn.name=str(index)
+            self.cnns.append(cnn)
+            setattr(self, 'cnn_'+str(index), cnn)
+            in_num = cnn.out_channels
+        self.out_channels = in_num
+        self.reset_parameters()
+
+    def forward(self, x, lengths):
+        #X shape : N,C,L
+        for index in range(self.num_layers):
+            pre_x = x
+            cnn = self.cnns[index]
+            x,lengths = cnn(x,lengths)
+            self._distribution.update(cnn.saved_distribution)
+            if index > 0:
+                x,lengths = add(pre_x,x,lengths)
+        self._distribution['cnn_result'] = x
+        return x,lengths
 
 class ProjectLayer(BasicModel):
     def __init__(self,in_channels,out_channels,kernel_size=None):
@@ -130,13 +172,18 @@ class ProjectLayer(BasicModel):
                   'in_channels':self.in_channels}
         return config
 
+STACK_CNN_CLASS = {'ConcatCNN':ConcatCNN,'ResCNN':ResCNN}
+    
 class FeatureBlock(BasicModel):
     def __init__(self,in_channels,num_layers,cnn_setting,reduce_cnn_ratio=None,
-                 reduced_cnn_number=None):
+                 reduced_cnn_number=None,stack_cnn_class=None):
         super().__init__()
         self.in_channels=in_channels
         self.cnn_setting = cnn_setting
         self.num_layers = num_layers
+        stack_cnn_class = stack_cnn_class or 'ConcatCNN'
+        self.stack_cnn_class = STACK_CNN_CLASS[stack_cnn_class]
+            
         if self.num_layers <= 0:
             raise Exception("CNN layer size sould be positive")
         self.reduced_cnn_number = reduced_cnn_number
@@ -160,11 +207,12 @@ class FeatureBlock(BasicModel):
         config['num_layers'] = self.num_layers
         config['reduced_cnn_number'] = self.reduced_cnn_number
         config['out_channels'] = self.out_channels
+        config['stack_cnn_class'] = self.stack_cnn_class.__name__
         return config
 
     def _build_layers(self):
         in_channels=self.in_channels
-        self.cnns = ConcatCNN(in_channels,self.num_layers,self.cnn_setting)
+        self.cnns = self.stack_cnn_class(in_channels,self.num_layers,self.cnn_setting)
         if self._reduce_cnn:
             if self.reduce_cnn_ratio < 1:
                 hidden_size = int(self.cnns.hidden_size*self.reduce_cnn_ratio)
@@ -212,9 +260,9 @@ class RelationBlock(BasicModel):
         config['out_channels'] = self.out_channels
         rnn_setting = self.rnn_setting
         if 'rnn_type' in rnn_setting.keys():
-            rnn_setting['rnn_type'] = str(rnn_setting['rnn_type'])
+            rnn_setting['rnn_type'] = rnn_setting['rnn_type'].__name__
         config['rnn_setting'] = rnn_setting
-        config['rnn_type'] = str(self.rnn_type)
+        config['rnn_type'] = self.rnn_type.__name__
         return config
 
     def _build_layers(self):
@@ -241,6 +289,7 @@ class SeqAnnModel(BasicModel):
         self.relation_block = relation_block
         self.project_layer = project_layer
         self.out_channels = self.project_layer.out_channels
+        self.save_distribution = True
         self.reset_parameters()
 
     def get_config(self):
@@ -257,17 +306,22 @@ class SeqAnnModel(BasicModel):
         #X shape : N,C,L
         x,lengths = self.feature_block(x, lengths)
         x,lengths = self.relation_block(x, lengths)
-        self._distribution["pre_last"] = x
+        distribution = {}
+        distribution["pre_last"] = x
         x,lengths = self.project_layer(x,lengths)
-        self._distribution.update(self.feature_block.saved_distribution)
-        self._distribution.update(self.relation_block.saved_distribution)
-        self._distribution["last"] = x
+        distribution.update(self.feature_block.saved_distribution)
+        distribution.update(self.relation_block.saved_distribution)
+        distribution["last"] = x
         if not self.use_sigmoid:
             x = nn.LogSoftmax(dim=1)(x).exp()
-            self._distribution["softmax"] = x
+            distribution["softmax"] = x
         else:
             x = torch.sigmoid(x)
-            self._distribution["sigmoid"] = x
+            distribution["sigmoid"] = x
+            
+        if self.save_distribution:
+            self._distribution = distribution
+
         if return_length:
             return x,lengths
         else:

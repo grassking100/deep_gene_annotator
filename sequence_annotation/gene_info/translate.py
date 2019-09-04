@@ -69,11 +69,10 @@ if __name__ == "__main__":
                     invalid_status[id_].append('premature stop codon') 
             else:
                 valid = False
-                #warnings.warn("{} in {} is not in translation table".format(codon,id_))
                 invalid_status[id_].append('unknown codon')
         else:
             valid = False
-            invalid_status[id_].append("length is not mulitple of three")
+            invalid_status[id_].append("length is not mulitple of three, got {}".format(length))
         if valid:
             if args.not_show_stop_signal:
                 peptide = ''.join(peptide[:-1])

@@ -40,6 +40,17 @@ class Concat(nn.Module):
         else:
             return new_x
 
+def add(lhs,rhs,lengths=None):
+    #N,C,L
+    min_length = min(item.shape[2] for item in [lhs,rhs])
+    lhs = lhs[:,:,:min_length]
+    rhs = rhs[:,:,:min_length]
+    new_x = lhs + rhs
+    if lengths is not None:
+        return new_x, lengths
+    else:
+        return new_x
+
 class PWM(nn.Module):
     def __init__(self,epsilon=None):
         super().__init__()

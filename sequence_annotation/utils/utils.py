@@ -109,9 +109,9 @@ def write_bed(bed,path,from_one_base=True):
     bed.to_csv(path,sep='\t',index=None,header=None)
 
 def read_gff(path):
-    gff = pd.read_csv(path,sep='\t',header=None,skiprows=1,dtype=str)
+    gff = pd.read_csv(path,sep='\t',header=None,names=list(range(len(GFF_COLUMNS))),dtype=str)
     gff.columns = GFF_COLUMNS
-    gff = gff[gff['chr']!='###']
+    gff = gff[~gff['chr'].str.startswith('#')]
     int_columns = ['start','end']
     gff.loc[:,int_columns] = gff[int_columns].astype(float).astype(int)
     return gff
@@ -150,10 +150,10 @@ def get_gff_with_attribute(gff,split_attr=None):
 def dupliacte_gff_by_parent(gff):
     preprocessed = []
     for item in gff.to_dict('record'):
-        parent = item['parent']
+        parents = item['parent']
         #If parent is not NaN
-        if parent == parent:
-            for parent in item['parent']:
+        if parents == parents:
+            for parent in parents:
                 item_ = dict(item)
                 item_['parent'] = str(parent)
                 preprocessed.append(item_)

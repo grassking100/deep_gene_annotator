@@ -9,7 +9,7 @@ except:
 GENE_TYPES = ['gene','transposable_element','transposable_element_gene','pseudogene']
 RNA_TYPES = ['mRNA','pseudogenic_tRNA','pseudogenic_transcript','antisense_lncRNA','lnc_RNA',
              'antisense_RNA','transcript_region','transposon_fragment','miRNA_primary_transcript',
-             'tRNA','snRNA','ncRNA','snoRNA','rRNA']
+             'tRNA','snRNA','ncRNA','snoRNA','rRNA','transcript']
 EXON_TYPES = ['exon','pseudogenic_exon']
 SUBEXON_TYPES = ['five_prime_UTR','three_prime_UTR','CDS','UTR']
     

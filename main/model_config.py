@@ -9,9 +9,11 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument("--config_path",help="Path to save config",required=True)
     parser.add_argument("--use_naive",action="store_true")
+    parser.add_argument("--cnn_act",default='NoisyReLU')
     parser.add_argument("--cnn_out",type=int,default=16)
     parser.add_argument("--cnn_kernel",type=int,default=16)
     parser.add_argument("--cnn_num",type=int,default=4)
+    parser.add_argument("--stack_cnn_class",type=str,default='ConcatCNN')
     parser.add_argument("--rnn_size",type=int,default=16)
     parser.add_argument("--rnn_num",type=int,default=4)
     parser.add_argument("--rnn_type",type=str,default='GRU')
@@ -22,9 +24,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     builder = SeqAnnBuilder()
+    builder.feature_block_config['num_layers'] = args.cnn_num
     builder.feature_block_config['cnn_setting']['out_channels'] = args.cnn_out
     builder.feature_block_config['cnn_setting']['kernel_size'] = args.cnn_kernel
-    builder.feature_block_config['num_layers'] = args.cnn_num
+    builder.feature_block_config['cnn_setting']['cnn_act'] = args.cnn_act
+    builder.feature_block_config['stack_cnn_class'] = args.stack_cnn_class
+    
     builder.relation_block_config['rnn_setting']['num_layers'] = args.rnn_num
     builder.relation_block_config['rnn_setting']['hidden_size'] = args.rnn_size
     builder.relation_block_config['rnn_setting']['train_init_value'] = args.train_init_value

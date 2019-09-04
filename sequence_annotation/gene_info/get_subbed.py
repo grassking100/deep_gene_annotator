@@ -18,7 +18,7 @@ if __name__ == "__main__":
     id_table = None
     if args.id_convert_path is not None:
         id_table = get_id_table(args.id_convert_path)
-    ids = list(pd.read_csv(args.id_path,header=None)[0])
+    ids = set(list(pd.read_csv(args.id_path,header=None)[0]))
     bed = read_bed(args.input_path).to_dict('record')
     new_bed = []
     for item in bed:

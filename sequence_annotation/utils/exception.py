@@ -48,12 +48,11 @@ class AttrIsNoneException(Exception):
         super().__init__(msg)
 
 class LengthNotEqualException(Exception):
-    def __init__(self, first_length, second_length):
-        msg = ("Two data must have same length"
-               ", size of first data is"
-               " "+str(first_length)+","
-               "and size of second data is"
-               " "+str(second_length))
+    def __init__(self, first_length, second_length,id_=None):
+        msg = "Two data must have same length, size of first data is {}, and size of second data is {}"
+        msg = msg.format(first_length,second_length)
+        if id_ is not None:
+             msg += ', this error occurs in {}'.format(id_) 
         super().__init__(msg)
 
 class DimensionNotSatisfy(Exception):

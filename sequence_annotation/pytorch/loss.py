@@ -2,13 +2,23 @@ import torch.nn as nn
 import torch
 from torch.nn.functional import binary_cross_entropy as BCE
 
-class CCELoss(nn.Module):
-    #Categorical cross entropy
-    def __init__(self):
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.autograd import Variable
+
+EPSILON=1e-32
+
+def bce(outputs,answers):
+    return BCE(outputs,answers,reduction='none')
+
+class FocalLoss(nn.Module):
+    def __init__(self, gamma=None):
         super().__init__()
-        self.loss = nn.NLLLoss(reduction='none')
+        self.gamma = gamma or 0
 
     def forward(self, output, answer, mask, **kwargs):
+        """data shape is N,C,L"""
         """data shape is N,C,L"""
         if len(output.shape) != 3 or len(answer.shape) != 3:
             raise Exception("Wrong input shape",output.shape,answer.shape)
@@ -16,31 +26,35 @@ class CCELoss(nn.Module):
             raise Exception("Inconsist batch size or channel size",output.shape,answer.shape)
         _,C,L = output.shape
         mask = mask[:,:L].contiguous().view(-1).float()
-        answer = answer[:,:,:L].transpose(1,2).reshape(-1,C).max(1)[1]
-        output = output.transpose(1,2).reshape(-1,C).log().float()
-        loss_ =  self.loss(output,answer)
-        loss_ = loss_*mask
-        loss = loss_.sum()/mask.sum()
-
+        answer = answer[:,:,:L].transpose(1,2).reshape(-1,C).float()
+        output = output.transpose(1,2).reshape(-1,C).float()
+        loss =  (output+EPSILON).log()
+        if self.gamma != 0:
+            loss = (1-output)**self.gamma * loss
+        loss = -loss * answer
+        loss = loss.sum(1)*mask
+        loss = loss.sum()/mask.sum()
         return loss
 
-def bce(outputs,answers):
-    return BCE(outputs,answers,reduction='none')
+class CCELoss(nn.Module):
+    #Categorical cross entropy
+    def __init__(self):
+        super().__init__()
+        self.loss = FocalLoss(0)
+
+    def forward(self, output, answer, mask, **kwargs):
+        """data shape is N,C,L"""
+        loss =  self.loss(output,answer, mask, **kwargs)
+        return loss
 
 class SeqAnnLoss(nn.Module):
     def __init__(self,intron_coef=None,other_coef=None,nontranscript_coef=None,
                  transcript_output_mask=False,transcript_answer_mask=True,
                  mean_by_mask=False):
         super().__init__()
-        self.intron_coef = 1
-        self.other_coef = 1
-        self.nontranscript_coef = 0
-        if intron_coef is not None:
-            self.intron_coef = intron_coef
-        if other_coef is not None:
-            self.other_coef = other_coef
-        if nontranscript_coef is not None:
-            self.nontranscript_coef = nontranscript_coef
+        self.intron_coef = intron_coef or 1
+        self.other_coef = other_coef or 1
+        self.nontranscript_coef = nontranscript_coef or 0
         self.transcript_output_mask = transcript_output_mask
         self.transcript_answer_mask = transcript_answer_mask
         self.mean_by_mask = mean_by_mask
@@ -86,7 +100,6 @@ class SeqAnnLoss(nn.Module):
         if self.nontranscript_coef > 0:
             zero = torch.zeros_like(intron_transcript_output)
             nontranscript_loss = bce(intron_transcript_output,zero)*nontranscript_mask*self.nontranscript_coef
-        EPSILON=1e-32
         
         other_loss = other_loss.sum()/(mask.sum())
         if self.mean_by_mask:

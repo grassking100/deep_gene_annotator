@@ -123,6 +123,9 @@ do
     bedtools getfasta -s -name -fi $genome_path -bed $name.bed -fo $name.fasta
 done
 
+bedtools getfasta -s -name -fi $genome_path -bed $bed_path -fo $output_root/bed.fasta
+
+
 python3 $src_root/get_CDS_bed.py -i $bed_path -o $CDS_path.bed
 
 bedtools getfasta -s -fi $genome_path -name -split -bed $CDS_path.bed  -fo $CDS_path.fasta
@@ -149,12 +152,16 @@ seq_stats $accept_signal.fasta $stats_root/accept_signal.stats
 seq_stats $donor_signal.fasta  $stats_root/donor_signal.stats
 seq_stats $start_codon_path.fasta $stats_root/start_codon.stats
 seq_stats $stop_codon_path.fasta $stats_root/stop_codon.stats
+seq_stats $stop_codon_path.fasta $stats_root/stop_codon.stats
 
 sed '/^>/ d' $CDS_path.fasta | awk '{print length}' > $stats_root/CDS.length
 
 printf "Longest length: %s\n" $(cat $stats_root/CDS.length | sort -rn | head -n 1) > $stats_root/CDS_length.stats
 printf "Shortest length: %s\n" $(cat $stats_root/CDS.length | sort | head -n 1) >> $stats_root/CDS_length.stats
 
+sed '/^>/ d' $output_root/bed.fasta | awk '{print length}' > $stats_root/RNA.length
+printf "Longest length: %s\n" $(cat $stats_root/RNA.length | sort -rn | head -n 1) > $stats_root/RNA_length.stats
+printf "Shortest length: %s\n" $(cat $stats_root/RNA.length | sort | head -n 1) >> $stats_root/RNA_length.stats
 
 if [ -e "$subpeptide" ]; then
     sed '/^>/ d' $subpeptide | awk '{print substr($1,1,1)}' > $stats_root/first_aa.stats.temp

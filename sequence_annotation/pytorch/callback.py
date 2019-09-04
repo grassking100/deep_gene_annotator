@@ -7,8 +7,7 @@ import numpy as np
 import os
 from ..genome_handler.region_extractor import GeneInfoExtractor
 from ..genome_handler.seq_container import SeqInfoContainer
-from ..genome_handler.ann_seq_processor import vecs2seq
-from ..genome_handler.utils import index2onehot
+from ..genome_handler.utils import ann2onehot, ann2seq_info
 from .metric import F1,accuracy,precision,recall,categorical_metric,contagion_matrix
 from .warning import WorkerProtectedWarning
 
@@ -140,19 +139,14 @@ class GFFCompare(Callback):
         self._counter = counter
 
     def on_batch_end(self,outputs,labels,ids,lengths,**kwargs):
-        N,C,L = outputs.shape
-        C = len(self._ann_types)
-        for id_,output, label, length in zip(ids,outputs,labels,lengths):
-            output = output.max(0)[1][:min(length,L)]
-            output = index2onehot(output.cpu().numpy(),C)
-            seq = vecs2seq(output,id_,'plus',self._ann_types)
-            seq_informs = self.extractor.extract_per_seq(seq,self._simplify_map)
-            self._outputs.add(seq_informs)
-            if self._counter == 1:
-                label = label.transpose(0,1)[:min(length,L)].transpose(0,1).cpu().numpy()
-                ann = vecs2seq(label,id_,'plus',self._ann_types)
-                ann_informs = self.extractor.extract_per_seq(ann,self._simplify_map)
-                self._answers.add(ann_informs)
+        output_info = ann2seq_info(ids,outputs.cpu().numpy(),lengths,self._ann_types,
+                                   self._simplify_map,extractor=self.extractor)
+        self._outputs.add(output_info)
+        if self._counter == 1:
+            label_info = ann2seq_info(ids,labels.cpu().numpy(),lengths,self._ann_types,
+                                      self._simplify_map,extractor=self.extractor)
+            
+            self._answers.add(label_info)
 
     def on_epoch_end(self,**kwargs):
         path = os.path.join(self._path,"{}gffcompare_{}").format(self.prefix,self._counter)
@@ -333,7 +327,7 @@ class SeqFigCallback(Callback):
 
     def on_epoch_end(self,**kwargs):
         #Value's shape should be (1,C,L)
-        result = self._executor.predict(self._model,self._data,[self._data.shape[2]])[0]
+        outputs,lengths,masks = self._executor.predict(self._model,self._data,[self._data.shape[2]])
         if self.do_add_distribution and hasattr(self._model,'saved_distribution'):
             for name,value in self._model.saved_distribution.items():
                 self._writer.add_distribution(name,value,prefix=self._prefix,
@@ -342,23 +336,15 @@ class SeqFigCallback(Callback):
                     value = value[0]
                 self._writer.add_figure(name+"_figure",value.transpose(0,1),prefix=self._prefix,
                                         counter=self._counter,title=name)
-        label_num = result.shape[0]
-        index = result.max(0)[1].cpu().numpy()
-        onehot = index2onehot(index,label_num)
+        outputs = outputs.cpu().numpy()[0]
+        C,L = outputs.shape
+        onehot = ann2onehot(outputs)
         onehot = np.transpose(onehot)
         self._writer.add_figure("result_figure",onehot,prefix=self._prefix,colors=self.colors,
                                 labels=self.label_names,title="Result figure",use_stack=True)
-        result = result.cpu().numpy()
-        C,L = result.shape
-        diff = np.transpose(result) - self._answer[0][:L,:]
+        diff = np.transpose(outputs) - self._answer[0][:L,:]
         self._writer.add_figure("diff_figure",diff,prefix=self._prefix,colors=self.colors,
                                 labels=self.label_names,title="Predict - Answer figure",use_stack=False)
-
-        if hasattr(self._model,'use_CRF'):
-            if self._model.use_CRF:
-                transitions = self._model.CRF.transitions.cpu().detach().numpy()
-                title = "Transitions figure (to row index from column index)"
-                self._writer.add_matshow("transitions_figure",transitions,prefix=self._prefix,title=title)
 
 class DataCallback(Callback):
     def __init__(self,prefix=None):
@@ -480,9 +466,9 @@ class CategoricalMetric(DataCallback):
     def on_epoch_begin(self,**kwargs):
         self._reset()
 
-    def on_batch_end(self,outputs,labels,mask=None,**kwargs):
+    def on_batch_end(self,outputs,labels,masks=None,**kwargs):
         #N,C,L
-        data = categorical_metric(outputs,labels,mask)
+        data = categorical_metric(outputs,labels,masks)
         for type_ in ['TPs','FPs','TNs','FNs']:
             for index in range(self.label_num):
                 self._data[type_][index] += data[type_][index]
@@ -580,9 +566,9 @@ class ContagionMatrix(DataCallback):
     def on_epoch_begin(self,**kwargs):
         self._reset()
 
-    def on_batch_end(self,outputs,labels,mask=None,**kwargs):
+    def on_batch_end(self,outputs,labels,masks=None,**kwargs):
         #N,C,L
-        data = contagion_matrix(outputs,labels,mask)
+        data = contagion_matrix(outputs,labels,masks)
         for answer_index in range(self.label_num):
             for predict_index in range(self.label_num):
                 self._data[answer_index][predict_index] += data[answer_index][predict_index]
@@ -593,4 +579,3 @@ class ContagionMatrix(DataCallback):
 
     def _reset(self):
         self._data = [[0]*self.label_num for _ in range(self.label_num)]
-

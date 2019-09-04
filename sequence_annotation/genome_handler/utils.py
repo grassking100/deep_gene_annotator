@@ -2,7 +2,9 @@ import math
 import random
 import numpy as np
 import pandas as pd
-from .seq_container import AnnSeqContainer
+from .seq_container import AnnSeqContainer,SeqInfoContainer
+from .region_extractor import GeneInfoExtractor
+from .ann_seq_processor import vecs2seq
 
 def merge_data(data,groupby,raise_duplicated_excpetion=True):
     def sort_aggregate(x):
@@ -93,13 +95,6 @@ def get_subseqs(ids,ann_seqs):
     sub_seqs.add([ann_seqs[id_] for id_ in ids])
     return sub_seqs
 
-def get_seq_mask(lengths,max_lengths=None):
-    max_lengths = max_lengths or max(lengths)
-    mask = np.zeros((len(lengths),max_lengths))
-    for index,length in enumerate(lengths):
-        mask[index,:length]=1
-    return mask
-
 def index2onehot(index,channel_size):
     if (np.array(index)<0).any() or (np.array(index)>=channel_size).any():
         raise Exception("Invalid number")
@@ -108,3 +103,22 @@ def index2onehot(index,channel_size):
     onehot = np.zeros((channel_size,L))
     onehot[index,loc]=1
     return onehot
+
+def ann2onehot(ann_seq,length=None):
+    C,L = ann_seq.shape
+    index = ann_seq.argmax(0)
+    if length is not None:
+        index = index[:length]
+    return index2onehot(index,C)
+
+def ann2seq_info(ids,ann_seqs,lengths,ann_types,simplify_map,extractor=None):
+    if extractor is None:
+        extractor = GeneInfoExtractor()
+    seq_infos = SeqInfoContainer()
+    N,C,L = ann_seqs.shape
+    for id_,output, length in zip(ids,ann_seqs,lengths):
+        output = ann2onehot(output,length)
+        seq = vecs2seq(output,id_,'plus',ann_types)
+        infos = extractor.extract_per_seq(seq,simplify_map)
+        seq_infos.add(infos)
+    return seq_infos

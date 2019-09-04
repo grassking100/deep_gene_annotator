@@ -8,14 +8,14 @@ from .worker import TrainWorker,TestWorker
 from .tensorboard_writer import TensorboardWriter
 from .callback import CategoricalMetric,TensorboardCallback
 from .callback import GFFCompare,SeqFigCallback, Callbacks,ContagionMatrix
-from .executer import BasicExecutor
+from .executor import BasicExecutor
 from ..process.pipeline import Pipeline
 from ..process.data_processor import AnnSeqProcessor
 from ..utils.utils import split,get_subdict
 from ..genome_handler.utils import get_subseqs,ann_count
 from ..utils.seq_converter import SeqConverter
 from ..genome_handler import ann_seq_processor
-from ..process.data_generator import SeqGenerator
+from .data_generator import SeqGenerator
 
 def split_data_by_random(seqs,ann_seqs,ratio=None):
     ratio = ratio or [0.7,0.2,0.1]
@@ -87,19 +87,31 @@ class SeqAnnFacade:
         seq_fig = SeqFigCallback(self._writer,seq,ann_seq,prefix=prefix,label_names=self.ann_types,colors=colors)
         self.other_callbacks.add(seq_fig)
 
-    def set_root(self,path,with_train=True,with_val=True,with_test=True):
+    def set_root(self,path,with_train=True,with_val=True,with_test=True,create_tensorboard=True):
         self.update_settings('set_root',locals())
         self._path = path
-        self._writer = TensorboardWriter(SummaryWriter(path))
+        if not os.path.exists(self._path):
+            os.mkdir(self._path)
+        if create_tensorboard:    
+            self._writer = TensorboardWriter(SummaryWriter(path))
         if with_train:
             fp = os.path.join(path,"train")
-            self._train_writer = TensorboardWriter(SummaryWriter(fp))
+            if not os.path.exists(fp):
+                os.mkdir(fp)
+            if create_tensorboard:
+                self._train_writer = TensorboardWriter(SummaryWriter(fp))
         if with_val:
             fp = os.path.join(path,"val")
-            self._val_writer = TensorboardWriter(SummaryWriter(fp))
+            if not os.path.exists(fp):
+                os.mkdir(fp)
+            if create_tensorboard:
+                self._val_writer = TensorboardWriter(SummaryWriter(fp))
         if with_test:
             fp = os.path.join(path,"test")
-            self._test_writer = TensorboardWriter(SummaryWriter(fp))
+            if not os.path.exists(fp):
+                os.mkdir(fp)
+            if create_tensorboard:
+                self._test_writer = TensorboardWriter(SummaryWriter(fp))
 
     def _create_gff_compare(self,path,prefix=None):
         if self.simplify_map is None:
@@ -151,46 +163,56 @@ class SeqAnnFacade:
                 callbacks.add(gff_compare)
         return callbacks
 
-    def train(self,model,epoch=100,batch_size=32,augmentation_max=None):
+    def train(self,model,epoch=None,batch_size=None,augmentation_max=None):
+        epoch = epoch or 100
+        batch_size = batch_size or 32
         self.update_settings('train_setting',{'epoch':epoch,'batch_size':batch_size})
-        fp = os.path.join(self._path,"val")
+        #Set callbacks and writer
+        fp = None
+        if self._path is not None:
+            fp = os.path.join(self._path,"val")
         train_callbacks, val_callbacks = self._create_default_train_callbacks(fp)
-        train_ann_count = self._validate_ann_seqs([self.train_ann_seqs])
-        self.update_settings('train_ann_counut',train_ann_count[0])
-        
-        if self.val_ann_seqs is not None:
-            val_ann_count = self._validate_ann_seqs([self.val_ann_seqs])
-            self.update_settings('val_ann_count',val_ann_count[0])
-        writers = [self._train_writer,self._val_writer,None]
         callbacks_list = [train_callbacks,val_callbacks,self.other_callbacks]
+        writers = [self._train_writer,self._val_writer,None]
         for writer,callback in zip(writers,callbacks_list):
             if writer is not None and callback is not None:
                 tensorboard = TensorboardCallback(writer)
-                callback.add(tensorboard)        
-        train_gen = SeqGenerator(batch_size,augmentation_max=augmentation_max)
-        val_gen = SeqGenerator(batch_size)
-        if self.val_ann_seqs is None:
+                callback.add(tensorboard)
+        
+        #Validate ann_seqs and set val_callbacks
+        train_ann_count = self._validate_ann_seqs([self.train_ann_seqs])
+        self.update_settings('train_ann_counut',train_ann_count[0])
+        if self.val_ann_seqs is not None:
+            val_ann_count = self._validate_ann_seqs([self.val_ann_seqs])
+            self.update_settings('val_ann_count',val_ann_count[0])
+        else:
             val_callbacks = None
+        #Create worker    
+        train_gen = SeqGenerator(batch_size=batch_size,augmentation_max=augmentation_max)
+        val_gen = SeqGenerator(batch_size=batch_size,shuffle=False)
+            
         worker = TrainWorker(train_generator=train_gen,val_generator=val_gen,
                              executor=self.executor,train_callbacks=train_callbacks,
                              val_callbacks=val_callbacks,other_callbacks=self.other_callbacks,
                              writer=self._writer,epoch=epoch)
         worker.is_verbose_visible = self.is_verbose_visible
+        #Process data
         data_ = {'training':{'inputs':self.train_seqs,'answers':self.train_ann_seqs}}
         if self.val_ann_seqs is not None:
              data_['validation'] = {'inputs':self.val_seqs,'answers':self.val_ann_seqs}
         data = AnnSeqProcessor(data_,discard_invalid_seq=True).process()
         origin_train_num = len(self.train_ann_seqs.ids)
-        filtered_train_num = len(data['training']['extra']['ids'])
+        filtered_train_num = len(data['training']['ids'])
         self.update_settings('train_seq',{'origin count':origin_train_num,
                                           'filtered count':filtered_train_num})
         if self.val_ann_seqs is not None:
             origin_val_num = len(self.val_ann_seqs.ids)
-            filtered_val_num  = len(data['validation']['extra']['ids'])
+            filtered_val_num  = len(data['validation']['ids'])
             self.update_settings('val_seq',{'origin count':origin_val_num,
                                             'filtered count':filtered_val_num})
-
+        #Create pipeline
         pipeline = Pipeline(model,data,worker,path=self._path)
+        #Save setting
         if self._path is not None:
             setting_path = os.path.join(self._path,"train_facade_setting.json")
             with open(setting_path,'w') as fp:
@@ -200,8 +222,10 @@ class SeqAnnFacade:
                 json.dump(model.get_config(),fp, indent=4)
             model_component_path = os.path.join(self._path,"model_component.txt")
             with open(model_component_path,'w') as fp:
-                fp.write(str(model))
+                fp.write(str(model)) 
+        #Execute pipeline
         pipeline.execute()
+        #Save record and model
         if self._path is not None:
             record_path = os.path.join(self._path,"train_record.json")
             with open(record_path,'w') as fp:
@@ -218,21 +242,24 @@ class SeqAnnFacade:
                  
         return worker.result
 
-    def test(self,model,batch_size=32):
+    def test(self,model,batch_size=None):
+        batch_size = batch_size or 32
         self.update_settings('test_setting',{'batch_size':batch_size})
         test_ann_count = self._validate_ann_seqs([self.test_ann_seqs])[0]
         self.update_settings('test_ann_count',test_ann_count)
-        fp = os.path.join(self._path,"test")
+        fp = None
+        if self._path is not None:
+            fp = os.path.join(self._path,"test")
         callbacks = self._create_default_test_callbacks(fp)
         if self._test_writer is not None:
             tensorboard = TensorboardCallback(self._test_writer)
             callbacks.add(tensorboard)
-        gen = SeqGenerator(batch_size)
+        gen = SeqGenerator(batch_size=batch_size,shuffle=False)
         worker = TestWorker(generator = gen,callbacks=callbacks,executor=self.executor)
         data_ = {'testing':{'inputs':self.test_seqs,'answers':self.test_ann_seqs}}
         data = AnnSeqProcessor(data_,discard_invalid_seq=True).process()
         origin_num  = len(self.test_ann_seqs.ids)
-        filtered_num = len(data['testing']['extra']['ids'])
+        filtered_num = len(data['testing']['ids'])
         self.update_settings('test_seq',{'origin count':origin_num,
                                          'filtered count':filtered_num})
         pipeline = Pipeline(model,data,worker,path=self._path)
