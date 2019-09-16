@@ -3,6 +3,8 @@ import errno
 import math
 import numpy as np
 import pandas as pd
+from Bio import SeqIO
+from pathlib import Path
 
 BED_COLUMNS = ['chr','start','end','id','score','strand','thick_start','thick_end',
                'rgb','count','block_size','block_related_start']
@@ -169,3 +171,46 @@ def read_fai(path):
     for id_,length in zip(chrom_id,chrom_length):
         chrom_info[str(id_)] = length
     return chrom_info
+
+def read_gffcompare_stats(stats_path):
+    """Return sensitivity, precision and miss_novel_stats"""
+    sensitivity = {}
+    precision = {}
+    miss_novel_stats = {}
+    with open(stats_path,'r') as fp:
+        for line in fp:
+            if not line.startswith("#"):
+                if 'level' in line:
+                    title,values = line.split(':')
+                    title = title.lower().strip()
+                    values = values.split('|')[:2]
+                    sensitivity[title] = float(values[0])
+                    precision[title] = float(values[1])
+                if 'Missed' in line or 'Novel' in line:
+                    title,values = line.split(':')
+                    title = title.lower().strip()
+                    values = float(values.split('(')[1][:-3])
+                    miss_novel_stats[title] = values
+        return sensitivity,precision,miss_novel_stats
+    
+def read_fasta(paths):
+    """Read fasta file and return dictionary of sequneces"""
+    if not isinstance(paths,list):
+        paths = [paths]
+    data = {}
+    for path in paths:
+        if not Path(path).exists():
+            raise FileNotFoundError(path)
+        with open(path) as file:
+            fasta_sequences = SeqIO.parse(file, 'fasta')
+            for fasta in fasta_sequences:
+                name, seq = fasta.id, str(fasta.seq)
+                data[name]=seq
+    return data
+
+def write_fasta(path,seqs):
+    """Read dictionary of sequneces into fasta file"""
+    with open(path,"w") as file:
+        for id_,seq in seqs.items():
+            file.write(">" + id_ + "\n")
+            file.write(seq + "\n")

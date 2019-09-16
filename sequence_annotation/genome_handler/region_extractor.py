@@ -66,6 +66,7 @@ class IInfoExtractor:
         pass
 
 class GeneInfoExtractor(IInfoExtractor):
+    """Create gene region information from annotation"""
     def __init__(self):
         self.extractor = RegionExtractor()
         self.alt = False
@@ -73,12 +74,14 @@ class GeneInfoExtractor(IInfoExtractor):
         self._alt_region_id = 0
 
     def extract(self,anns,simply_map):
+        """Create SeqInfoContainer of SeqAnnContainer"""
         seq_infos = SeqInfoContainer()
         for ann in anns:
             seq_infos.add(self.extract_per_seq(ann,simply_map))
         return seq_infos
 
     def extract_per_seq(self,ann,simply_map):
+        """Create SeqInformation of SeqAnnotation"""
         if 'gene' not in simply_map.keys():
             raise Exception("Gene must in map's key.")
         seq_infos = SeqInfoContainer()

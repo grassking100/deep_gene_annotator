@@ -4,16 +4,21 @@ import numpy as np
 import pandas as pd
 from . import SubplotHelper
 
+VALID_STRAND = ['plus','minus']
+
 def visual_ann_seq(seq):
     """Visualize the count of each type along sequence"""
     answer_vec = []
     for type_ in seq.ANN_TYPES:
         answer_vec.append(np.array([0.0]*seq.length))
     for index,type_ in enumerate(seq.ANN_TYPES):
-        if seq.strand=='plus':
-            answer_vec[index] += seq.get_ann(type_)
+        if seq.strand in VALID_STRAND:
+            if seq.strand=='plus':
+                answer_vec[index] += seq.get_ann(type_)
+            else:
+                answer_vec[index] += np.flip(seq.get_ann(type_),0)
         else:
-            answer_vec[index] += np.flip(seq.get_ann(type_),0)
+            raise Exception("Invalid strand")
     x = list(range(seq.length))
     plt.stackplot(x,answer_vec,labels=seq.ANN_TYPES)
     plt.legend(loc='upper right')
@@ -28,10 +33,13 @@ def visual_ann_genome(seqs):
         answer_vec.append(np.array([0.0]*max_len))
     for seq in seqs:
         for index,type_ in enumerate(seqs.ANN_TYPES):
-            if seq.strand=='plus':
-                answer_vec[index][0:seq.length] += seq.get_ann(type_)
+            if seq.strand in VALID_STRAND:
+                if seq.strand=='plus':
+                    answer_vec[index][0:seq.length] += seq.get_ann(type_)
+                else:
+                    answer_vec[index][0:seq.length] += np.flip(seq.get_ann(type_),0)
             else:
-                answer_vec[index][0:seq.length] += np.flip(seq.get_ann(type_),0)
+                raise Exception("Invalid strand")
     x = list(range(np.array(answer_vec).shape[1]))
     plt.stackplot(x,answer_vec, labels=seqs.ANN_TYPES)
     plt.legend(loc='upper right')
@@ -59,12 +67,15 @@ def position_error(predict, answer,check_length=True):
         status = np.zeros(max(len(predict),len(answer)),dtype=np.float32)
         status[:len(predict)] = predict.get_ann(type_)
         status[:len(answer)] -= answer.get_ann(type_)
-        if predict.strand != 'plus':
-            status = np.flip(status)
+        if predict.strand in VALID_STRAND:
+            if predict.strand != 'plus':
+                status = np.flip(status)
+        else:
+            raise Exception("Invalid strand")
         error[type_] = status
     return  error
 
-def visual_error(predict, answer,check_length=None):
+def visual_error(predict, answer,check_length=True):
     """Visualize the error of each type along sequence"""
     error_status = position_error(predict, answer,check_length=check_length)
     for type_ in predict.ANN_TYPES:
@@ -112,7 +123,6 @@ def draw_metric_curve(data,annotations,sources,line_types,scale_y_axis=True):
             ax.set_title(ann_type+"'s "+metric_type,size=30)
             for metric in values_list:
                 ax.plot(list(metric['value']),line_types[metric['source']])
-                #ax.set_xlim([0,200])
                 if scale_y_axis:
                     ax.set_ylim([0,1])
             for tick in ax.xaxis.get_major_ticks():

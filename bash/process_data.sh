@@ -93,7 +93,7 @@ region_selected_root=$saved_root/region_selected
 
 bash_root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 script_root=$bash_root/..
-gene_info_root=$script_root/sequence_annotation/gene_info
+gene_info_root=$script_root/sequence_annotation/preprocess
 genome_handler_root=$script_root/sequence_annotation/genome_handler
 region_bed_path=$result_root/selected_region.bed
 rna_bed_path=$result_root/rna.bed

@@ -10,22 +10,22 @@ from hyperopt import fmin, tpe, hp, Trials
 import torch
 from torch import nn
 torch.backends.cudnn.benchmark = True
-from sequence_annotation.pytorch.SA_facade import SeqAnnFacade
-from sequence_annotation.pytorch.space_evaluate import SpaceEvaluator
-from sequence_annotation.utils.fasta import write_fasta
+from sequence_annotation.process.seq_ann_engine import SeqAnnEngine
+from sequence_annotation.process.space_evaluate import SpaceEvaluator
+from sequence_annotation.utils.utils import write_fasta
 from sequence_annotation.genome_handler.load_data import load_data
 from sequence_annotation.genome_handler.alt_count import max_alt_count
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
 
 def train(train_data,val_data,saved_root,batch_size,epoch,max_evals,parameter_sharing):
-    facade = SeqAnnFacade()
-    facade.is_verbose_visible = True
-    facade.use_gffcompare = False
+    engine = SeqAnnEngine()
+    engine.is_verbose_visible = True
+    engine.use_gffcompare = False
     train_data,val_data = data
-    facade.train_seqs,facade.train_ann_seqs = train_data
-    facade.val_seqs,facade.val_ann_seqs = val_data
-    write_fasta(os.path.join(saved_root,'train.fasta'),facade.train_seqs)
-    write_fasta(os.path.join(saved_root,'val.fasta'),facade.val_seqs)
+    engine.train_seqs,engine.train_ann_seqs = train_data
+    engine.val_seqs,engine.val_ann_seqs = val_data
+    write_fasta(os.path.join(saved_root,'train.fasta'),engine.train_seqs)
+    write_fasta(os.path.join(saved_root,'val.fasta'),engine.val_seqs)
     space = {
         'feature_block':{
             'num_layers':4,
@@ -57,7 +57,7 @@ def train(train_data,val_data,saved_root,batch_size,epoch,max_evals,parameter_sh
          
     }
     trials = Trials()
-    space_evaluator = SpaceEvaluator(facade,saved_root)
+    space_evaluator = SpaceEvaluator(engine,saved_root)
     space_evaluator.parameter_sharing = parameter_sharing
     space_evaluator.target_min = False
     space_evaluator.eval_target = 'val_macro_F1'

@@ -4,10 +4,8 @@ from time import strftime, gmtime, time
 from ..utils.utils import create_folder
 
 class Pipeline(metaclass=ABCMeta):
-    def __init__(self,model,data,worker,path=None):
+    def __init__(self,worker,path=None):
         self.worker = worker
-        self.data = data
-        self.model = model
         self.path = path
         self.is_prompt_visible = True
 
@@ -20,15 +18,10 @@ class Pipeline(metaclass=ABCMeta):
             self.print_prompt("Creating folder "+self.path+"...")
             create_folder(self.path)
         self.print_prompt("Processing worker...")
-        self._prepare_worker()
         self._before_execute()
         self.print_prompt("Executing...")
         self._execute()
         self._after_execute()
-
-    def _prepare_worker(self):
-        self.worker.model = self.model
-        self.worker.data = self.data
 
     def _before_execute(self):
         self.worker.before_work(path=self.path)

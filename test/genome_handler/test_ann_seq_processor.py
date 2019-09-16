@@ -1,13 +1,12 @@
 from . import AnnSeqTestCase
 import numpy as np
+from numpy.testing import assert_array_equal
 from sequence_annotation.genome_handler.exception import ProcessedStatusNotSatisfied
 from sequence_annotation.genome_handler.sequence import AnnSequence
 from sequence_annotation.genome_handler.ann_seq_processor import get_normalized,get_one_hot
 from sequence_annotation.genome_handler.ann_seq_processor import is_full_annotated,get_certain_status,is_one_hot
 from sequence_annotation.genome_handler.ann_genome_processor import genome2dict_vec
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
-from numpy.testing import assert_array_equal
-
 
 class TestAnnSeqProcessor(AnnSeqTestCase):
     def test_normalized_all_types(self):
@@ -30,6 +29,7 @@ class TestAnnSeqProcessor(AnnSeqTestCase):
         real.set_ann('other',.5,5,5).set_ann('other',2/3,6,6)
         real.set_ann('exon',.5,5,5).set_ann('exon',1/3,6,6).set_ann('exon',1,7,7)
         self.assert_seq_equal(real,normalized)
+
     def test_normalized_some_type(self):
         ann = AnnSequence()
         ann.length = 8
@@ -51,6 +51,7 @@ class TestAnnSeqProcessor(AnnSeqTestCase):
         real.set_ann('exon',1,5,7).set_ann('intron',1,4,4)
         real.processed_status = 'normalized'
         self.assert_seq_equal(real,normalized)
+
     def test_max_one_hot_all_types(self):
         ann = AnnSequence()
         ann.length = 8
@@ -70,6 +71,7 @@ class TestAnnSeqProcessor(AnnSeqTestCase):
         real.set_ann('other',1,6,6).set_ann('exon',1,7,7)
         real.processed_status = 'one_hot'
         self.assert_seq_equal(real,normalized)
+
     def test_max_one_hot_all_types_by_specific_order(self):
         ann = AnnSequence()
         ann.length = 8
@@ -89,6 +91,7 @@ class TestAnnSeqProcessor(AnnSeqTestCase):
         real.set_ann('other',1,6,6).set_ann('exon',1,7,7)
         real.processed_status = 'one_hot'
         self.assert_seq_equal(real,normalized)
+
     def test_max_one_hot_some_types_by_specific_order(self):
         ann = AnnSequence()
         ann.length = 8
@@ -109,6 +112,7 @@ class TestAnnSeqProcessor(AnnSeqTestCase):
         real.set_ann('exon',1,5,7)
         real.processed_status = 'one_hot'
         self.assert_seq_equal(real,normalized)
+
     def test_is_full_annotated_all_types(self):
         ann = AnnSequence()
         ann.length = 4
@@ -120,6 +124,7 @@ class TestAnnSeqProcessor(AnnSeqTestCase):
         ann.set_ann('intron',1,0,0).set_ann('exon',1,0,1).set_ann('other',1,2,3)
         status = is_full_annotated(ann)
         self.assertTrue(status)
+
     def test_is_not_full_annotated_all_types(self):
         ann = AnnSequence()
         ann.length = 4
@@ -131,6 +136,7 @@ class TestAnnSeqProcessor(AnnSeqTestCase):
         ann.set_ann('intron',1,0,0).set_ann('exon',1,0,1).set_ann('other',1,2,2)
         status = is_full_annotated(ann)
         self.assertFalse(status)
+
     def test_is_not_full_annotated_some_types(self):
         ann = AnnSequence()
         ann.length = 4
@@ -142,6 +148,7 @@ class TestAnnSeqProcessor(AnnSeqTestCase):
         ann.set_ann('intron',1,0,0).set_ann('exon',1,0,1).set_ann('other',1,2,3)
         status = is_full_annotated(ann,['exon','intron'])
         self.assertFalse(status)
+
     def test_is_one_hot(self):
         ann = AnnSequence()
         ann.length = 4
@@ -153,6 +160,7 @@ class TestAnnSeqProcessor(AnnSeqTestCase):
         ann.set_ann('intron',1,0,0).set_ann('exon',1,1,3).set_ann('other',1,2,3)
         status = is_one_hot(ann,['exon','intron'])
         self.assertTrue(status)
+
     def test_is_not_one_hot(self):
         ann = AnnSequence()
         ann.length = 4
@@ -164,6 +172,7 @@ class TestAnnSeqProcessor(AnnSeqTestCase):
         ann.set_ann('intron',1,0,0).set_ann('exon',1,0,1).set_ann('other',1,2,3)
         status = is_one_hot(ann,['exon','intron'])
         self.assertFalse(status)
+
     def test_order_one_hot_all_types(self):
         ann = AnnSequence()
         ann.length = 8
@@ -181,6 +190,7 @@ class TestAnnSeqProcessor(AnnSeqTestCase):
         real.set_ann('other',1,4,4).set_ann('exon',1,5,7)
         real.processed_status = 'one_hot'
         self.assert_seq_equal(real,normalized)
+
     def test_get_certain_status(self):
         ann = AnnSequence()
         ann.length = 9
@@ -192,8 +202,11 @@ class TestAnnSeqProcessor(AnnSeqTestCase):
         ann.set_ann('exon',1,0,2).set_ann('intron',1,3,5)
         ann.set_ann('intron',0.4,7,7).set_ann('exon',1,8,8)
         ann.processed_status='normalized'
-        certain_status = get_certain_status(ann)
-        real_status = [True,True,True,True,True,True,False,False,True]
+        certain_statuses = get_certain_status(ann)
+        real_statuses = [True,True,True,True,True,True,False,True,True]
+        for certain_status,real_status in zip(certain_statuses,real_statuses):
+            self.assertEqual(real_status,certain_status)
+
     def test_unnormalized_seq_certain_status(self):
         ann = AnnSequence()
         ann.length = 9
@@ -205,6 +218,7 @@ class TestAnnSeqProcessor(AnnSeqTestCase):
         ann.set_ann('exon',1,0,2).set_ann('intron',1,3,5)
         with self.assertRaises(ProcessedStatusNotSatisfied):
             certain_status = get_certain_status(ann)
+
     def test_get_ann_vecs(self):
         genome = AnnSeqContainer()
         genome.ANN_TYPES = ['gene','other']

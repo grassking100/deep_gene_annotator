@@ -1,23 +1,20 @@
-import json
 import math
 import unittest
-import deepdish
-import numpy as np
-import pandas as pd
-import math
-from time import gmtime, strftime
-from os.path import abspath, expanduser
-from sequence_annotation.genome_handler.seq_info_parser import UCSCInfoParser,EnsemblInfoParser
+import os
+from sequence_annotation.genome_handler.seq_info_parser import BedInfoParser
 from sequence_annotation.genome_handler.region_extractor import RegionExtractor
 from sequence_annotation.genome_handler.exon_handler import ExonHandler
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer,SeqInfoContainer
 from sequence_annotation.genome_handler.ann_seq_processor import get_background,get_seq_with_added_type,get_one_hot,simplify_seq
-from sequence_annotation.genome_handler.ann_seq_converter import EnsemblSeqConverter,UCSCSeqConverter
+from sequence_annotation.genome_handler.ann_seq_converter import CodingBedSeqConverter
 from sequence_annotation.genome_handler.ann_genome_creator import AnnGenomeCreator,AnnChromCreator
 from sequence_annotation.genome_handler.seq_info_generator import SeqInfoGenerator
 from sequence_annotation.genome_handler.ann_genome_processor import get_sub_ann_seqs
 from sequence_annotation.genome_handler.sequence import SeqInformation
 from sequence_annotation.utils.seq_converter import SeqConverter
+
+file_root = os.path.abspath(os.path.join(__file__,'..'))
+bed_file_prefix = os.path.join(file_root,'data/test_data')
 
 class TestGenomeHandlePipeline(unittest.TestCase):
     def test_runable(self):
@@ -25,17 +22,16 @@ class TestGenomeHandlePipeline(unittest.TestCase):
             id_ = 0
             length = 180
             #Create object to use
-            
             info_container = SeqInfoContainer()
-            gene_converter = EnsemblSeqConverter()
+            gene_converter = CodingBedSeqConverter()
             ann_genome_creator = AnnGenomeCreator()
             converted_data = AnnSeqContainer()
             exon_handler = ExonHandler()
-            ensembl_path = abspath(expanduser(__file__+'/../data/test_data/test_ensembl.tsv'))
+            ensembl_path =  os.path.join(bed_file_prefix,'test.bed')
             seq_info = {'chromosome':{'chr1':240},'source':'test'}
             #Create Annotated Genoome
             map_ = {'exon':['cds','utr_5','utr_3'],'intron':['intron']}
-            for seq in EnsemblInfoParser().parse(ensembl_path):
+            for seq in BedInfoParser().parse(ensembl_path):
                 converted_seq = gene_converter.convert(seq)
                 converted_seq = simplify_seq(converted_seq,map_)
                 further_seq = exon_handler.further_division(converted_seq)
@@ -63,7 +59,7 @@ class TestGenomeHandlePipeline(unittest.TestCase):
                     info.chromosome_id = chrom.chromosome_id
                     info.strand = chrom.strand
                     info.start = index*length
-                    info.end = (index+1)*length -1
+                    info.end = (index+1)*length - 1
                     if info.end >= simple_seq.length:
                         info.end = simple_seq.length - 1
                         info.start = info.end - length + 1

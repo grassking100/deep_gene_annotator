@@ -3,7 +3,6 @@ import random
 import numpy as np
 from keras.preprocessing.sequence import pad_sequences
 from ..genome_handler.seq_container import AnnSeqContainer
-from ..genome_handler.utils import get_subseqs
 from ..genome_handler import ann_genome_processor
 from ..utils.seq_converter import SeqConverter
 from ..utils.exception import LengthNotEqualException,DimensionNotSatisfy
@@ -55,8 +54,8 @@ class AnnSeqProcessor:
             data = self._data['training']
             for type_,item in data.items():
                 if isinstance(item,AnnSeqContainer):
-                    train_seqs[type_] = get_subseqs(train_keys,item)
-                    val_seqs[type_] = get_subseqs(val_keys,item)
+                    train_seqs[type_] = item.get_seqs(train_keys)
+                    val_seqs[type_] = item.get_seqs(val_keys)
                 else:
                     train_seqs[type_] = get_subdict(train_keys,item)
                     val_seqs[type_] = get_subdict(val_keys,item)
@@ -76,11 +75,12 @@ class AnnSeqProcessor:
     def _to_dict(self,item):
         seqs = self._seq_converter.seqs2dict_vec(item['inputs'],self._discard_invalid_seq)
         ann_seq_dict = ann_genome_processor.genome2dict_vec(item['answers'],self._ann_types)
-        data = {'inputs':[],'answers':[],'lengths':[],'ids':[]}
+        data = {'inputs':[],'answers':[],'lengths':[],'ids':[],'seqs':[]}
         for name in seqs.keys():
             seq = seqs[name]
             answer = ann_seq_dict[name]
             data['ids'].append(name)
+            data['seqs'].append(item['inputs'][name])
             data['inputs'].append(seq)
             data['answers'].append(answer)
             data['lengths'].append(len(seq))

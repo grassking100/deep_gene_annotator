@@ -12,16 +12,13 @@ class InvalidStrandType(Exception):
     def __init__(self, strand_type= None):
         type_=""
         if strand_type is not None:
-            type_ = ","+ str(strand_type)+","
-        msg = ("Strand type"+str(type_)+" "
-               "is not expected")
+            type_ = ", "+ str(strand_type)+", "
+        msg = "Strand type{} is not expected".format(type_)
         super().__init__(msg)
 
 class ProcessedStatusNotSatisfied(Exception):
     def __init__(self,get_status,predict_status):
-        msg = ("Get "+str(get_status)+""
-               ",but it is expect to be "
-               ""+str(predict_status))
+        msg = "Get {}, but it is expect to be {}".format(get_status,predict_status)
         super().__init__(msg)
 
 class InvalidAnnotation(Exception):
@@ -29,6 +26,10 @@ class InvalidAnnotation(Exception):
         type_=""
         if ann_type is not None:
             type_ = ","+str(ann_type)+","
-        msg = ("Annotation type"+str(type_)+" "
-               "is not expected")
+        msg = "Annotation type{} is not expected".format(type_)
+        super().__init__(msg)
+        
+class NotSameSizeException(Exception):
+    def __init__(self,lhs,rhs):
+        msg = "{} and {} should have same size".format(lhs,rhs)
         super().__init__(msg)

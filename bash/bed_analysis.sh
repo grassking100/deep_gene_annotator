@@ -77,7 +77,7 @@ fi
 
 bash_root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 sa_root=$bash_root/..
-src_root=$sa_root/sequence_annotation/gene_info
+src_root=$sa_root/sequence_annotation/preprocess
 
 #Create folder
 mkdir -p $output_root

@@ -133,7 +133,7 @@ class SeqInformation(Sequence):
         self._extra_index = value
 
 class AnnSequence(Sequence):
-    def __init__(self):
+    def __init__(self,ann_types=None,length=None):
         self._has_space = False
         self._ANN_TYPES = None
         self._length = None
@@ -141,6 +141,14 @@ class AnnSequence(Sequence):
         self._absolute_index = None
         self.processed_status = None
         super().__init__()
+        if ann_types is not None:
+            self.ANN_TYPES = ann_types
+
+        if length is not None:
+            self.length = length
+        
+        if ann_types is not None and length is not None:
+            self.init_space()
 
     @property
     def _checked_attr(self):
@@ -288,7 +296,7 @@ class AnnSequence(Sequence):
         if start_index is None:
             start_index = 0
         if end_index is None:
-            end_index = self._length -1
+            end_index = self._length - 1
         self._validate_is_init()
         self._validate_input_ann_type(ann_type)
         self._validate_input_index(start_index, end_index)
@@ -305,15 +313,16 @@ class AnnSequence(Sequence):
         self._validate_input_index(start_index, end_index)
         return self._data[ann_type][start_index : end_index+1].copy()
 
-    def get_subseq(self, start_index=None, end_index=None):
+    def get_subseq(self, start_index=None, end_index=None, ann_types=None):
         if start_index is None:
             start_index = 0
         if end_index is None:
             end_index = self._length - 1
+        ann_types = ann_types or self.ANN_TYPES
         sub_seq = self.copy()
         sub_seq.clean_space()
         sub_seq.length = end_index - start_index + 1
         sub_seq.init_space()
-        for type_ in self.ANN_TYPES:
+        for type_ in ann_types:
             sub_seq.set_ann(type_,self.get_ann(type_,start_index,end_index))
         return sub_seq

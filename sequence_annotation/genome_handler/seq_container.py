@@ -113,12 +113,17 @@ class SeqContainer(metaclass=ABCMeta):
     def __getitem__(self, id_):
         return self.get(id_)
 
-    def copy(self):
+    def copy(self,with_seq=True):
         new_container = self.__class__()
         new_container.note = self.note
-        for seq in self._data.values():
-            new_container.add(seq.copy())
+        if with_seq:
+            for seq in self._data.values():
+                new_container._data[seq.id] = seq.copy()
         return new_container
+    
+    def get_seqs(self,ids):
+        seqs = self.copy(with_seq=False)
+        return seqs.add([seqs[id_] for id_ in ids])
 
 class SeqInfoContainer(SeqContainer):
     def _validate(self):
@@ -148,11 +153,11 @@ class SeqInfoContainer(SeqContainer):
         return selected_df[GFF_COLUMNS]
 
 class AnnSeqContainer(SeqContainer):
-    def __init__(self,ANN_TYPES=None):
+    def __init__(self,ann_types=None):
         super().__init__()
         self._ANN_TYPES = None
-        if ANN_TYPES is not None:
-            self.ANN_TYPES = ANN_TYPES
+        if ann_types is not None:
+            self.ANN_TYPES = ann_types
 
     @property
     def ANN_TYPES(self):
@@ -195,7 +200,7 @@ class AnnSeqContainer(SeqContainer):
         else:
             raise Exception("AnnSeqContainer's ANN_TYPES must not be None")
 
-    def copy(self):
-        new_container = super().copy()
+    def copy(self,with_seq=True):
+        new_container = super().copy(with_seq)
         new_container.ANN_TYPES = self._ANN_TYPES
         return new_container

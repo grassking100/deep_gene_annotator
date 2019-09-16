@@ -3,7 +3,7 @@ import sys
 from argparse import ArgumentParser
 import json
 sys.path.append("/home/sequence_annotation")
-from sequence_annotation.pytorch.model import SeqAnnBuilder
+from sequence_annotation.process.model import SeqAnnBuilder
 
 if __name__ == '__main__':    
     parser = ArgumentParser()
@@ -21,24 +21,31 @@ if __name__ == '__main__':
     parser.add_argument("--use_discrim",action="store_true")
     parser.add_argument("--disrim_rnn_size",type=int,default=16)
     parser.add_argument("--disrim_rnn_num",type=int,default=1)
+    parser.add_argument("--customized_gru_init",action="store_true")
+    parser.add_argument("--padding_handle",help='Handle padding issue',default='valid')
     args = parser.parse_args()
 
     builder = SeqAnnBuilder()
+    builder.feature_block_config['stack_cnn_class'] = args.stack_cnn_class
     builder.feature_block_config['num_layers'] = args.cnn_num
     builder.feature_block_config['cnn_setting']['out_channels'] = args.cnn_out
     builder.feature_block_config['cnn_setting']['kernel_size'] = args.cnn_kernel
-    builder.feature_block_config['cnn_setting']['cnn_act'] = args.cnn_act
-    builder.feature_block_config['stack_cnn_class'] = args.stack_cnn_class
+    builder.feature_block_config['cnn_setting']['activation_function'] = args.cnn_act
+    builder.feature_block_config['cnn_setting']['padding_handle'] = args.padding_handle
     
+    builder.relation_block_config['rnn_type'] = args.rnn_type
     builder.relation_block_config['rnn_setting']['num_layers'] = args.rnn_num
     builder.relation_block_config['rnn_setting']['hidden_size'] = args.rnn_size
     builder.relation_block_config['rnn_setting']['train_init_value'] = args.train_init_value
+    builder.relation_block_config['rnn_setting']['customized_init'] = args.customized_gru_init
     
-    builder.relation_block_config['rnn_type'] = args.rnn_type
+    #builder.project_layer_config['customized_init'] = args.customized_projection_init
+    
     builder.discrim_config['rnn_num'] = args.disrim_rnn_num
     builder.discrim_config['rnn_size'] = args.disrim_rnn_size
     builder.discrim_config['train_init_value'] = args.train_init_value
     builder.use_discrim = args.use_discrim
+
     if args.use_naive:
         builder.out_channels = 3
         builder.use_sigmoid = False
