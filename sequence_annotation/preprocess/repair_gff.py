@@ -1,6 +1,7 @@
 import sys,os
 from functools import cmp_to_key
 import pandas as pd
+pd.options.mode.chained_assignment = 'raise'
 import numpy as np
 sys.path.append(os.path.dirname(__file__)+"/../..")
 from sequence_annotation.utils.utils import get_gff_with_attribute,read_gff
@@ -160,7 +161,7 @@ def gff_repair(gff):
     exons = gff[gff['feature'].isin(EXON_TYPES)]
     subexons = gff[gff['feature'].isin(SUBEXON_TYPES)]
     
-    exons.loc[:,'attribute'] = "ID=" + exons['id'] + ";Parent=" + exons['parent'] + ";Name=" + exons['name']
+    exons = exons.assign(attribute = "ID=" + exons['id'] + ";Parent=" + exons['parent'] + ";Name=" + exons['name'])
     rna_group = rnas.groupby('parent')
     exon_group = exons.groupby('parent')
     subexon_group = subexons.groupby('parent')
@@ -194,12 +195,8 @@ def gff_repair(gff):
                 if len(list_) > 0:
                     created_subexons += create_blocks(list_,type_)
             subexons_list += created_subexons
-            #print(created_subexons)
             created_exons_ = create_exons(created_subexons)
             if len(exons_) != len(created_exons_):
-                #print(exons_)
-                #print("##############")
-                #print(created_exons_)
                 raise Exception("Inonsist exon number at {}, got {} and {}".format(rna_id,len(exons_),
                                                                                    len(created_exons_)))
             created_exons += created_exons_

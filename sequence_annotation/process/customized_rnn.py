@@ -2,9 +2,9 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.nn.init import constant_,uniform_
-from .customized_layer import BasicModel
+from .customized_layer import BasicModel,Conv1d
 from .noisy_activation import SymNoisyHardSigmoid
-from .rnn import _RNN,ConcatRNN,BidirectionalRNN,LSTM,GRU
+from .rnn import _RNN,ConcatRNN,BidirectionalRNN,LSTM,GRU,RNN_TYPES
 
 def to_bidirectional(rnn_class,**rnn_setting):
     forward_rnn = rnn_class(**rnn_setting)
@@ -70,51 +70,57 @@ class StackRNN(BasicModel):
             config['rnn_{}'.format(index)] = config
         return config
 
-class SuperMinimalRNNCell(BasicModel):
+class _MinimalInyRNNCell(BasicModel):
     def __init__(self, in_channels, hidden_size,batch_first=True):
         super().__init__()
         self.in_channels = in_channels
         self.hidden_size = hidden_size
         if not batch_first:
             raise Exception("{} should set batch_first to True".format(self.__class__.__name__))
-        self.gate_num=1
-        self.gate_weights = nn.Parameter(torch.empty(hidden_size*self.gate_num, in_channels+hidden_size))
-        self.weights = nn.Parameter(torch.empty(hidden_size*self.gate_num, in_channels))
-        self.bias = nn.Parameter(torch.empty(hidden_size))
-        self.gate_bias = nn.Parameter(torch.empty(hidden_size*self.gate_num))
-        
-        self.act = SymNoisyHardSigmoid(c=1e-3)
+        self.cnn = Conv1d(in_channels=in_channels,out_channels=hidden_size,kernel_size=1)
+        self.act = nn.Hardtanh(min_val=0)
         self.reset_parameters()
 
-    def reset_parameters(self):
-        gate_bound = (2/(self.hidden_size*(self.gate_num+1)+self.in_channels))**0.5
-        input_bound = (2/(self.in_channels+self.hidden_size))**0.5
-        uniform_(self.gate_weights,-gate_bound,gate_bound)
-        constant_(self.gate_bias,0.5)
-        uniform_(self.weights,-input_bound,input_bound)
-        #bias_bound = (2/(self.hidden_size))**0.5
-        uniform_(self.bias,0,0)
-
-    def forward(self, x, state):
+    def forward(self, x, state,precompute=False):
         #input shape should be (number,feature size)
-        concated = torch.cat([x,state],1)
-        pre_gate = F.linear(concated, self.gate_weights, self.gate_bias)
-        gate = self.act(pre_gate)
-        #print(pre_gate,gate)
-        gate_f = torch.chunk(gate, self.gate_num, dim=1)[0]
-        values = torch.tanh(F.linear(x, self.weights, self.bias))
-        #values = self.bias)
-        new_state = state*gate_f+ values*(1-gate_f)
-        return new_state,new_state
+        if precompute:
+            x = self.cnn(x.transpose(1,2))[0].transpose(1,2)
+            return x
+        else:
+            x = self.act(x + state)
+        return x,x
     
-class _SuperMinimalRNN(RNN):
+class _MinimalInyRNN(_RNN):
     def _create_rnn(self,in_channels,**rnn_setting):
-        return SuperMinimalRNNCell(in_channels,**rnn_setting)
+        return _MinimalInyRNNCell(in_channels,**rnn_setting)
+    def forward(self,x,lengths,state=None):
+        #Input:N,C,L, Output: N,C,L
+        if not self.batch_first:
+            x = x.transpose(0,1)
+        x = x.transpose(1,2)
+        if state is None:
+            state = self.init_states.repeat(len(x),1).cuda()    
+        outputs = []
+        N,L,C = x.shape
+        x = self.rnn(x, None,precompute=True)
+        for i in range(L):
+            out, state = self.rnn(x[:,i], state)
+            outputs += [out.unsqueeze(1)]
+        x = torch.cat(outputs,1)
+        x = x.transpose(1,2)
+        if not self.batch_first:
+            x = x.transpose(0,1)
+        return x
 
-class SuperMinimalRNN(BasicModel):
+    def get_config(self):
+        config = super().get_config()
+        config['cell'] = str(self.cell)
+        return config
+
+class MinimalInyRNN(BasicModel):
     def __init__(self,**rnn_setting):
         super().__init__()
-        self.rnn = StackRNN(_SuperMinimalRNN,**rnn_setting)
+        self.rnn = StackRNN(_MinimalInyRNN,**rnn_setting)
         self.out_channels = self.rnn.out_channels
 
     def forward(self,x,lengths):
@@ -140,4 +146,5 @@ class ConcatGRU(BasicModel):
                  }
         return config
     
-RNN_TYPES = {'GRU':GRU,'LSTM':LSTM,'ConcatGRU':ConcatGRU,'SuperMinimalRNN':SuperMinimalRNN}
+RNN_TYPES = dict(RNN_TYPES)
+RNN_TYPES.update({'ConcatGRU':ConcatGRU,'MinimalInyRNN':MinimalInyRNN})

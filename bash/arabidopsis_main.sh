@@ -10,13 +10,13 @@ usage(){
  echo "    -s  <string>  Source name"
  echo "  Options:"
  echo "    -m  <bool>    Merge regions which are overlapped                 [default: false]"
- 
+ echo "    -c  <bool>    Remove gene with altenative donor site and accept site    [default: false]"
  echo "    -h            Print help message and exit"
  echo "Example: bash arabidopsis_main.sh -u 10000 -d 10000 -r /home/io/Arabidopsis_thaliana -o ./data/2019_07_12 -s Arabidopsis_1"
  echo ""
 }
 
-while getopts u:d:r:o:s:mh option
+while getopts u:d:r:o:s:mch option
  do
   case "${option}"
   in
@@ -26,6 +26,7 @@ while getopts u:d:r:o:s:mh option
    o )saved_root=$OPTARG;;
    s )source_name=$OPTARG;;
    m )merge_overlapped=true;;
+   c )remove_alt_site=true;;
    h )usage; exit 1;;
    : )echo "Option $OPTARG requires an argument"
       usage; exit 1
@@ -41,30 +42,37 @@ if [ ! "$upstream_dist" ]; then
     usage
     exit 1
 fi
+
 if [ ! "$downstream_dist" ]; then
     echo "Missing option -w"
     usage
     exit 1
 fi
+
 if [ ! "$root" ]; then
     echo "Missing option -r"
     usage
     exit 1
 fi
+
 if [ ! "$saved_root" ]; then
     echo "Missing option -o"
     usage
     exit 1
 fi
+
 if [ ! "$source_name" ]; then
     echo "Missing option -s"
     usage
     exit 1
 fi
 
-
 if [ ! "$merge_overlapped" ]; then
     merge_overlapped=false
+fi
+
+if [ ! "$remove_alt_site" ]; then
+    remove_alt_site=false
 fi
 
 preprocessed_root=$saved_root/preprocessed
@@ -144,9 +152,17 @@ echo "Step 6: Execute process_data.sh"
 
 if [ ! -e "$processed_root/result/selected_region.bed" ]; then
     if $merge_overlapped; then
-        bash $bash_root/process_data.sh -u $upstream_dist -d $downstream_dist -g $genome_path -i $preprocessed_root/coordinate_consist.bed -o $processed_root -s $source_name -t $id_convert_table_path -b $processed_bed_path -m
+        if $remove_alt_site; then
+            bash $bash_root/process_data.sh -u $upstream_dist -d $downstream_dist -g $genome_path -i $preprocessed_root/coordinate_consist.bed -o $processed_root -s $source_name -t $id_convert_table_path -b $processed_bed_path -m -c
+        else
+            bash $bash_root/process_data.sh -u $upstream_dist -d $downstream_dist -g $genome_path -i $preprocessed_root/coordinate_consist.bed -o $processed_root -s $source_name -t $id_convert_table_path -b $processed_bed_path -m
+        fi
     else
-        bash $bash_root/process_data.sh -u $upstream_dist -d $downstream_dist -g $genome_path -i $preprocessed_root/coordinate_consist.bed -o $processed_root -s $source_name -t $id_convert_table_path -b $processed_bed_path
+        if $remove_alt_site; then
+            bash $bash_root/process_data.sh -u $upstream_dist -d $downstream_dist -g $genome_path -i $preprocessed_root/coordinate_consist.bed -o $processed_root -s $source_name -t $id_convert_table_path -b $processed_bed_path -c
+        else
+            bash $bash_root/process_data.sh -u $upstream_dist -d $downstream_dist -g $genome_path -i $preprocessed_root/coordinate_consist.bed -o $processed_root -s $source_name -t $id_convert_table_path -b $processed_bed_path
+        fi
     fi
 else
     echo "The program process_data.sh is skipped"

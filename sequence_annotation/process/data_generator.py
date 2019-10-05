@@ -1,8 +1,11 @@
+import warnings
 import numpy as np
 import torch
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
-from keras.preprocessing.sequence import pad_sequences
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    from keras.preprocessing.sequence import pad_sequences
 
 class SeqDataset(Dataset):
     def __init__(self,data=None):
@@ -87,15 +90,16 @@ def augmentation_seqs(inputs,answers,lengths,augmentation_max):
 def order(data,indice):
     return np.array([data[index] for index in indice])
     
-def seq_collate_wrapper(augmentation_max=None):
+def seq_collate_wrapper(augmentation_max=None,padding_first=False):
     augmentation_max = augmentation_max or 0
     def seq_collate_fn(data):
         transposed_data  = list(zip(*data))
         ids, inputs, answers, lengths, seqs = transposed_data
-        if augmentation_max > 0:
-            inputs,answers,lengths = augmentation_seqs(inputs,answers,lengths,augmentation_max)
-        inputs = pad_sequences(inputs,padding='post')
-        answers = pad_sequences(answers,padding='post')
+        if not padding_first:
+            if augmentation_max > 0:
+                inputs,answers,lengths = augmentation_seqs(inputs,answers,lengths,augmentation_max)
+            inputs = pad_sequences(inputs,padding='post')
+            answers = pad_sequences(answers,padding='post')
         length_order = np.flip(np.argsort(lengths))
         ids = order(ids,length_order)
         inputs = order(inputs,length_order)
@@ -108,17 +112,26 @@ def seq_collate_wrapper(augmentation_max=None):
     return seq_collate_fn
     
 class SeqLoader(DataLoader):
-    def __init__(self,dataset,augmentation_max=None,*args,**kwargs):
+    def __init__(self,dataset,augmentation_max=None,padding_first=False,*args,**kwargs):
+        if padding_first:
+            if augmentation_max is None or augmentation_max == 0:
+                dataset._inputs = pad_sequences(dataset._inputs,padding='post')
+                dataset._answers = pad_sequences(dataset._answers,padding='post')
+            else:
+                raise Exception("The augmentation_max should be zero or None when the padding_first is True")
         if 'collate_fn' not in kwargs:
-            kwargs['collate_fn'] = seq_collate_wrapper(augmentation_max)
+            kwargs['collate_fn'] = seq_collate_wrapper(augmentation_max,padding_first)
         if 'shuffle' not in kwargs:
+            warnings.warn("Set the shuffle to True by default")
             kwargs['shuffle'] = True
+
         super().__init__(dataset,*args,**kwargs)
 
         if 'batch_size' in kwargs:
             batch_size = kwargs['batch_size']
         else:    
             batch_size = 1
+        
         self._length = int(np.ceil(len(dataset) /batch_size))
 
     def __len__(self):

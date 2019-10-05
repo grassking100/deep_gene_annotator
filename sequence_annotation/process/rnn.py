@@ -3,30 +3,34 @@ import math
 import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence,pad_packed_sequence,PackedSequence
-from torch.nn.init import xavier_uniform_,zeros_,orthogonal_, _calculate_fan_in_and_fan_out, _no_grad_uniform_
-from .customized_layer import BasicModel,Concat
+from torch.nn.init import xavier_uniform_,zeros_,orthogonal_, _calculate_fan_in_and_fan_out, _no_grad_uniform_,constant_
+from .customized_layer import BasicModel,Concat, Conv1d
 
 def xavier_uniform_in_(tensor, gain=1.):
     fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
     std = gain * math.sqrt(1 / float(fan_in))
     bound = math.sqrt(3.0) * std
     return _no_grad_uniform_(tensor, -bound, bound)
+        
+def customized_init_gru(rnn):
+    suffice = ['']
+    if rnn.bidirectional:
+        suffice.append('_reverse')
+    for index in range(rnn.num_layers):
+        for suffix in suffice:
+            w_ir, w_iz, w_in = getattr(rnn,'weight_ih_l{}{}'.format(index,suffix)).chunk(3, 0)
+            w_hr, w_hz, w_hn = getattr(rnn,'weight_hh_l{}{}'.format(index,suffix)).chunk(3, 0)
+            ri_bias,zi_bias,ni_bias = getattr(rnn,'bias_ih_l{}{}'.format(index,suffix)).chunk(3, 0)
+            rh_bias,zh_bias,nh_bias = getattr(rnn,'bias_hh_l{}{}'.format(index,suffix)).chunk(3, 0)
+            constant_(ri_bias,-4)
+            constant_(rh_bias,-4)
+            constant_(zi_bias,4)
+            constant_(zh_bias,4)
+            constant_(ni_bias,0)
+            constant_(nh_bias,0)
 
-def customized_init_gru(gru):
-    for index in range(gru.num_layers):
-        w_ir, w_iz, w_in = getattr(gru,'weight_ih_l{}'.format(index)).chunk(3, 0)
-        w_hr, w_hz, w_hn = getattr(gru,'weight_hh_l{}'.format(index)).chunk(3, 0)
-        i_bias = getattr(gru,'bias_ih_l{}'.format(index))
-        h_bias = getattr(gru,'bias_hh_l{}'.format(index))
-        xavier_uniform_in_(w_ir)
-        xavier_uniform_in_(w_iz)
-        xavier_uniform_in_(w_in)
-        xavier_uniform_in_(w_hr)
-        xavier_uniform_in_(w_hz)
-        orthogonal_(w_hn)
-        zeros_(i_bias)
-        zeros_(h_bias)
-
+GRU_INIT_MODE = {None:None,'bias_shift':customized_init_gru}
+        
 def _forward(rnn,x,lengths,state=None,batch_first=True):
     #Input:N,C,L, Output: N,C,L
     if not batch_first:
@@ -51,15 +55,17 @@ class _RNN(BasicModel):
         self.out_channels = self.rnn.hidden_size
         self.train_init_value = train_init_value
         self.init_value = init_value or 0
+        
         if hasattr(self.rnn,'bidirectional') and self.rnn.bidirectional:
             direction_num = 2
             self.out_channels *= 2
         else:
             direction_num = 1
-
         val = [self.init_value]*self.rnn.hidden_size
         num_layers = self.rnn.num_layers if hasattr(self.rnn,'num_layers') else 1
-        val = torch.Tensor(val).unsqueeze(0).repeat(num_layers*direction_num,1)
+        val = torch.Tensor(val)
+        val = val.unsqueeze(0)
+        val = val.repeat(num_layers*direction_num,1)
         self.init_states = torch.nn.Parameter(val,requires_grad=train_init_value)
         self.batch_first = self.rnn.batch_first if hasattr(self.rnn,'batch_first') else True
         self.reset_parameters()
@@ -77,12 +83,14 @@ class _RNN(BasicModel):
         config['rnn_setting'] = self.rnn_setting
         config['customized_init'] = str(self.customized_init)
         return config
-        
+    
 class GRU(_RNN):
     def _create_rnn(self,in_channels,**rnn_setting):
         return nn.GRU(in_channels,**rnn_setting)
     
-    def forward(self,x,lengths,state=None):
+    def forward(self,x,lengths=None,state=None):
+        if lengths is None:
+            lengths = [x.shape[2]]*len(x)
         if state is None:
             state = self.init_states.unsqueeze(1).repeat(1,len(x),1)
         x = _forward(self.rnn,x,lengths,state,self.batch_first)
@@ -103,8 +111,54 @@ class LSTM(_RNN):
         x = _forward(self.rnn,x,lengths,state,self.batch_first)
         return x
 
-RNN_TYPES = {'GRU':GRU,'LSTM':LSTM}
-    
+class GatedStackGRU(BasicModel):
+    def __init__(self,in_channels,hidden_size,num_layers=None,**kwargs):
+        super().__init__()
+        self.num_layers = num_layers or 1
+        self.in_channels = in_channels
+        self.hidden_size = hidden_size
+        self.rnn_0 = GRU(in_channels=in_channels,bidirectional=True,
+                         hidden_size=hidden_size,batch_first=True,
+                         num_layers=self.num_layers)
+        self.rnn_1 = GRU(in_channels=in_channels,bidirectional=True,
+                         hidden_size=hidden_size,batch_first=True,
+                         num_layers=self.num_layers)
+        self.project_0 = Conv1d(in_channels=self.rnn_0.out_channels,out_channels=1,kernel_size=1)
+        self.project_1 = Conv1d(in_channels=self.rnn_1.out_channels,out_channels=1,kernel_size=1)
+        self.out_channels = 2
+        
+    def get_config(self):
+        config = {}
+        config['in_channels'] = self.in_channels
+        config['out_channels'] = self.out_channels
+        config['out_channels'] = self.hidden_size
+        config['num_layers'] = self.num_layers
+        return config
+        
+    def forward(self,x,lengths):
+        post_rnn_0 = self.rnn_0(x,lengths)
+        self._distribution['post_rnn_0'] = post_rnn_0
+        result_0,lengths,_ = self.project_0(post_rnn_0,lengths)
+        self._distribution['result_0'] = result_0
+        gated_result_0 = torch.sigmoid(result_0)
+        self._distribution['gated_result_0'] = gated_result_0
+        #print(gated_result_0.shape)
+        #print(x.shape)
+        gated_x = x*gated_result_0
+        #print(gated_x.shape)
+        self._distribution['gated_x'] = gated_x
+        post_rnn_1 = self.rnn_1(gated_x,lengths)
+        self._distribution['post_rnn_1'] = post_rnn_1
+        result_1,lengths,_ = self.project_1(post_rnn_1,lengths)
+        self._distribution['result_1'] = result_1
+        gated_result_1 = torch.sigmoid(result_1)
+        self._distribution['gated_result_1'] = gated_result_1
+        result = torch.cat([gated_result_0,gated_result_1],1)
+        self._distribution['gated_stack_result'] = result
+        return result
+        
+RNN_TYPES = {'GRU':GRU,'LSTM':LSTM,'GatedStackGRU':GatedStackGRU}
+        
 def _reverse(x,lengths):
     #Convert forward data data to reversed data with N-C-L shape to N-C-L shape
     x = x.transpose(1,2)

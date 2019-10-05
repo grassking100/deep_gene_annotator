@@ -7,8 +7,9 @@ import torch
 from abc import ABCMeta, abstractmethod
 from .data_generator import SeqDataset,SeqGenerator
 from .executor import BasicExecutor
-from .callback import Accumulator, Recorder, Callbacks
+from .callback import Accumulator, Recorder, Callbacks, WarningRecorder
 from .warning import WorkerProtectedWarning
+from ..utils.utils import create_folder
 
 def _batch_process(model,seq_data,process,callbacks):
     callbacks.on_batch_begin()
@@ -31,7 +32,7 @@ def evaluate_per_batch(model,seq_data,executor,callbacks):
     _batch_process(model,seq_data,executor.evaluate,callbacks)
     
 class Worker(metaclass=ABCMeta):
-    def __init__(self,model,data,executor=None):
+    def __init__(self,model,data,executor=None,path=None):
         super().__init__()
         self.model = model
         self.data = data
@@ -39,21 +40,30 @@ class Worker(metaclass=ABCMeta):
         self.result = {}
         self.is_verbose_visible = True
         self._settings = {}
+        self.path = path
         if executor is None:
             self.executor = BasicExecutor()
+        if self.path is not None:
+            create_folder(self.path)
 
-    @abstractmethod
     def work(self):
+        """Work"""
+        self._before_work()
+        self._work()
+        self._after_work()
+            
+    @abstractmethod
+    def _work(self):
         """Work"""
         pass
 
     @abstractmethod
-    def after_work(self,**kwargs):
+    def _after_work(self):
         """Do something after worker work"""
         pass
 
     @abstractmethod
-    def before_work(self,**kwargs):
+    def _before_work(self):
         """Do something before worker work"""
         pass
  
@@ -66,8 +76,8 @@ class TrainWorker(Worker):
     """a worker which will train and evaluate the model"""
     def __init__(self,model,data,executor=None,train_generator=None,val_generator=None,
                  train_callbacks=None,val_callbacks=None,other_callbacks=None,
-                 writer=None,epoch_start=None,epoch=None):
-        super().__init__(model,data,executor)
+                 writer=None,epoch_start=None,epoch=None,path=None):
+        super().__init__(model,data,executor,path=path)
         self._train_generator = train_generator
         self._val_generator = val_generator
         self._train_callbacks = train_callbacks
@@ -115,19 +125,8 @@ class TrainWorker(Worker):
         warnings.warn("Best_epoch SHOULD only be called by callback", WorkerProtectedWarning)
         self._best_epoch = value
 
-    def before_work(self,path=None,**kwargs):
-        self._train_loader = self._train_generator(SeqDataset(self.data['training']))
-        if 'validation' in self.data.keys():
-            self._val_loader = self._val_generator(SeqDataset(self.data['validation']))
-            acc = Accumulator(prefix='val')
-            self._val_callbacks.add(acc)
-        acc = Accumulator()
-        self._train_callbacks.add(acc)
-        self._recoder = Recorder()
-        self.executor.process(self.model)
-        self._is_running = True
-
-        if path is not None:
+    def _save_setting(self):
+        if self.path is not None:
             for key in ['_train_callbacks','_val_callbacks','_other_callbacks',
                         '_epoch_start','_epoch','executor']:
                 attr = getattr(self,key)
@@ -135,18 +134,33 @@ class TrainWorker(Worker):
                     attr = attr.get_config()
                 self._settings[key] = attr
 
-            with open(os.path.join(path,"train_worker_setting.json"),'w') as fp:
+            with open(os.path.join(self.path,"train_worker_setting.json"),'w') as fp:
                 json.dump(self._settings,fp, indent=4)
 
-            self._recoder.path = os.path.join(path,'train_record.json')
+    def _before_work(self):
+        self._train_loader = self._train_generator(SeqDataset(self.data['training']))
+        if 'validation' in self.data.keys():
+            self._val_loader = self._val_generator(SeqDataset(self.data['validation']))
+            acc = Accumulator(prefix='val')
+            self._val_callbacks.add(acc)
+        record_path = None
+        warning_path = None
+        if self.path is not None:    
+            record_path = os.path.join(self.path,"train_record.json")
+            warning_path = os.path.join(self.path,"warning.txt")    
+        accumulator = Accumulator()
+        warning_recorder = WarningRecorder(path=warning_path)
+        self._train_callbacks.add(accumulator)
+        self._other_callbacks.add(warning_recorder)
+        self._recoder = Recorder(path=record_path)
+        self.executor.process(self.model)
+        self._is_running = True
+        self._save_setting()
 
-    def work(self):
+    def _work(self):
         """Train model"""
-        callbacks = Callbacks(self._train_callbacks)
-        callbacks.add(self._val_callbacks)
-        callbacks.add(self._other_callbacks)
-        all_callbacks = Callbacks(callbacks)
-        all_callbacks.add(self._recoder)
+        all_callbacks = Callbacks([self._train_callbacks,self._val_callbacks,
+                                   self._other_callbacks,self._recoder])
         all_callbacks.on_work_begin(worker=self)
         start = self._epoch_start+1
         end = start+self._epoch
@@ -157,18 +171,27 @@ class TrainWorker(Worker):
             if self._writer is not None:
                 self._writer.counter = epoch
             all_callbacks.on_epoch_begin(counter=epoch)
-
+            warnings = []
             for index,item in enumerate(self._train_loader):
                 seq_data = SeqDataset(item)
                 train_per_batch(self.model,seq_data,self.executor,self._train_callbacks)
                 status = 100*index/len(self._train_loader)
                 self.print_verbose(batch_info.format(epoch,self._epoch,'training',status))
+                for name,param in self.model.named_parameters():
+                    if param.grad is not None:
+                        grad = param.grad.cpu().detach().numpy()
+                        if  (grad>1).any():
+                            warning = "Epoch {}: {} have gradients which are larger than one, the max value is {}".format(epoch,name,grad.max())
+                            print(warning)
+                            warnings.append(warning)
+                #break
 
             for index,item in enumerate(self._val_loader):
                 seq_data = SeqDataset(item)
                 evaluate_per_batch(self.model,seq_data,self.executor,self._val_callbacks)
                 status = 100*index/len(self._val_loader)
                 self.print_verbose(batch_info.format(epoch,self._epoch,'validating',status))
+                #break
 
             train_record = self._train_callbacks.get_data()
             val_record = self._val_callbacks.get_data()
@@ -184,7 +207,7 @@ class TrainWorker(Worker):
             record.update(other_record)
             self._train_callbacks.on_epoch_end(metric=train_record)
             self._val_callbacks.on_epoch_end(metric=val_record)
-            self._other_callbacks.on_epoch_end(metric=record)
+            self._other_callbacks.on_epoch_end(metric=record,warnings=warnings)
             self._recoder.on_epoch_end(metric=record)
 
             time_cost = round(time.time()-pre_time,3)
@@ -196,17 +219,23 @@ class TrainWorker(Worker):
 
         all_callbacks.on_work_end()
 
-    def after_work(self,**kwargs):
+    def _after_work(self):
         self.result = self._recoder.data
         if self.best_epoch is not None:
             self._best_result = {}
             for key,value in self.result.items():
                 self._best_result[key] = self.result[key][self.best_epoch - 1]
+            if self.path is not None:    
+                best_path = os.path.join(self.path,"best_record.json")
+                best_result = {'best_epoch':self.best_epoch,
+                               'best_result':self.best_result}
+                with open(best_path,'w') as fp:
+                    json.dump(best_result,fp)
 
 class TestWorker(Worker):
     """a worker which will evaluate the model"""
-    def __init__(self,model,data,executor=None,generator=None,callbacks=None):
-        super().__init__(model,data,executor)
+    def __init__(self,model,data,executor=None,generator=None,callbacks=None,path=None):
+        super().__init__(model,data,executor,path=path)
         self._generator = generator
         self._callbacks = callbacks
         self._recoder = None
@@ -216,23 +245,29 @@ class TestWorker(Worker):
         if callbacks is None:
             self._callbacks = Callbacks()
 
-    def before_work(self,path=None,**kwargs):
-        self._loader = self._generator(SeqDataset(self.data['testing']))
-        accum = Accumulator(prefix='test')
-        self._callbacks.add(accum)
-        self._recoder = Recorder()
-        self.executor.process(self.model)
-        if path is not None:
+    def _save_setting(self):
+        if self.path is not None:
             for key in ['_callbacks']:
                 attr = getattr(self,key)
                 if hasattr(attr,'get_config'):
                     attr = attr.get_config()
                 self._settings[key] = attr
-            with open(os.path.join(path,"test_worker_setting.json"),'w') as fp:
+            with open(os.path.join(self.path,"test_worker_setting.json"),'w') as fp:
                 json.dump(self._settings,fp, indent=4)
-            self._recoder.path = os.path.join(path,'test_record.json')
+            
+    def _before_work(self):
+        self._loader = self._generator(SeqDataset(self.data['testing']))
+        
+        record_path = None
+        if self.path is not None:   
+            record_path = os.path.join(self.path,"test_record.json")
+        accum = Accumulator(prefix='test')
+        self._recoder = Recorder(path=record_path)
+        self._callbacks.add(accum)
+        self.executor.process(self.model)
+        self._save_setting()
 
-    def work(self):
+    def _work(self):
         """Test model"""
         callbacks = Callbacks(self._callbacks)
         self._recoder.on_work_begin(worker=self)
@@ -255,5 +290,5 @@ class TestWorker(Worker):
         callbacks.on_work_end()
         self._recoder.on_work_end()
 
-    def after_work(self,**kwargs):
+    def _after_work(self):
         self.result = self._recoder.data

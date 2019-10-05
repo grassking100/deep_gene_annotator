@@ -15,6 +15,14 @@ if __name__ == '__main__':
     parser.add_argument("--transcript_output_mask",action="store_true")
     parser.add_argument("--transcript_answer_mask",action="store_true")
     parser.add_argument("--mean_by_mask",action="store_true")
+    parser.add_argument("--weight_decay",type=float,default=0)
+    parser.add_argument("--predict_site",action="store_true")
+    parser.add_argument("--site_mask_method")
+    parser.add_argument("--label_num",type=int)
+    parser.add_argument("--predict_label_num",type=int)
+    parser.add_argument("--answer_label_num",type=int)
+    parser.add_argument("--output_label_num",type=int)
+    
     
     args = parser.parse_args()    
     config_path = args.config_path

@@ -22,11 +22,13 @@ class ProcessedStatusNotSatisfied(Exception):
         super().__init__(msg)
 
 class InvalidAnnotation(Exception):
-    def __init__(self, ann_type = None):
+    def __init__(self, ann_type = None,valid_types=None):
         type_=""
         if ann_type is not None:
             type_ = ","+str(ann_type)+","
         msg = "Annotation type{} is not expected".format(type_)
+        if valid_types is not None:
+            msg += ", valid type are {}".format(valid_types)
         super().__init__(msg)
         
 class NotSameSizeException(Exception):

@@ -255,7 +255,7 @@ class AnnSequence(Sequence):
 
     def _validate_input_ann_type(self, ann_type):
         if ann_type not in self.ANN_TYPES:
-            raise InvalidAnnotation(ann_type)
+            raise InvalidAnnotation(ann_type,self.ANN_TYPES)
 
     def _validate_is_init(self):
         if not self._has_space:
@@ -318,11 +318,11 @@ class AnnSequence(Sequence):
             start_index = 0
         if end_index is None:
             end_index = self._length - 1
-        ann_types = ann_types or self.ANN_TYPES
         sub_seq = self.copy()
         sub_seq.clean_space()
+        sub_seq.ANN_TYPES = ann_types or self.ANN_TYPES
         sub_seq.length = end_index - start_index + 1
         sub_seq.init_space()
-        for type_ in ann_types:
+        for type_ in sub_seq.ANN_TYPES:
             sub_seq.set_ann(type_,self.get_ann(type_,start_index,end_index))
         return sub_seq

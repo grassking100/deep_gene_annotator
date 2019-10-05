@@ -1,5 +1,6 @@
 import warnings
 import numpy as np
+import re
 from .exception import ProcessedStatusNotSatisfied,InvalidStrandType
 from .sequence import AnnSequence
 
@@ -194,7 +195,7 @@ def seq2vecs(ann_seq,ann_types=None):
 def vecs2seq(vecs,id_,strand,ann_types,length=None):
     #vecs shape is channel,length
     if vecs.shape[0] != len(ann_types):
-        raise Exception("The number of annotation type is not match with the channel number.")
+        raise Exception("The number({}) of annotation type is not match with the channel number({}).".format(len(ann_types),vecs.shape[0]))
     ann_seq = AnnSequence()
     ann_seq.ANN_TYPES = ann_types
     ann_seq.id=id_
@@ -202,7 +203,7 @@ def vecs2seq(vecs,id_,strand,ann_types,length=None):
         ann_seq.length = vecs.shape[1]
     else:
         ann_seq.length = length
-    ann_seq.strand=strand
+    ann_seq.strand = strand
     ann_seq.init_space()
     length = ann_seq.length
     for index,type_ in  enumerate(ann_types):
@@ -260,3 +261,71 @@ def get_mixed_seq(seq,map_=None):
     else:
         raise Exception("Sequence {} cannot convert to one-hot sequence".format(seq.id))
     return mixed_type_seq
+
+def get_start(signal):
+    return [m.start()+1 for m in re.finditer('01', signal)]
+
+def get_end(signal):
+    return [m.start()+1 for m in re.finditer('10', signal)]
+
+def is_valid_strand(seq):
+    return seq.strand in ['plus','minus']
+
+def get_tss(seq):
+    if not is_valid_strand(seq):
+        raise InvalidStrandType(seq.strand)
+    signal = ''.join(seq.get_ann('gene').astype(int).astype(str))
+    if seq.strand == 'plus':
+        return get_start(signal)
+    else:
+        return get_end(signal)
+
+def get_ca(seq):
+    if not is_valid_strand(seq):
+        raise InvalidStrandType(seq.strand)
+    signal = ''.join(seq.get_ann('gene').astype(int).astype(str))
+    if seq.strand == 'plus':
+        return get_end(signal)
+    else:
+        return get_start(signal)
+
+def get_donor(seq):
+    if not is_valid_strand(seq):
+        raise InvalidStrandType(seq.strand)
+    signal = ''.join(seq.get_ann('intron').astype(int).astype(str))
+    if seq.strand == 'plus':
+        return get_start(signal)
+    else:
+        return get_end(signal)
+
+def get_accept(seq):
+    if not is_valid_strand(seq):
+        raise InvalidStrandType(seq.strand)
+    signal = ''.join(seq.get_ann('intron').astype(int).astype(str))
+    if seq.strand == 'plus':
+        return get_end(signal)
+    else:
+        return get_start(signal)
+
+def get_seq_with_site_ann(seq,gene_map,set_non_site=False):
+    simplified = simplify_seq(seq,gene_map)
+    TSSs = get_tss(simplified)
+    CAs = get_ca(simplified)
+    DSs = get_donor(seq)
+    ASs = get_accept(seq)
+    site_ann = {}
+    site_names = ['TSSs','ca_sites','donor_sites','accept_sites']
+    multiple_sites = [TSSs,CAs,DSs,ASs]
+    non_site_ann = np.ones(seq.length)
+    for name,sites in zip(site_names,multiple_sites):
+        template = np.zeros(seq.length)
+        for site in sites:
+            template[site] = 1
+            non_site_ann[site] = 0
+        site_ann[name] = template    
+
+    if set_non_site:
+        site_ann['non_site'] = non_site_ann
+
+    seq = get_seq_with_added_type(seq,site_ann)
+    return seq

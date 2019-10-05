@@ -58,10 +58,10 @@ class TensorboardWriter:
         if labels is not None:
             value = value.transpose()
             if len(value) != len(labels):
-                raise Exception("Labels' size is not same as data's size")
+                raise Exception("Labels' size({}) is not same as data's size({})".format(len(labels),len(value)))
             if colors is not None:
                 if len(colors) != len(labels):
-                    raise Exception("Labels' size is not same as colors's size")    
+                    raise Exception("Labels' size({}) is not same as colors's size({})".format(len(labels),len(colors)))    
             if use_stack:
                 pyplot.stackplot(list(range(length)),value,labels=labels,colors=colors)
             else:

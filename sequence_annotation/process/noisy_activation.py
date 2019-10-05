@@ -36,13 +36,13 @@ class NoisyHardAct(nn.Module):
     def forward(self,x):
         h = self._hard_function(x)
         if self.training:
-            random = torch.abs(torch.randn_like(x))
-            diff = h-x
-            d = -sgn(x)*self._sgn
             if self._alpha == 1:
                 native_result = h
             else:
-                native_result = self._alpha*h+self._alpha_complement*x
+                native_result = self._alpha*h+self._alpha_complement*x    
+            random = torch.abs(torch.randn_like(x))
+            diff = h-x
+            d = (-sgn(x)*self._sgn).to(x.dtype)
             if self._p != 1:
                 diff = self._p*diff
             sigma = self._c*(torch.sigmoid(diff)-0.5)**2

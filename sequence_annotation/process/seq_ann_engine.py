@@ -1,5 +1,5 @@
+import time
 import json
-import random
 import numpy as np
 import torch
 import os
@@ -8,32 +8,36 @@ from .worker import TrainWorker,TestWorker
 from .tensorboard_writer import TensorboardWriter
 from .callback import CategoricalMetric,TensorboardCallback
 from .callback import GFFCompare,SeqFigCallback, Callbacks,ContagionMatrix
+from .inference import basic_inference
 from .executor import BasicExecutor
-from ..process.pipeline import Pipeline
 from ..process.data_processor import AnnSeqProcessor
-from ..utils.utils import split,get_subdict
+from ..utils.utils import split,get_subdict,create_folder
 from ..genome_handler.utils import ann_count
 from ..utils.seq_converter import SeqConverter
 from ..genome_handler import ann_seq_processor
 from .data_generator import SeqGenerator
 
 class SeqAnnEngine:
-    def __init__(self):
+    def __init__(self,ann_types=None,channel_order=None):
         self._settings = {}
         self.train_seqs = self.val_seqs = self.test_seqs = None
         self.train_ann_seqs = self.val_ann_seqs = self.test_ann_seqs = None
+        self.train_callbacks = Callbacks()
+        self.val_callbacks = Callbacks()
         self.other_callbacks = Callbacks()
         self.executor = BasicExecutor()
         self._path = None
         self._writer = None
         self._train_writer = self._val_writer = self._test_writer = None
-        self.simplify_map = None
+        self.gene_map = None
         self.alt = False
         self.use_gffcompare = True
         self.alt_num = 0
         self.is_verbose_visible = True
         self.fix_distance = 16
         self.fix_boundary = False
+        self._ann_types = ann_types
+        self._channel_order = channel_order or self.ann_types
 
     def update_settings(self,key,params):
         params = dict(params)
@@ -43,7 +47,9 @@ class SeqAnnEngine:
 
     @property
     def ann_types(self):
-        if self.train_ann_seqs is not None:
+        if self._ann_types is not None:
+            return self._ann_types
+        elif self.train_ann_seqs is not None:
             return self.train_ann_seqs.ANN_TYPES
         elif self.test_ann_seqs is not None:
             return self.test_ann_seqs.ANN_TYPES
@@ -68,7 +74,7 @@ class SeqAnnEngine:
         seq = SeqConverter().seq2vecs(seq)
         seq = np.transpose(np.array([seq]),[0,2,1])
         seq = torch.from_numpy(seq).type('torch.FloatTensor').cuda()
-        ann_seq = [ann_seq_processor.seq2vecs(ann_seq)]
+        ann_seq = [ann_seq_processor.seq2vecs(ann_seq,self.ann_types)]
         color_settings = color_settings or {'other':'blue','exon':'red','intron':'yellow'}
         colors=[color_settings[type_]for type_ in self.ann_types]
         seq_fig = SeqFigCallback(self._writer,seq,ann_seq,prefix=prefix,label_names=self.ann_types,colors=colors)
@@ -77,34 +83,30 @@ class SeqAnnEngine:
     def set_root(self,path,with_train=True,with_val=True,with_test=True,create_tensorboard=True):
         self.update_settings('set_root',locals())
         self._path = path
-        if not os.path.exists(self._path):
-            os.mkdir(self._path)
+        create_folder(self._path)
         if create_tensorboard:    
             self._writer = TensorboardWriter(SummaryWriter(path))
         if with_train:
             fp = os.path.join(path,"train")
-            if not os.path.exists(fp):
-                os.mkdir(fp)
+            create_folder(fp)
             if create_tensorboard:
                 self._train_writer = TensorboardWriter(SummaryWriter(fp))
         if with_val:
             fp = os.path.join(path,"val")
-            if not os.path.exists(fp):
-                os.mkdir(fp)
+            create_folder(fp)
             if create_tensorboard:
                 self._val_writer = TensorboardWriter(SummaryWriter(fp))
         if with_test:
             fp = os.path.join(path,"test")
-            if not os.path.exists(fp):
-                os.mkdir(fp)
+            create_folder(fp)
             if create_tensorboard:
                 self._test_writer = TensorboardWriter(SummaryWriter(fp))
 
     def _create_gff_compare(self,path,prefix=None):
-        if self.simplify_map is None:
-            raise Exception("The simplify_map must be set first")
+        if self.gene_map is None:
+            raise Exception("The gene_map must be set first")
         gff_compare = GFFCompare(self.ann_types,path,
-                                 simplify_map=self.simplify_map,
+                                 simplify_map=self.gene_map,
                                  dist=self.fix_distance,prefix=prefix)
         gff_compare.fix_boundary = self.fix_boundary
         gff_compare.converter.extractor.alt = self.alt
@@ -131,10 +133,8 @@ class SeqAnnEngine:
         val_metric = self._create_categorical_metric(prefix='val')
         train_matrix = self._create_contagion_matrix()
         val_matrix = self._create_contagion_matrix(prefix='val')
-        train_callbacks.add(train_metric)
-        train_callbacks.add(train_matrix)
-        val_callbacks.add(val_metric)
-        val_callbacks.add(val_matrix)
+        train_callbacks.add([train_metric,train_matrix])
+        val_callbacks.add([val_metric,val_matrix])
         if path is not None:
             if self.use_gffcompare:
                 gff_compare = self._create_gff_compare(path,prefix='val')
@@ -145,15 +145,25 @@ class SeqAnnEngine:
         callbacks = Callbacks()
         test_metric = self._create_categorical_metric(prefix='test')
         test_matrix = self._create_contagion_matrix(prefix='test')
-        callbacks.add(test_metric)
-        callbacks.add(test_matrix)
+        callbacks.add([test_metric,test_matrix])
         if path is not None:
             if self.use_gffcompare:
                 gff_compare = self._create_gff_compare(path,prefix='test')
                 callbacks.add(gff_compare)
         return callbacks
 
+    def update_common_setting(self):
+        self.update_settings('setting',{'gene_map':self.gene_map,
+                                        'alt':self.alt,
+                                        'use_gffcompare':self.use_gffcompare,
+                                        'alt_num':self.alt_num,
+                                        'fix_distance':self.fix_distance,
+                                        'fix_boundary':self.fix_boundary,
+                                        'ann_types':self._ann_types,
+                                        'channel_order':self._channel_order})
+    
     def train(self,model,epoch=None,batch_size=None,augmentation_max=None):
+        self.update_common_setting()
         epoch = epoch or 100
         batch_size = batch_size or 32
         self.update_settings('train_setting',{'epoch':epoch,'batch_size':batch_size})
@@ -162,6 +172,8 @@ class SeqAnnEngine:
         if self._path is not None:
             fp = os.path.join(self._path,"val")
         train_callbacks, val_callbacks = self._create_default_train_callbacks(fp)
+        train_callbacks.add(self.train_callbacks)
+        val_callbacks.add(self.val_callbacks)
         callbacks_list = [train_callbacks,val_callbacks,self.other_callbacks]
         writers = [self._train_writer,self._val_writer,None]
         for writer,callback in zip(writers,callbacks_list):
@@ -185,7 +197,7 @@ class SeqAnnEngine:
         data_ = {'training':{'inputs':self.train_seqs,'answers':self.train_ann_seqs}}
         if self.val_ann_seqs is not None:
              data_['validation'] = {'inputs':self.val_seqs,'answers':self.val_ann_seqs}
-        data = AnnSeqProcessor(data_,discard_invalid_seq=True).process()
+        data = AnnSeqProcessor(data_,ann_types=self._channel_order).process()
         origin_train_num = len(self.train_ann_seqs.ids)
         filtered_train_num = len(data['training']['ids'])
         self.update_settings('train_seq',{'origin count':origin_train_num,
@@ -195,14 +207,13 @@ class SeqAnnEngine:
             filtered_val_num  = len(data['validation']['ids'])
             self.update_settings('val_seq',{'origin count':origin_val_num,
                                             'filtered count':filtered_val_num})
-        #Create pipeline
+        #Create worker
         worker = TrainWorker(model,data,
                              train_generator=train_gen,val_generator=val_gen,
                              executor=self.executor,train_callbacks=train_callbacks,
                              val_callbacks=val_callbacks,other_callbacks=self.other_callbacks,
-                             writer=self._writer,epoch=epoch)
+                             writer=self._writer,epoch=epoch,path=self._path)
         worker.is_verbose_visible = self.is_verbose_visible
-        pipeline = Pipeline(worker,path=self._path)
         #Save setting
         if self._path is not None:
             setting_path = os.path.join(self._path,"train_facade_setting.json")
@@ -214,26 +225,20 @@ class SeqAnnEngine:
             model_component_path = os.path.join(self._path,"model_component.txt")
             with open(model_component_path,'w') as fp:
                 fp.write(str(model)) 
-        #Execute pipeline
-        pipeline.execute()
+        #Execute worker
+        pre_time = time.time()
+        worker.work()
+        time_spend = time.time() - pre_time
         #Save record and model
         if self._path is not None:
-            record_path = os.path.join(self._path,"train_record.json")
-            with open(record_path,'w') as fp:
-                json.dump(worker.result,fp, indent=4)
-            if worker.best_epoch is None:
-                model_path =  os.path.join(self._path,'last_model.pth')
-                torch.save(worker.model.state_dict(),model_path)
-            else:    
-                best_path = os.path.join(self._path,"best_record.json")
-                best_result = {'best_epoch':worker.best_epoch,
-                               'best_result':worker.best_result}
-                with open(best_path,'w') as fp:
-                    json.dump(best_result,fp)
-                 
+            time_path = os.path.join(self._path,"time.txt")
+            with open(time_path,'w') as fp:
+                fp.write("Time spend: {} seconds".format(time_spend))
+
         return worker.result
 
-    def test(self,model,batch_size=None):
+    def test(self,model,batch_size=None,use_default_callback=True):
+        self.update_common_setting()
         batch_size = batch_size or 32
         self.update_settings('test_setting',{'batch_size':batch_size})
         test_ann_count = self._validate_ann_seqs([self.test_ann_seqs])[0]
@@ -241,30 +246,30 @@ class SeqAnnEngine:
         fp = None
         if self._path is not None:
             fp = os.path.join(self._path,"test")
-        callbacks = self._create_default_test_callbacks(fp)
+        if use_default_callback:
+            callbacks = self._create_default_test_callbacks(fp)
+        else:
+            callbacks = Callbacks()
+        callbacks.add(self.other_callbacks)
         if self._test_writer is not None:
             tensorboard = TensorboardCallback(self._test_writer)
             callbacks.add(tensorboard)
-        gen = SeqGenerator(batch_size=batch_size,shuffle=False)
+        generator = SeqGenerator(batch_size=batch_size,shuffle=False)
 
         data_ = {'testing':{'inputs':self.test_seqs,'answers':self.test_ann_seqs}}
-        data = AnnSeqProcessor(data_,discard_invalid_seq=True).process()
+        data = AnnSeqProcessor(data_,ann_types=self._channel_order).process()
         origin_num  = len(self.test_ann_seqs.ids)
         filtered_num = len(data['testing']['ids'])
         self.update_settings('test_seq',{'origin count':origin_num,
                                          'filtered count':filtered_num})
         worker = TestWorker(model,data,
-                            generator = gen,
+                            generator=generator,
                             callbacks=callbacks,
-                            executor=self.executor)
-        pipeline = Pipeline(worker,path=self._path)
+                            executor=self.executor,
+                            path=self._path)
         if self._path is not None:
             fp = os.path.join(self._path,"test_facade_setting.json")
             with open(fp,'w') as fp:
                 json.dump(self._settings,fp, indent=4)
-        pipeline.execute()
-        if self._path is not None:
-            fp = os.path.join(self._path,"test_record.json")
-            with open(fp,'w') as fp:
-                json.dump(worker.result,fp, indent=4)
+        worker.work()
         return worker.result

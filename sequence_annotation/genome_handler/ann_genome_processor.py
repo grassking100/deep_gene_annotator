@@ -6,8 +6,7 @@ from .sequence import AnnSequence
 from . import ann_seq_processor
 
 def mixed_typed_genome_generate(seqs):
-    mixed_seqs = AnnSeqContainer()
-    mixed_seqs.ANN_TYPES = ['exon','intron','mix','other']
+    mixed_seqs = AnnSeqContainer(['exon','intron','mix','other'])
     for seq in seqs:
         mixed_seqs.add(ann_seq_processor.get_mixed_seq(seq))
     return mixed_seqs
@@ -37,8 +36,7 @@ def get_backgrounded_genome(ann_genome,background_type,frontground_types=None):
 
 def get_one_hot_genome(ann_genome,method='max',focus_types=None):
     """Make genome into one-hot encoded"""
-    one_hot_genome = AnnSeqContainer()
-    one_hot_genome.ANN_TYPES = ann_genome.ANN_TYPES
+    one_hot_genome = AnnSeqContainer(ann_genome.ANN_TYPES)
     for ann_seq in ann_genome:
         one_hot_item = ann_seq_processor.get_one_hot(ann_seq,method=method,focus_types=focus_types)
         one_hot_genome.add(one_hot_item)
@@ -74,8 +72,7 @@ def get_mixed_genome(ann_genome,verbose=True):
     return mixed_genome
 
 def simplify_genome(ann_genome,replace):
-    simplied_genome = AnnSeqContainer()
-    simplied_genome.ANN_TYPES = list(replace.keys())
+    simplied_genome = AnnSeqContainer(list(replace.keys()))
     for ann_seq in ann_genome:
         simplified_seq = ann_seq_processor.simplify_seq(ann_seq,replace)
         simplied_genome.add(simplified_seq)
@@ -109,19 +106,27 @@ def vecs2genome(vecs,ids,strands,ann_types):
     #vecs shape is channel,length
     if vecs.shape[0] != len(ann_types):
         raise Exception("The number of annotation type is not match with the channel number.")
-    ann_genome = AnnSeqContainer()
-    ann_genome.ANN_TYPES = ann_types
+    ann_genome = AnnSeqContainer(ann_types)
     for vecs_,id_,strand in zip(vecs,ids,strands):
         ann_seq = ann_seq_processor.vecs2seq(vecs_,id_,strand,ann_types)
     ann_genome.add(ann_seq)
     return ann_genome
 
 def get_sub_ann_seqs(ann_seq_container,seq_info_container):
-    result = AnnSeqContainer()
-    result.ANN_TYPES = ann_seq_container.ANN_TYPES
+    result = AnnSeqContainer(ann_seq_container.ANN_TYPES)
     for seq_info in seq_info_container.data:
         single_strand_chrom = ann_seq_container.get(str(seq_info.chromosome_id)+"_"+seq_info.strand)
         seq_ann = single_strand_chrom.get_subseq(seq_info.start,seq_info.end)
         seq_ann.id = seq_info.id
         result.add(seq_ann)
     return result
+
+def get_genome_with_site_ann(ann_genome,**kwargs):
+    """Get annotaed genome with site annotation"""
+    returned = None
+    for ann_seq in ann_genome:
+        returned_seq = ann_seq_processor.get_seq_with_site_ann(ann_seq,**kwargs)
+        if returned is None:
+            returned = AnnSeqContainer(returned_seq.ANN_TYPES)
+        returned.add(returned_seq)
+    return returned

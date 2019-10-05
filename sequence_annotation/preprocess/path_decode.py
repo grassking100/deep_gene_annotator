@@ -25,10 +25,10 @@ def find_path(seqs,start_sites,end_sites):
         return "{}_{}".format(start,end)
 
     if len(start_sites) != 1:
-        raise SingleSiteException("Start sites should be same in each cluster.")
+        raise SingleSiteException("Start sites should be same in each cluster, but get {}".format(start_sites))
 
     if len(end_sites) != 1:
-        raise SingleSiteException("End sites should be same in each cluster.")
+        raise SingleSiteException("End sites should be same in each cluster, but get {}".format(end_sites))
 
     length = end_sites[0] - start_sites[0] + 1
     strand = seqs[0]['strand']
@@ -211,28 +211,63 @@ def parse(bed_path,relation_path,single_start_end_site_by_election=False):
     
     for parent,mRNAs in genes.items():
         try:
-            start_sites = list(set(int(mRNA['start']) for mRNA in mRNAs))
-            end_sites = list(set(int(mRNA['end']) for mRNA in mRNAs))
+            parsed = None
+            start_sites = list(int(mRNA['start']) for mRNA in mRNAs)
+            end_sites = list(int(mRNA['end']) for mRNA in mRNAs)
             if single_start_end_site_by_election:
+                strand = mRNAs[0]['strand']
                 start_count = count_occurrence(start_sites)
+                max_start_count = max(start_count.values())
+                start_sites = []
+                for site,count in start_count.items():
+                    if max_start_count == count:
+                        start_sites.append(site)
+                if strand == 'plus':
+                    start_sites = [min(start_sites)]
+                else:
+                    start_sites = [max(start_sites)]
+                mRNAs_ = []
+                for mRNA in mRNAs:
+                    if mRNA['start']==start_sites[0]:
+                        mRNAs_.append(mRNA)
+                mRNAs = mRNAs_
+                end_sites = list(int(mRNA['end']) for mRNA in mRNAs)
                 end_count = count_occurrence(end_sites)
-                start_sites = [min(start_count, key=start_count.get)]
-                end_sites = [max(end_count, key=start_count.get)]        
-            path_data = find_path(mRNAs,start_sites,end_sites)
+                max_end_count = max(end_count.values())
+                end_sites = []
+                for site,count in end_count.items():
+                    if max_end_count == count:
+                        end_sites.append(site)
+                if strand == 'plus':
+                    end_sites = [max(end_sites)]
+                else:
+                    end_sites = [min(end_sites)]
+                mRNAs_ = []
+                for mRNA in mRNAs:
+                    if mRNA['start']==start_sites[0] and mRNA['end']==end_sites[0]:
+                        mRNAs_.append(mRNA)
+                mRNAs = mRNAs_
+            start_sites = list(set(start_sites))
+            end_sites = list(set(end_sites))
+            if len(mRNAs) > 0:
+                parsed = find_path(mRNAs,start_sites,end_sites)
+            else:
+                print("Cannot get {}'s canonical gene model".format(parent))
         except:
             raise Exception(mRNAs)
 
-        data = {}
-        for index,name in enumerate(path_names):
-            data[name] = path_data[index]
+        if parsed is not None:
+            data = {}
+            for index,name in enumerate(path_names):
+                data[name] = parsed[index]
 
-        for name in global_names:
-            data[name] = mRNAs[0][name]
+            for name in global_names:
+                data[name] = mRNAs[0][name]
 
-        data['id'] = parent
-        #Convert zero-nt based to zero-site based
-        data['end'] += 1
-        gene_info.append(data)
+            data['id'] = parent
+            #Convert zero-nt based to zero-site based
+            data['end'] += 1
+            gene_info.append(data)
 
     return gene_info
 

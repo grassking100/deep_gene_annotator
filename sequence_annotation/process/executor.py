@@ -1,44 +1,27 @@
 import torch.nn as nn
 import torch
 from abc import abstractmethod
-from .loss import CCELoss
+from .loss import CCELoss,bce_loss,mean_by_mask
 from .utils import get_seq_mask
+from .inference import basic_inference
 
-bce_loss = nn.BCELoss(reduction='none')
+def _evaluate(loss,model,inputs, labels,lengths,inference):
+    model.train(False)
+    with torch.no_grad():
+        outputs,lengths = model(inputs,lengths=lengths)
+        masks = get_seq_mask(lengths)
+        predict_result = inference(outputs, masks)
+        outputs = outputs.float()
+        loss_ = loss(outputs, labels, masks,predict_result=predict_result).item()
+    return loss_,predict_result,lengths,masks
 
-def mean_by_mask(value,mask):
-    L = value.shape[1]
-    mask = mask[:,:L].float()
-    return (value * mask).sum()/(mask.sum())
-
-def _inference(outputs,masks,inference=None):
-    if inference is not None:
+def _predict(model,inputs,lengths,inference):
+    model.train(False)
+    with torch.no_grad():
+        outputs,lengths = model(inputs,lengths=lengths)
+        masks = get_seq_mask(lengths)
+        outputs = outputs.float()
         outputs = inference(outputs,masks)
-    else:
-        outputs = outputs.transpose(0,1)
-        if masks is not None:
-            L = outputs.shape[2]
-            outputs = outputs*(masks[:,:L].float())
-        outputs = outputs.transpose(0,1)
-    return outputs
-
-def _evaluate(loss,model,inputs, labels,lengths,inference=None):
-    model.train(False)
-    with torch.no_grad():
-        outputs,lengths = model(inputs,lengths=lengths,return_length=True)
-        masks = get_seq_mask(lengths)
-        outputs = outputs.float()
-        loss_ = loss(outputs, labels, masks).item()
-        outputs = _inference(outputs,masks,inference)
-    return loss_,outputs,lengths,masks
-
-def _predict(model,inputs,lengths,inference=None):
-    model.train(False)
-    with torch.no_grad():
-        outputs,lengths = model(inputs,lengths=lengths,return_length=True)
-        masks = get_seq_mask(lengths)
-        outputs = outputs.float()
-        outputs = _inference(outputs,masks,inference)
     return outputs,lengths,masks
 
 class IExecutor:
@@ -61,7 +44,7 @@ class IExecutor:
 class _Executor(IExecutor):
     def __init__(self):
         self.loss = CCELoss()
-        self.inference = None
+        self.inference = basic_inference(3)
 
     def get_config(self,**kwargs):
         config = {}
@@ -80,7 +63,7 @@ class _Executor(IExecutor):
                                                     inference=self.inference,**kwargs)
             return {'loss':loss},outputs,lengths,masks
         else:
-            outputs,lengths,masks = self.predict(model,inputs,lengths,**kwargs)
+            outputs,lengths,masks = _predict(model,inputs,lengths,inference=self.inference,**kwargs)
             return {},outputs,lengths,masks
 
 class BasicExecutor(_Executor):
@@ -99,20 +82,21 @@ class BasicExecutor(_Executor):
     def fit(self,model,inputs, labels, lengths, **kwargs):
         if self.optimizer is None:
             raise Exception("Exectutor must set optimizer for fitting")
-        model.train(True)
+
+        model.train()
         self.optimizer.zero_grad()
-        outputs,lengths = model(inputs,lengths=lengths,return_length=True)
+        outputs,lengths = model(inputs,lengths=lengths)
         outputs = outputs.float()
         masks = get_seq_mask(lengths)
-        loss_ = self.loss(outputs, labels, masks, **kwargs)
+        predict_result = self.inference(outputs, masks)
+        loss_ = self.loss(outputs, labels, masks,predict_result=predict_result, **kwargs)
         loss_.backward()
         if self.grad_clip is not None:
             nn.utils.clip_grad_value_(model.parameters(),self.grad_clip)
         if self.grad_norm is not None:
             nn.utils.clip_grad_norm_(model.parameters(),self.grad_norm)
         self.optimizer.step()
-        outputs = _inference(outputs, masks, self.inference)
-        return {'loss':loss_.item()},outputs,lengths,masks
+        return {'loss':loss_.item()},predict_result,lengths,masks
 
     def process(self,model):
         if self.optimizer is None:
@@ -135,24 +119,24 @@ class GANExecutor(_Executor):
     def fit(self,model,inputs, labels, lengths,**kwargs):
         if self._label_optimizer is None or self._discrim_optimizer is None:
             raise Exception("Exectutor must set optimizer for fitting")
-        model.train(True)
+        model.train()
         label_model, discrim_model = model.gan,model.discrim
         #train generator
         self._label_optimizer.zero_grad()
-        predict_labels,lengths_ = label_model(inputs,lengths=lengths,return_length=True)
+        predict_labels,lengths_ = label_model(inputs,lengths=lengths)
         masks = get_seq_mask(lengths_)
-        outputs = _inference(predict_labels,masks,self.inference)
+        outputs = self.inference(predict_labels,masks)
         label_status = discrim_model(inputs,predict_labels,lengths=lengths_)
-        
-        gan_label_loss = bce_loss(label_status,torch.ones(*label_status.shape).cuda())
-        gan_label_loss = mean_by_mask(gan_label_loss,masks)
+        ONES = torch.ones(*label_status.shape).cuda()
+        ZEROS = torch.zeros(*label_status.shape).cuda()
+        gan_label_loss = bce_loss(label_status,ONES,masks)
         class_loss = self.loss(predict_labels, labels, masks) 
-        gan_loss = gan_label_loss + class_loss
+        gan_loss = gan_label_loss*0.01 + class_loss
         gan_loss.backward()
         self._label_optimizer.step()
         #train discriminator
         self._discrim_optimizer.zero_grad()
-        predict_labels,lengths_ = label_model(inputs,lengths=lengths,return_length=True)
+        predict_labels,lengths_ = label_model(inputs,lengths=lengths)
         masks = get_seq_mask(lengths_)
         if self.reverse_inference is not None:
             reverse_inference_labels = self.reverse_inference(labels,masks)
@@ -161,10 +145,8 @@ class GANExecutor(_Executor):
         
         real_status = discrim_model(inputs,reverse_inference_labels,lengths=lengths_)
         label_status = discrim_model(inputs,predict_labels,lengths=lengths_)
-        disrim_label_loss = bce_loss(label_status,torch.zeros(*label_status.shape).cuda())
-        disrim_label_loss = mean_by_mask(disrim_label_loss,masks)
-        disrim_real_loss = bce_loss(real_status,torch.ones(*real_status.shape).cuda())
-        disrim_real_loss = mean_by_mask(disrim_real_loss,masks)
+        disrim_label_loss = bce_loss(label_status,ZEROS,masks)
+        disrim_real_loss = bce_loss(real_status,ONES,masks)
         disrim_loss = disrim_label_loss + disrim_real_loss
         disrim_loss.backward()
         self._discrim_optimizer.step()
