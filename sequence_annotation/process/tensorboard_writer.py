@@ -28,7 +28,10 @@ class TensorboardWriter:
 
     def add_distribution(self,name,data,prefix='',counter=None):
         counter = counter or self.counter
-        values = data.contiguous().view(-1).cpu().detach().numpy()
+        try:
+            values = data.contiguous().view(-1).cpu().detach().numpy()
+        except:
+            raise Exception("{} cause something wrong occur".format(name))
         if  np.isnan(values).any():
             print(values)
             raise Exception(name+" has at least one NaN in it.")

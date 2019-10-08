@@ -16,6 +16,7 @@ from .metric import F1,accuracy,precision,recall,categorical_metric,contagion_ma
 from .warning import WorkerProtectedWarning
 from .inference import ann_seq2one_hot_seq, AnnSeq2InfoConverter,basic_inference
 from .signal import get_signal_ppm, ppms2meme
+from .utils import get_copied_state_dict
 
 preprocess_src_root = 'sequence_annotation/sequence_annotation/preprocess'
 
@@ -207,7 +208,7 @@ class ModelCheckpoint(Callback):
         self._best_epoch = 0
         self._model_weights = None
         if self.save_best_weights:
-            self._model_weights = worker.model.state_dict()
+            self._model_weights = get_copied_state_dict(worker.model)
         self._worker = worker
 
     def get_config(self,**kwargs):
@@ -252,9 +253,11 @@ class ModelCheckpoint(Callback):
 
         if update:
             if self.save_best_weights:
-                self._model_weights = self._worker.model.state_dict()
+                print("Save best weight of epoch {}".format(self._counter))
+                self._model_weights = get_copied_state_dict(self._worker.model)
             self._best_epoch = self._counter
             self._best_result = target
+            print("Update best weight of epoch {}".format(self._counter))
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore",category=WorkerProtectedWarning)
                 self._worker.best_epoch = self._best_epoch
@@ -271,6 +274,7 @@ class ModelCheckpoint(Callback):
         print("Best "+str(self.target)+": "+str(self._best_result))
         if self.save_best_weights:
             if self.restore_best_weights:
+                print("Restore best weight of epoch {}".format(self._best_epoch))
                 self._worker.model.load_state_dict(self._model_weights)
             if self.path is not None:
                 model_path =  os.path.join(self.path,'best_model.pth').format(self._best_epoch)

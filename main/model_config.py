@@ -35,7 +35,12 @@ if __name__ == '__main__':
     parser.add_argument("--use_sigmoid",action="store_true")
     parser.add_argument("--project_kernel_size",type=int,default=1)
     parser.add_argument("--rnn_dropout",type=float,default=0)
-    
+    parser.add_argument("--use_attention",action="store_true")
+    parser.add_argument("--attention_rnn_num",type=int,default=1)
+    parser.add_argument("--attention_rnn_size",type=int,default=16)
+    parser.add_argument("--attention_mode")
+    parser.add_argument("--attention_use_sigmoid",action="store_true")
+    parser.add_argument("--attention_on_site",action="store_true")
     
     args = parser.parse_args()
 
@@ -61,15 +66,22 @@ if __name__ == '__main__':
     
     builder.project_layer_config['kernel_size'] = args.project_kernel_size
     
+    builder.use_discrim = args.use_discrim
     builder.discrim_config['rnn_num'] = args.disrim_rnn_num
     builder.discrim_config['rnn_size'] = args.disrim_rnn_size
     builder.discrim_config['train_init_value'] = args.train_init_value
-    builder.use_discrim = args.use_discrim
-
+    
+    builder.use_attention = args.use_attention
+    builder.attention_config['attention_setting']['num_layers'] = args.attention_rnn_num
+    builder.attention_config['attention_setting']['mode'] = args.attention_mode
+    builder.attention_config['attention_setting']['use_softmax'] = not args.attention_use_sigmoid
+    builder.attention_config['attention_setting']['on_site'] = args.attention_on_site
+    builder.attention_config['attention_setting']['hidden_size'] = args.attention_rnn_size
+    
     builder.out_channels = args.out_channels
     builder.use_sigmoid = args.use_sigmoid
     builder.site_ann_method = args.site_ann_method
     builder.predict_site_by = args.predict_site_by
-        
+    
     with open(args.config_path,"w") as fp:
         json.dump(builder.config, fp, indent=4)

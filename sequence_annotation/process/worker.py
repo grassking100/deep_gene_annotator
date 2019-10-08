@@ -184,14 +184,12 @@ class TrainWorker(Worker):
                             warning = "Epoch {}: {} have gradients which are larger than one, the max value is {}".format(epoch,name,grad.max())
                             print(warning)
                             warnings.append(warning)
-                #break
 
             for index,item in enumerate(self._val_loader):
                 seq_data = SeqDataset(item)
                 evaluate_per_batch(self.model,seq_data,self.executor,self._val_callbacks)
                 status = 100*index/len(self._val_loader)
                 self.print_verbose(batch_info.format(epoch,self._epoch,'validating',status))
-                #break
 
             train_record = self._train_callbacks.get_data()
             val_record = self._val_callbacks.get_data()

@@ -20,7 +20,7 @@ def add_to_set(dict_,key,value):
         dict_[key] = set()
     dict_[key].add(value)
 
-def find_path(seqs,start_sites,end_sites):
+def find_path(seqs,start_sites,end_sites,select_site_by_election=False):
     def get_id(start,end):
         return "{}_{}".format(start,end)
 
@@ -36,9 +36,20 @@ def find_path(seqs,start_sites,end_sites):
     region_extractor = RegionExtractor()
     regions = SeqInfoContainer()
     ann_seqs = [converter.convert(item) for item in seqs]
+    site_count = {}
     for seq in ann_seqs:
-        regions.add(region_extractor.extract(seq))
-
+        regions_ = region_extractor.extract(seq)
+        regions.add(regions_)
+        for region in regions_:
+            start = region.start
+            end = region.end + 1
+            if start not in site_count:
+                site_count[start] = 0
+            if end not in site_count:
+                site_count[end] = 0 
+            site_count[start] += 1
+            site_count[end] += 1
+                
     mixed_ann_seq = ann_seqs[0].copy()
     for seq in ann_seqs[1:]:
         for type_ in seq.ANN_TYPES:
@@ -76,12 +87,18 @@ def find_path(seqs,start_sites,end_sites):
         sites.add(end)
 
     sites = sorted(list(sites))
+    #Linker to other altenative donor site
     alt_donor = {}
+    #Linker to other altenative accept site
     alt_accept = {}
+    #Group of altenative donor sites
     alt_donors = {}
+    #Group of altenative accept sites
     alt_accepts = {}
     canonical_region = {}
     donor_accept_site = set()
+    canonical_accepts = set()
+    canonical_donors = set()
     if strand == 'plus':
         range_ = range(1,len(sites))
     else:
@@ -109,8 +126,12 @@ def find_path(seqs,start_sites,end_sites):
 
         if 'A' in start_types and 'D' in end_types:
             canonical_region[id_] = 'exon'
+            canonical_accepts.add(start)
+            canonical_donors.add(end)
         elif 'D' in start_types and 'A' in end_types:
             canonical_region[id_] = 'intron'
+            canonical_donors.add(start)
+            canonical_accepts.add(end)
         if 'D' in start_types and 'D' in end_types:
             if start in alt_donor.keys():
                 start = alt_donor[start]
@@ -123,7 +144,22 @@ def find_path(seqs,start_sites,end_sites):
             alt_accept[end] = start
             add_to_set(alt_accepts,start,end)
             canonical_region[id_] = 'alt_accept'
+    
+    if select_site_by_election:
+        for alt_sites,canonical_sites in zip([alt_donors,alt_accepts],[canonical_donors,canonical_accepts]):
+            for first_site,alts in alt_sites.items():
+                sites = [first_site]+alts
+                noncanonical_sites = sites - canonical_sites
+                canonical_site = sites - noncanonical_sites
+                noncanonical_count = [site_count[site] for site in noncanonical_sites]
+                max_count = max(noncanonical_count)
+                if site_count[canonical_site] < max_count:
+                    end = noncanonical_count[noncanonical_count.index(max_count)]
+                    id_ = get_id(first_site,end)
+                    print(id_)
+                    canonical_region[id_] = 'exon'
 
+    #Merge regions with same type
     for index in range(1,len(sites)-1):
         previous = sites[index-1]
         current = sites[index]
@@ -181,7 +217,7 @@ def find_path(seqs,start_sites,end_sites):
     #return zero site based site
     return canonical_region_list,noncanonical_region_list,alt_donor,alt_accept,alt_donors,alt_accepts,donor_accept_site
 
-def parse(bed_path,relation_path,single_start_end_site_by_election=False):
+def parse(bed_path,relation_path,select_site_by_election=False):
     """Return site-based data"""
     #Read bed file form path
     parser = BedInfoParser()
@@ -214,7 +250,7 @@ def parse(bed_path,relation_path,single_start_end_site_by_election=False):
             parsed = None
             start_sites = list(int(mRNA['start']) for mRNA in mRNAs)
             end_sites = list(int(mRNA['end']) for mRNA in mRNAs)
-            if single_start_end_site_by_election:
+            if select_site_by_election:
                 strand = mRNAs[0]['strand']
                 start_count = count_occurrence(start_sites)
                 max_start_count = max(start_count.values())
@@ -454,9 +490,9 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--bed_path",required=True)
     parser.add_argument("-t", "--id_table_path",required=True)
     parser.add_argument("-o", "--gff_path",required=True)
-    parser.add_argument("--single_start_end_site_by_election",action='store_true')
+    parser.add_argument("--select_site_by_election",action='store_true')
     args = parser.parse_args()
     paths = parse(args.bed_path,args.id_table_path,
-                  single_start_end_site_by_election=args.single_start_end_site_by_election)
+                  select_site_by_election=args.select_site_by_election)
     gff=alt_data_to_gff(paths)
     write_gff(gff,args.gff_path)

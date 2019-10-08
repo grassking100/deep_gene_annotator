@@ -19,6 +19,7 @@ if __name__ == '__main__':
     parser.add_argument("--patient",type=int,default=5)
     parser.add_argument("--frozen_names",type=lambda x:x.split(','),default=None)
     parser.add_argument("--map_order_config_path")
+    parser.add_argument("--use_gffcompare",action="store_true")
     args = parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] =  args.gpu_id
 
@@ -42,10 +43,10 @@ def train(model,executor,train_data,val_data=None,
           saved_root=None,epoch=None,batch_size=None,
           augmentation_max=None,patient=None,
           gene_map=None,color_settings=None,
-          channel_order=None,seq_fig_target=None,ann_types=None):
+          channel_order=None,seq_fig_target=None,ann_types=None,use_gffcompare=False):
     channel_order = channel_order or list(train_data[1].ANN_TYPES)
     engine = SeqAnnEngine(ann_types=ann_types or ANN_TYPES,channel_order=channel_order)
-    engine.use_gffcompare = False
+    engine.use_gffcompare = use_gffcompare
     if saved_root is not None:
         engine.set_root(saved_root,with_test=False)
     engine.executor = executor
@@ -139,7 +140,8 @@ if __name__ == '__main__':
     if not os.path.exists(best_model_path) and not os.path.exists(last_model_path):
         train(model,executor,train_data,val_data,args.saved_root,
               args.epoch,args.batch_size,args.augmentation_max,
-              patient=args.patient,**map_order_config)
+              patient=args.patient,use_gffcompare=args.use_gffcompare,
+              **map_order_config)
     elif os.path.exists(best_model_path):
         model.load_state_dict(torch.load(best_model_path))
     else:

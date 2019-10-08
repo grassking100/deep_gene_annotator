@@ -3,14 +3,8 @@ import math
 import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence,pad_packed_sequence,PackedSequence
-from torch.nn.init import xavier_uniform_,zeros_,orthogonal_, _calculate_fan_in_and_fan_out, _no_grad_uniform_,constant_
-from .customized_layer import BasicModel,Concat, Conv1d
-
-def xavier_uniform_in_(tensor, gain=1.):
-    fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
-    std = gain * math.sqrt(1 / float(fan_in))
-    bound = math.sqrt(3.0) * std
-    return _no_grad_uniform_(tensor, -bound, bound)
+from .customized_layer import BasicModel,Concat
+from .cnn import Conv1d
         
 def customized_init_gru(rnn):
     suffice = ['']
@@ -28,8 +22,6 @@ def customized_init_gru(rnn):
             constant_(zh_bias,4)
             constant_(ni_bias,0)
             constant_(nh_bias,0)
-
-GRU_INIT_MODE = {None:None,'bias_shift':customized_init_gru}
         
 def _forward(rnn,x,lengths,state=None,batch_first=True):
     #Input:N,C,L, Output: N,C,L
@@ -131,141 +123,33 @@ class GatedStackGRU(BasicModel):
         config = {}
         config['in_channels'] = self.in_channels
         config['out_channels'] = self.out_channels
-        config['out_channels'] = self.hidden_size
+        config['hidden_size'] = self.hidden_size
         config['num_layers'] = self.num_layers
         return config
         
     def forward(self,x,lengths):
-        post_rnn_0 = self.rnn_0(x,lengths)
-        self._distribution['post_rnn_0'] = post_rnn_0
+        if isinstance(x,list):
+            feature_for_gate_0, feature_for_gate_1 = x
+        else:
+            feature_for_gate_0 = feature_for_gate_1 = x
+        post_rnn_0 = self.rnn_0(feature_for_gate_0,lengths)
         result_0,lengths,_ = self.project_0(post_rnn_0,lengths)
-        self._distribution['result_0'] = result_0
         gated_result_0 = torch.sigmoid(result_0)
-        self._distribution['gated_result_0'] = gated_result_0
-        #print(gated_result_0.shape)
-        #print(x.shape)
-        gated_x = x*gated_result_0
-        #print(gated_x.shape)
-        self._distribution['gated_x'] = gated_x
+        gated_x = feature_for_gate_1*gated_result_0
         post_rnn_1 = self.rnn_1(gated_x,lengths)
-        self._distribution['post_rnn_1'] = post_rnn_1
         result_1,lengths,_ = self.project_1(post_rnn_1,lengths)
-        self._distribution['result_1'] = result_1
         gated_result_1 = torch.sigmoid(result_1)
-        self._distribution['gated_result_1'] = gated_result_1
         result = torch.cat([gated_result_0,gated_result_1],1)
+
+        self._distribution['post_rnn_0'] = post_rnn_0
+        self._distribution['result_0'] = result_0
+        self._distribution['gated_result_0'] = gated_result_0
+        self._distribution['gated_x'] = gated_x
+        self._distribution['post_rnn_1'] = post_rnn_1
+        self._distribution['result_1'] = result_1
+        self._distribution['gated_result_1'] = gated_result_1
         self._distribution['gated_stack_result'] = result
         return result
         
+GRU_INIT_MODE = {None:None,'bias_shift':customized_init_gru}
 RNN_TYPES = {'GRU':GRU,'LSTM':LSTM,'GatedStackGRU':GatedStackGRU}
-        
-def _reverse(x,lengths):
-    #Convert forward data data to reversed data with N-C-L shape to N-C-L shape
-    x = x.transpose(1,2)
-    N,L,C = x.shape
-    concat_data=[]
-    reversed_ = torch.zeros(*x.shape).cuda()
-    for index,(item,length) in enumerate(zip(x,lengths)):
-        reversed_core = item[:length].flip(0)
-        reversed_[index,:length] = reversed_core
-    reversed_ = reversed_.transpose(1,2)    
-    return reversed_
-
-def _to_bidirection(x,lengths):
-    #Convert data with N-C-L shape to two tensors with N-C-L shape
-    N,L,C = x.shape
-    reversed_ = _reverse(x,lengths)
-    return x,reversed_
-
-def _from_bidirection(forward,reversed_,lengths):
-    #Convert two tensors with N-C-L shape to one tensors with N-2C-L shape
-    reversed_ = _reverse(reversed_,lengths)
-    bidirection = torch.cat([forward,reversed_],dim=1)
-    return bidirection
-
-class ReverseRNN(BasicModel):
-    def __init__(self,rnn):
-        super().__init__()
-        self.rnn = rnn
-        self.out_channels = self.rnn.out_channels
-        self.hidden_size = self.rnn.hidden_size
-        
-    def forward(self,x,lengths,state=None):
-        x = _reverse(x,lengths)
-        x = self.rnn(x,lengths, state)
-        x = _reverse(x,lengths)
-        return x
-                
-class BidirectionalRNN(BasicModel):
-    def __init__(self,forward_rnn,backward_rnn):
-        super().__init__()
-        self.forward_rnn = forward_rnn
-        self.backward_rnn = backward_rnn
-        if self.forward_rnn.out_channels != self.backward_rnn.out_channels:
-            raise Exception("Forward and backward RNNs' out channels should be the same")
-        self.out_channels = self.forward_rnn.out_channels
-        self.hidden_size = self.forward_rnn.hidden_size
-     
-    @property
-    def bidirectional(self):
-        return True
-
-    def forward(self,x,lengths,forward_state=None,reverse_state=None):
-        forward_x,reversed_x = _to_bidirection(x,lengths)
-        forward_x = self.forward_rnn(forward_x, lengths, forward_state)
-        reversed_x = self.backward_rnn(reversed_x, lengths, reverse_state)
-        x = _from_bidirection(forward_x,reversed_x,lengths)
-        return x
-
-class ConcatRNN(BasicModel):
-    def __init__(self,in_channels,hidden_size,num_layers,
-                 rnn_type,**rnn_setting):
-        super().__init__()
-        self.in_channels = in_channels
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.rnn_setting = rnn_setting
-        if isinstance(rnn_type,str):
-            try:
-                self.rnn_type = RNN_TYPES[rnn_type]
-            except:
-                raise Exception("{} is not supported".format(rnn_type))
-        else:        
-            self.rnn_type = rnn_type                
-        self.concat = Concat(dim=1)
-        self.rnns = []
-        
-        for index in range(self.num_layers):
-            rnn = self.rnn_type(in_channels=in_channels,
-                                hidden_size=self.hidden_size,
-                                **rnn_setting)
-            self.rnns.append(rnn)
-            out_channels = rnn.out_channels
-            setattr(self, 'rnn_'+str(index), rnn)
-            in_channels += out_channels
-        self.out_channels = out_channels*self.num_layers
-        self.reset_parameters()
-        
-    def forward(self, x, lengths,state=None):
-        #N,C,L
-        rnn_output = []
-        for index in range(self.num_layers):            
-            rnn = self.rnns[index]
-            pre_x = x
-            x = rnn(x,lengths,state)
-            rnn_output.append(x)
-            x,lengths = self.concat([pre_x,x],lengths)
-        x, lengths = self.concat(rnn_output,lengths)
-        self._distribution['rnn_result'] = x
-        return x
-    
-    def get_config(self):
-        config = {}
-        config['in_channels'] = self.in_channels
-        config['hidden_size'] = self.hidden_size
-        config['num_layers'] = self.num_layers
-        rnn_setting = dict(self.rnn_setting)
-        rnn_setting['customized_gru_init'] = str(rnn_setting['customized_gru_init'])
-        config['rnn_setting'] = rnn_setting
-        config['rnn_type'] = self.rnn_type
-        return config
