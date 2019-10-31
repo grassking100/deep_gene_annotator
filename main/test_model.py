@@ -46,16 +46,15 @@ def test(model,executor,data,batch_size=None,saved_root=None,
         seqlogo = SeqLogo('post_act_x_',saved_root,radius=128)
         engine.other_callbacks.add(seqlogo)
         model = model.feature_block
-    record = engine.test(model,batch_size=batch_size,use_default_callback=not use_seqlogo)
-
-    return record
+    worker = engine.test(model,batch_size=batch_size,use_default_callback=not use_seqlogo)
+    return worker
 
 def main(data_path,model_config_path,model_weights_path,use_naive=True,**kwargs):
     model = get_model(model_config_path,model_weights_path=model_weights_path)
     executor = get_executor(model,use_naive=use_naive,set_loss=False,set_optimizer=False)
     data = dd.io.load(data_path)
-    record = test(model,executor,data,**kwargs)
-    return record
+    worker = test(model,executor,data,**kwargs)
+    return worker
 
 if __name__ == '__main__':
     create_folder(args.saved_root)

@@ -3,8 +3,9 @@ import sys
 from argparse import ArgumentParser
 import pandas as pd
 import json
-#Load library
+from numpy import median
 import torch
+from torch import optim
 sys.path.append("/home/sequence_annotation")
 from sequence_annotation.genome_handler.load_data import load_data as _load_data
 from sequence_annotation.process.loss import SeqAnnLoss, FocalLoss, MixedLoss, LabelLoss,SiteLoss
@@ -17,34 +18,88 @@ SIMPLIFY_MAP = {'exon':['exon'],'intron':['intron'],'other':['other']}
 GENE_MAP = {'gene':['exon','intron'],'other':['other']}
 BASIC_COLOR_SETTING={'other':'blue','exon':'red','intron':'yellow'}
 ANN_TYPES = ['exon','intron','other']
-#CHANNEL_ORDER = ANN_TYPES + ['TSSs', 'ca_sites', 'donor_sites','accept_sites']
 
-def load_data(fasta_path,ann_seqs_path,id_paths,**kwargs):
+def copy_path(root,path):
+    command = 'cp -t {} {}'.format(root,path)
+    os.system(command)
+
+def select_data_by_length_each_type(fasta,ann_seqs,**kwargs):
+    if len(set(ANN_TYPES) - set(ann_seqs.ANN_TYPES)) > 0:
+        raise Exception("ANN_TYPES should include {}, but got {}".format(ANN_TYPES,ann_seqs.ANN_TYPES))
+    multiple_exon_transcripts = []
+    single_exon_transcripts = []
+    no_transcripts = []
+    #Classify sequence
+    for ann_seq in ann_seqs:
+        #If it is multiple exon transcript
+        if sum(ann_seq.get_ann('intron')) > 0:
+            multiple_exon_transcripts.append(ann_seq)
+        #If it is single exon transcript
+        elif sum(ann_seq.get_ann('exon')) > 0:
+            single_exon_transcripts.append(ann_seq)
+        #If there is no transcript
+        else:
+            no_transcripts.append(ann_seq)
+            
+    selected_seqs = {}
+    selected_anns = ann_seqs.copy()
+    selected_anns.clean()
+    
+    for seqs in [multiple_exon_transcripts,single_exon_transcripts,no_transcripts]:
+        median_length = median([seq.length for seq in seqs])
+        for seq in seqs:
+            if seq.length <= median_length:
+                selected_seqs[seq.id] = fasta[seq.id]
+                selected_anns.add(seq)
+    return selected_seqs,selected_anns
+    
+def load_data(fasta_path,ann_seqs_path,id_paths,select_each_type=False,**kwargs):
     id_list = []
     for id_path in id_paths:
         id_list.append(list(pd.read_csv(id_path,header=None)[0]))
 
     if 'max_len' in kwargs and kwargs['max_len'] < 0:
         kwargs['max_len'] = None
+    
+    select_func = None
+    if select_each_type:
+        select_func = select_data_by_length_each_type
 
     data = _load_data(fasta_path,ann_seqs_path,id_list,simplify_map=SIMPLIFY_MAP,
                       before_mix_simplify_map=BEFORE_MIX_SIMPLIFY_MAP,
-                      gene_map=GENE_MAP,**kwargs)
+                      gene_map=GENE_MAP,select_func=select_func,**kwargs)
     
     return data
 
-def get_executor(model,use_naive=True,use_discrim=False,set_loss=True,set_optimizer=True,
+OPTIMIZER_CLASS = {'Adam':optim.Adam,'SGD':optim.SGD}
+
+def optimizer_generator(type_,model,momentum=0,nesterov=False,**kwargs):
+    
+    if type_ not in OPTIMIZER_CLASS:
+        raise Exception("Optimizer should be {}, but got {}".format(OPTIMIZER_CLASS,type_))
+        
+    filter_ = filter(lambda p: p.requires_grad, model.parameters())
+    if type_ == 'Adam':
+        if momentum > 0 or nesterov:
+            raise
+        return torch.optim.Adam(filter_,**kwargs)
+    else:
+        return torch.optim.SGD(filter_,momentum=momentum,
+                               nesterov=nesterov,**kwargs)
+
+def get_executor(model,optim_type,use_naive=True,use_discrim=False,set_loss=True,set_optimizer=True,
                  learning_rate=None,disrim_learning_rate=None,intron_coef=None,other_coef=None,
                  nontranscript_coef=None,gamma=None,transcript_answer_mask=False,
-                 transcript_output_mask=True,mean_by_mask=False,frozed_names=None,
+                 transcript_output_mask=False,mean_by_mask=False,frozed_names=None,
                  weight_decay=None,site_mask_method=None,label_num=None,
-                 predict_label_num=None,answer_label_num=None,output_label_num=None,**kwargs):
+                 predict_label_num=None,answer_label_num=None,output_label_num=None,
+                 grad_clip=None,momentum=None,nesterov=False,**kwargs):
 
     if learning_rate is None:
         learning_rate =  1e-3
     if disrim_learning_rate is None:
         disrim_learning_rate = 1e-3
-        
+
     weight_decay = weight_decay or 0
 
     if use_naive:
@@ -54,11 +109,13 @@ def get_executor(model,use_naive=True,use_discrim=False,set_loss=True,set_optimi
         answer_label_num = answer_label_num or 3
         output_label_num = output_label_num or 3
 
-    print(predict_label_num,answer_label_num,output_label_num)
     if use_discrim:
         executor = GANExecutor()
     else:
         executor = BasicExecutor()
+        
+    executor.grad_clip = grad_clip
+        
     if use_naive:
         executor.inference = basic_inference(output_label_num)
     else:
@@ -68,13 +125,16 @@ def get_executor(model,use_naive=True,use_discrim=False,set_loss=True,set_optimi
 
     if set_optimizer:
         if use_discrim:
-            executor.optimizer = (torch.optim.Adam(filter(lambda p: p.requires_grad, model.gan.parameters()),
-                                                   lr=learning_rate,weight_decay=weight_decay),
-                                  torch.optim.Adam(filter(lambda p: p.requires_grad, model.discrim.parameters()),
-                                                   lr=disrim_learning_rate,weight_decay=weight_decay))
+            executor.optimizer = (optimizer_generator(optim_type,model.gan,lr=learning_rate,
+                                                      weight_decay=weight_decay,momentum=momentum,
+                                                      nesterov=nesterov),
+                                  optimizer_generator(omtim_type,model.discrim,lr=learning_rate,
+                                                      weight_decay=weight_decay,momentum=momentum,
+                                                      nesterov=nesterov))
         else:
-            executor.optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
-                                                  lr=learning_rate,weight_decay=weight_decay)
+            executor.optimizer = optimizer_generator(optim_type,model,lr=learning_rate,
+                                                     weight_decay=weight_decay,momentum=momentum,
+                                                     nesterov=nesterov)
     
     if set_loss:
         if use_naive:

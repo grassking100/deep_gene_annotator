@@ -99,9 +99,11 @@ class TrainWorker(Worker):
         self._epoch_start = epoch_start or 0
         self._epoch = 1 if epoch is None else epoch
         self._best_epoch = None
+        self._best_result = None
         self._is_running = True
         self._recoder = None
-        self._best_result = None
+        self._train_loader = None
+        self._val_loader = None
 
     @property
     def best_result(self):
@@ -156,16 +158,27 @@ class TrainWorker(Worker):
         self.executor.process(self.model)
         self._is_running = True
         self._save_setting()
+        #Load best record 
+        self._best_epoch = 0
+        best_path = os.path.join(self.path,"best_record.json")
+        if os.path.exists(best_path):
+            print("Load best record from {}".format(best_path))
+            with open(best_path,"r") as fp:
+                status = json.load(fp)
+                self._best_epoch = status['best_epoch']
+                self._best_result = status['best_result']
 
     def _work(self):
         """Train model"""
+        start = self._epoch_start+1
+        end = self._epoch + 1
         all_callbacks = Callbacks([self._train_callbacks,self._val_callbacks,
                                    self._other_callbacks,self._recoder])
-        all_callbacks.on_work_begin(worker=self)
-        start = self._epoch_start+1
-        end = start+self._epoch
+        all_callbacks.on_work_begin(worker=self,epoch_start=start)
         batch_info = "Epoch: ({}/{}), {} {:.1f}% of data"
         epoch_info = "Epoch: ({}/{}), Time cost of: {}, {}"
+        gradient_warning = "Epoch {}: {} have gradients which are larger than one, the max value is {}"
+        print(start,end)
         for epoch in range(start,end):
             pre_time = time.time()
             if self._writer is not None:
@@ -181,15 +194,18 @@ class TrainWorker(Worker):
                     if param.grad is not None:
                         grad = param.grad.cpu().detach().numpy()
                         if  (grad>1).any():
-                            warning = "Epoch {}: {} have gradients which are larger than one, the max value is {}".format(epoch,name,grad.max())
+                            warning = gradient_warning.format(epoch,name,grad.max())
                             print(warning)
                             warnings.append(warning)
+                #break
 
-            for index,item in enumerate(self._val_loader):
-                seq_data = SeqDataset(item)
-                evaluate_per_batch(self.model,seq_data,self.executor,self._val_callbacks)
-                status = 100*index/len(self._val_loader)
-                self.print_verbose(batch_info.format(epoch,self._epoch,'validating',status))
+            if self._val_loader is not None:
+                for index,item in enumerate(self._val_loader):
+                    seq_data = SeqDataset(item)
+                    evaluate_per_batch(self.model,seq_data,self.executor,self._val_callbacks)
+                    status = 100*index/len(self._val_loader)
+                    self.print_verbose(batch_info.format(epoch,self._epoch,'validating',status))
+                    #break
 
             train_record = self._train_callbacks.get_data()
             val_record = self._val_callbacks.get_data()
@@ -222,7 +238,7 @@ class TrainWorker(Worker):
         if self.best_epoch is not None:
             self._best_result = {}
             for key,value in self.result.items():
-                self._best_result[key] = self.result[key][self.best_epoch - 1]
+                self._best_result[key] = self.result[key][self.best_epoch - 1 - self._epoch_start]
             if self.path is not None:    
                 best_path = os.path.join(self.path,"best_record.json")
                 best_result = {'best_epoch':self.best_epoch,

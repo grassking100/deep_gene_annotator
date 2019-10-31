@@ -80,7 +80,8 @@ class SeqAnnEngine:
         seq_fig = SeqFigCallback(self._writer,seq,ann_seq,prefix=prefix,label_names=self.ann_types,colors=colors)
         self.other_callbacks.add(seq_fig)
 
-    def set_root(self,path,with_train=True,with_val=True,with_test=True,create_tensorboard=True):
+    def set_root(self,path,with_train=True,with_val=True,with_test=True,
+                 create_tensorboard=True):
         self.update_settings('set_root',locals())
         self._path = path
         create_folder(self._path)
@@ -162,7 +163,7 @@ class SeqAnnEngine:
                                         'ann_types':self._ann_types,
                                         'channel_order':self._channel_order})
     
-    def train(self,model,epoch=None,batch_size=None,augmentation_max=None):
+    def train(self,model,epoch=None,batch_size=None,augmentation_max=None,add_grad=True,epoch_start=None):
         self.update_common_setting()
         epoch = epoch or 100
         batch_size = batch_size or 32
@@ -179,6 +180,7 @@ class SeqAnnEngine:
         for writer,callback in zip(writers,callbacks_list):
             if writer is not None and callback is not None:
                 tensorboard = TensorboardCallback(writer)
+                tensorboard.do_add_grad = add_grad
                 callback.add(tensorboard)
         
         #Validate ann_seqs and set val_callbacks
@@ -212,7 +214,8 @@ class SeqAnnEngine:
                              train_generator=train_gen,val_generator=val_gen,
                              executor=self.executor,train_callbacks=train_callbacks,
                              val_callbacks=val_callbacks,other_callbacks=self.other_callbacks,
-                             writer=self._writer,epoch=epoch,path=self._path)
+                             writer=self._writer,epoch=epoch,path=self._path,
+                             epoch_start=epoch_start)
         worker.is_verbose_visible = self.is_verbose_visible
         #Save setting
         if self._path is not None:
@@ -232,10 +235,10 @@ class SeqAnnEngine:
         #Save record and model
         if self._path is not None:
             time_path = os.path.join(self._path,"time.txt")
-            with open(time_path,'w') as fp:
-                fp.write("Time spend: {} seconds".format(time_spend))
+            with open(time_path,'a+') as fp:
+                fp.write("Time spend: {} seconds\n".format(time_spend))
 
-        return worker.result
+        return worker
 
     def test(self,model,batch_size=None,use_default_callback=True):
         self.update_common_setting()

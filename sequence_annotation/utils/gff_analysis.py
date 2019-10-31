@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from .utils import read_gff,read_gffcompare_stats
 
-def site_diff(answer,predict,types,is_start=True):
+def site_diff(answer,predict,types,is_start=True,absolute=True):
     if (answer['strand'] != '+').any() or (predict['strand'] != '+').any():
         raise Exception("Wrong strand")
     site_type = 'start' if is_start else 'end'
@@ -19,20 +19,27 @@ def site_diff(answer,predict,types,is_start=True):
             answer_sites = list(answer_group[site_type])
             predict_sites = list(predict_group[site_type])
             for predict_site in predict_sites:
-                diff = min([abs(predict_site-site) for site in answer_sites])
+                if absolute:
+                    diff = min([abs(predict_site-site) for site in answer_sites])
+                else:
+                    diff = None
+                    for site in answer_sites:
+                        diff_ = predict_site-site
+                        if diff is None or abs(diff) > abs(diff_):
+                            diff = diff_
                 site_diff.append(diff)
         except KeyError:
             pass
     return site_diff
     
-def donor_site_diff(answer,predict):
-    return site_diff(answer,predict,['intron'])
-def accept_site_diff(answer,predict):
-    return site_diff(answer,predict,['intron'],is_start=False)
-def transcript_start_diff(answer,predict):
-    return site_diff(answer,predict,['mRNA'])
-def transcript_end_diff(answer,predict):
-    return site_diff(answer,predict,['mRNA'],is_start=False)
+def donor_site_diff(answer,predict,absolute=True):
+    return site_diff(answer,predict,['intron'],absolute=absolute)
+def accept_site_diff(answer,predict,absolute=True):
+    return site_diff(answer,predict,['intron'],is_start=False,absolute=absolute)
+def transcript_start_diff(answer,predict,absolute=True):
+    return site_diff(answer,predict,['mRNA'],absolute=absolute)
+def transcript_end_diff(answer,predict,absolute=True):
+    return site_diff(answer,predict,['mRNA'],is_start=False,absolute=absolute)
     
 def site_diff_table(roots,names):
     site_diff_ = {}

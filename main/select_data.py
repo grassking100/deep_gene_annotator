@@ -17,6 +17,7 @@ if __name__ == '__main__':
     parser.add_argument("--ratio",type=float,default=1,help="Ratio of number to be chosen to train" +\
                         " and validate, start chosen by increasing order)")
     parser.add_argument("--site_ann_method")
+    parser.add_argument("--select_each_type",action='store_true')
     args = parser.parse_args()
     
     print("Load and parse data")
@@ -28,5 +29,6 @@ if __name__ == '__main__':
                          min_len=args.min_len,
                          max_len=args.max_len,
                          ratio=args.ratio,
-                         site_ann_method=args.site_ann_method)[0]
+                         site_ann_method=args.site_ann_method,
+                         select_each_type=args.select_each_type)[0]
         dd.io.save(args.saved_path,data)

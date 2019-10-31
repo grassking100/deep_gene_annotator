@@ -5,7 +5,106 @@ import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence,pad_packed_sequence,PackedSequence
 from .customized_layer import BasicModel,Concat
 from .cnn import Conv1d
-        
+from .utils import xavier_uniform_extend_
+from torch.nn.init import zeros_,constant_,orthogonal_
+
+from torch.nn.init import _calculate_fan_in_and_fan_out
+
+def xav_gru_init(rnn,mode=None):
+    mode = mode or 'fan_in'
+    suffice = ['']
+    if rnn.bidirectional:
+        suffice.append('_reverse')
+    for index in range(rnn.num_layers):
+        for suffix in suffice:
+            w_ir, w_iz, w_in = getattr(rnn,'weight_ih_l{}{}'.format(index,suffix)).chunk(3, 0)
+            w_hr, w_hz, w_hn = getattr(rnn,'weight_hh_l{}{}'.format(index,suffix)).chunk(3, 0)
+            for var in [w_ir, w_iz, w_in, w_hz, w_hr,w_hn]:
+                xavier_uniform_extend_(var,mode=mode)
+
+def orth_xav_gru_init(rnn,mode=None):
+    mode = mode or 'fan_in'
+    suffice = ['']
+    if rnn.bidirectional:
+        suffice.append('_reverse')
+    for index in range(rnn.num_layers):
+        for suffix in suffice:
+            w_ir, w_iz, w_in = getattr(rnn,'weight_ih_l{}{}'.format(index,suffix)).chunk(3, 0)
+            w_hr, w_hz, w_hn = getattr(rnn,'weight_hh_l{}{}'.format(index,suffix)).chunk(3, 0)
+            orthogonal_(w_hn)
+            for var in [w_ir, w_iz, w_in, w_hz, w_hr]:
+                xavier_uniform_extend_(var,mode=mode)
+                
+def bias_zero_gru_init(rnn):
+    suffice = ['']
+    if rnn.bidirectional:
+        suffice.append('_reverse')
+    for index in range(rnn.num_layers):
+        for suffix in suffice:
+            ri_bias,zi_bias,ni_bias = getattr(rnn,'bias_ih_l{}{}'.format(index,suffix)).chunk(3, 0)
+            rh_bias,zh_bias,nh_bias = getattr(rnn,'bias_hh_l{}{}'.format(index,suffix)).chunk(3, 0)
+            for var in [ri_bias,zi_bias,ni_bias,rh_bias,zh_bias,nh_bias]:
+                zeros_(var)
+                
+def bias_xav_gru_init(rnn,mode=None):
+    mode = mode or 'fan_in'
+    suffice = ['']
+    if rnn.bidirectional:
+        suffice.append('_reverse')
+    for index in range(rnn.num_layers):
+        for suffix in suffice:
+            ri_bias,zi_bias,ni_bias = getattr(rnn,'bias_ih_l{}{}'.format(index,suffix)).chunk(3, 0)
+            rh_bias,zh_bias,nh_bias = getattr(rnn,'bias_hh_l{}{}'.format(index,suffix)).chunk(3, 0)
+            w_ir = getattr(rnn,'weight_ih_l{}{}'.format(index,suffix)).chunk(3, 0)[0]
+            w_hr = getattr(rnn,'weight_hh_l{}{}'.format(index,suffix)).chunk(3, 0)[0]
+            fan_in, fan_out = _calculate_fan_in_and_fan_out(w_ir)
+            h_n = fan_out
+            if mode == 'both':
+                n = float(fan_in + fan_out)/2
+            elif mode == 'fan_in':
+                n = fan_in
+            else:
+                n = fan_out
+
+            for var in [rh_bias,zh_bias,nh_bias]:
+                xavier_uniform_extend_(var,n=h_n)
+
+            for var in [ri_bias,zi_bias,ni_bias]:
+                xavier_uniform_extend_(var,n=n)
+                
+def xav_bias_zero_gru_init(rnn,mode=None):
+    xav_gru_init(rnn,mode)
+    bias_zero_gru_init(rnn)
+    
+def xav_bias_xav_gru_init(rnn,mode=None):
+    xav_gru_init(rnn,mode)
+    bias_xav_gru_init(rnn,mode)
+
+def orth_xav_bias_zero_gru_init(rnn,mode=None):
+    orth_xav_gru_init(rnn,mode=mode)
+    bias_zero_gru_init(rnn)
+
+def orth_both_xav_bias_zero_gru_init(rnn):
+    return orth_xav_bias_zero_gru_init(rnn,'both')
+
+def orth_in_xav_bias_zero_gru_init(rnn):
+    return orth_xav_bias_zero_gru_init(rnn,'fan_in')
+
+def orth_out_xav_bias_zero_gru_init(rnn):
+    return orth_xav_bias_zero_gru_init(rnn,'fan_out')
+
+def both_xav_bias_zero_gru_init(rnn):
+    return xav_bias_zero_gru_init(rnn,'both')
+
+def in_xav_bias_zero_gru_init(rnn):
+    return xav_bias_zero_gru_init(rnn,'fan_in')
+
+def out_xav_bias_zero_gru_init(rnn):
+    return xav_bias_zero_gru_init(rnn,'fan_out')
+
+def in_xav_bias_xav_gru_init(rnn):
+    return xav_bias_xav_gru_init(rnn,'fan_in')
+
 def customized_init_gru(rnn):
     suffice = ['']
     if rnn.bidirectional:
@@ -22,7 +121,20 @@ def customized_init_gru(rnn):
             constant_(zh_bias,4)
             constant_(ni_bias,0)
             constant_(nh_bias,0)
-        
+
+GRU_INIT_MODE = {
+    None:None,
+    'bias_shift':customized_init_gru,
+    'orth_xav_bias_zero_gru_init':orth_xav_bias_zero_gru_init,
+    'orth_both_xav_bias_zero_gru_init':orth_both_xav_bias_zero_gru_init,
+    'orth_in_xav_bias_zero_gru_init':orth_in_xav_bias_zero_gru_init,
+    'orth_out_xav_bias_zero_gru_init':orth_out_xav_bias_zero_gru_init,
+    'both_xav_bias_zero_gru_init':both_xav_bias_zero_gru_init,
+    'in_xav_bias_zero_gru_init':in_xav_bias_zero_gru_init,
+    'out_xav_bias_zero_gru_init':out_xav_bias_zero_gru_init,
+    'in_xav_bias_xav_gru_init':in_xav_bias_xav_gru_init
+}
+            
 def _forward(rnn,x,lengths,state=None,batch_first=True):
     #Input:N,C,L, Output: N,C,L
     if not batch_first:
@@ -39,6 +151,8 @@ def _forward(rnn,x,lengths,state=None,batch_first=True):
 class _RNN(BasicModel):
     def __init__(self,in_channels,train_init_value=False,init_value=None,customized_init=None,**rnn_setting):
         super().__init__()
+        if isinstance(customized_init,str):
+            customized_init = GRU_INIT_MODE[customized_init]
         self.customized_init = customized_init
         self.rnn = self._create_rnn(in_channels,**rnn_setting)
         self.rnn_setting = rnn_setting
@@ -76,6 +190,11 @@ class _RNN(BasicModel):
         config['customized_init'] = str(self.customized_init)
         return config
     
+    def reset_parameters(self):
+        super().reset_parameters()
+        if self.customized_init is not None:
+            self.customized_init(self.rnn)
+    
 class GRU(_RNN):
     def _create_rnn(self,in_channels,**rnn_setting):
         return nn.GRU(in_channels,**rnn_setting)
@@ -87,11 +206,6 @@ class GRU(_RNN):
             state = self.init_states.unsqueeze(1).repeat(1,len(x),1)
         x = _forward(self.rnn,x,lengths,state,self.batch_first)
         return x
-
-    def reset_parameters(self):
-        super().reset_parameters()
-        if self.customized_init is not None:
-            self.customized_init(self.rnn)
     
 class LSTM(_RNN):
     def _create_rnn(self,in_channels,**rnn_setting):
@@ -103,53 +217,39 @@ class LSTM(_RNN):
         x = _forward(self.rnn,x,lengths,state,self.batch_first)
         return x
 
-class GatedStackGRU(BasicModel):
-    def __init__(self,in_channels,hidden_size,num_layers=None,**kwargs):
+class ProjectedGRU(BasicModel):
+    def __init__(self,in_channels,hidden_size,out_channels,num_layers=None,
+                  customized_cnn_init=None,customized_gru_init=None,**kwargs):
         super().__init__()
         self.num_layers = num_layers or 1
         self.in_channels = in_channels
         self.hidden_size = hidden_size
-        self.rnn_0 = GRU(in_channels=in_channels,bidirectional=True,
-                         hidden_size=hidden_size,batch_first=True,
-                         num_layers=self.num_layers)
-        self.rnn_1 = GRU(in_channels=in_channels,bidirectional=True,
-                         hidden_size=hidden_size,batch_first=True,
-                         num_layers=self.num_layers)
-        self.project_0 = Conv1d(in_channels=self.rnn_0.out_channels,out_channels=1,kernel_size=1)
-        self.project_1 = Conv1d(in_channels=self.rnn_1.out_channels,out_channels=1,kernel_size=1)
-        self.out_channels = 2
+        self.out_channels = out_channels
+        self.customized_cnn_init = customized_cnn_init
+        self.customized_gru_init = customized_gru_init
+        self.rnn = GRU(in_channels=self.in_channels,bidirectional=True,
+                       hidden_size=self.hidden_size,batch_first=True,
+                       num_layers=self.num_layers,customized_init=customized_gru_init)
+        self.project = Conv1d(in_channels=self.rnn.out_channels,
+                              out_channels=self.out_channels,kernel_size=1,
+                              customized_init=customized_cnn_init)
+        self.reset_parameters()
         
     def get_config(self):
         config = {}
         config['in_channels'] = self.in_channels
         config['out_channels'] = self.out_channels
         config['hidden_size'] = self.hidden_size
-        config['num_layers'] = self.num_layers
+        config['customized_cnn_init'] = self.customized_cnn_init
+        config['customized_gru_init'] = self.customized_gru_init
         return config
         
-    def forward(self,x,lengths):
-        if isinstance(x,list):
-            feature_for_gate_0, feature_for_gate_1 = x
+    def forward(self,x,lengths,return_intermediate=False):
+        post_rnn = self.rnn(x,lengths)
+        result,lengths,_ = self.project(post_rnn,lengths)
+        if return_intermediate:
+            return result,post_rnn
         else:
-            feature_for_gate_0 = feature_for_gate_1 = x
-        post_rnn_0 = self.rnn_0(feature_for_gate_0,lengths)
-        result_0,lengths,_ = self.project_0(post_rnn_0,lengths)
-        gated_result_0 = torch.sigmoid(result_0)
-        gated_x = feature_for_gate_1*gated_result_0
-        post_rnn_1 = self.rnn_1(gated_x,lengths)
-        result_1,lengths,_ = self.project_1(post_rnn_1,lengths)
-        gated_result_1 = torch.sigmoid(result_1)
-        result = torch.cat([gated_result_0,gated_result_1],1)
+            return result
 
-        self._distribution['post_rnn_0'] = post_rnn_0
-        self._distribution['result_0'] = result_0
-        self._distribution['gated_result_0'] = gated_result_0
-        self._distribution['gated_x'] = gated_x
-        self._distribution['post_rnn_1'] = post_rnn_1
-        self._distribution['result_1'] = result_1
-        self._distribution['gated_result_1'] = gated_result_1
-        self._distribution['gated_stack_result'] = result
-        return result
-        
-GRU_INIT_MODE = {None:None,'bias_shift':customized_init_gru}
-RNN_TYPES = {'GRU':GRU,'LSTM':LSTM,'GatedStackGRU':GatedStackGRU}
+RNN_TYPES = {'GRU':GRU,'LSTM':LSTM}

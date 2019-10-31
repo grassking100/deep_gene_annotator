@@ -1,13 +1,14 @@
 import torch
 from torch import nn
-from .customized_layer import Conv1d , BasicModel
+from .customized_layer import BasicModel
 from .rnn import GRU, LSTM,GRU_INIT_MODE
 from .customized_rnn import RNN_TYPES, ConcatGRU
 from .attention import ATTENTION_LAYER
-from .hier_atten_rnn import HierAttenGRU
-from .cnn import STACK_CNN_CLASS
+from .hier_atten_rnn import HierAttenGRU,GatedStackGRU
+from .cnn import STACK_CNN_CLASS,Conv1d
 
 RNN_TYPES = dict(RNN_TYPES)
+RNN_TYPES['GatedStackGRU'] = GatedStackGRU
 RNN_TYPES['HierAttenGRU'] = HierAttenGRU
 
 class FeatureBlock(BasicModel):
@@ -18,6 +19,7 @@ class FeatureBlock(BasicModel):
         self.in_channels=in_channels
         self.cnn_setting = cnn_setting
         self.num_layers = num_layers
+        self.cnns = None
         stack_cnn_class = stack_cnn_class or 'ConcatCNN'
         self.norm_mode = norm_mode or 'after_activation'
         self.stack_cnn_class = STACK_CNN_CLASS[stack_cnn_class]
@@ -51,12 +53,16 @@ class FeatureBlock(BasicModel):
         in_channels=self.in_channels
         self.cnns = self.stack_cnn_class(in_channels,self.num_layers,self.cnn_setting,
                                          norm_mode=self.norm_mode,**self.kwargs)
+        customized_init = None
+        if 'customized_init' in self.cnn_setting:
+            customized_init = self.cnn_setting['customized_init']
         if self.compression_factor < 1:
             in_num = self.cnns.out_channels
             out_num = int(in_num*self.compression_factor)
             self.transition = CANBlock(in_channels=in_num,kernel_size=1,
                                        out_channels=out_num,
-                                       norm_mode=self.norm_mode)
+                                       norm_mode=self.norm_mode,
+                                       customized_init=customized_init)
             in_channels = self.transition.out_channels
         else:
             in_channels = self.cnns.out_channels
@@ -91,12 +97,13 @@ class RelationBlock(BasicModel):
                 raise Exception("{} is not supported".format(rnn_type))
         else:        
             self.rnn_type = rnn_type
+        self.rnn = None
         self._build_layers()
         self.reset_parameters()
         self.save_distribution = True
 
     def get_config(self):
-        config = {}
+        config = dict(self.rnn.get_config())
         config['in_channels'] = self.in_channels
         config['out_channels'] = self.out_channels
         rnn_setting = dict(self.rnn_setting)
@@ -138,8 +145,7 @@ class ProjectLayer(BasicModel):
         else:
             self.kernel_size = kernel_size
         self.cnn = Conv1d(in_channels=in_channels,out_channels=out_channels,
-                          kernel_size=self.kernel_size)
-        self.customized_init = customized_init
+                          kernel_size=self.kernel_size,customized_init=customized_init)
         self.reset_parameters()
 
     def forward(self,x,lengths):
@@ -151,11 +157,6 @@ class ProjectLayer(BasicModel):
                   'kernel_size':self.kernel_size,
                   'in_channels':self.in_channels}
         return config
-    
-    def reset_parameters(self):
-        super().reset_parameters()
-        if self.customized_init is not None:
-            self.customized_init(self.cnn,gain=1)
     
 class SeqAnnModel(BasicModel):
     def __init__(self,feature_block,relation_block,
@@ -275,6 +276,7 @@ class Disrim(BasicModel):
                        num_layers=self.rnn_num, batch_first=True,**kwargs)
         self.project = Conv1d(in_channels=self.rnn.out_channels,
                               out_channels=1,kernel_size=1)
+        self.reset_parameters()
 
     def get_config(self):
         config = {}
@@ -372,7 +374,7 @@ class SeqAnnBuilder:
                                       'rnn_type':'GRU'}
         self.discrim_config = {'kernel_size':32}
         self.attention_config = {'attention_type':'BiRNNAttention','attention_setting':{}}
-        self.project_layer_config = {}
+        self.project_layer_config = {'kernel_size':1}
         self.in_channels = 4
         self.out_channels = 3
         self.use_sigmoid = True
@@ -385,25 +387,9 @@ class SeqAnnBuilder:
         attention_block = None        
         relation_block_config = dict(self.relation_block_config)
         project_layer_config = dict(self.project_layer_config)
-        relation_init_func = None
-        project_layer_init_func = None
         relation_block = None
         project_layer = None
         predict_site_layer = None
-
-        if 'customized_gru_init_mode' in relation_block_config['rnn_setting']:
-            mode = relation_block_config['rnn_setting']['customized_gru_init_mode']
-            relation_init_func = GRU_INIT_MODE[mode]
-            
-        relation_block_config['rnn_setting']['customized_init'] = relation_init_func
-
-        if 'customized_gru_init_mode' in relation_block_config['rnn_setting']:
-            del relation_block_config['rnn_setting']['customized_gru_init_mode']
-
-        if 'customized_init' in project_layer_config and project_layer_config['customized_init']:
-            project_layer_init_func = customized_init_cnn
-            
-        project_layer_config['customized_init'] = project_layer_init_func
 
         if self.use_attention:
             attention_class = ATTENTION_LAYER[self.attention_config['attention_type']]

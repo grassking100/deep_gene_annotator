@@ -186,12 +186,13 @@ class GFFCompare(Callback):
             os.system(command)
 
 class ModelCheckpoint(Callback):
-    def __init__(self,target=None,optimize_min=True,patient=None,path=None,period=None,
-                 save_best_weights=False,restore_best_weights=False,prefix=None):
+    def __init__(self,target=None,optimize_min=True,patient=None,path=None,
+                 period=None,save_best_weights=False,restore_best_weights=False,
+                 prefix=None,explicit_period=False):
         super().__init__(prefix)
         self.target = target or 'val_loss'
         self.optimize_min = optimize_min
-        self.patient = patient or 16
+        self.patient = patient
         self.path = path
         self.period = period
         self.save_best_weights = save_best_weights
@@ -201,15 +202,44 @@ class ModelCheckpoint(Callback):
         self._best_epoch = None
         self._model_weights = None
         self._worker = None
+        self.explicit_period = explicit_period
         
     def on_work_begin(self, worker,**kwargs):
-        self._counter = 0
+        self._worker = worker
         self._best_result = None
-        self._best_epoch = 0
+        if self._worker.best_result is not None:
+            self._best_result = self._worker.best_result[self.target]
+        self._best_epoch = self._worker.best_epoch
         self._model_weights = None
         if self.save_best_weights:
             self._model_weights = get_copied_state_dict(worker.model)
-        self._worker = worker
+        
+        last_status_path = os.path.join(self.path,'last_model.status')
+        latest_status_path = os.path.join(self.path,'latest_model.status')
+        latest_model_path = os.path.join(self.path,'latest_model.pth')
+        model_path = None
+        if os.path.exists(latest_model_path):
+            print("Load latest model from {}".format(latest_model_path))
+            self._model_weights = torch.load(latest_model_path)
+        if os.path.exists(latest_status_path):
+            #Load latest model
+            with open(latest_status_path,"r") as fp:
+                latest_status = json.load(fp)
+            if os.path.exists(last_status_path):
+                with open(last_status_path,"r") as fp:
+                    last_status = json.load(fp)
+                if last_status['epoch'] <= latest_status['epoch']:
+                    model_path = latest_status['path']
+                else:
+                    model_path = last_status['path']
+            else:
+                model_path = latest_status['path']
+                
+            #Load last model
+            #last_status_path = os.path.join(self.path,'last_model.pth')
+        if model_path is not None and os.path.exists(model_path):
+            print("Load last model from {}".format(model_path))
+            self._worker.model.load_state_dict(torch.load(model_path),strict=False)
 
     def get_config(self,**kwargs):
         config = super().get_config(**kwargs)
@@ -219,6 +249,7 @@ class ModelCheckpoint(Callback):
         config['period'] = self.period
         config['save_best_weights'] = self.save_best_weights
         config['restore_best_weights'] = self.restore_best_weights
+        config['explicit_period'] = self.explicit_period
         return config
 
     @property
@@ -230,11 +261,6 @@ class ModelCheckpoint(Callback):
 
     def on_epoch_begin(self,counter,**kwargs):
         self._counter = counter
-        if self.path is not None and self.period is not None:
-            if (self._counter%self.period) == 0:
-                model_path = os.path.join(self.path,'model_epoch_{}.pth').format(self._counter)
-                print("Save model at "+model_path)
-                torch.save(self._worker.model.state_dict(),model_path)
 
     def on_epoch_end(self,metric,**kwargs):
         target = metric[self.target]
@@ -270,7 +296,28 @@ class ModelCheckpoint(Callback):
                     warnings.simplefilter("ignore",category=WorkerProtectedWarning)
                     self._worker.is_running = False
 
+        if self.path is not None and self.period is not None:
+            if (self._counter%self.period) == 0:
+                if self.explicit_period:
+                    model_path = os.path.join(self.path,'model_epoch_{}.pth').format(self._counter)
+                else:
+                    model_path = os.path.join(self.path,'latest_model.pth')
+                print("Save model at "+model_path)
+                torch.save(self._worker.model.state_dict(),model_path)
+                status_path = os.path.join(self.path,'latest_model.status')
+                with open(status_path,"w") as fp:
+                    status = {"epoch":self._counter,"path":model_path}
+                    json.dump(status,fp, indent=4)
+
     def on_work_end(self):
+        if self.path is not None:
+            model_path =  os.path.join(self.path,'last_model.pth')
+            torch.save(self._worker.model.state_dict(),model_path)
+            status_path = os.path.join(self.path,'last_model.status')
+            with open(status_path,"w") as fp:
+                status = {"epoch":self._counter,"path":model_path}
+                json.dump(status,fp, indent=4)
+
         print("Best "+str(self.target)+": "+str(self._best_result))
         if self.save_best_weights:
             if self.restore_best_weights:
@@ -287,10 +334,86 @@ class ModelCheckpoint(Callback):
                     best_status = {'best_epoch':self.best_epoch,'path':model_path,
                                    'formula':'(self._counter-self.best_epoch) >= self.patient'}
                     json.dump(best_status,fp, indent=4)
+            
+class ExecutorCheckpoint(Callback):
+    def __init__(self,path,period=None,prefix=None,explicit_period=False):
+        super().__init__(prefix)
+        self.path = path
+        self.period = period or 1
+        self._counter = None
+        self._executor_state_dict = None
+        self._executor = None
+        self.explicit_period = explicit_period
+        
+    def on_work_begin(self, worker,**kwargs):
+        self._executor = worker.executor
+        self._executor_state_dict = self._executor.state_dict()
+        
+        
+        last_status_path = os.path.join(self.path,'last_executor.status')
+        latest_status_path = os.path.join(self.path,'latest_executor.status')
+        latest_exec_path = os.path.join(self.path,'latest_executor.pth')
+        executor_path = None
+        if os.path.exists(latest_exec_path):
+            print("Load latest executor from {}".format(latest_exec_path))
+            self._executor_state_dict = torch.load(latest_exec_path)
+        
+        if os.path.exists(latest_status_path):
+            #Load latest model
+            with open(latest_status_path,"r") as fp:
+                latest_status = json.load(fp)
+            if os.path.exists(last_status_path):
+                with open(last_status_path,"r") as fp:
+                    last_status = json.load(fp)
+                if last_status['epoch'] <= latest_status['epoch']:
+                    executor_path = latest_status['path']
+                else:
+                    executor_path = last_status['path']
+            else:
+                executor_path = latest_status['path']
 
-        if self.best_epoch == 0 and self.path is not None:
-            model_path =  os.path.join(self.path,'last_model.pth')
-            torch.save(self._worker.model.state_dict(),model_path)
+        ###
+        #Load latest executor
+        #latest_status_path = os.path.join(self.path,'latest_executor.pth')
+        #if os.path.exists(latest_status_path):
+        #    print("Load latest executor from {}".format(latest_status_path))
+        #    self._executor_state_dict = torch.load(latest_status_path)
+        
+        #Load last executor
+        #last_status_path = os.path.join(self.path,'last_executor.pth')
+        if executor_path is not None and os.path.exists(executor_path):
+            print("Load last executor from {}".format(executor_path))
+            self._executor.load_state_dict(torch.load(executor_path))
+
+    def get_config(self,**kwargs):
+        config = super().get_config(**kwargs)
+        config['period'] = self.period
+        return config
+
+    def on_epoch_begin(self,counter,**kwargs):
+        self._counter = counter
+
+    def on_epoch_end(self,metric,**kwargs):
+        self._executor_state_dict = self._executor.state_dict()
+        if (self._counter%self.period) == 0:
+            if self.explicit_period:
+                executor_path = os.path.join(self.path,'executor_epoch_{}.pth').format(self._counter)
+            else:
+                executor_path = os.path.join(self.path,'latest_executor.pth')
+            print("Save executor at "+executor_path)
+            torch.save(self._executor_state_dict,executor_path)
+            status_path = os.path.join(self.path,'latest_executor.status')
+            with open(status_path,"w") as fp:
+                status = {"epoch":self._counter,"path":executor_path}
+                json.dump(status,fp, indent=4)
+
+    def on_work_end(self):
+        executor_path =  os.path.join(self.path,'last_executor.pth')
+        torch.save(self._executor_state_dict,executor_path)
+        status_path = os.path.join(self.path,'last_executor.status')
+        with open(status_path,"w") as fp:
+            status = {"epoch":self._counter,"path":executor_path}
+            json.dump(status,fp, indent=4)
 
 class TensorboardCallback(Callback):
     def __init__(self,tensorboard_writer,prefix=None):
@@ -396,7 +519,7 @@ class WarningRecorder(Callback):
 
     def on_work_end(self):
         if self.path is not None:
-            with open(self.path,'w') as fp:
+            with open(self.path,'a+') as fp:
                 for warning in self._data:
                     fp.write("{}\n".format(warning))
         
@@ -429,6 +552,15 @@ class Recorder(DataCallback):
 
     def _reset(self):
         self._data = {}
+        if self.path is not None and os.path.exists(self.path):
+            with open(self.path,'r') as fp:
+                self._data = json.load(fp)
+
+    def on_work_begin(self,epoch_start=None,**kwargs):
+        super().on_work_begin()
+        if epoch_start is not None:
+            for type_,value in self._data.items():
+                self._data[type_] = value[:epoch_start-1]
 
     def on_epoch_end(self,metric,**kwargs):
         for type_,value in metric.items():
@@ -436,7 +568,7 @@ class Recorder(DataCallback):
                 self._data[type_] = []
             self._data[type_].append(value)
             
-    def on_work_end(self):
+    #def on_work_end(self):
         if self.path is not None:
             with open(self.path,'w') as fp:
                 json.dump(self.data,fp, indent=4)
@@ -735,3 +867,39 @@ class SeqLogo(Callback):
         index = [DNA_CODES.index(alpha) for alpha in list("ACGT")]
         background_freq_ = background_freq[index]
         ppms2meme(ppm_dfs,names,self._meme_path,strands='+',background=background_freq_)
+
+class OptunaPruning(Callback):
+    def __init__(self,trial,target=None,prefix=None):
+        super().__init__(prefix)
+        self.trial = trial
+        self.target = target or 'val_loss'
+        self._counter = None
+        self._worker = None
+        self.is_prune = None
+        
+    def on_work_begin(self, worker,**kwargs):
+        self._counter = 0
+        self._worker = worker
+        if not hasattr(self._worker,'best_epoch') or not hasattr(self._worker,'best_result'):
+            raise Exception("The worker should has best_epoch and best_result to work with OptunaPruning")
+        self.is_prune = False
+
+    def get_config(self,**kwargs):
+        config = super().get_config(**kwargs)
+        config['target'] = self.target
+        return config
+
+    def on_epoch_begin(self,counter,**kwargs):
+        self._counter = counter - 1
+
+    def on_epoch_end(self,metric,**kwargs):
+        target = metric[self.target]
+        if str(target) == 'nan':
+            return
+
+        self.trial.report(target,self._counter)
+        if self.trial.should_prune():
+            self.is_prune = True
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore",category=WorkerProtectedWarning)
+                self._worker.is_running = False

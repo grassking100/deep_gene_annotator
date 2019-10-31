@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-from abc import abstractmethod
+from abc import abstractmethod,ABCMeta,abstractproperty
 from .loss import CCELoss,bce_loss,mean_by_mask
 from .utils import get_seq_mask
 from .inference import basic_inference
@@ -24,7 +24,7 @@ def _predict(model,inputs,lengths,inference):
         outputs = inference(outputs,masks)
     return outputs,lengths,masks
 
-class IExecutor:
+class IExecutor(metaclass=ABCMeta):
     @abstractmethod
     def fit(self,**kwargs):
         pass
@@ -39,6 +39,18 @@ class IExecutor:
         pass
     @abstractmethod
     def get_config(self,**kwargs):
+        pass
+    @abstractproperty
+    def optimizer(self):
+        pass
+    @abstractmethod
+    def optimizer(self,optimizer):
+        pass
+    @abstractproperty
+    def state_dict(self):
+        pass
+    @abstractmethod        
+    def load_state_dict(self,state_dicts):
         pass
 
 class _Executor(IExecutor):
@@ -71,8 +83,23 @@ class BasicExecutor(_Executor):
         super().__init__()
         self.grad_clip = None
         self.grad_norm = None
-        self.optimizer = None
+        self._optimizer = None
 
+    @property
+    def optimizer(self):
+        return self._optimizer
+
+    @optimizer.setter
+    def optimizer(self,optimizer):
+        self._optimizer = optimizer
+        
+    def state_dict(self):
+        state_dict = self._optimizer.state_dict()
+        return state_dict
+        
+    def load_state_dict(self,state_dicts):
+        self._optimizer.load_state_dict(state_dicts)
+        
     def get_config(self,**kwargs):
         config = super().get_config(**kwargs)
         config['grad_clip'] = self.grad_clip
@@ -106,10 +133,30 @@ class GANExecutor(_Executor):
     def __init__(self):
         super().__init__()
         self.reverse_inference = None
-        self.optimizer = None
         self._label_optimizer = None
         self._discrim_optimizer = None
 
+    @property
+    def optimizer(self):
+        return self._label_optimizer, self._discrim_optimizer
+
+    @optimizer.setter
+    def optimizer(self,optimizer):
+        if len(optimizer) != 2:
+            raise Exception("The optimizer should be a list of two Optimizer object")
+        self._label_optimizer, self._discrim_optimizer = optimizer
+
+    def state_dict(self):
+        label_optim_state_dict = self._label_optimizer.state_dict()
+        discrim_optim_state_dict = self._discrim_optimizer.state_dict()
+        return label_optim_state_dict,discrim_optim_state_dict
+        
+    def load_state_dict(self,state_dicts):
+        if len(state_dicts) != 2:
+            raise Exception("The state_dicts should be a list of two OrderedDict object")
+        self._label_optimizer.load_state_dict(state_dicts[0])
+        self._discrim_optimizer.load_state_dict(state_dicts[1])
+        
     def get_config(self,**kwargs):
         config = super().get_config(**kwargs)
         config['reverse_inference'] = self.reverse_inference
@@ -171,5 +218,3 @@ class GANExecutor(_Executor):
         if self.optimizer is None:
             self._label_optimizer = torch.optim.Adam(model.gan.parameters())
             self._discrim_optimizer = torch.optim.Adam(model.discrim.parameters())
-        else:
-            self._label_optimizer, self._discrim_optimizer = self.optimizer

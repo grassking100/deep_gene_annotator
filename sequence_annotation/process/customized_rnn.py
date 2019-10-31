@@ -2,7 +2,8 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.nn.init import constant_,uniform_
-from .customized_layer import BasicModel,Conv1d
+from .customized_layer import BasicModel
+from .cnn import Conv1d 
 from .noisy_activation import SymNoisyHardSigmoid
 from .rnn import _RNN,LSTM,GRU,RNN_TYPES
 
