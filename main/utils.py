@@ -71,7 +71,7 @@ def load_data(fasta_path,ann_seqs_path,id_paths,select_each_type=False,**kwargs)
     
     return data
 
-OPTIMIZER_CLASS = {'Adam':optim.Adam,'SGD':optim.SGD}
+OPTIMIZER_CLASS = {'Adam':optim.Adam,'SGD':optim.SGD,'AdamW':optim.AdamW}
 
 def optimizer_generator(type_,model,momentum=0,nesterov=False,**kwargs):
     
@@ -79,17 +79,18 @@ def optimizer_generator(type_,model,momentum=0,nesterov=False,**kwargs):
         raise Exception("Optimizer should be {}, but got {}".format(OPTIMIZER_CLASS,type_))
         
     filter_ = filter(lambda p: p.requires_grad, model.parameters())
-    if type_ == 'Adam':
+    optim = OPTIMIZER_CLASS[type]
+    if isinstance(optim,optim.Adam) or isinstance(optim,optim.AdamW):
         if momentum > 0 or nesterov:
             raise
-        return torch.optim.Adam(filter_,**kwargs)
+        return optim(filter_,**kwargs)
     else:
-        return torch.optim.SGD(filter_,momentum=momentum,
-                               nesterov=nesterov,**kwargs)
+        return optim(filter_,momentum=momentum,
+                     nesterov=nesterov,**kwargs)
 
 def get_executor(model,optim_type,use_naive=True,use_discrim=False,set_loss=True,set_optimizer=True,
                  learning_rate=None,disrim_learning_rate=None,intron_coef=None,other_coef=None,
-                 nontranscript_coef=None,gamma=None,transcript_answer_mask=False,
+                 nontranscript_coef=None,gamma=None,transcript_answer_mask=True,
                  transcript_output_mask=False,mean_by_mask=False,frozed_names=None,
                  weight_decay=None,site_mask_method=None,label_num=None,
                  predict_label_num=None,answer_label_num=None,output_label_num=None,
