@@ -25,12 +25,10 @@ if __name__ == '__main__':
                         help='Handle padding issue, valid options are {}'.format(', '.join(PADDING_HANDLE)))
     parser.add_argument("--padding_value",type=float,default=0)
     parser.add_argument("--bottleneck_factor",type=float)
-    parser.add_argument("--compression_factor",type=float)
-    parser.add_argument("--feature_dropout",type=float)
+    #parser.add_argument("--compression_factor",type=float)
+    #parser.add_argument("--feature_dropout",type=float)
     parser.add_argument("--norm_mode",default='after_activation')
     parser.add_argument("--out_channels",type=int,default=3)
-    parser.add_argument("--use_sigmoid",action="store_true")
-    parser.add_argument("--project_kernel_size",type=int,default=1)
     parser.add_argument("--rnn_dropout",type=float,default=0)    
     parser.add_argument("--use_common_atten",action='store_true')
     parser.add_argument("--not_use_first_atten",action='store_true')
@@ -43,33 +41,30 @@ if __name__ == '__main__':
     builder.feature_block_config['stack_cnn_class'] = args.stack_cnn_class
     builder.feature_block_config['num_layers'] = args.cnn_num
     builder.feature_block_config['norm_mode'] = args.norm_mode
-    builder.feature_block_config['cnn_setting']['out_channels'] = args.cnn_out
-    builder.feature_block_config['cnn_setting']['kernel_size'] = args.cnn_kernel
-    builder.feature_block_config['cnn_setting']['activation_function'] = args.cnn_act
-    builder.feature_block_config['cnn_setting']['padding_handle'] = args.padding_handle
-    builder.feature_block_config['cnn_setting']['padding_value'] = args.padding_value
-    builder.feature_block_config['cnn_setting']['customized_init'] = args.customized_cnn
+    builder.feature_block_config['out_channels'] = args.cnn_out
+    builder.feature_block_config['kernel_size'] = args.cnn_kernel
+    builder.feature_block_config['activation_function'] = args.cnn_act
+    builder.feature_block_config['padding_handle'] = args.padding_handle
+    builder.feature_block_config['padding_value'] = args.padding_value
+    builder.feature_block_config['customized_init'] = args.customized_cnn
     
     builder.feature_block_config['bottleneck_factor'] = args.bottleneck_factor
-    builder.feature_block_config['compression_factor'] = args.compression_factor
-    builder.feature_block_config['dropout'] = args.feature_dropout
+    #builder.feature_block_config['compression_factor'] = args.compression_factor
+    #builder.feature_block_config['dropout'] = args.feature_dropout
     
     builder.relation_block_config['rnn_type'] = args.rnn_type
-    builder.relation_block_config['rnn_setting']['num_layers'] = args.rnn_num
-    builder.relation_block_config['rnn_setting']['hidden_size'] = args.rnn_size
-    builder.relation_block_config['rnn_setting']['train_init_value'] = args.train_init_value
-    builder.relation_block_config['rnn_setting']['customized_gru_init'] = args.customized_gru_init
-    builder.relation_block_config['rnn_setting']['customized_cnn_init'] = args.customized_rnn_cnn
-    builder.relation_block_config['rnn_setting']['dropout'] = args.rnn_dropout
-    builder.relation_block_config['rnn_setting']['use_common_atten'] = args.use_common_atten
-    builder.relation_block_config['rnn_setting']['use_first_atten'] = not args.not_use_first_atten
-    builder.relation_block_config['rnn_setting']['use_second_atten'] = not args.not_use_second_atten
-    builder.relation_block_config['rnn_setting']['atten_hidden_size'] = args.atten_hidden_size
+    builder.relation_block_config['num_layers'] = args.rnn_num
+    builder.relation_block_config['hidden_size'] = args.rnn_size
+    builder.relation_block_config['train_init_value'] = args.train_init_value
+    builder.relation_block_config['customized_gru_init'] = args.customized_gru_init
+    builder.relation_block_config['customized_cnn_init'] = args.customized_rnn_cnn
+    builder.relation_block_config['dropout'] = args.rnn_dropout
+    builder.relation_block_config['use_common_atten'] = args.use_common_atten
+    builder.relation_block_config['use_first_atten'] = not args.not_use_first_atten
+    builder.relation_block_config['use_second_atten'] = not args.not_use_second_atten
+    builder.relation_block_config['atten_hidden_size'] = args.atten_hidden_size
 
-    builder.project_layer_config['kernel_size'] = args.project_kernel_size
-    
     builder.out_channels = args.out_channels
-    builder.use_sigmoid = args.use_sigmoid
     
     with open(args.config_path,"w") as fp:
         json.dump(builder.config, fp, indent=4)

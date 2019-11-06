@@ -149,15 +149,14 @@ def _forward(rnn,x,lengths,state=None,batch_first=True):
     return x
 
 class _RNN(BasicModel):
-    def __init__(self,in_channels,train_init_value=False,init_value=None,customized_init=None,**rnn_setting):
+    def __init__(self,in_channels,train_init_value=False,init_value=None,customized_init=None,**kwargs):
         super().__init__()
         if isinstance(customized_init,str):
             customized_init = GRU_INIT_MODE[customized_init]
         self.customized_init = customized_init
-        self.rnn = self._create_rnn(in_channels,**rnn_setting)
-        self.rnn_setting = rnn_setting
+        self.rnn = self._create_rnn(in_channels,**kwargs)
+        self.kwargs = kwargs
         self.in_channels = in_channels
-        self.hidden_size = self.rnn.hidden_size
         self.out_channels = self.rnn.hidden_size
         self.train_init_value = train_init_value
         self.init_value = init_value or 0
@@ -177,16 +176,14 @@ class _RNN(BasicModel):
         self.reset_parameters()
 
     @abstractmethod
-    def _create_rnn(self,in_channels,**rnn_setting):
+    def _create_rnn(self,in_channels,**kwargs):
         pass
     
     def get_config(self):
-        config = {}
-        config['in_channels'] = self.in_channels
-        config['out_channels'] = self.out_channels
+        config = super().get_config()
         config['train_init_value'] = self.train_init_value
         config['init_value'] = self.init_value
-        config['rnn_setting'] = self.rnn_setting
+        config['setting'] = self.kwargs
         config['customized_init'] = str(self.customized_init)
         return config
     
@@ -196,8 +193,8 @@ class _RNN(BasicModel):
             self.customized_init(self.rnn)
     
 class GRU(_RNN):
-    def _create_rnn(self,in_channels,**rnn_setting):
-        return nn.GRU(in_channels,**rnn_setting)
+    def _create_rnn(self,in_channels,**kwargs):
+        return nn.GRU(in_channels,**kwargs)
     
     def forward(self,x,lengths=None,state=None):
         if lengths is None:
@@ -208,8 +205,8 @@ class GRU(_RNN):
         return x
     
 class LSTM(_RNN):
-    def _create_rnn(self,in_channels,**rnn_setting):
-        return nn.LSTM(in_channels,**rnn_setting)
+    def _create_rnn(self,in_channels,**kwargs):
+        return nn.LSTM(in_channels,**kwargs)
     
     def forward(self,x,lengths,state=None):
         if state is None:
@@ -218,34 +215,33 @@ class LSTM(_RNN):
         return x
 
 class ProjectedGRU(BasicModel):
-    def __init__(self,in_channels,hidden_size,out_channels,num_layers=None,
-                  customized_cnn_init=None,customized_gru_init=None,**kwargs):
+    def __init__(self,in_channels,out_channels,
+                 customized_cnn_init=None,customized_gru_init=None,
+                 norm_type=None,**kwargs):
         super().__init__()
-        self.num_layers = num_layers or 1
         self.in_channels = in_channels
-        self.hidden_size = hidden_size
         self.out_channels = out_channels
-        self.customized_cnn_init = customized_cnn_init
-        self.customized_gru_init = customized_gru_init
-        self.rnn = GRU(in_channels=self.in_channels,bidirectional=True,
-                       hidden_size=self.hidden_size,batch_first=True,
-                       num_layers=self.num_layers,customized_init=customized_gru_init)
+        self.rnn = GRU(in_channels=self.in_channels,
+                       customized_init=customized_gru_init,**kwargs)
+        self.norm_type = norm_type
+        if self.norm_type is not None:
+            self.norm = self.norm_type(in_channel[self.norm_mode])
         self.project = Conv1d(in_channels=self.rnn.out_channels,
                               out_channels=self.out_channels,kernel_size=1,
                               customized_init=customized_cnn_init)
         self.reset_parameters()
         
     def get_config(self):
-        config = {}
-        config['in_channels'] = self.in_channels
-        config['out_channels'] = self.out_channels
-        config['hidden_size'] = self.hidden_size
-        config['customized_cnn_init'] = self.customized_cnn_init
-        config['customized_gru_init'] = self.customized_gru_init
+        config = super().get_config()
+        config['rnn'] = self.rnn.get_config()
+        config['project'] = self.project.get_config()
+        config['norm_type'] = self.norm_type
         return config
         
     def forward(self,x,lengths,return_intermediate=False):
         post_rnn = self.rnn(x,lengths)
+        if self.norm_type is not None:
+            post_rnn = self.norm(post_rnn,lengths)
         result,lengths,_ = self.project(post_rnn,lengths)
         if return_intermediate:
             return result,post_rnn

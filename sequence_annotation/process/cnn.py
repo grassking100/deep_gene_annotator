@@ -22,15 +22,17 @@ def kaming_uniform_cnn_init(cnn,mode=None):
 
 CNN_INIT_MODE = {None:None,'kaming_uniform_cnn_init':kaming_uniform_cnn_init}
 
-class Conv1d(nn.Conv1d):
+class Conv1d(nn.Conv1d,BasicModel):
     def __init__(self,padding_handle=None,padding_value=None,customized_init=None,
                  *args,**kwargs):
         if isinstance(customized_init,str):
             customized_init = CNN_INIT_MODE[customized_init]
         self.customized_init = customized_init
         super().__init__(*args,**kwargs)
+        self.args = args
+        self.kwargs = kwargs
         padding_handle = padding_handle or 'valid'
-        padding_value = padding_value or 0
+        self.padding_value = padding_value or 0
         self._pad_func = None
         self.mask_kernel = None
         kernek_size = self.kernel_size[0]
@@ -48,15 +50,24 @@ class Conv1d(nn.Conv1d):
                      raise Exception("When padding_handle is partial, the padding_value should be 0")
                 if kernek_size%2 == 0:
                     bound = int(kernek_size/2)
-                    self._pad_func = nn.ConstantPad1d((bound-1,bound),padding_value)
+                    self._pad_func = nn.ConstantPad1d((bound-1,bound),self.padding_value)
                 else:
                     bound = int((kernek_size-1)/2)
-                    self._pad_func = nn.ConstantPad1d((bound,bound),padding_value)
+                    self._pad_func = nn.ConstantPad1d((bound,bound),self.padding_value)
 
         if self._padding_handle == 'partial' and kernek_size > 1:
             self.mask_kernel = torch.ones((self.out_channels,self.in_channels,self.kernel_size[0]))
         self.reset_parameters()
 
+    def get_config(self):
+        config = super().get_config()
+        config['args'] = self.args
+        config['kwargs'] = self.kwargs
+        config['padding_handle'] = self._padding_handle
+        config['padding_value'] = self.padding_value
+        config['customized_init'] = str(self.customized_init)
+        return config
+        
     def reset_parameters(self):
         super().reset_parameters()
         if self.customized_init is not None:
@@ -106,14 +117,11 @@ class Conv1d(nn.Conv1d):
         return x, new_lengths, weights
 
 class CANBlock(BasicModel):
-    def __init__(self,in_channels,kernel_size,out_channels,
-                 norm_mode=None,norm_type=None,
-                 activation_function=None,customized_init=None,**kwargs):
+    def __init__(self,in_channels,norm_mode=None,norm_type=None,
+                 activation_function=None,**kwargs):
         super().__init__()
         self.name = ""
         self.in_channels = in_channels
-        self.kernel_size = kernel_size
-        self.out_channels = out_channels
         self.norm_type = norm_type
         self.kwargs = kwargs
         if norm_mode in ["before_cnn","after_cnn","after_activation",None]:
@@ -128,9 +136,9 @@ class CANBlock(BasicModel):
             else:
                 self.activation_function = activation_function
         use_bias = self.norm_mode != "after_cnn"
-        self.cnn = Conv1d(in_channels=self.in_channels,kernel_size=self.kernel_size,
-                          out_channels=self.out_channels,bias=use_bias,
-                          customized_init=customized_init,**kwargs)
+        self.cnn = Conv1d(in_channels=self.in_channels,bias=use_bias,**kwargs)
+        self.kernel_size = self.cnn.kernel_size
+        self.out_channels = self.cnn.out_channels
         if self.norm_mode is not None:
             in_channel = {"before_cnn":self.in_channels,"after_cnn":self.out_channels,
                           "after_activation":self.out_channels}
@@ -138,7 +146,6 @@ class CANBlock(BasicModel):
                 self.norm = PaddedBatchNorm1d(in_channel[self.norm_mode])
             else:
                 self.norm = self.norm_type(in_channel[self.norm_mode])
-        self.customized_init = customized_init
         self.reset_parameters()
 
     def _normalized(self,x,lengths):
@@ -161,6 +168,7 @@ class CANBlock(BasicModel):
         return x,lengths,weights
     
     def get_config(self):
+        config = super().get_config()
         config = dict(self.kwargs)
         config['name'] = self.name
         config['in_channels'] = self.in_channels
@@ -169,33 +177,25 @@ class CANBlock(BasicModel):
         config['norm_type'] = self.norm_type
         config['norm_mode'] = self.norm_mode
         config['activation_function'] = str(self.activation_function)
-        config['customized_init'] = self.customized_init
         return config
 
 class StackCNN(BasicModel):
-    def __init__(self,in_channels,num_layers,cnn_setting,norm_mode=None):
+    def __init__(self,in_channels,num_layers,**kwargs):
         super().__init__()
         self.in_channels = in_channels
         self.num_layers = num_layers
-        self.cnn_setting = cnn_setting
-        self.norm_mode = norm_mode
+        self.kwargs = kwargs
     
     def get_config(self):
-        config = {'cnn_setting':self.cnn_setting,
-                  'num_layers':self.num_layers,
-                  'in_channels':self.in_channels,
-                  'out_channels':self.out_channels,
-                  'norm_mode':self.norm_mode}
+        config = super().get_config()
+        config.update(self.kwargs)
+        config['num_layers'] = self.num_layers,
         return config
     
 class ConcatCNN(StackCNN):
-    def __init__(self,in_channels,num_layers,cnn_setting,norm_mode=None,
-                 bottleneck_factor=None):
-        super().__init__(in_channels,num_layers,cnn_setting,norm_mode)
+    def __init__(self,in_channels,num_layers,bottleneck_factor=None,**kwargs):
+        super().__init__(in_channels,num_layers,**kwargs)
         self.bottleneck_factor = bottleneck_factor or 0
-        customized_init = None
-        if 'customized_init' in cnn_setting:
-            customized_init = cnn_setting['customized_init']
         in_num = in_channels
         self.cnns = []
         self.bottlenecks = []
@@ -205,19 +205,17 @@ class ConcatCNN(StackCNN):
                 out_num = int(in_num*self.bottleneck_factor)
                 out_num = 1 if out_num == 0 else out_num
                 bottleneck = CANBlock(in_channels=in_num,kernel_size=1,
-                                       out_channels=out_num,
-                                       norm_mode=norm_mode,
-                                       customized_init=customized_init)
+                                       out_channels=out_num,**kwargs)
                 self.bottlenecks.append(bottleneck)
                 setattr(self, 'bottleneck_'+str(index), bottleneck)
                 in_num = out_num
             setting = {}
-            for key,value in cnn_setting.items():
+            for key,value in kwargs.items():
                 if isinstance(value,list):
                     setting[key] = value[index]
                 else:
                     setting[key] = value
-            cnn = CANBlock(in_num,norm_mode=norm_mode,**setting)
+            cnn = CANBlock(in_num,**setting)
             cnn.name=str(index)
             self.cnns.append(cnn)
             setattr(self, 'cnn_'+str(index), cnn)
@@ -246,18 +244,18 @@ class ConcatCNN(StackCNN):
         return config
     
 class ResCNN(StackCNN):
-    def __init__(self,in_channels,num_layers,cnn_setting,norm_mode=None):
-        super().__init__(in_channels,num_layers,cnn_setting,norm_mode=norm_mode)
+    def __init__(self,in_channels,num_layers,**kwargs):
+        super().__init__(in_channels,num_layers,**kwargs)
         in_num = in_channels
         self.cnns = []
         for index in range(self.num_layers):
             setting = {}
-            for key,value in cnn_setting.items():
+            for key,value in kwargs.items():
                 if isinstance(value,list):
                     setting[key] = value[index]
                 else:
                     setting[key] = value
-            cnn = CANBlock(in_num,norm_mode=norm_mode,**setting)
+            cnn = CANBlock(in_num,**setting)
             cnn.name=str(index)
             self.cnns.append(cnn)
             setattr(self, 'cnn_'+str(index), cnn)

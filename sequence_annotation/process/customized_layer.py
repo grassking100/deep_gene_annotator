@@ -53,10 +53,10 @@ class PWM(nn.Module):
         else:
             raise Exception("Shape is not permmited.")
 
-class PaddedBatchNorm1d(nn.Module):
-    def __init__(self,channel_size):
+class PaddedNorm1d(nn.Module):
+    def __init__(self,norm):
         super().__init__()
-        self.norm = nn.BatchNorm1d(channel_size)
+        self.norm = norm
 
     def forward(self,x,lengths):
         """N,C,L"""
@@ -72,10 +72,31 @@ class PaddedBatchNorm1d(nn.Module):
         pad_func = nn.ConstantPad1d((0,origin_length-new_length),0)
         x = pad_func(x)
         return x
+
+class PaddedBatchNorm1d(nn.Module):
+    def __init__(self,channel_size):
+        super().__init__()
+        self.norm = PaddedNorm1d(nn.BatchNorm1d(channel_size))
+
+    def forward(self,x,lengths):
+        """N,C,L"""
+        x = self.norm(x,lengths)
+        return x
+    
+class PaddedLayerNorm1d(nn.Module):
+    def __init__(self,channel_size):
+        super().__init__()
+        self.norm = PaddedNorm1d(nn.LayerNorm(channel_size))
+
+    def forward(self,x,lengths):
+        """N,C,L"""
+        x = self.norm(x,lengths)
+        return x
     
 class BasicModel(nn.Module,metaclass=ABCMeta):
     def __init__(self):
         super().__init__()
+        self.in_channels = None
         self.out_channels = None
         self._distribution = {}
 
@@ -84,7 +105,11 @@ class BasicModel(nn.Module,metaclass=ABCMeta):
         return self._distribution
 
     def get_config(self):
-        return {}
+        config = {}
+        config['type'] = self.__class__.__name__
+        config['in_channels'] = self.in_channels
+        config['out_channels'] = self.out_channels
+        return config
 
     def reset_parameters(self):
         for layer in self.children():
