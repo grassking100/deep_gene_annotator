@@ -227,7 +227,11 @@ class SeqAnnEngine:
                 json.dump(model.get_config(),fp, indent=4)
             model_component_path = os.path.join(self._path,"model_component.txt")
             with open(model_component_path,'w') as fp:
-                fp.write(str(model)) 
+                fp.write(str(model))
+            config_path = os.path.join(self._path,"executor_config.json")
+            with open(config_path,'w') as fp:
+                json.dump(self.executor.get_config(),fp, indent=4)
+
         #Execute worker
         pre_time = time.time()
         worker.work()

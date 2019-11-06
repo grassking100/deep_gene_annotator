@@ -52,6 +52,9 @@ class IExecutor(metaclass=ABCMeta):
     @abstractmethod        
     def load_state_dict(self,state_dicts):
         pass
+    @abstractmethod        
+    def on_epoch_end(self,**kwargs):
+        pass
 
 class _Executor(IExecutor):
     def __init__(self):
@@ -60,8 +63,8 @@ class _Executor(IExecutor):
 
     def get_config(self,**kwargs):
         config = {}
-        config['loss'] = self.loss
-        config['inference'] = self.inference
+        config['loss_config'] = self.loss.get_config()
+        config['inference'] = self.inference.__name__ 
         return config
 
     def predict(self,model,inputs,lengths,**kwargs):
@@ -84,6 +87,9 @@ class BasicExecutor(_Executor):
         self.grad_clip = None
         self.grad_norm = None
         self._optimizer = None
+        self.lr_scheduler = None
+        self.lr_scheduler_target = 'loss'
+        self._lr_history = {}
 
     @property
     def optimizer(self):
@@ -94,17 +100,30 @@ class BasicExecutor(_Executor):
         self._optimizer = optimizer
         
     def state_dict(self):
-        state_dict = self._optimizer.state_dict()
+        state_dict = {'optimizer':self.optimizer.state_dict()}
+        state_dict['lr_history'] = self._lr_history
+        if self.lr_scheduler is not None:
+            state_dict['lr_scheduler'] = self.lr_scheduler.state_dict()
+        
         return state_dict
         
     def load_state_dict(self,state_dicts):
-        self._optimizer.load_state_dict(state_dicts)
-        
+        self.optimizer.load_state_dict(state_dicts['optimizer'])
+        self._lr_history = state_dicts['lr_history']
+        if self.lr_scheduler is not None:
+            self.lr_scheduler.load_state_dict(state_dicts['lr_scheduler'])
+
     def get_config(self,**kwargs):
         config = super().get_config(**kwargs)
         config['grad_clip'] = self.grad_clip
         config['grad_norm'] = self.grad_norm
+        config['optimizer_name'] = self.optimizer.__class__.__name__
         config['optimizer'] = self.optimizer.state_dict()
+        if self.lr_scheduler is not None:
+            config['lr_scheduler_name'] = self.lr_scheduler.__class__.__name__
+            config['lr_scheduler'] = self.lr_scheduler.state_dict()
+            config['lr_scheduler_target'] = self.lr_scheduler_target
+        return config
 
     def fit(self,model,inputs, labels, lengths, **kwargs):
         if self.optimizer is None:
@@ -128,6 +147,15 @@ class BasicExecutor(_Executor):
     def process(self,model):
         if self.optimizer is None:
             self.optimizer = torch.optim.Adam(model.parameters())
+
+    def on_epoch_end(self,epoch,metric,**kwargs):
+        for index,group in enumerate(self.optimizer.param_groups):
+            if index not in self._lr_history:
+                self._lr_history[index] = []
+            self._lr_history[index].append(group['lr'])
+
+        if self.lr_scheduler is not None:
+            self.lr_scheduler.step(metric[self.lr_scheduler_target],epoch=epoch)
 
 class GANExecutor(_Executor):
     def __init__(self):
@@ -162,6 +190,7 @@ class GANExecutor(_Executor):
         config['reverse_inference'] = self.reverse_inference
         config['label_optimizer'] = self._label_optimizer.state_dict()
         config['discrim_optimizer'] = self._discrim_optimizer.state_dict()
+        return config
 
     def fit(self,model,inputs, labels, lengths,**kwargs):
         if self._label_optimizer is None or self._discrim_optimizer is None:

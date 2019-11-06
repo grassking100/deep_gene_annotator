@@ -35,7 +35,8 @@ if __name__ == '__main__':
     parser.add_argument("--use_common_atten",action='store_true')
     parser.add_argument("--not_use_first_atten",action='store_true')
     parser.add_argument("--not_use_second_atten",action='store_true')
-    
+    parser.add_argument("--atten_hidden_size",type=int,default=None)
+
     #Deprecate
     parser.add_argument("--use_discrim",action="store_true")
     parser.add_argument("--disrim_rnn_size",type=int,default=16)
@@ -77,6 +78,8 @@ if __name__ == '__main__':
     builder.relation_block_config['rnn_setting']['use_common_atten'] = args.use_common_atten
     builder.relation_block_config['rnn_setting']['use_first_atten'] = not args.not_use_first_atten
     builder.relation_block_config['rnn_setting']['use_second_atten'] = not args.not_use_second_atten
+    builder.relation_block_config['rnn_setting']['atten_hidden_size'] = args.atten_hidden_size
+    
     
     builder.project_layer_config['kernel_size'] = args.project_kernel_size
     

@@ -1,3 +1,4 @@
+from abc import abstractmethod,ABCMeta
 import numpy as np
 import torch
 import torch.nn as nn
@@ -10,8 +11,6 @@ from ..genome_handler.ann_seq_processor import get_start, get_end
 EPSILON=1e-32
 
 def mean_by_mask(value,mask):
-    #L = value.shape[1]
-    #mask = mask[:,:L].float()
     return (value * mask).sum()/(mask.sum()+EPSILON)
 
 def bce_loss(outputs,answers,mask=None):
@@ -20,11 +19,22 @@ def bce_loss(outputs,answers,mask=None):
         loss = mean_by_mask(loss,mask)
     return loss
 
-class FocalLoss(nn.Module):
+class ILoss(nn.Module,metaclass=ABCMeta):
+    @abstractmethod
+    def get_config(self):
+        pass
+
+class FocalLoss(ILoss):
     def __init__(self, gamma=None):
         super().__init__()
         self.gamma = gamma or 0
 
+    def get_config(self):
+        config = {}
+        config['name'] = self.__class__.__name__
+        config['gamma'] = self.gamma
+        return config
+        
     def forward(self, output, answer, mask, **kwargs):
         """data shape is N,C,L"""
         """data shape is N,C,L"""
@@ -47,11 +57,16 @@ class CCELoss(nn.Module):
     #Categorical cross entropy
     def __init__(self):
         super().__init__()
-        self.loss = FocalLoss(0)
+        self._loss = FocalLoss(0)
 
+    def get_config(self):
+        config = {}
+        config['name'] = self.__class__.__name__
+        return config
+        
     def forward(self, output, answer, mask, **kwargs):
         """data shape is N,C,L"""
-        loss =  self.loss(output,answer, mask, **kwargs)
+        loss =  self._loss(output,answer, mask, **kwargs)
         return loss
 
 class SeqAnnLoss(nn.Module):
@@ -65,6 +80,17 @@ class SeqAnnLoss(nn.Module):
         self.transcript_output_mask = transcript_output_mask
         self.transcript_answer_mask = transcript_answer_mask
         self.mean_by_mask = mean_by_mask
+        
+    def get_config(self):
+        config = {}
+        config['name'] = self.__class__.__name__
+        config['intron_coef'] = self.intron_coef
+        config['other_coef'] = self.other_coef
+        config['nontranscript_coef'] = self.nontranscript_coef
+        config['transcript_output_mask'] = self.transcript_output_mask
+        config['transcript_answer_mask'] = self.transcript_answer_mask
+        config['mean_by_mask'] = self.mean_by_mask
+        return config
         
     def forward(self, output, answer, mask,**kwargs):
         """
@@ -142,11 +168,19 @@ class LabelLoss(nn.Module):
         self.loss = loss
         self.predict_inference = basic_inference(3)
         self.answer_inference = basic_inference(3)
+        
+    def get_config(self):
+        config = {}
+        config['name'] = self.__class__.__name__
+        config['loss_config'] = self.loss.get_config()
+        config['predict_inference'] = self.predict_inference.__name__
+        config['answer_inference'] = self.answer_inference.__name__
+        return config
             
     def forward(self, output, answer, mask ,**kwargs):
-        site_predict = self.predict_inference(output,mask)
-        site_answer = self.answer_inference(answer,mask)
-        loss = self.loss(site_predict,site_answer, mask)
+        label_predict = self.predict_inference(output,mask)
+        label_answer = self.answer_inference(answer,mask)
+        loss = self.loss(label_predict,label_answer, mask)
         return loss
     
 def signals2site_mask(signals,signal_index):

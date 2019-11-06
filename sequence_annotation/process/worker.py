@@ -4,6 +4,7 @@ import os,sys
 import time
 import json
 import torch
+import numpy as np
 from abc import ABCMeta, abstractmethod
 from .data_generator import SeqDataset,SeqGenerator
 from .executor import BasicExecutor
@@ -160,13 +161,14 @@ class TrainWorker(Worker):
         self._save_setting()
         #Load best record 
         self._best_epoch = 0
+
         best_path = os.path.join(self.path,"best_record.json")
         if os.path.exists(best_path):
-            print("Load best record from {}".format(best_path))
             with open(best_path,"r") as fp:
                 status = json.load(fp)
                 self._best_epoch = status['best_epoch']
                 self._best_result = status['best_result']
+            print("Load best record from of epoch {} from {}".format(self._best_epoch,best_path))
 
     def _work(self):
         """Train model"""
@@ -178,7 +180,7 @@ class TrainWorker(Worker):
         batch_info = "Epoch: ({}/{}), {} {:.1f}% of data"
         epoch_info = "Epoch: ({}/{}), Time cost of: {}, {}"
         gradient_warning = "Epoch {}: {} have gradients which are larger than one, the max value is {}"
-        print(start,end)
+        print("Start from {} to {}".format(start,end-1))
         for epoch in range(start,end):
             pre_time = time.time()
             if self._writer is not None:
@@ -219,6 +221,8 @@ class TrainWorker(Worker):
             record.update(train_record)
             record.update(val_record)
             record.update(other_record)
+            
+            self.executor.on_epoch_end(epoch=epoch,metric=record)
             self._train_callbacks.on_epoch_end(metric=train_record)
             self._val_callbacks.on_epoch_end(metric=val_record)
             self._other_callbacks.on_epoch_end(metric=record,warnings=warnings)
@@ -238,7 +242,8 @@ class TrainWorker(Worker):
         if self.best_epoch is not None:
             self._best_result = {}
             for key,value in self.result.items():
-                self._best_result[key] = self.result[key][self.best_epoch - 1 - self._epoch_start]
+                self._best_result[key] = self.result[key][self.best_epoch - 1]
+            print("Save best result of epoch {}".format(self.best_epoch))
             if self.path is not None:    
                 best_path = os.path.join(self.path,"best_record.json")
                 best_result = {'best_epoch':self.best_epoch,

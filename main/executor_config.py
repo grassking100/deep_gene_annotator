@@ -23,10 +23,13 @@ if __name__ == '__main__':
     parser.add_argument("--answer_label_num",type=int)
     parser.add_argument("--output_label_num",type=int)
     parser.add_argument("--grad_clip",type=float)
+    parser.add_argument("--grad_norm",type=float)
     parser.add_argument("--optim_type",type=str,required=True)
     parser.add_argument("--momentum",type=float,default=0)
     parser.add_argument("--nesterov",action='store_true')
-    
+    parser.add_argument("--reduce_lr_on_plateau",action='store_true')
+    parser.add_argument("--amsgrad",action='store_true')
+
     args = parser.parse_args()    
     config_path = args.config_path
     config = vars(args)

@@ -71,22 +71,28 @@ def load_data(fasta_path,ann_seqs_path,id_paths,select_each_type=False,**kwargs)
     
     return data
 
-OPTIMIZER_CLASS = {'Adam':optim.Adam,'SGD':optim.SGD,'AdamW':optim.AdamW}
+OPTIMIZER_CLASS = {'Adam':optim.Adam,'SGD':optim.SGD,'AdamW':optim.AdamW,'RMSprop':optim.RMSprop}
 
-def optimizer_generator(type_,model,momentum=0,nesterov=False,**kwargs):
+def optimizer_generator(type_,model,momentum=0,nesterov=False,amsgrad=False,**kwargs):
     
     if type_ not in OPTIMIZER_CLASS:
         raise Exception("Optimizer should be {}, but got {}".format(OPTIMIZER_CLASS,type_))
         
     filter_ = filter(lambda p: p.requires_grad, model.parameters())
-    optim = OPTIMIZER_CLASS[type]
-    if isinstance(optim,optim.Adam) or isinstance(optim,optim.AdamW):
+    optimizer = OPTIMIZER_CLASS[type_]
+    if optimizer in [optim.Adam,optim.AdamW]:
         if momentum > 0 or nesterov:
             raise
-        return optim(filter_,**kwargs)
+        return optimizer(filter_,amsgrad=amsgrad,**kwargs)
+    elif optimizer in [optim.RMSprop]:
+        if nesterov or amsgrad:
+            raise
+        return optimizer(filter_,momentum=momentum,**kwargs)
     else:
-        return optim(filter_,momentum=momentum,
-                     nesterov=nesterov,**kwargs)
+        if amsgrad:
+            raise
+        return optimizer(filter_,momentum=momentum,
+                          nesterov=nesterov,**kwargs)
 
 def get_executor(model,optim_type,use_naive=True,use_discrim=False,set_loss=True,set_optimizer=True,
                  learning_rate=None,disrim_learning_rate=None,intron_coef=None,other_coef=None,
@@ -94,7 +100,8 @@ def get_executor(model,optim_type,use_naive=True,use_discrim=False,set_loss=True
                  transcript_output_mask=False,mean_by_mask=False,frozed_names=None,
                  weight_decay=None,site_mask_method=None,label_num=None,
                  predict_label_num=None,answer_label_num=None,output_label_num=None,
-                 grad_clip=None,momentum=None,nesterov=False,**kwargs):
+                 grad_clip=None,grad_norm=None,momentum=None,nesterov=False,
+                 reduce_lr_on_plateau=False,amsgrad=False,**kwargs):
 
     if learning_rate is None:
         learning_rate =  1e-3
@@ -116,6 +123,7 @@ def get_executor(model,optim_type,use_naive=True,use_discrim=False,set_loss=True
         executor = BasicExecutor()
         
     executor.grad_clip = grad_clip
+    executor.grad_norm = grad_norm
         
     if use_naive:
         executor.inference = basic_inference(output_label_num)
@@ -128,14 +136,17 @@ def get_executor(model,optim_type,use_naive=True,use_discrim=False,set_loss=True
         if use_discrim:
             executor.optimizer = (optimizer_generator(optim_type,model.gan,lr=learning_rate,
                                                       weight_decay=weight_decay,momentum=momentum,
-                                                      nesterov=nesterov),
+                                                      nesterov=nesterov,amsgrad=amsgrad),
                                   optimizer_generator(omtim_type,model.discrim,lr=learning_rate,
                                                       weight_decay=weight_decay,momentum=momentum,
-                                                      nesterov=nesterov))
+                                                      nesterov=nesterov,amsgrad=amsgrad))
         else:
             executor.optimizer = optimizer_generator(optim_type,model,lr=learning_rate,
                                                      weight_decay=weight_decay,momentum=momentum,
-                                                     nesterov=nesterov)
+                                                     nesterov=nesterov,amsgrad=amsgrad)
+            if reduce_lr_on_plateau:
+                executor.lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(executor.optimizer,verbose=True,
+                                                                             threshold=0.1)
     
     if set_loss:
         if use_naive:

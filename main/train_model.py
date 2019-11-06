@@ -22,7 +22,6 @@ if __name__ == '__main__':
     parser.add_argument("--patient",help="Dafault value is 5. If lower(value) is 'none', then model won't be stopped",
                         type=lambda x: int(x) if x.lower() != 'none' else None,default=5)
     parser.add_argument("--frozen_names",type=lambda x:x.split(','),default=None)
-    #parser.add_argument("--load_previous",action='store_true')
     parser.add_argument("--map_order_config_path")
     parser.add_argument("--use_gffcompare",action="store_true")
     parser.add_argument("--monitor_target",default='val_loss')
@@ -142,15 +141,12 @@ if __name__ == '__main__':
         #Load latest model
         with open(latest_status_path,"r") as fp:
             latest_status = json.load(fp)
-        if os.path.exists(last_status_path):
-            with open(last_status_path,"r") as fp:
-                last_status = json.load(fp)
-            if last_status['epoch'] <= latest_status['epoch']:
-                epoch_start = latest_status['epoch']
-            else:
-                epoch_start = last_status['epoch']
-        else:
-            epoch_start = latest_status['epoch']
+            epoch_start = max(epoch_start,latest_status['epoch'])
+            
+    if os.path.exists(last_status_path):
+        with open(last_status_path,"r") as fp:
+            last_status = json.load(fp)
+            epoch_start = max(epoch_start,last_status['epoch'])
 
     #Create model
     model = get_model(args.model_config_path,model_weights_path,args.frozen_names)
@@ -161,25 +157,13 @@ if __name__ == '__main__':
         executor_config = json.load(fp)
     
     executor = get_executor(model,**executor_config)
-    #executor_status_path = os.path.join(args.saved_root,'last_executor.pth')
-    #if os.path.exists(executor_status_path):
-    #    executor.load_state_dict(torch.load(executor_status_path))
 
-    #Train
-    #best_model_path = os.path.join(args.saved_root,'best_model.pth')
-    #last_model_path = os.path.join(args.saved_root,'last_model.pth')
-    #if not os.path.exists(best_model_path) and not os.path.exists(last_model_path):
     train(model,executor,train_data,val_data,args.saved_root,
           args.epoch,args.batch_size,args.augmentation_max,
           patient=args.patient,use_gffcompare=args.use_gffcompare,
           epoch_start=epoch_start,
           monitor_target=args.monitor_target,
           **map_order_config)
-    #elif os.path.exists(best_model_path):
-    #    model.load_state_dict(torch.load(best_model_path))
-    #else:
-    #    model.load_state_dict(torch.load(last_model_path))
-    
     #Test
     if not args.only_train:
         executor = get_executor(model,set_loss=False,set_optimizer=False,**executor_config)

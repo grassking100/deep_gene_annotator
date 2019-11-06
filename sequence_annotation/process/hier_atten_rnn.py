@@ -6,16 +6,17 @@ from .rnn import GRU,ProjectedGRU
 from .attention import RNNAttention
 
 class AttenGRU(BasicModel):
-    def __init__(self,in_channels,hidden_size=None,num_layers=None,out_channels=None,
-                 #use_softmax=False,on_site=False,
-                 name=None,customized_gru_init=None,customized_cnn_init=None,**kwargs):
+    def __init__(self,in_channels,num_layers=None,out_channels=None,
+                 name=None,customized_gru_init=None,customized_cnn_init=None,
+                 hidden_size=None,atten_hidden_size=None,**kwargs):
         super().__init__()
         self.name = name
         self.customized_gru_init = customized_gru_init
         self.customized_cnn_init = customized_cnn_init
-        self.atten = RNNAttention(in_channels,hidden_size=hidden_size,num_layers=num_layers,
-                                  #use_softmax=use_softmax,on_site=on_site,
-                                  name=name,
+        if atten_hidden_size is None:
+            atten_hidden_size = hidden_size
+        self.atten = RNNAttention(in_channels,hidden_size=atten_hidden_size,
+                                  num_layers=num_layers,name=name,
                                   customized_gru_init=customized_gru_init,
                                   customized_cnn_init=customized_cnn_init,**kwargs)
         self.rnn = ProjectedGRU(in_channels,hidden_size,out_channels,num_layers=num_layers,
@@ -25,6 +26,7 @@ class AttenGRU(BasicModel):
         if self.name is not None:
             self.result_name = "{}_{}".format(self.name,self.result_name)
         self.reset_parameters()
+        self.kwargs = kwargs
         
     def forward(self,features,lengths):
         attention = self.atten(features,lengths)
@@ -40,6 +42,7 @@ class AttenGRU(BasicModel):
         config['name'] = self.name
         config['customized_gru_init'] = self.customized_gru_init
         config['customized_cnn_init'] = self.customized_cnn_init
+        config['kwargs'] = self.kwargs
         return config
         
 class HierAttenGRU(BasicModel):
@@ -63,12 +66,14 @@ class HierAttenGRU(BasicModel):
         self.use_common_atten = use_common_atten    
         self.out_channels = 2
         self.reset_parameters()
+        self.kwargs = kwargs
         
     def get_config(self):
         config = dict(self.rnn_0.get_config())
         config['use_first_atten'] = self.use_first_atten
         config['use_second_atten'] = self.use_second_atten
         config['use_common_atten'] = self.use_common_atten
+        config['kwargs'] = self.kwargs
         return config
         
     def forward(self,x,lengths):
@@ -101,11 +106,12 @@ class GatedStackGRU(BasicModel):
         self.in_channels = in_channels
         self.hidden_size = hidden_size
         self.projected_rnn_0 = ProjectedGRU(in_channels=in_channels,hidden_size=hidden_size,
-                                          out_channels=1,num_layers=self.num_layers,**kwargs)
+                                            out_channels=1,num_layers=self.num_layers,**kwargs)
         
         self.projected_rnn_1 = ProjectedGRU(in_channels=in_channels,hidden_size=hidden_size,
-                                          out_channels=1,num_layers=self.num_layers,**kwargs)
+                                            out_channels=1,num_layers=self.num_layers,**kwargs)
         self.out_channels = 2
+        self.kwargs = kwargs
         
     def get_config(self):
         config = dict(self.projected_rnn_0.get_config())
@@ -113,6 +119,7 @@ class GatedStackGRU(BasicModel):
         config['out_channels'] = self.out_channels
         config['hidden_size'] = self.hidden_size
         config['num_layers'] = self.num_layers
+        config['kwargs'] = self.kwargs
         return config
         
     def forward(self,x,lengths):
