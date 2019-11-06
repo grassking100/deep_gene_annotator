@@ -160,15 +160,12 @@ class ProjectLayer(BasicModel):
     
 class SeqAnnModel(BasicModel):
     def __init__(self,feature_block,relation_block,
-                 project_layer,use_sigmoid=False,
-                 predict_site_layer=None,predict_site_by=None,
-                 attention_block=None):
+                 project_layer,use_sigmoid=False):
         super().__init__()
         self.use_sigmoid = use_sigmoid
         self.feature_block = feature_block
         self.relation_block = relation_block
         self.project_layer = project_layer
-        self.attention_block = attention_block
         if project_layer is not None:
             out_channels = self.project_layer.out_channels
         elif relation_block is not None:
@@ -176,16 +173,7 @@ class SeqAnnModel(BasicModel):
         else:
             out_channels = self.feature_block.out_channels
         self.out_channels = out_channels
-        self.predict_site_layer = predict_site_layer
-        if self.predict_site_layer is not None:
-            self.out_channels += self.predict_site_layer.out_channels
         self.save_distribution = True
-        self.predict_site = self.predict_site_layer is not None
-        predict_site_by = predict_site_by or 'feature_block'
-        if predict_site_by in ['feature_block','relation_block']:
-            self._predict_site_by = predict_site_by
-        else:
-            raise Exception("Wrong block type, got {}".format(predict_site_by_block))
         self.reset_parameters()
 
     def get_config(self):
@@ -194,15 +182,10 @@ class SeqAnnModel(BasicModel):
         config['feature_block'] = self.feature_block.get_config()
         config['out_channels'] = self.out_channels
         config['in_channels'] = self.feature_block.in_channels
-        config['predict_site_by'] = self._predict_site_by
-        if self.attention_block is not None:
-            config['attention_block'] = self.attention_block.get_config()
         if self.relation_block is not None:
             config['relation_block'] = self.relation_block.get_config()
         if self.project_layer is not None:
             config['project_layer'] = self.project_layer.get_config()
-        if self.predict_site_layer is not None:
-            config['predict_site_layer'] = self.predict_site_layer.get_config()
         return config
 
     def forward(self, x, lengths):
@@ -211,9 +194,6 @@ class SeqAnnModel(BasicModel):
         features,lengths = self.feature_block(x, lengths)
         distribution.update(self.feature_block.saved_distribution)
         x = features
-        if self.attention_block is not None:
-            x = self.attention_block(x,lengths)
-            distribution.update(self.attention_block.saved_distribution)
         relation = None
         if self.relation_block is not None:
             relation,lengths = self.relation_block(x, lengths)
@@ -234,88 +214,11 @@ class SeqAnnModel(BasicModel):
                 distribution["softmax"] = ann
         else:
             ann = x
-        
-        if self.predict_site:
-            if self._predict_site_by == 'feature_block':
-                previous_signal = features
-            else:
-                previous_signal = relation
-            site_predict,lengths = self.predict_site_layer(previous_signal,lengths)
-            site_predict = nn.LogSoftmax(dim=1)(site_predict).exp()
-            distribution["site_predict"] = site_predict
-            x = torch.cat([ann,site_predict],1)
-        else:
-            x = ann
-            
+        x = ann 
         if self.save_distribution:
             self._distribution = distribution
 
         return x,lengths
-
-class Disrim(BasicModel):
-    def __init__(self,label_channels,rnn_size,rnn_num=None,seq_channels=None,
-                 cnn_out=None,kernel_size=None,**kwargs):
-        super().__init__()
-        self.seq_channels = seq_channels or 4
-        self.label_channels = label_channels
-        self.rnn_size = rnn_size or 16
-        self.kernel_size = kernel_size or 3
-        self.rnn_num = rnn_num or 1
-        self.cnn_out = cnn_out or 1
-        self.concat = Concat(dim=1)
-        self.out_channels = 1
-        if self.cnn_out > 0:
-            self.cnn = CANBlock(self.label_channels,self.kernel_size,self.cnn_out,
-                                norm_mode='after_activation',padding_handle='partial')
-            in_channels = self.cnn.out_channels
-        else:
-            in_channels = self.label_channels
-        
-        in_channels += self.seq_channels
-        self.rnn = GRU(in_channels=in_channels,hidden_size=self.rnn_size,bidirectional=True,
-                       num_layers=self.rnn_num, batch_first=True,**kwargs)
-        self.project = Conv1d(in_channels=self.rnn.out_channels,
-                              out_channels=1,kernel_size=1)
-        self.reset_parameters()
-
-    def get_config(self):
-        config = {}
-        config['seq_channels'] = self.seq_channels
-        config['label_channels'] = self.label_channels
-        config['kernel_size'] = self.kernel_size
-        config['rnn_size'] = self.rnn_size
-        config['rnn_num'] = self.rnn_num
-        config['cnn_out'] = self.cnn_out
-        config['out_channels'] = self.out_channels
-        return config
-        
-    def forward(self, seq, label, lengths):
-        seq = seq.float()
-        label = label.float()
-        if self.cnn_out > 0:
-            label, lengths,_ = self.cnn(label,lengths)
-        x,lengths = self.concat([seq,label],lengths)
-        x = self.rnn(x,lengths)
-        x,_,_ = self.project(x,lengths)
-        x = x.squeeze(1)
-        x = torch.sigmoid(x)
-        return x
-    
-class SAGAN(BasicModel):
-    """Sequence annotation GAN model"""
-    def __init__(self,gan,discrim):
-        super().__init__()
-        self.gan = gan
-        self.discrim = discrim
-        
-    @property
-    def saved_distribution(self):
-        return self.gan.saved_distribution
-        
-    def get_config(self):
-        config = {'GAN':self.gan.get_config(),
-                  'discriminator':self.discrim.get_config()}
-        return config
 
 class SeqAnnBuilder:
     def __init__(self):
@@ -325,12 +228,6 @@ class SeqAnnBuilder:
         self.in_channels = None
         self.out_channels = None
         self.use_sigmoid = None
-        self.discrim_config = None
-        self.use_discrim = None
-        self.site_ann_method = None
-        self.predict_site_by = None
-        self.use_attention = None
-        self.attention_config = None
         self.reset()
 
     @property
@@ -342,12 +239,6 @@ class SeqAnnBuilder:
         config['in_channels'] = self.in_channels
         config['out_channels'] = self.out_channels
         config['use_sigmoid'] = self.use_sigmoid
-        config['discrim_config'] = self.discrim_config
-        config['use_discrim'] = self.use_discrim
-        config['site_ann_method'] = self.site_ann_method
-        config['predict_site_by'] = self.predict_site_by
-        config['use_attention'] = self.use_attention
-        config['attention_config'] = self.attention_config
         return config
    
     @config.setter
@@ -358,12 +249,6 @@ class SeqAnnBuilder:
         self.in_channels = config['in_channels']
         self.out_channels = config['out_channels']
         self.use_sigmoid = config['use_sigmoid']
-        self.discrim_config = config['discrim_config']
-        self.use_discrim = config['use_discrim']
-        self.site_ann_method = config['site_ann_method']
-        self.predict_site_by = config['predict_site_by']
-        self.use_attention = config['use_attention']
-        self.attention_config = config['attention_config']
         
     def reset(self):
         self.feature_block_config = {'cnn_setting':{'out_channels':16,'kernel_size':16},
@@ -372,28 +257,17 @@ class SeqAnnBuilder:
                                                      'batch_first':True,
                                                      'bidirectional':True},
                                       'rnn_type':'GRU'}
-        self.discrim_config = {'kernel_size':32}
-        self.attention_config = {'attention_type':'BiRNNAttention','attention_setting':{}}
         self.project_layer_config = {'kernel_size':1}
         self.in_channels = 4
         self.out_channels = 3
         self.use_sigmoid = True
-        self.use_discrim = False
-        self.site_ann_method = None
-        self.use_attention = False
         
     def build(self):
-        feature_block = FeatureBlock(self.in_channels,**self.feature_block_config)
-        attention_block = None        
+        feature_block = FeatureBlock(self.in_channels,**self.feature_block_config)       
         relation_block_config = dict(self.relation_block_config)
         project_layer_config = dict(self.project_layer_config)
         relation_block = None
         project_layer = None
-        predict_site_layer = None
-
-        if self.use_attention:
-            attention_class = ATTENTION_LAYER[self.attention_config['attention_type']]
-            attention_block = attention_class(feature_block.out_channels,**self.attention_config['attention_setting'])
         
         if relation_block_config['rnn_setting']['num_layers'] > 0 :
             relation_block = RelationBlock(feature_block.out_channels,
@@ -404,25 +278,7 @@ class SeqAnnBuilder:
         
         if self.project_layer_config['kernel_size'] >=1:
             project_layer = ProjectLayer(out_channels,self.out_channels,**project_layer_config)
-            
-        if self.site_ann_method is not None:
-            if self.predict_site_by == 'feature_block':
-                in_channels = feature_block.out_channels
-            else:
-                in_channels = relation_block.out_channels
-            if self.site_ann_method == 'positive':
-                out_channels = 4
-            else:
-                out_channels = 5
-            predict_site_layer = ProjectLayer(in_channels,out_channels,**project_layer_config)
-        
+
         model = SeqAnnModel(feature_block,relation_block,project_layer,
-                            use_sigmoid=self.use_sigmoid,
-                            predict_site_layer=predict_site_layer,
-                            predict_site_by=self.predict_site_by,
-                            attention_block=attention_block)
-        if self.use_discrim:
-            gan = model
-            discrim = Disrim(model.out_channels,**self.discrim_config).cuda()
-            model = SAGAN(model,discrim)
+                            use_sigmoid=self.use_sigmoid)
         return model

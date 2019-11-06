@@ -21,8 +21,8 @@ if __name__ == '__main__':
     parser.add_argument("--customized_cnn")
     parser.add_argument("--customized_gru_init")
     parser.add_argument("--customized_rnn_cnn")
-    parser.add_argument("--padding_handle",help='Handle padding issue, valid options are {}'.format(', '.join(PADDING_HANDLE)),
-                        default='valid')
+    parser.add_argument("--padding_handle",default='valid',
+                        help='Handle padding issue, valid options are {}'.format(', '.join(PADDING_HANDLE)))
     parser.add_argument("--padding_value",type=float,default=0)
     parser.add_argument("--bottleneck_factor",type=float)
     parser.add_argument("--compression_factor",type=float)
@@ -37,19 +37,6 @@ if __name__ == '__main__':
     parser.add_argument("--not_use_second_atten",action='store_true')
     parser.add_argument("--atten_hidden_size",type=int,default=None)
 
-    #Deprecate
-    parser.add_argument("--use_discrim",action="store_true")
-    parser.add_argument("--disrim_rnn_size",type=int,default=16)
-    parser.add_argument("--disrim_rnn_num",type=int,default=1)
-    parser.add_argument("--use_attention",action="store_true")
-    parser.add_argument("--attention_rnn_num",type=int,default=1)
-    parser.add_argument("--attention_rnn_size",type=int,default=16)
-    parser.add_argument("--attention_mode")
-    parser.add_argument("--attention_use_sigmoid",action="store_true")
-    parser.add_argument("--attention_on_site",action="store_true")
-    parser.add_argument("--site_ann_method")
-    parser.add_argument("--predict_site_by")
-    
     args = parser.parse_args()
 
     builder = SeqAnnBuilder()
@@ -62,7 +49,6 @@ if __name__ == '__main__':
     builder.feature_block_config['cnn_setting']['padding_handle'] = args.padding_handle
     builder.feature_block_config['cnn_setting']['padding_value'] = args.padding_value
     builder.feature_block_config['cnn_setting']['customized_init'] = args.customized_cnn
-    
     
     builder.feature_block_config['bottleneck_factor'] = args.bottleneck_factor
     builder.feature_block_config['compression_factor'] = args.compression_factor
@@ -79,26 +65,11 @@ if __name__ == '__main__':
     builder.relation_block_config['rnn_setting']['use_first_atten'] = not args.not_use_first_atten
     builder.relation_block_config['rnn_setting']['use_second_atten'] = not args.not_use_second_atten
     builder.relation_block_config['rnn_setting']['atten_hidden_size'] = args.atten_hidden_size
-    
-    
+
     builder.project_layer_config['kernel_size'] = args.project_kernel_size
-    
-    builder.use_discrim = args.use_discrim
-    builder.discrim_config['rnn_num'] = args.disrim_rnn_num
-    builder.discrim_config['rnn_size'] = args.disrim_rnn_size
-    builder.discrim_config['train_init_value'] = args.train_init_value
-    
-    builder.use_attention = args.use_attention
-    builder.attention_config['attention_setting']['num_layers'] = args.attention_rnn_num
-    builder.attention_config['attention_setting']['mode'] = args.attention_mode
-    builder.attention_config['attention_setting']['use_softmax'] = not args.attention_use_sigmoid
-    builder.attention_config['attention_setting']['on_site'] = args.attention_on_site
-    builder.attention_config['attention_setting']['hidden_size'] = args.attention_rnn_size
     
     builder.out_channels = args.out_channels
     builder.use_sigmoid = args.use_sigmoid
-    builder.site_ann_method = args.site_ann_method
-    builder.predict_site_by = args.predict_site_by
     
     with open(args.config_path,"w") as fp:
         json.dump(builder.config, fp, indent=4)

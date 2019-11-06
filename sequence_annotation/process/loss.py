@@ -148,19 +148,6 @@ class SeqAnnLoss(nn.Module):
                 nontranscript_loss = mean_by_mask(nontranscript_loss,nontranscript_mask)
             loss = loss + nontranscript_loss
         return loss
-    
-class SiteLoss(nn.Module):
-    def __init__(self,loss):
-        super().__init__()
-        self.loss = loss
-        self.output_inference = basic_inference(3,before=False)
-        self.answer_inference = basic_inference(3,before=False)
-            
-    def forward(self, output, answer, mask ,site_mask,**kwargs):
-        site_predict = self.output_inference(output,mask)
-        site_answer = self.answer_inference(answer,mask)
-        loss = self.loss(site_predict,site_answer, site_mask)
-        return loss
 
 class LabelLoss(nn.Module):
     def __init__(self,loss):
@@ -182,66 +169,3 @@ class LabelLoss(nn.Module):
         label_answer = self.answer_inference(answer,mask)
         loss = self.loss(label_predict,label_answer, mask)
         return loss
-    
-def signals2site_mask(signals,signal_index):
-    N,C,L = signals.shape
-    site_mask = np.zeros((N,L))
-    signals = np.split(signals,N)
-    for item_index,signal in enumerate(signals):
-        signal = signal[0]
-        signal = ann_seq2one_hot_seq(signal)
-        signal = signal.astype(int).astype(str)
-        sites = []
-        for index in signal_index:
-            signal_ = signal[index]
-            sites = sites + get_start(''.join(signal_)) + get_end(''.join(signal_))
-        for site in set(sites):
-            site_mask[item_index,site] = 1
-    return site_mask
-    
-class MixedLoss(nn.Module):
-    def __init__(self,label_loss,site_loss,site_mask_method=None):
-        super().__init__()
-        self.label_loss = label_loss
-        self.site_loss = site_loss
-        self._site_mask_method = None
-        self.site_mask_method = site_mask_method or 'by_answer'
-        self.signal_index = [0,1]
-        
-    @property
-    def site_mask_method(self):
-        return self._site_mask_method
-        
-    @site_mask_method.setter
-    def site_mask_method(self,value):
-        if value in ['by_answer','by_answer_predict','by_mask']:
-            self._site_mask_method = value
-        else:
-            raise Exception("Get weong method {}".format(value))
-        
-    def forward(self, output, answer, mask, predict_result,**kwargs):
-        """
-            Data shape is N,C,L.
-            Output channel order: *,TSSs,CAs,DSs,ASs
-            Answer channel order: *,TSSs,CAs,DSs,ASs
-            Predict_result channel order: exon, intron, other
-        """
-        #Get site_answer with channel order: exon, intron and other
-        if self.site_mask_method == 'by_mask':
-            site_mask = mask
-        else:
-            site_answer = self.site_loss.inference(answer)
-            site_mask_ = (site_answer.sum(1)>=1).long()
-            if self.site_mask_method == 'by_answer':
-                site_mask = site_mask_
-            else:
-                signals = predict_result.detach().cpu().numpy()
-                site_mask = signals2site_mask(signals,self.signal_index)
-                site_mask = torch.LongTensor(site_mask).cuda()
-                site_mask += site_mask_
-            site_mask = (site_mask>=1).long()
-        
-        label_loss = self.label_loss(output, answer, mask)
-        site_loss = self.site_loss(output, answer, mask,site_mask=site_mask)
-        loss_ = label_loss + site_loss
-        return loss_

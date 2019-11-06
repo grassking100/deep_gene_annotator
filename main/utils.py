@@ -8,8 +8,8 @@ import torch
 from torch import optim
 sys.path.append("/home/sequence_annotation")
 from sequence_annotation.genome_handler.load_data import load_data as _load_data
-from sequence_annotation.process.loss import SeqAnnLoss, FocalLoss, MixedLoss, LabelLoss,SiteLoss
-from sequence_annotation.process.executor import BasicExecutor, GANExecutor
+from sequence_annotation.process.loss import SeqAnnLoss, FocalLoss, LabelLoss
+from sequence_annotation.process.executor import BasicExecutor
 from sequence_annotation.process.inference import seq_ann_inference, seq_ann_reverse_inference, basic_inference
 from sequence_annotation.process.model import SeqAnnBuilder
 
@@ -23,7 +23,7 @@ def copy_path(root,path):
     command = 'cp -t {} {}'.format(root,path)
     os.system(command)
 
-def select_data_by_length_each_type(fasta,ann_seqs,**kwargs):
+def select_data_by_length_each_type(fasta,ann_seqs):
     if len(set(ANN_TYPES) - set(ann_seqs.ANN_TYPES)) > 0:
         raise Exception("ANN_TYPES should include {}, but got {}".format(ANN_TYPES,ann_seqs.ANN_TYPES))
     multiple_exon_transcripts = []
@@ -94,19 +94,17 @@ def optimizer_generator(type_,model,momentum=0,nesterov=False,amsgrad=False,**kw
         return optimizer(filter_,momentum=momentum,
                           nesterov=nesterov,**kwargs)
 
-def get_executor(model,optim_type,use_naive=True,use_discrim=False,set_loss=True,set_optimizer=True,
-                 learning_rate=None,disrim_learning_rate=None,intron_coef=None,other_coef=None,
+def get_executor(model,optim_type,use_naive=True,set_loss=True,set_optimizer=True,
+                 learning_rate=None,intron_coef=None,other_coef=None,
                  nontranscript_coef=None,gamma=None,transcript_answer_mask=True,
                  transcript_output_mask=False,mean_by_mask=False,frozed_names=None,
-                 weight_decay=None,site_mask_method=None,label_num=None,
+                 weight_decay=None,label_num=None,
                  predict_label_num=None,answer_label_num=None,output_label_num=None,
                  grad_clip=None,grad_norm=None,momentum=None,nesterov=False,
-                 reduce_lr_on_plateau=False,amsgrad=False,**kwargs):
+                 reduce_lr_on_plateau=False,amsgrad=False):
 
     if learning_rate is None:
         learning_rate =  1e-3
-    if disrim_learning_rate is None:
-        disrim_learning_rate = 1e-3
 
     weight_decay = weight_decay or 0
 
@@ -117,10 +115,7 @@ def get_executor(model,optim_type,use_naive=True,use_discrim=False,set_loss=True
         answer_label_num = answer_label_num or 3
         output_label_num = output_label_num or 3
 
-    if use_discrim:
-        executor = GANExecutor()
-    else:
-        executor = BasicExecutor()
+    executor = BasicExecutor()
         
     executor.grad_clip = grad_clip
     executor.grad_norm = grad_norm
@@ -129,24 +124,18 @@ def get_executor(model,optim_type,use_naive=True,use_discrim=False,set_loss=True
         executor.inference = basic_inference(output_label_num)
     else:
         executor.inference = seq_ann_inference
-    if not use_naive and use_discrim:
-        executor.reverse_inference = seq_ann_reverse_inference
+
 
     if set_optimizer:
-        if use_discrim:
-            executor.optimizer = (optimizer_generator(optim_type,model.gan,lr=learning_rate,
-                                                      weight_decay=weight_decay,momentum=momentum,
-                                                      nesterov=nesterov,amsgrad=amsgrad),
-                                  optimizer_generator(omtim_type,model.discrim,lr=learning_rate,
-                                                      weight_decay=weight_decay,momentum=momentum,
-                                                      nesterov=nesterov,amsgrad=amsgrad))
-        else:
-            executor.optimizer = optimizer_generator(optim_type,model,lr=learning_rate,
-                                                     weight_decay=weight_decay,momentum=momentum,
-                                                     nesterov=nesterov,amsgrad=amsgrad)
-            if reduce_lr_on_plateau:
-                executor.lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(executor.optimizer,verbose=True,
-                                                                             threshold=0.1)
+
+        executor.optimizer = optimizer_generator(optim_type,model,lr=learning_rate,
+                                                 weight_decay=weight_decay,momentum=momentum,
+                                                 nesterov=nesterov,amsgrad=amsgrad)
+        if reduce_lr_on_plateau:
+            executor.lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(executor.optimizer,verbose=True,
+                                                                         threshold=0.1)
+    
+    executor.loss = None
     
     if set_loss:
         if use_naive:
@@ -161,16 +150,8 @@ def get_executor(model,optim_type,use_naive=True,use_discrim=False,set_loss=True
         label_loss.predict_inference = basic_inference(predict_label_num)
         label_loss.answer_inference = basic_inference(answer_label_num)
     
-        if site_mask_method is not None:
-            site_loss = SiteLoss(FocalLoss(gamma))
-            site_loss.output_inference = basic_inference(output_label_num,before=False)
-            site_loss.answer_inference = basic_inference(answer_label_num,before=False)
-            executor.loss = MixedLoss(label_loss=label_loss,site_loss=site_loss,site_mask_method=site_mask_method)
-        else:
-            executor.loss = label_loss
-    else:
-        executor.loss = None
-
+        executor.loss = label_loss
+        
     return executor
 
 def get_model(path_or_json,model_weights_path=None,frozen_names=None):
