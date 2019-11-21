@@ -217,8 +217,12 @@ class LSTM(_RNN):
 class ProjectedGRU(BasicModel):
     def __init__(self,in_channels,out_channels,
                  customized_cnn_init=None,customized_gru_init=None,
-                 norm_type=None,**kwargs):
+                 norm_type=None,norm_mode=None,name=None,**kwargs):
         super().__init__()
+        if name is None:
+            self.name = ''
+        else:
+            self.name = "{}_".format(name)
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.rnn = GRU(in_channels=self.in_channels,
@@ -236,13 +240,15 @@ class ProjectedGRU(BasicModel):
         config['rnn'] = self.rnn.get_config()
         config['project'] = self.project.get_config()
         config['norm_type'] = self.norm_type
+        config['name'] = self.name
         return config
         
     def forward(self,x,lengths,return_intermediate=False):
         post_rnn = self.rnn(x,lengths)
+        self._distribution['{}rnn'.format(self.name)] = post_rnn
         if self.norm_type is not None:
             post_rnn = self.norm(post_rnn,lengths)
-        result,lengths,_ = self.project(post_rnn,lengths)
+        result,lengths,_,_ = self.project(post_rnn,lengths=lengths)
         if return_intermediate:
             return result,post_rnn
         else:

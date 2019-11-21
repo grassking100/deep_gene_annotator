@@ -414,7 +414,7 @@ class TensorboardCallback(Callback):
         self._model = None
         self._counter = None
         self.do_add_grad = True
-        self.do_add_weights = False
+        self.do_add_weights = True
         self.do_add_scalar = True
 
     def on_work_begin(self,worker,**kwargs):
@@ -442,6 +442,9 @@ class TensorboardCallback(Callback):
         if self.do_add_scalar:
             self.tensorboard_writer.add_scalar(counter=self._counter,record=metric,
                                                prefix=self.prefix)
+        
+    def on_work_end(self):
+        self.tensorboard_writer.close()
 
 class SeqFigCallback(Callback):
     def __init__(self,tensorboard_writer,data,answer,label_names=None,colors=None,prefix=None):
@@ -495,25 +498,6 @@ class SeqFigCallback(Callback):
         diff = np.transpose(outputs) - self._answer[0][:L,:]
         self._writer.add_figure("diff_figure",diff,prefix=self._prefix,colors=self.colors,
                                 labels=self.label_names,title="Predict - Answer figure",use_stack=False)
-
-        
-class WarningRecorder(Callback):
-    def __init__(self,prefix=None,path=None):
-        super().__init__(prefix)
-        self._data = None
-        self.path = path
-
-    def on_work_begin(self,**kwargs):
-        self._data = []
-    
-    def on_epoch_end(self,warnings,**kwargs):
-        self._data += warnings
-
-    def on_work_end(self):
-        if self.path is not None:
-            with open(self.path,'a+') as fp:
-                for warning in self._data:
-                    fp.write("{}\n".format(warning))
         
 class DataCallback(Callback):
     def __init__(self,prefix=None):
@@ -559,8 +543,7 @@ class Recorder(DataCallback):
             if type_ not in self._data.keys():
                 self._data[type_] = []
             self._data[type_].append(value)
-            
-    #def on_work_end(self):
+
         if self.path is not None:
             with open(self.path,'w') as fp:
                 json.dump(self.data,fp, indent=4)
@@ -594,10 +577,9 @@ class Accumulator(DataCallback):
         if self._batch_count == 0:
             for key in metric.keys():
                 self._data[key] = 0
-        with torch.no_grad():
-            for key,value in metric.items():
-                self._data[key] += value
-            self._batch_count += 1
+        for key,value in metric.items():
+            self._data[key] += value
+        self._batch_count += 1
 
     @property
     def data(self):

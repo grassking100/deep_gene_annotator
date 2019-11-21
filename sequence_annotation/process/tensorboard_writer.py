@@ -7,16 +7,20 @@ class TensorboardWriter:
         self._writer = writer
         self.counter = 0
 
-    def add_scalar(self,record,prefix='',counter=None):
+    def close(self):
+        self._writer.close()
+        
+    def add_scalar(self,record,prefix=None,counter=None):
+        prefix = prefix or ''
         for name,val in record.items():
+            val = np.array(val).reshape(-1)
             if 'val' in name:
                 name = '_'.join(name.split('_')[1:])
-            try:
-                self._writer.add_scalar(prefix+name, np.array(val), counter)
-            except:
-                pass
+            if len(val)==1:
+                self._writer.add_scalar(prefix+name, val, counter)
 
-    def add_grad(self,named_parameters,prefix='',counter=None):
+    def add_grad(self,named_parameters,prefix=None,counter=None):
+        prefix = prefix or ''
         counter = counter or self.counter
         for name,param in named_parameters:
             if param.grad is not None:
@@ -26,18 +30,20 @@ class TensorboardWriter:
                     raise Exception(name+" has at least one NaN in it.")
                 self._writer.add_histogram("layer_"+prefix+'grad_'+name, grad, counter)
 
-    def add_distribution(self,name,data,prefix='',counter=None):
+    def add_distribution(self,name,data,prefix=None,counter=None):
+        prefix = prefix or ''
         counter = counter or self.counter
         try:
             values = data.contiguous().view(-1).cpu().detach().numpy()
         except:
-            raise Exception("{} cause something wrong occur".format(name))
+            raise Exception("{} causes something wrong occur".format(name))
         if  np.isnan(values).any():
             print(values)
             raise Exception(name+" has at least one NaN in it.")
         self._writer.add_histogram(prefix+name, values,counter)
 
-    def add_weights(self,named_parameters,prefix='',counter=None):
+    def add_weights(self,named_parameters,prefix=None,counter=None):
+        prefix = prefix or ''
         counter = counter or self.counter
         for name,param in named_parameters:
             w = param.cpu().detach().numpy()
@@ -46,8 +52,9 @@ class TensorboardWriter:
                 raise Exception(name+" has at least one NaN in it.")
             self._writer.add_histogram("layer_"+prefix+name, w, counter)
 
-    def add_figure(self,name,value,prefix='',counter=None,title='',labels=None,
+    def add_figure(self,name,value,prefix=None,counter=None,title='',labels=None,
                    colors=None,use_stack=False,*args,**kwargs):
+        prefix = prefix or ''
         counter = counter or self.counter
         #data shape is L,C
         if len(value.shape)!=2:
@@ -88,7 +95,8 @@ class TensorboardWriter:
         pyplot.close(fig)
         self._writer.add_figure(prefix+name,fig,global_step=counter,*args,**kwargs)
 
-    def add_matshow(self,name,value,prefix,counter=None,title='',*args,**kwargs):
+    def add_matshow(self,name,value,prefix=None,counter=None,title='',*args,**kwargs):
+        prefix = prefix or ''
         counter = counter or self.counter
         fig = pyplot.figure(dpi=200)
         if  np.isnan(value).any():

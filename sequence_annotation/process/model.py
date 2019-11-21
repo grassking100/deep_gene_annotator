@@ -16,7 +16,7 @@ class FeatureBlock(BasicModel):
         self.in_channels=in_channels
         self.num_layers = num_layers
         stack_cnn_class = stack_cnn_class or 'ConcatCNN'
-        self.stack_cnn_class = STACK_CNN_CLASS[stack_cnn_class]
+        self.stack_cnn_class = STACK_CNN_CLASS[stack_cnn_class]        
         self.cnns = self.stack_cnn_class(in_channels,self.num_layers,**kwargs)
         self.out_channels = self.cnns.out_channels
         self.reset_parameters()

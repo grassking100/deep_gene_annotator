@@ -1,35 +1,36 @@
 from abc import ABCMeta
+import numpy as np
 import torch
 from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence,pad_packed_sequence
 from torch.nn.utils.rnn import PackedSequence
 import torch.nn.functional as F
 
-class Concat(nn.Module):
-    def __init__(self,*args,**kwargs):
-        super().__init__()
+class Concat:
+    def __init__(self,handle_length=True,*args,**kwargs):
         self.args = args
         self.kwargs = kwargs
+        self.handle_length = handle_length
 
-    def forward(self,x,lengths=None):
+    def __call__(self,x):
         #N,C,L
-        min_length = min(item.shape[2] for item in x)
-        x = [item[:,:,:min_length] for item in x]
+        if self.handle_length:
+            min_length = min(item.shape[2] for item in x)
+            x = [item[:,:,:min_length] for item in x]
         new_x = torch.cat(x,*self.args,**self.kwargs)
-        if lengths is not None:
-            return new_x, lengths
-        else:
-            return new_x
+        return new_x
 
-def add(lhs,rhs,lengths=None):
-    #N,C,L
-    min_length = min(item.shape[2] for item in [lhs,rhs])
-    lhs = lhs[:,:,:min_length]
-    rhs = rhs[:,:,:min_length]
-    new_x = lhs + rhs
-    if lengths is not None:
-        return new_x, lengths
-    else:
+class Add:
+    def __init__(self,handle_length=True):
+        self.handle_length = handle_length
+    
+    def __call__(self,lhs,rhs):
+        #N,C,L
+        if self.handle_length:
+            min_length = min(item.shape[2] for item in [lhs,rhs])
+            lhs = lhs[:,:,:min_length]
+            rhs = rhs[:,:,:min_length]
+        new_x = lhs + rhs
         return new_x
 
 class PWM(nn.Module):
@@ -67,32 +68,71 @@ class PaddedNorm1d(nn.Module):
         normed_x = self.norm(padded_x)
         packed = PackedSequence(normed_x,batch_sizes)
         x = pad_packed_sequence(packed)[0]
-        x = x.transpose(0,1).transpose(1,2)
+        x = x.permute(1,2,0)
         new_length = x.shape[2]
-        pad_func = nn.ConstantPad1d((0,origin_length-new_length),0)
-        x = pad_func(x)
+        if origin_length != new_length:
+            pad_func = nn.ConstantPad1d((0,origin_length-new_length),0)
+            x = pad_func(x)
         return x
 
 class PaddedBatchNorm1d(nn.Module):
-    def __init__(self,channel_size):
+    def __init__(self,channel_size,**kwrags):
         super().__init__()
-        self.norm = PaddedNorm1d(nn.BatchNorm1d(channel_size))
+        self.channel_size = channel_size
+        self.norm = PaddedNorm1d(nn.BatchNorm1d(channel_size,**kwrags))
 
     def forward(self,x,lengths):
         """N,C,L"""
+        N,C,L = x.shape
+        if self.channel_size != C:
+            raise Exception("Wrong channel size")
         x = self.norm(x,lengths)
         return x
     
 class PaddedLayerNorm1d(nn.Module):
-    def __init__(self,channel_size):
+    def __init__(self,channel_size,**kwrags):
         super().__init__()
-        self.norm = PaddedNorm1d(nn.LayerNorm(channel_size))
+        self.channel_size = channel_size
+        self.norm = PaddedNorm1d(nn.LayerNorm(channel_size,**kwrags))
 
     def forward(self,x,lengths):
         """N,C,L"""
+        N,C,L = x.shape
+        if self.channel_size != C:
+            raise Exception("Wrong channel size")
         x = self.norm(x,lengths)
         return x
+
+class PaddedAllNorm1d(nn.Module):
+    def __init__(self,channel_size,**kwrags):
+        super().__init__()
+        self.channel_size = channel_size
+        self.norm = PaddedNorm1d(nn.BatchNorm1d(1,**kwrags))
+
+    def forward(self,x,lengths):
+        """N,C,L"""
+        N,C,L = x.shape
+        if self.channel_size != C:
+            raise Exception("Wrong channel size")
+        x = x.reshape(N*C,1,L)
+        x = self.norm(x,np.repeat(lengths,C))
+        x = x.reshape(N,C,L)
+        return x
     
+NORM_CLASS = {
+    'PaddedBatchNorm1d':PaddedBatchNorm1d,
+    'PaddedLayerNorm1d':PaddedLayerNorm1d,
+    'PaddedAllNorm1d':PaddedAllNorm1d
+}
+
+def generator_norm_class(norm_class,**kwargs):
+    def create(channel_size):
+        if isinstance(norm_class,str):
+            return NORM_CLASS[norm_class](channel_size,**kwargs)
+        else:
+            return norm_class(channel_size,**kwargs)
+    return create
+
 class BasicModel(nn.Module,metaclass=ABCMeta):
     def __init__(self):
         super().__init__()

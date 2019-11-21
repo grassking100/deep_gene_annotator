@@ -28,25 +28,33 @@ if __name__ == '__main__':
     #parser.add_argument("--compression_factor",type=float)
     #parser.add_argument("--feature_dropout",type=float)
     parser.add_argument("--norm_mode",default='after_activation')
+    parser.add_argument("--norm_type")
     parser.add_argument("--out_channels",type=int,default=3)
     parser.add_argument("--rnn_dropout",type=float,default=0)    
     parser.add_argument("--use_common_atten",action='store_true')
     parser.add_argument("--not_use_first_atten",action='store_true')
     parser.add_argument("--not_use_second_atten",action='store_true')
     parser.add_argument("--atten_hidden_size",type=int,default=None)
-
+    parser.add_argument("--norm_input",action='store_true')
+    parser.add_argument("--norm_momentum",type=float,default=None)
+    parser.add_argument("--hier_option")
+    
+    
     args = parser.parse_args()
 
     builder = SeqAnnBuilder()
     builder.feature_block_config['stack_cnn_class'] = args.stack_cnn_class
     builder.feature_block_config['num_layers'] = args.cnn_num
     builder.feature_block_config['norm_mode'] = args.norm_mode
+    builder.feature_block_config['norm_type'] = args.norm_type
     builder.feature_block_config['out_channels'] = args.cnn_out
     builder.feature_block_config['kernel_size'] = args.cnn_kernel
     builder.feature_block_config['activation_function'] = args.cnn_act
     builder.feature_block_config['padding_handle'] = args.padding_handle
     builder.feature_block_config['padding_value'] = args.padding_value
     builder.feature_block_config['customized_init'] = args.customized_cnn
+    builder.feature_block_config['norm_input'] = args.norm_input
+    builder.feature_block_config['norm_momentum'] = args.norm_momentum
     
     builder.feature_block_config['bottleneck_factor'] = args.bottleneck_factor
     #builder.feature_block_config['compression_factor'] = args.compression_factor
@@ -63,6 +71,7 @@ if __name__ == '__main__':
     builder.relation_block_config['use_first_atten'] = not args.not_use_first_atten
     builder.relation_block_config['use_second_atten'] = not args.not_use_second_atten
     builder.relation_block_config['atten_hidden_size'] = args.atten_hidden_size
+    builder.relation_block_config['hier_option'] = args.hier_option
 
     builder.out_channels = args.out_channels
     

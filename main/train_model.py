@@ -11,7 +11,7 @@ if __name__ == '__main__':
     parser.add_argument("-s","--saved_root",help="Root to save file",required=True)
     parser.add_argument("-t","--train_data_path",help="Path of training data",required=True)
     parser.add_argument("-v","--val_data_path",help="Path of validation data")
-    parser.add_argument("-g","--gpu_id",type=str,default=0,help="GPU to used")
+    parser.add_argument("-g","--gpu_id",type=str,default='0',help="GPU to used")
     parser.add_argument("-w","--model_weights_path")
     parser.add_argument("--augmentation_max",type=int,default=0)
     parser.add_argument("--epoch",type=int,default=100)
@@ -25,6 +25,7 @@ if __name__ == '__main__':
     parser.add_argument("--map_order_config_path")
     parser.add_argument("--use_gffcompare",action="store_true")
     parser.add_argument("--monitor_target",default='val_loss')
+    parser.add_argument("--period",default=5,type=int)
     args = parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] =  args.gpu_id
 
@@ -36,22 +37,22 @@ from sequence_annotation.utils.utils import write_fasta, create_folder
 from sequence_annotation.process.seq_ann_engine import SeqAnnEngine
 from sequence_annotation.process.callback import ModelCheckpoint, ExecutorCheckpoint
 from sequence_annotation.process.inference import seq_ann_inference
+from sequence_annotation.process.utils import param_num
 from sequence_annotation.genome_handler.ann_seq_processor import class_count
 from sequence_annotation.genome_handler.ann_genome_processor import simplify_genome
 from main.utils import load_data, get_model, get_executor, GENE_MAP, BASIC_COLOR_SETTING,ANN_TYPES, SIMPLIFY_MAP, copy_path
 from main.test_model import test
 
-CHECKPOINT_PERIOD = 5
-
 def train(model,executor,train_data,val_data=None,saved_root=None,
           epoch=None,batch_size=None,augmentation_max=None,patient=None,
           gene_map=None,color_settings=None,channel_order=None,seq_fig_target=None,
           ann_types=None,use_gffcompare=False,other_callbacks=None,
-          add_grad=True,add_seq_fig=True,epoch_start=None,monitor_target=None):
+          add_grad=True,add_seq_fig=True,epoch_start=None,monitor_target=None,period=None):
     channel_order = channel_order or list(train_data[1].ANN_TYPES)
     engine = SeqAnnEngine(ann_types=ann_types or ANN_TYPES,channel_order=channel_order)
     engine.use_gffcompare = use_gffcompare
     monitor_target = monitor_target or 'val_loss'
+    period = period or 5
     if saved_root is not None:
         engine.set_root(saved_root,with_test=False,with_val=val_data is not None)
     engine.executor = executor
@@ -77,9 +78,9 @@ def train(model,executor,train_data,val_data=None,saved_root=None,
         model_checkpoint = ModelCheckpoint(target=monitor_target,optimize_min=True,
                                            patient=patient,save_best_weights=True,
                                            restore_best_weights=True,path=saved_root,
-                                           period = CHECKPOINT_PERIOD)
+                                           period = period)
         other_callbacks.append(model_checkpoint)
-        checkpoint = ExecutorCheckpoint(path=saved_root,period = CHECKPOINT_PERIOD)
+        checkpoint = ExecutorCheckpoint(path=saved_root,period = period)
         other_callbacks.append(checkpoint)
     
     engine.other_callbacks.add(other_callbacks)
@@ -151,6 +152,8 @@ if __name__ == '__main__':
     #Create model
     model = get_model(args.model_config_path,model_weights_path,args.frozen_names)
     model.save_distribution = args.save_distribution
+    with open(os.path.join(args.saved_root,'param_num.txt'),"w") as fp:
+        fp.write("Required-gradient parameters number:{}".format(param_num(model)))
 
     #Create executor
     with open(args.executor_config_path,"r") as fp:
@@ -163,6 +166,7 @@ if __name__ == '__main__':
           patient=args.patient,use_gffcompare=args.use_gffcompare,
           epoch_start=epoch_start,
           monitor_target=args.monitor_target,
+          period=args.period,
           **map_order_config)
     #Test
     if not args.only_train:

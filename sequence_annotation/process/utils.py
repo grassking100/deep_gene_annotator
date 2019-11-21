@@ -10,15 +10,16 @@ def get_copied_state_dict(model):
         weights[key] = tensor.clone()
     return weights
 
-def get_seq_mask(lengths,max_lengths=None,to_tensor=True,to_cuda=True):
-    max_lengths = max_lengths or max(lengths)
-    mask = np.zeros((len(lengths),max_lengths))
-    for index,length in enumerate(lengths):
-        mask[index,:length] = 1
+def get_seq_mask(lengths,max_length=None,to_tensor=True,to_cuda=True):
+    max_length = max_length or max(lengths)
     if to_tensor:
-        mask = torch.FloatTensor(mask)
+        mask = (torch.arange(max_length)[None,:]<= torch.LongTensor(lengths)[:,None]).float()
         if to_cuda:
             mask = mask.cuda()    
+    else:
+        mask = np.zeros((len(lengths),max_length))
+        for index,length in enumerate(lengths):
+            mask[index,:length] = 1
     return mask
 
 def param_num(model,requires_grad=True):

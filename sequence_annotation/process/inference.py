@@ -10,7 +10,6 @@ def basic_inference(first_n_channel,before=True):
         if first_n_channel > ann.shape[1]:
             raise Exception("Wrong channel size, got {} and {}".format(first_n_channel,ann.shape[1]))
         if before:
-            
             ann = ann[:,:first_n_channel,:]
         else:
             ann = ann[:,first_n_channel:,:]

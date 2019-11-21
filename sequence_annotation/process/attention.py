@@ -20,7 +20,7 @@ class RNNAttention(BasicModel):
             self.out_channels = in_channels
         
         self.projected_rnn = ProjectedGRU(in_channels=in_channels,hidden_size=self.hidden_size,
-                                          out_channels=self.out_channels,**kwargs)
+                                          out_channels=self.out_channels,name=name,**kwargs)
         
         if self.use_softmax:
             self.softmax_log = nn.LogSoftmax(dim=1)
@@ -38,13 +38,16 @@ class RNNAttention(BasicModel):
         config['name'] = self.name
         return config
         
-    def forward(self,features,lengths):
+    def forward(self,features,lengths,target_feature=None):
+        if target_feature is None:
+            target_feature = features
         attention_value = self.projected_rnn(features,lengths)
         if self.use_softmax:
             attention_gate = self.softmax_log(attention_value).exp()
         else:
             attention_gate = torch.sigmoid(attention_value)
-        attention_result = features * attention_gate
+        attention_result = target_feature * attention_gate
+        #attention_result[:,:,:attention_gate.shape[2]] = target_feature[:,:,:attention_gate.shape[2]] * attention_gate
         self._distribution['{}attention_value'.format(self.name)] = attention_value
         self._distribution['{}attention_gate'.format(self.name)] = attention_gate
         self._distribution['{}attention_result'.format(self.name)] = attention_result

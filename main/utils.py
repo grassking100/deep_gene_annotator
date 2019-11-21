@@ -1,5 +1,6 @@
 import os
 import sys
+import warnings
 from argparse import ArgumentParser
 import pandas as pd
 import json
@@ -23,7 +24,7 @@ def copy_path(root,path):
     command = 'cp -t {} {}'.format(root,path)
     os.system(command)
 
-def select_data_by_length_each_type(fasta,ann_seqs):
+def select_data_by_length_each_type(fasta,ann_seqs,**kwargs):
     if len(set(ANN_TYPES) - set(ann_seqs.ANN_TYPES)) > 0:
         raise Exception("ANN_TYPES should include {}, but got {}".format(ANN_TYPES,ann_seqs.ANN_TYPES))
     multiple_exon_transcripts = []
@@ -73,17 +74,22 @@ def load_data(fasta_path,ann_seqs_path,id_paths,select_each_type=False,**kwargs)
 
 OPTIMIZER_CLASS = {'Adam':optim.Adam,'SGD':optim.SGD,'AdamW':optim.AdamW,'RMSprop':optim.RMSprop}
 
-def optimizer_generator(type_,model,momentum=0,nesterov=False,amsgrad=False,**kwargs):
+def optimizer_generator(type_,model,momentum=None,nesterov=False,amsgrad=False,adam_betas=None,**kwargs):
     
+    momentum = momentum or 0
+    adam_betas = adam_betas or [0.9,0.999]
     if type_ not in OPTIMIZER_CLASS:
         raise Exception("Optimizer should be {}, but got {}".format(OPTIMIZER_CLASS,type_))
         
     filter_ = filter(lambda p: p.requires_grad, model.parameters())
     optimizer = OPTIMIZER_CLASS[type_]
+    if type_ == 'AdamW':
+        warnings.warn("\n!!!\n\nAdamW's weight decay is implemented differnetly in paper and pytorch 1.3.0, please see https://github.com/pytorch/pytorch/pull/21250#issuecomment-520559993 for more information!\n\n!!!\n")
+        
     if optimizer in [optim.Adam,optim.AdamW]:
         if momentum > 0 or nesterov:
             raise
-        return optimizer(filter_,amsgrad=amsgrad,**kwargs)
+        return optimizer(filter_,amsgrad=amsgrad,betas=adam_betas,**kwargs)
     elif optimizer in [optim.RMSprop]:
         if nesterov or amsgrad:
             raise
@@ -98,15 +104,10 @@ def get_executor(model,optim_type,use_naive=True,set_loss=True,set_optimizer=Tru
                  learning_rate=None,intron_coef=None,other_coef=None,
                  nontranscript_coef=None,gamma=None,transcript_answer_mask=True,
                  transcript_output_mask=False,mean_by_mask=False,frozed_names=None,
-                 weight_decay=None,label_num=None,
-                 predict_label_num=None,answer_label_num=None,output_label_num=None,
-                 grad_clip=None,grad_norm=None,momentum=None,nesterov=False,
-                 reduce_lr_on_plateau=False,amsgrad=False):
+                 label_num=None,predict_label_num=None,answer_label_num=None,output_label_num=None,
+                 grad_clip=None,grad_norm=None,reduce_lr_on_plateau=False,**kwargs):
 
-    if learning_rate is None:
-        learning_rate =  1e-3
-
-    weight_decay = weight_decay or 0
+    learning_rate = learning_rate or 1e-3
 
     if use_naive:
         output_label_num = predict_label_num = answer_label_num = label_num or 3
@@ -128,9 +129,7 @@ def get_executor(model,optim_type,use_naive=True,set_loss=True,set_optimizer=Tru
 
     if set_optimizer:
 
-        executor.optimizer = optimizer_generator(optim_type,model,lr=learning_rate,
-                                                 weight_decay=weight_decay,momentum=momentum,
-                                                 nesterov=nesterov,amsgrad=amsgrad)
+        executor.optimizer = optimizer_generator(optim_type,model,lr=learning_rate,**kwargs)
         if reduce_lr_on_plateau:
             executor.lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(executor.optimizer,verbose=True,
                                                                          threshold=0.1)

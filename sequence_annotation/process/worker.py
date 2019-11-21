@@ -1,4 +1,5 @@
 """This submodule provides trainer to train model"""
+import signal
 import warnings
 import os,sys
 import time
@@ -8,30 +9,41 @@ import numpy as np
 from abc import ABCMeta, abstractmethod
 from .data_generator import SeqDataset,SeqGenerator
 from .executor import BasicExecutor
-from .callback import Accumulator, Recorder, Callbacks, WarningRecorder
+from .callback import Accumulator, Recorder, Callbacks
 from .warning import WorkerProtectedWarning
 from ..utils.utils import create_folder
 
 def _batch_process(model,seq_data,process,callbacks):
-    callbacks.on_batch_begin()
     torch.cuda.empty_cache()
+    callbacks.on_batch_begin()
     ids,inputs,labels,lengths,seqs = seq_data.data
     inputs = inputs.cuda()
     labels = labels.cuda()
     returned = process(model,inputs,labels,lengths=lengths)
     metric,outputs,lengths,masks = returned
     seq_data = SeqDataset([ids,inputs,labels,lengths,seqs])
-    callbacks.on_batch_end(outputs=outputs,
-                           seq_data=seq_data,
-                           metric=metric,
-                           masks=masks)
+    with torch.no_grad():
+        callbacks.on_batch_end(outputs=outputs,
+                               seq_data=seq_data,
+                               metric=metric,
+                               masks=masks)
 
 def train_per_batch(model,seq_data,executor,callbacks):
     _batch_process(model,seq_data,executor.fit,callbacks)
 
 def evaluate_per_batch(model,seq_data,executor,callbacks):
     _batch_process(model,seq_data,executor.evaluate,callbacks)
+
+class MessageRecorder:
+    def __init__(self,path=None):
+        self.path = path
     
+    def notify(self,messages):
+        if self.path is not None:
+            with open(self.path,'a+') as fp:
+                for message in messages:
+                    fp.write("{}\n".format(message))
+
 class Worker(metaclass=ABCMeta):
     def __init__(self,model,data,executor=None,path=None):
         super().__init__()
@@ -46,6 +58,8 @@ class Worker(metaclass=ABCMeta):
             self.executor = BasicExecutor()
         if self.path is not None:
             create_folder(self.path)
+        self._warning_recorder = None
+        signal.signal(signal.SIGTERM, self.handle_signal)
 
     def work(self):
         """Work"""
@@ -72,6 +86,9 @@ class Worker(metaclass=ABCMeta):
         if self.is_verbose_visible:
             print(info,end='\r')
             sys.stdout.write('\033[K')
+            
+    def handle_signal(self, signum, frame):
+        pass
 
 class TrainWorker(Worker):
     """a worker which will train and evaluate the model"""
@@ -99,6 +116,7 @@ class TrainWorker(Worker):
         self._writer = writer
         self._epoch_start = epoch_start or 0
         self._epoch = 1 if epoch is None else epoch
+        self._current_epoch = None
         self._best_epoch = None
         self._best_result = None
         self._is_running = True
@@ -152,9 +170,8 @@ class TrainWorker(Worker):
             record_path = os.path.join(self.path,"train_record.json")
             warning_path = os.path.join(self.path,"warning.txt")    
         accumulator = Accumulator()
-        warning_recorder = WarningRecorder(path=warning_path)
+        self._warning_recorder = MessageRecorder(path=warning_path)
         self._train_callbacks.add(accumulator)
-        self._other_callbacks.add(warning_recorder)
         self._recoder = Recorder(path=record_path)
         self.executor.process(self.model)
         self._is_running = True
@@ -170,6 +187,13 @@ class TrainWorker(Worker):
                 self._best_result = status['best_result']
             print("Load best record from of epoch {} from {}".format(self._best_epoch,best_path))
 
+    def handle_signal(self, signum, frame):
+        self._is_running = False
+        warning = "STOP worker at epoch {} by signal {}".format(self._current_epoch,signum)
+        print(warning)
+        if self._warning_recorder is not None:
+            self._warning_recorder.notify([warning])
+            
     def _work(self):
         """Train model"""
         start = self._epoch_start+1
@@ -182,11 +206,11 @@ class TrainWorker(Worker):
         gradient_warning = "Epoch {}: {} have gradients which are larger than one, the max value is {}"
         print("Start from {} to {}".format(start,end-1))
         for epoch in range(start,end):
+            self._current_epoch = epoch
             pre_time = time.time()
             if self._writer is not None:
                 self._writer.counter = epoch
             all_callbacks.on_epoch_begin(counter=epoch)
-            warnings = []
             for index,item in enumerate(self._train_loader):
                 seq_data = SeqDataset(item)
                 train_per_batch(self.model,seq_data,self.executor,self._train_callbacks)
@@ -198,8 +222,8 @@ class TrainWorker(Worker):
                         if  (grad>1).any():
                             warning = gradient_warning.format(epoch,name,grad.max())
                             print(warning)
-                            warnings.append(warning)
-                #break
+                            if self._warning_recorder is not None:
+                                self._warning_recorder.notify([warning])
 
             if self._val_loader is not None:
                 for index,item in enumerate(self._val_loader):
@@ -207,7 +231,6 @@ class TrainWorker(Worker):
                     evaluate_per_batch(self.model,seq_data,self.executor,self._val_callbacks)
                     status = 100*index/len(self._val_loader)
                     self.print_verbose(batch_info.format(epoch,self._epoch,'validating',status))
-                    #break
 
             train_record = self._train_callbacks.get_data()
             val_record = self._val_callbacks.get_data()
@@ -225,14 +248,14 @@ class TrainWorker(Worker):
             self.executor.on_epoch_end(epoch=epoch,metric=record)
             self._train_callbacks.on_epoch_end(metric=train_record)
             self._val_callbacks.on_epoch_end(metric=val_record)
-            self._other_callbacks.on_epoch_end(metric=record,warnings=warnings)
+            self._other_callbacks.on_epoch_end(metric=record)
             self._recoder.on_epoch_end(metric=record)
 
             time_cost = round(time.time()-pre_time,3)
             self.print_verbose(epoch_info.format(epoch,self._epoch,time_cost,record))
-
+            
             if not self.is_running:
-                self.print_verbose("Early stop at {}".format(epoch))
+                self.print_verbose("Stop at {}".format(epoch))
                 break
 
         all_callbacks.on_work_end()

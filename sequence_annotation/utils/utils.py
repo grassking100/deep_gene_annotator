@@ -10,6 +10,13 @@ BED_COLUMNS = ['chr','start','end','id','score','strand','thick_start','thick_en
                'rgb','count','block_size','block_related_start']
 GFF_COLUMNS = ['chr','source','feature','start','end','score','strand','frame','attribute']
 
+NVIDIA_SMI_MEM_COMMEND = '"nvidia-smi" -i {} --query-gpu=memory.total,memory.used --format=csv,nounits,noheader'
+
+def gpu_memory_status(gpu_id):
+    status = os.popen(NVIDIA_SMI_MEM_COMMEND.format(gpu_id)).read().replace("\n","").replace(" ","").split(",")
+    total, used = [int(m) for v in status]
+    return used,total
+
 def logical_not(lhs, rhs):
     return np.logical_and(lhs,np.logical_not(rhs))
 
@@ -215,39 +222,41 @@ def write_fasta(path,seqs):
             file.write(">" + id_ + "\n")
             file.write(seq + "\n")
 
-def model_setting_generator(radius_base,hidden_size_base,depth_base,phi=0,alpha=1,beta=1,gamma=1):
+def model_setting_generator(hidden_size_base,depth_base,phi=0,alpha=1,beta=1):
     """
     length:round(radius_base*alpha^phi)*2+1
     hidden_size:round(hidden_size_base*beta^phi)
-    depth:round(depth_base*alpha^gamma)
-    
+    depth:round(depth_base*gamma^phi)
     """
-    length = int(round(radius_base*alpha**phi)*2+1)
-    hidden_size = int(round(hidden_size_base*beta**phi))
-    depth = int(round(depth_base*gamma**phi))
-    return length,hidden_size,depth
+    hidden_size = int(round(hidden_size_base*alpha**phi))
+    depth = int(round(depth_base*beta**phi))
+    return hidden_size,depth
             
-def model_settings_generator(radius_base,hidden_size_base,depth_base,step=None,min_value=None,max_coef=None):
+def model_settings_generator(hidden_size_base,depth_base,phi=None,step=None,min_value=None,max_coef=None,remove_one=False):
     setting = set()
     setting_coef={}
-    step=step or 0.05
-    min_value = min_value or 0
+    step = step or 0.05
+    phi = phi or 1
+    min_value = min_value or 1
     max_coef= max_coef or 2
-    for alpha in np.arange(1+min_value,max_coef+1,step):
-        alpha = round(alpha,2)
-        for beta_square in np.arange(1+min_value,max_coef+1,step):
-            beta = beta_square**0.5
-            if alpha*beta_square <= max_coef:
-                beta = round(beta_square**0.5,2)
-                gamma_suqare = max_coef/(alpha*beta_square)
-                gamma = round(gamma_suqare**0.5,2)
-                setting_ = model_setting_generator(radius_base,hidden_size_base,
-                                                   depth_base,phi=1,
-                                                   alpha=alpha,beta=beta,gamma=gamma)
-                setting.add(setting_)
-                if setting_ not in setting_coef:
-                    setting_coef[setting_] = []
-                setting_coef[setting_] += [[alpha,beta,gamma]]
+    #for alpha in np.arange(min_value,max_coef+1,step):
+    for alpha_suqare in np.arange(min_value,max_coef+1,step):
+        alpha = round(alpha_suqare**0.5,1)
+        beta_square = max_coef/alpha_suqare
+        beta =  round(beta_square**0.5,1)
+        setting_ = model_setting_generator(hidden_size_base,depth_base,phi=phi,alpha=alpha,beta=beta)
+        add=False
+        if beta_square >= min_value and max_coef-step <= (alpha**2)*(beta**2) <= max_coef+step:
+            if remove_one:
+                if alpha > 1.0 and beta > 1.0:
+                    add=True
+            else:
+                add=True
+        if add:
+            setting.add(setting_)
+            if setting_ not in setting_coef:
+                setting_coef[setting_] = []
+            setting_coef[setting_] += [[alpha,beta,phi]]
     for key,value in setting_coef.items():
         setting_coef[key] = value[np.argmax([sorted(tuple_)[0] for tuple_ in value])]
     return setting_coef
