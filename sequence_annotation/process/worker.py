@@ -6,6 +6,7 @@ import time
 import json
 import torch
 import numpy as np
+from time import gmtime, strftime
 from abc import ABCMeta, abstractmethod
 from .data_generator import SeqDataset,SeqGenerator
 from .executor import BasicExecutor
@@ -20,6 +21,7 @@ def _batch_process(model,seq_data,process,callbacks):
     inputs = inputs.cuda()
     labels = labels.cuda()
     returned = process(model,inputs,labels,lengths=lengths)
+    torch.cuda.empty_cache()
     metric,outputs,lengths,masks = returned
     seq_data = SeqDataset([ids,inputs,labels,lengths,seqs])
     with torch.no_grad():
@@ -27,6 +29,7 @@ def _batch_process(model,seq_data,process,callbacks):
                                seq_data=seq_data,
                                metric=metric,
                                masks=masks)
+    torch.cuda.empty_cache()
 
 def train_per_batch(model,seq_data,executor,callbacks):
     _batch_process(model,seq_data,executor.fit,callbacks)
@@ -58,7 +61,7 @@ class Worker(metaclass=ABCMeta):
             self.executor = BasicExecutor()
         if self.path is not None:
             create_folder(self.path)
-        self._warning_recorder = None
+        self._message_recorder = None
         signal.signal(signal.SIGTERM, self.handle_signal)
 
     def work(self):
@@ -165,12 +168,12 @@ class TrainWorker(Worker):
             acc = Accumulator(prefix='val')
             self._val_callbacks.add(acc)
         record_path = None
-        warning_path = None
+        message_path = None
         if self.path is not None:    
             record_path = os.path.join(self.path,"train_record.json")
-            warning_path = os.path.join(self.path,"warning.txt")    
+            message_path = os.path.join(self.path,"message.txt")    
         accumulator = Accumulator()
-        self._warning_recorder = MessageRecorder(path=warning_path)
+        self._message_recorder = MessageRecorder(path=message_path)
         self._train_callbacks.add(accumulator)
         self._recoder = Recorder(path=record_path)
         self.executor.process(self.model)
@@ -187,12 +190,27 @@ class TrainWorker(Worker):
                 self._best_result = status['best_result']
             print("Load best record from of epoch {} from {}".format(self._best_epoch,best_path))
 
+        start_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+        time_messgae = "Start time at {}".format(start_time)
+        print(time_messgae)
+        if self._message_recorder is not None:
+            self._message_recorder.notify([time_messgae])
+
     def handle_signal(self, signum, frame):
         self._is_running = False
         warning = "STOP worker at epoch {} by signal {}".format(self._current_epoch,signum)
         print(warning)
-        if self._warning_recorder is not None:
-            self._warning_recorder.notify([warning])
+        if self._message_recorder is not None:
+            self._message_recorder.notify([warning])
+            
+    def work(self):
+        #Execute worker
+        pre_time = time.time()
+        super().work()
+        time_spend = time.time() - pre_time
+        time_messgae = "Time spend: {} seconds\n".format(time_spend)
+        if self._message_recorder is not None:
+            self._message_recorder.notify([time_messgae])
             
     def _work(self):
         """Train model"""
@@ -205,12 +223,14 @@ class TrainWorker(Worker):
         epoch_info = "Epoch: ({}/{}), Time cost of: {}, {}"
         gradient_warning = "Epoch {}: {} have gradients which are larger than one, the max value is {}"
         print("Start from {} to {}".format(start,end-1))
+        save_distribution = self.model.save_distribution
         for epoch in range(start,end):
             self._current_epoch = epoch
             pre_time = time.time()
             if self._writer is not None:
                 self._writer.counter = epoch
             all_callbacks.on_epoch_begin(counter=epoch)
+            self.model.save_distribution=False
             for index,item in enumerate(self._train_loader):
                 seq_data = SeqDataset(item)
                 train_per_batch(self.model,seq_data,self.executor,self._train_callbacks)
@@ -219,12 +239,12 @@ class TrainWorker(Worker):
                 for name,param in self.model.named_parameters():
                     if param.grad is not None:
                         grad = param.grad.cpu().detach().numpy()
-                        if  (grad>1).any():
+                        if (grad>1).any():
                             warning = gradient_warning.format(epoch,name,grad.max())
                             print(warning)
-                            if self._warning_recorder is not None:
-                                self._warning_recorder.notify([warning])
-
+                            if self._message_recorder is not None:
+                                self._message_recorder.notify([warning])
+                
             if self._val_loader is not None:
                 for index,item in enumerate(self._val_loader):
                     seq_data = SeqDataset(item)
@@ -232,6 +252,7 @@ class TrainWorker(Worker):
                     status = 100*index/len(self._val_loader)
                     self.print_verbose(batch_info.format(epoch,self._epoch,'validating',status))
 
+            self.model.save_distribution = save_distribution
             train_record = self._train_callbacks.get_data()
             val_record = self._val_callbacks.get_data()
             other_record = self._other_callbacks.get_data()
@@ -273,6 +294,12 @@ class TrainWorker(Worker):
                                'best_result':self.best_result}
                 with open(best_path,'w') as fp:
                     json.dump(best_result,fp)
+
+        end_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+        time_messgae = "End time at {}".format(end_time)
+        print(time_messgae)
+        if self._message_recorder is not None:
+            self._message_recorder.notify([time_messgae])
 
 class TestWorker(Worker):
     """a worker which will evaluate the model"""
@@ -318,14 +345,15 @@ class TestWorker(Worker):
         self._recoder.on_epoch_begin()
         callbacks.on_epoch_begin(counter=1)
         batch_info = "Testing data: {0:.1f}%"
-
+        save_distribution = self.model.save_distribution
+        self.model.save_distribution=False
         for index,item in enumerate(self._loader):
             seq_data = SeqDataset(item)
             evaluate_per_batch(self.model,seq_data,
                                self.executor,self._callbacks)
             status = 100*index/len(self._loader)
             self.print_verbose(batch_info.format(status))
-
+        self.model.save_distribution = save_distribution
         record = callbacks.get_data()
         self._recoder.on_epoch_end(metric=record)
         callbacks.on_epoch_end(metric=record)

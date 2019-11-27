@@ -215,18 +215,30 @@ class LSTM(_RNN):
         return x
 
 class ProjectedGRU(BasicModel):
-    def __init__(self,in_channels,out_channels,
+    def __init__(self,in_channels,out_channels,hidden_size=None,
+                 num_layers=None,bias=True,batch_first=False,dropout=None,
+                 bidirectional=False,
                  customized_cnn_init=None,customized_gru_init=None,
                  norm_type=None,norm_mode=None,name=None,**kwargs):
         super().__init__()
+        self.hidden_size = hidden_size or 16
+        self.num_layers = num_layers or 1
+        self.bias = bias
+        self.batch_first = batch_first 
+        self.dropout = dropout or 0
+        self.bidirectional = bidirectional
         if name is None:
             self.name = ''
         else:
             self.name = "{}_".format(name)
+        #print(kwargs)
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.rnn = GRU(in_channels=self.in_channels,
-                       customized_init=customized_gru_init,**kwargs)
+        self.rnn = GRU(in_channels=self.in_channels,hidden_size=self.hidden_size,
+                       num_layers=self.num_layers,bias=self.bias,
+                       batch_first=self.batch_first,dropout=self.dropout,
+                       bidirectional=self.bidirectional,
+                       customized_init=customized_gru_init)
         self.norm_type = norm_type
         if self.norm_type is not None:
             self.norm = self.norm_type(in_channel[self.norm_mode])
@@ -240,12 +252,19 @@ class ProjectedGRU(BasicModel):
         config['rnn'] = self.rnn.get_config()
         config['project'] = self.project.get_config()
         config['norm_type'] = self.norm_type
-        config['name'] = self.name
+        config['name'] = self.name        
+        config['hidden_size'] = self.hidden_size
+        config['num_layers'] = self.num_layers
+        config['bias'] = self.bias
+        config['batch_first'] = self.batch_first
+        config['dropout'] = self.dropout
+        config['bidirectional'] = self.bidirectional
+        
         return config
         
     def forward(self,x,lengths,return_intermediate=False):
         post_rnn = self.rnn(x,lengths)
-        self._distribution['{}rnn'.format(self.name)] = post_rnn
+        self.update_distribution(post_rnn,key='{}rnn'.format(self.name))
         if self.norm_type is not None:
             post_rnn = self.norm(post_rnn,lengths)
         result,lengths,_,_ = self.project(post_rnn,lengths=lengths)
@@ -254,4 +273,4 @@ class ProjectedGRU(BasicModel):
         else:
             return result
 
-RNN_TYPES = {'GRU':GRU,'LSTM':LSTM}
+RNN_TYPES = {'GRU':GRU,'LSTM':LSTM,'ProjectedGRU':ProjectedGRU}

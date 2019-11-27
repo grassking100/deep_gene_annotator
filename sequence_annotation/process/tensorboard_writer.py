@@ -33,14 +33,20 @@ class TensorboardWriter:
     def add_distribution(self,name,data,prefix=None,counter=None):
         prefix = prefix or ''
         counter = counter or self.counter
-        try:
-            values = data.contiguous().view(-1).cpu().detach().numpy()
-        except:
-            raise Exception("{} causes something wrong occur".format(name))
-        if  np.isnan(values).any():
-            print(values)
+        if isinstance(data,torch.Tensor):
+            try:
+                data = data.cpu().detach().numpy()
+            except:
+                print(data)
+                raise Exception("{} causes something wrong occur".format(name))
+        if np.isnan(data).any():
+            print(data)
             raise Exception(name+" has at least one NaN in it.")
-        self._writer.add_histogram(prefix+name, values,counter)
+        try:
+            self._writer.add_histogram(prefix+name, data.flatten(),counter)
+        except:
+            print(data)
+            raise Exception("{} causes something wrong occur".format(name))
 
     def add_weights(self,named_parameters,prefix=None,counter=None):
         prefix = prefix or ''

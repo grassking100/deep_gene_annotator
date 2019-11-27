@@ -20,7 +20,6 @@ class FeatureBlock(BasicModel):
         self.cnns = self.stack_cnn_class(in_channels,self.num_layers,**kwargs)
         self.out_channels = self.cnns.out_channels
         self.reset_parameters()
-        self.save_distribution = True
 
     def get_config(self):
         config = super().get_config()
@@ -30,9 +29,7 @@ class FeatureBlock(BasicModel):
     def forward(self, x, lengths):
         #X shape : N,C,L
         x,lengths,_ = self.cnns(x,lengths)
-        cnn_distribution = self.cnns.saved_distribution
-        if self.save_distribution:
-            self._distribution.update(cnn_distribution)
+        self.update_distribution(self.cnns.saved_distribution)
         return x,lengths
 
 class RelationBlock(BasicModel):
@@ -49,7 +46,6 @@ class RelationBlock(BasicModel):
         self.rnn = self.rnn_type(in_channels=in_channels,**kwargs)
         self.out_channels = self.rnn.out_channels
         self.reset_parameters()
-        self.save_distribution = True
 
     def get_config(self):
         config = super().get_config()
@@ -60,50 +56,18 @@ class RelationBlock(BasicModel):
         #X shape : N,C,L
         if isinstance(x,list):
             for i in range(len(x)):
-                self._distribution["pre_rnn_result_{}".format(i)] = x[i]
+                self.update_distribution(x[i],key="pre_rnn_result_{}".format(i))
         else:
-            self._distribution["pre_rnn_result"] = x
-        rnn_distribution = {}
+            self.update_distribution(x,key="pre_rnn_result")
         x = self.rnn(x,lengths)
-        rnn_distribution.update(self.rnn.saved_distribution)
-        self._distribution["pre_last_result"] = x
-        if self.save_distribution:
-            self._distribution.update(rnn_distribution)
-        return x,lengths
-
-class ConnectBlock(BasicModel):
-    def __init__(self,in_channels,compression_factor=None,dropout=None):
-        super().__init__()
-        self.in_channels = in_channels
-        self.compression_factor = compression_factor or 1
-        self.dropout = dropout or 0
-        if self.dropout > 0:
-            self.dropout_layer = nn.Dropout(self.dropout)
-        self.out_channels = int(in_channels*self.compression_factor)
-        self.transition = CANBlock(in_channels=in_channels,kernel_size=1,
-                                   out_channels=self.out_channels,
-                                   norm_mode=self.norm_mode,
-                                   customized_init=customized_init)
-        self.save_distribution = True
-        self.reset_parameters()
-
-    def get_config(self):
-        config = super().get_config()
-        config['compression_factor'] = self.compression_factor
-        config['dropout'] = self.dropout
-        return config
-
-    def forward(self, x, lengths):
-        #X shape : N,C,L
-        if self.compression_factor < 1:
-            x,lengths,_ = self.transition(x,lengths)
-        if self.dropout > 0:
-            x = self.dropout_layer(x)
+        self.update_distribution(self.rnn.saved_distribution)
+        self.update_distribution(x,key="pre_last_result")
         return x,lengths
     
 class SeqAnnModel(BasicModel):
-    def __init__(self,feature_block,relation_block):
+    def __init__(self,feature_block,relation_block,last_act=None):
         super().__init__()
+        self.last_act=last_act
         self.feature_block = feature_block
         self.relation_block = relation_block
         self.in_channels = self.feature_block.in_channels
@@ -111,11 +75,11 @@ class SeqAnnModel(BasicModel):
             self.out_channels = self.relation_block.out_channels
         else:
             self.out_channels = self.feature_block.out_channels
-        self.save_distribution = True
         self.reset_parameters()
 
     def get_config(self):
         config = super().get_config()
+        config['last_act'] = self.last_act
         config['feature_block'] = self.feature_block.get_config()
         if self.relation_block is not None:
             config['relation_block'] = self.relation_block.get_config()
@@ -123,22 +87,24 @@ class SeqAnnModel(BasicModel):
 
     def forward(self, x, lengths):
         #X shape : N,C,L
-        distribution = {}
         features,lengths = self.feature_block(x, lengths)
-        distribution.update(self.feature_block.saved_distribution)
+        self.update_distribution(self.feature_block.saved_distribution)
         x = features
         if self.relation_block is not None:
             x,lengths = self.relation_block(x, lengths)
-            distribution.update(self.relation_block.saved_distribution)
-        if self.save_distribution:
-            self._distribution = distribution
-
+            self.update_distribution(self.relation_block.saved_distribution)
+        if self.last_act is not None:
+            if self.last_act == 'softmax':
+                x = torch.softmax(x,1)
+            else:
+                x = torch.sigmoid(x)
         return x,lengths
 
 class SeqAnnBuilder:
     def __init__(self):
         self.in_channels = None
         self.out_channels = None
+        self.last_act = None
         self.feature_block_config = None
         self.relation_block_config = None
         self.reset()
@@ -150,6 +116,7 @@ class SeqAnnBuilder:
         config['out_channels'] = self.out_channels
         config['feature_block_config'] = self.feature_block_config
         config['relation_block_config'] = self.relation_block_config
+        config['last_act'] = self.last_act
         return config
    
     @config.setter
@@ -158,6 +125,7 @@ class SeqAnnBuilder:
         self.relation_block_config = config['relation_block_config']
         self.in_channels = config['in_channels']
         self.out_channels = config['out_channels']
+        self.last_act = config['last_act']
         
     def reset(self):
         self.feature_block_config = {'out_channels':16,'kernel_size':16,
@@ -167,6 +135,7 @@ class SeqAnnBuilder:
                                       'rnn_type':'GRU'}
         self.in_channels = 4
         self.out_channels = 3
+        self.last_act = None
         
     def build(self):
         feature_block = FeatureBlock(self.in_channels,**self.feature_block_config)       
@@ -175,10 +144,11 @@ class SeqAnnBuilder:
         
         if relation_block_config['num_layers'] > 0 :
             relation_block = RelationBlock(feature_block.out_channels,
+                                           out_channels=self.out_channels,
                                            **relation_block_config)
             out_channels = relation_block.out_channels
         else:    
             out_channels = feature_block.out_channels
         
-        model = SeqAnnModel(feature_block,relation_block)
+        model = SeqAnnModel(feature_block,relation_block,last_act=self.last_act)
         return model

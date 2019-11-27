@@ -7,10 +7,13 @@ from sequence_annotation.utils.utils import read_bed,write_bed
 def get_external_UTR(bed):
     external_UTR = []
     for item in bed.to_dict('record'):
+        strand = item['strand']
+        if strand not in ['+','-']:
+            raise Exception("Wrong strnad {}".format(strand))
         exon_starts = []
         exon_ends = []
         thick_start = int(item['thick_start'])
-        thick_end = int(item['thick_end'])
+        thick_end = int(item['thick_end'])            
         start = int(item['start'])
         count = int(item['count'])
         exon_sizes = [int(val) for val in item['block_size'].split(',')[:count]]
@@ -24,25 +27,37 @@ def get_external_UTR(bed):
         left_target_end = exon_ends[exon_starts.index(left_target_start)]
         right_target_start = max(exon_starts)
         right_target_end = exon_ends[exon_starts.index(right_target_start)]
-        strand = item['strand']
-        five = {'start':left_target_start,
-                'end':min(left_target_end,thick_start-1),'type':'five_external_utr'}
-        three = {'start':max(right_target_start,thick_end+1),
-                 'end':right_target_end,'type':'three_external_utr'}
-        if strand not in ['+','-']:
-            raise Exception("Wrong strnad {}".format(strand))
-        if strand == '-':
-            five_, three_ = dict(five), dict(three)
-            five, three = three_, five_
-            three['type'] = 'three_external_utr'
-            five['type'] = 'five_external_utr'
-        three['id'] = five['id'] = item['id']
-        three['strand'] = five['strand'] = strand
-        three['chr'] = five['chr'] = item['chr']
-        if five['start'] <= five['end']:
-            external_UTR.append(five)
-        if three['start'] <= three['end']:
-            external_UTR.append(three)
+
+        left = {}
+        right = {}
+        right['id'] = left['id'] = item['id']
+        right['strand'] = left['strand'] = strand
+        right['chr'] = left['chr'] = item['chr']
+        #if transcript is coding:
+        if thick_start<=thick_end:
+            left.update({'start':left_target_start,'end':min(left_target_end,thick_start-1)})
+            right.update({'start':max(right_target_start,thick_end+1),'end':right_target_end})
+            if strand == '+':
+                left['type'] = 'five_external_utr'
+                right['type'] = 'three_external_utr'
+            else:
+                left['type'] = 'three_external_utr'
+                right['type'] = 'five_external_utr'
+
+            #If left UTR are exist
+            if left['start'] <= left['end']:
+                external_UTR.append(left)
+            #If right UTR are exist
+            if right['start'] <= right['end']:
+                external_UTR.append(right)
+                
+        else:
+            left.update({'start':left_target_start,'end':left_target_end})
+            right.update({'start':right_target_start,'end':right_target_end})
+            right['type'] = left['type'] = 'external_utr'
+            external_UTR.append(left)
+            external_UTR.append(right)
+
     external_UTR = pd.DataFrame.from_dict(external_UTR)
     return external_UTR
 
@@ -67,8 +82,8 @@ if __name__ == "__main__":
         utr_bed = get_external_UTR(bed)
         utr_bed['chr'] = utr_bed['chr'].str.replace('Chr','')
         utr_bed['score']='.'
-        five_external_utr = utr_bed[utr_bed['type']=='five_external_utr']
-        three_external_utr = utr_bed[utr_bed['type']=='three_external_utr']
+        five_external_utr = utr_bed[utr_bed['type'].isin(['five_external_utr','external_utr'])]
+        three_external_utr = utr_bed[utr_bed['type'].isin(['three_external_utr','external_utr'])]
         five_external_utr.to_csv(five_UTR_tsv_path,sep='\t',index=None)
         three_external_utr.to_csv(three_UTR_tsv_path,sep='\t',index=None)
         five_external_utr_bed = five_external_utr[['chr','start','end','id','score','strand']].copy()

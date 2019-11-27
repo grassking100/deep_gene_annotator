@@ -24,6 +24,7 @@ if __name__ == '__main__':
     parser.add_argument("--test_wtih_fix_boundary",action='store_true')
     parser.add_argument("--save_distribution",action='store_true')
     parser.add_argument("--only_train",action='store_true')
+    parser.add_argument("--period",default=None,type=int)
     
     args = parser.parse_args()
     gpu_ids = args.gpu_ids
@@ -39,6 +40,9 @@ if __name__ == '__main__':
         
     if args.only_train:
         extra += '--only_train ' 
+        
+    if args.period is not None:
+        extra += '--period {}'.format(args.period)
 
     for model_config_name in model_config_names:
         if model_config_name.endswith('json') and model_config_name.startswith('model'):

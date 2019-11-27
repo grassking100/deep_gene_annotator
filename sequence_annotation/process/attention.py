@@ -47,10 +47,10 @@ class RNNAttention(BasicModel):
         else:
             attention_gate = torch.sigmoid(attention_value)
         attention_result = target_feature * attention_gate
-        #attention_result[:,:,:attention_gate.shape[2]] = target_feature[:,:,:attention_gate.shape[2]] * attention_gate
-        self._distribution['{}attention_value'.format(self.name)] = attention_value
-        self._distribution['{}attention_gate'.format(self.name)] = attention_gate
-        self._distribution['{}attention_result'.format(self.name)] = attention_result
+        self.update_distribution(self.projected_rnn.saved_distribution)
+        self.update_distribution(attention_value,'{}attention_value'.format(self.name))
+        self.update_distribution(attention_gate,'{}attention_gate'.format(self.name))
+        self.update_distribution(attention_result,'{}attention_result'.format(self.name))
         return attention_result
 
 ATTENTION_LAYER={'RNNAttention':RNNAttention}

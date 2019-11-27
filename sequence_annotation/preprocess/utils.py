@@ -50,7 +50,7 @@ def consist(data,by,ref_value,drop_duplicated):
             subdata = data[(data['strand'] == strand_) & (data['chr'] == chr_)]
             consist_data = consist_(subdata,by,ref_value,drop_duplicated)
             return_data+=consist_data
-    df = pd.DataFrame.from_dict(return_data)
+    df = pd.DataFrame.from_dict(return_data).drop_duplicates()
     return  df
 
 def coordinate_consist_filter(data,group_by,site_name):
@@ -63,7 +63,7 @@ def coordinate_consist_filter(data,group_by,site_name):
         value = set(list(sector[site_name]))
         if len(value) == 1:
             returned += sector.to_dict('record')
-    return pd.DataFrame.from_dict(returned)
+    return pd.DataFrame.from_dict(returned).drop_duplicates()
 
 def duplicated_filter(data,group_by,site_name):
     """Drop all duplicate data in group"""
@@ -104,8 +104,8 @@ def classify_data_by_id(bed,selected_ids,id_convert=None):
         want_status = id_info['id'].isin(selected_ids)
         want_id = id_info[want_status]['id']
         unwant_id = id_info[~want_status]['id']
-    want_bed = bed[bed['id'].isin(want_id)]
-    unwant_bed = bed[bed['id'].isin(unwant_id)]
+    want_bed = bed[bed['id'].isin(want_id)].drop_duplicates()
+    unwant_bed = bed[bed['id'].isin(unwant_id)].drop_duplicates()
     return want_bed, unwant_bed
 
 def simply_coord(bed):
@@ -138,4 +138,4 @@ def merge_bed_by_coord(bed):
         del item['coord_id']
         item['id'] = new_id
         data+=[item]
-    return pd.DataFrame.from_dict(data)
+    return pd.DataFrame.from_dict(data).drop_duplicates()

@@ -10,16 +10,12 @@ if __name__ == "__main__":
     #Reading arguments
     parser = ArgumentParser(description="This program will output sites data which are valid in RNA external UTR"+
                             ", and have no strogner signal in orphan site")
-    parser.add_argument("--tg",help="transcript_gro_sites_path",required=True)
-    parser.add_argument("--tc",help="transcript_cleavage_sites_path",required=True)
     parser.add_argument("--ig",help="inner_gro_sites_path",required=True)
     parser.add_argument("--ic",help="inner_cleavage_sites_path",required=True)
     parser.add_argument("--lg",help="long_dist_gro_sites_path",required=True)
     parser.add_argument("--lc",help="long_dist_cleavage_sites_path",required=True)
     parser.add_argument("-s", "--saved_root",help="saved_root",required=True)
     args = parser.parse_args()
-    transcript_gro_sites_path = args.tg
-    transcript_cleavage_sites_path = args.tc
     inner_gro_sites_path = args.ig
     inner_cleavage_sites_path = args.ic
     long_dist_gro_sites_path = args.lg
@@ -37,8 +33,6 @@ if __name__ == "__main__":
         inner_ca_sites = pd.read_csv(inner_cleavage_sites_path,sep='\t')
         ld_gro_sites = pd.read_csv(long_dist_gro_sites_path,sep='\t')
         ld_ca_sites = pd.read_csv(long_dist_cleavage_sites_path,sep='\t')        
-        transcript_gro_sites = pd.read_csv(transcript_gro_sites_path,sep='\t')
-        transcript_ca_sites = pd.read_csv(transcript_cleavage_sites_path,sep='\t')
         #Create orhpan data
         ld_gro_id = set(ld_gro_sites['id'])
         ld_ca_id = set(ld_ca_sites['id'])
@@ -48,15 +42,10 @@ if __name__ == "__main__":
         orphan_ld_ca_id = ld_ca_id - inner_ca_id
         orphan_ld_gro_sites = ld_gro_sites[ld_gro_sites['id'].isin(orphan_ld_gro_id)]
         orphan_ld_ca_sites = ld_ca_sites[ld_ca_sites['id'].isin(orphan_ld_ca_id)]
-        #Create transcript-other-than-inner data
-        #all_transcript_gro_sites = pd.concat([inner_gro_sites,transcript_gro_sites],sort=False)
-        #other_gro_sites = duplicated_filter(all_transcript_gro_sites,'ref_name','evidence_5_end')
-        #all_transcript_ca_sites = pd.concat([inner_ca_sites,transcript_ca_sites],sort=False)
-        #other_ca_sites = duplicated_filter(all_transcript_ca_sites,'ref_name','evidence_3_end')
         #Merge data###
-        merged_gro_sites = [inner_gro_sites,orphan_ld_gro_sites]#other_gro_sites
+        merged_gro_sites = [inner_gro_sites,orphan_ld_gro_sites]
         merged_gro_sites = pd.concat(merged_gro_sites,sort=False)
-        merged_ca_sites = [inner_ca_sites,orphan_ld_ca_sites]#other_ca_sites
+        merged_ca_sites = [inner_ca_sites,orphan_ld_ca_sites]
         merged_ca_sites = pd.concat(merged_ca_sites,sort=False)
         print("Get consist site of every transcript")
         #Get max signal TSS

@@ -185,6 +185,22 @@ class GFFCompare(Callback):
             command = to_bed_command.format(preprocess_src_root,path,path)
             os.system(command)
 
+def _read_status(root,read_path):
+    with open(read_path,"r") as fp:
+        status = json.load(fp)
+        epoch = int(status['epoch'])
+        if 'relative_path' in status:
+            path = os.path.join(root,status['relative_path'])
+        else:
+            path = status['path']
+        return epoch,path
+          
+def _write_status(root,saved_path,epoch,relative_path):
+    with open(saved_path,"w") as fp:
+        path = os.path.join(root,relative_path)
+        status = {"epoch":epoch,"relative_path":relative_path,"path":path}
+        json.dump(status,fp, indent=4)
+        
 class ModelCheckpoint(Callback):
     def __init__(self,target=None,optimize_min=True,patient=None,path=None,
                  period=None,save_best_weights=False,restore_best_weights=False,
@@ -204,13 +220,16 @@ class ModelCheckpoint(Callback):
         self._worker = None
         self.explicit_period = explicit_period
         
+    @property
+    def counter(self):
+        return self._counter
+        
     def on_work_begin(self, worker,**kwargs):
         self._worker = worker
         self._best_result = None
         self._model_weights = None
         last_status_path = os.path.join(self.path,'last_model.status')
         latest_status_path = os.path.join(self.path,'latest_model.status')
-        latest_model_path = os.path.join(self.path,'latest_model.pth')
         model_path = None  
         biggest_epoch = 0
         self._best_epoch = self._worker.best_epoch
@@ -220,20 +239,13 @@ class ModelCheckpoint(Callback):
             self._model_weights = get_copied_state_dict(worker.model)
 
         if os.path.exists(latest_status_path):
-            with open(latest_status_path,"r") as fp:
-                latest_status = json.load(fp)
-                biggest_epoch = int(latest_status['epoch'])
-                model_path = latest_status['path']
-            print("Load latest epoch {}'s model from {}".format(biggest_epoch,latest_model_path))
-            self._model_weights = torch.load(latest_model_path)
+            biggest_epoch,model_path = _read_status(self.path,latest_status_path)
 
         if os.path.exists(last_status_path):
-            with open(last_status_path,"r") as fp:
-                last_status = json.load(fp)
-                epoch = int(last_status['epoch'])
-                if epoch >= biggest_epoch:
-                    biggest_epoch = epoch
-                    model_path = last_status['path']
+            biggest_epoch_,model_path_ = _read_status(self.path,last_status_path)
+            if biggest_epoch_ >= biggest_epoch:
+                biggest_epoch = biggest_epoch_
+                model_path = model_path_
 
         if model_path is not None:
             print("Load epoch {}'s model from {}".format(biggest_epoch,model_path))
@@ -288,8 +300,6 @@ class ModelCheckpoint(Callback):
                 self._worker.best_epoch = self._best_epoch
         
         if self.patient is not None:
-            #if (self._counter-self.best_epoch) > self.patient:
-            #to if (self._counter-self.best_epoch) >= self.patient:
             if (self._counter-self.best_epoch) >= self.patient:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore",category=WorkerProtectedWarning)
@@ -298,25 +308,22 @@ class ModelCheckpoint(Callback):
         if self.path is not None and self.period is not None:
             if (self._counter%self.period) == 0:
                 if self.explicit_period:
-                    model_path = os.path.join(self.path,'model_epoch_{}.pth').format(self._counter)
+                    relative_path = 'model_epoch_{}.pth'.format(self._counter)
                 else:
-                    model_path = os.path.join(self.path,'latest_model.pth')
+                    relative_path = 'latest_model.pth'
+                model_path = os.path.join(self.path,relative_path)
                 print("Save model at "+model_path)
                 torch.save(self._worker.model.state_dict(),model_path)
-                status_path = os.path.join(self.path,'latest_model.status')
-                with open(status_path,"w") as fp:
-                    status = {"epoch":self._counter,"path":model_path}
-                    json.dump(status,fp, indent=4)
+                _write_status(self.path,os.path.join(self.path,'latest_model.status'),
+                              self._counter,relative_path)
 
     def on_work_end(self):
         if self.path is not None:
             model_path =  os.path.join(self.path,'last_model.pth')
             torch.save(self._worker.model.state_dict(),model_path)
-            status_path = os.path.join(self.path,'last_model.status')
             print("Save last model of epoch {} at {}".format(self._counter,model_path))
-            with open(status_path,"w") as fp:
-                status = {"epoch":self._counter,"path":model_path}
-                json.dump(status,fp, indent=4)
+            _write_status(self.path,os.path.join(self.path,'last_model.status'),
+                          self._counter,'last_model.pth')
 
         print("Best "+str(self.target)+": "+str(self._best_result))
         if self.save_best_weights:
@@ -324,14 +331,14 @@ class ModelCheckpoint(Callback):
                 print("Restore best weight of epoch {}".format(self._best_epoch))
                 self._worker.model.load_state_dict(self._model_weights)
             if self.path is not None:
-                model_path =  os.path.join(self.path,'best_model.pth').format(self._best_epoch)
-                best_status_path =  os.path.join(self.path,'best_model.status')
+                model_path = os.path.join(self.path,'best_model.pth')
                 print("Save best model of epoch {} at {}".format(self.best_epoch,model_path))
                 torch.save(self._model_weights,model_path)
+                best_status_path = os.path.join(self.path,'best_model.status')
                 with open(best_status_path,"w") as fp:
-                    #Change 'formula':'(self._counter-self.best_epoch) > self.patient'}
-                    # to 'formula':'(self._counter-self.best_epoch) >= self.patient'}
-                    best_status = {'best_epoch':self.best_epoch,'path':model_path,
+                    best_status = {'best_epoch':self.best_epoch,
+                                   'relative_path':'best_model.pth',
+                                   "path":model_path,
                                    'formula':'(self._counter-self.best_epoch) >= self.patient'}
                     json.dump(best_status,fp, indent=4)
             
@@ -345,34 +352,30 @@ class ExecutorCheckpoint(Callback):
         self._executor = None
         self.explicit_period = explicit_period
         
+    @property
+    def counter(self):
+        return self._counter
+        
     def on_work_begin(self, worker,**kwargs):
         self._executor = worker.executor
         self._executor_state_dict = self._executor.state_dict()
         
         last_status_path = os.path.join(self.path,'last_executor.status')
         latest_status_path = os.path.join(self.path,'latest_executor.status')
-        latest_exec_path = os.path.join(self.path,'latest_executor.pth')
 
         executor_path = None
         biggest_epoch = 0
         if os.path.exists(latest_status_path):
-            with open(latest_status_path,"r") as fp:
-                latest_status = json.load(fp)
-                biggest_epoch = int(latest_status['epoch'])
-                executor_path = latest_status['path']
-            print("Load latest epoch {}'s executor from {}".format(biggest_epoch,latest_exec_path))
-            self._executor_state_dict = torch.load(latest_exec_path)
+            biggest_epoch,executor_path = _read_status(self.path,latest_status_path)
                 
         if os.path.exists(last_status_path):
-            with open(last_status_path,"r") as fp:
-                last_status = json.load(fp)
-                epoch = int(last_status['epoch'])
-                if epoch >= biggest_epoch:
-                    biggest_epoch = epoch
-                    executor_path = last_status['path']
+            biggest_epoch_,executor_path_ = _read_status(self.path,last_status_path)
+            if biggest_epoch_ >= biggest_epoch:
+                biggest_epoch = biggest_epoch_
+                executor_path = executor_path_
             
         if executor_path is not None:
-            print("Load last epoch {}'s executor from {}".format(biggest_epoch,executor_path))
+            print("Load epoch {}'s executor from {}".format(biggest_epoch,executor_path))
             self._executor.load_state_dict(torch.load(executor_path))
         self._counter = biggest_epoch
 
@@ -388,25 +391,59 @@ class ExecutorCheckpoint(Callback):
         self._executor_state_dict = self._executor.state_dict()
         if (self._counter%self.period) == 0:
             if self.explicit_period:
-                executor_path = os.path.join(self.path,'executor_epoch_{}.pth').format(self._counter)
+                relative_path = 'executor_epoch_{}.pth'.format(self._counter)
             else:
-                executor_path = os.path.join(self.path,'latest_executor.pth')
+                relative_path = 'latest_executor.pth'
+            executor_path = os.path.join(self.path,relative_path)
             print("Save epoch {}'s executor at {}".format(self._counter,executor_path))
             torch.save(self._executor_state_dict,executor_path)
-            status_path = os.path.join(self.path,'latest_executor.status')
-            with open(status_path,"w") as fp:
-                status = {"epoch":self._counter,"path":executor_path}
-                json.dump(status,fp, indent=4)
+            _write_status(self.path,os.path.join(self.path,'latest_executor.status'),
+                          self._counter,relative_path)
 
     def on_work_end(self):
-        executor_path =  os.path.join(self.path,'last_executor.pth')
+        relative_path = 'last_executor.pth'
+        executor_path =  os.path.join(self.path,relative_path)
         torch.save(self._executor_state_dict,executor_path)
         status_path = os.path.join(self.path,'last_executor.status')
         print("Save last epoch {}'s of executor at {}".format(self._counter,executor_path))
-        with open(status_path,"w") as fp:
-            status = {"epoch":self._counter,"path":executor_path}
-            json.dump(status,fp, indent=4)
+        _write_status(self.path,os.path.join(self.path,'last_executor.status'),
+                      self._counter,relative_path)
 
+class ModelExecutorCheckpoint(Callback):
+    def __init__(self,model_checkpoint,executor_checkpoint,prefix=None):
+        super().__init__(prefix)
+        self.model_checkpoint = model_checkpoint
+        self.executor_checkpoint = executor_checkpoint
+        self.callbacks = Callbacks([self.model_checkpoint,self.executor_checkpoint])
+        
+    def get_config(self,**kwargs):
+        config = super().get_config(**kwargs)
+        config['model_checkpoint'] = self.model_checkpoint.get_config(**kwargs)
+        config['executor_checkpoint'] = self.executor_checkpoint.get_config(**kwargs)
+        return config
+
+    def on_work_begin(self,**kwargs):
+        self.callbacks.on_work_begin(**kwargs)
+        if self.model_checkpoint.counter != self.executor_checkpoint.counter:
+            message = "Checkpoint at model and executor are not the same, got {} and {}".format(self.model_checkpoint.counter,
+                                                                                               self.executor_checkpoint.counter)
+            raise Exception(message)
+
+    def on_work_end(self):
+        self.callbacks.on_work_end(**kwargs)
+
+    def on_epoch_begin(self,**kwargs):
+        self.callbacks.on_epoch_begin(**kwargs)
+
+    def on_epoch_end(self,**kwargs):
+        self.callbacks.on_epoch_end(**kwargs)
+
+    def on_batch_begin(self):
+        self.callbacks.on_batch_begin(**kwargs)
+
+    def on_batch_end(self,**kwargs):
+        self.callbacks.on_batch_end(**kwargs)
+        
 class TensorboardCallback(Callback):
     def __init__(self,tensorboard_writer,prefix=None):
         super().__init__(prefix)
@@ -487,7 +524,8 @@ class SeqFigCallback(Callback):
                                               counter=self._counter)
                 if len(value.shape)==3:
                     value = value[0]
-                self._writer.add_figure(name+"_figure",value.transpose(0,1),prefix=self._prefix,
+                value = value.transpose()
+                self._writer.add_figure(name+"_figure",value,prefix=self._prefix,
                                         counter=self._counter,title=name)
         outputs = outputs.cpu().numpy()[0]
         C,L = outputs.shape

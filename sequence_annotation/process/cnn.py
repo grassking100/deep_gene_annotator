@@ -68,7 +68,7 @@ class Conv1d(nn.Conv1d,BasicModel):
                 bound = int((kernek_size-1)/2)
                 self._pad_func = nn.ConstantPad1d((bound,bound),self.padding_value)
                 
-        self.register_buffer('mask_kernel',torch.ones((self.out_channels,self.in_channels,self.kernel_size[0])))
+        self.mask_kernel = torch.ones((self.out_channels,self.in_channels,self.kernel_size[0])).cuda()
         self.reset_parameters()
 
     def get_config(self):
@@ -159,7 +159,7 @@ class CANBlock(BasicModel):
 
     def _normalized(self,x,lengths):
         x = self.norm(x,lengths)
-        self._distribution['norm_{}'.format(self.name)] = x
+        self.update_distribution(x,key='norm_{}'.format(self.name))
         return x
 
     def forward(self, x, lengths,weights=None,mask=None):
@@ -167,11 +167,11 @@ class CANBlock(BasicModel):
         if self.norm_mode=='before_cnn':
             x = self._normalized(x,lengths)
         x,lengths,weights,mask = self.cnn(x,lengths,weights,mask)
-        self._distribution['cnn_x_{}'.format(self.name)] = x
+        self.update_distribution(x,key='cnn_x_{}'.format(self.name))
         if self.norm_mode=='after_cnn':
             x = self._normalized(x,lengths)
         x = self.activation_function(x)
-        self._distribution['post_act_x_{}'.format(self.name)] = x
+        self.update_distribution(x,key='post_act_x_{}'.format(self.name))
         if self.norm_mode=='after_activation':
             x = self._normalized(x,lengths)
         return x,lengths,weights,mask
@@ -187,17 +187,19 @@ class CANBlock(BasicModel):
 
 class StackCNN(BasicModel):
     def __init__(self,in_channels,num_layers,norm_type=None,norm_input=False,
-                 norm_momentum=None,**kwargs):
+                 norm_momentum=None,norm_affine=True,**kwargs):
         super().__init__()
         self.in_channels = in_channels
         self.num_layers = num_layers
         self.norm_input = norm_input
+        self.norm_affine = norm_affine
         self.norm_momentum = norm_momentum or 0.1
-        norm_type = norm_type or 'PaddedBatchNorm1d'
-        self.norm_type = generator_norm_class(norm_type,momentum=self.norm_momentum)
+        self.norm_type = norm_type or 'PaddedBatchNorm1d'
+        self.norm_class = generator_norm_class(self.norm_type,affine=self.norm_affine,
+                                               momentum=self.norm_momentum)
         self.norm = None
         if self.norm_input:
-            self.norm = self.norm_type(self.in_channels)
+            self.norm = self.norm_class(self.in_channels)
         self.kwargs = kwargs
     
     def handle_input(self, x, lengths):
@@ -210,17 +212,18 @@ class StackCNN(BasicModel):
         config = super().get_config()
         config.update(self.kwargs)
         config['num_layers'] = self.num_layers
-        config['norm_type'] = self.norm_type.__class__.__name__
+        config['norm_type'] = self.norm_type
         config['norm_input'] = self.norm_input
         config['norm_momentum'] = self.norm_momentum
+        config['norm_affine'] = self.norm_affine
         
         return config
     
 class ConcatCNN(StackCNN):
-    def __init__(self,in_channels,num_layers,bottleneck_factor=None,
-                 norm_type=None,norm_input=False,norm_momentum=None,**kwargs):
-        super().__init__(in_channels,num_layers,norm_type=norm_type,
-                         norm_input=norm_input,norm_momentum=norm_momentum,**kwargs)
+    def __init__(self,in_channels,num_layers,bottleneck_factor=None,norm_type=None,
+                 norm_input=False,norm_momentum=None,norm_affine=True,**kwargs):
+        super().__init__(in_channels,num_layers,norm_type=norm_type,norm_input=norm_input,
+                         norm_momentum=norm_momentum,norm_affine=norm_affine,**kwargs)
         self.bottleneck_factor = bottleneck_factor or 0
         in_num = in_channels
         self.cnns = []
@@ -236,7 +239,7 @@ class ConcatCNN(StackCNN):
                 out_num = 1 if out_num == 0 else out_num
                 bottleneck = CANBlock(in_channels=in_num,kernel_size=1,
                                        out_channels=out_num,
-                                       norm_type=self.norm_type,**kwargs)
+                                       norm_type=self.norm_class,**kwargs)
                 self.bottlenecks.append(bottleneck)
                 setattr(self, 'bottleneck_'+str(index), bottleneck)
                 in_num = out_num
@@ -246,7 +249,7 @@ class ConcatCNN(StackCNN):
                     setting[key] = value[index]
                 else:
                     setting[key] = value
-            cnn = CANBlock(in_num,norm_type=self.norm_type,**setting)
+            cnn = CANBlock(in_num,norm_type=self.norm_class,**setting)
             cnn.name=str(index)
             self.cnns.append(cnn)
             setattr(self, 'cnn_'+str(index), cnn)
@@ -265,9 +268,9 @@ class ConcatCNN(StackCNN):
                 bottleneck = self.bottlenecks[index]
                 x,lengths,_ = bottleneck(x,lengths)
             x,lengths,weights,mask = cnn(x,lengths=lengths,weights=weights)
-            self._distribution.update(cnn.saved_distribution)
+            self.update_distribution(cnn.saved_distribution)
             x = self.concat([pre_x,x])
-        self._distribution['cnn_result'] = x
+        self.update_distribution(x,key='cnn_result')
         return x,lengths,weights
     
     def get_config(self):
@@ -276,9 +279,9 @@ class ConcatCNN(StackCNN):
         return config
     
 class ResCNN(StackCNN):
-    def __init__(self,in_channels,num_layers,norm_type=None,
+    def __init__(self,in_channels,num_layers,norm_type=None,norm_affine=True,
                  norm_input=False,norm_momentum=None,bottleneck_factor=None,**kwargs):
-        super().__init__(in_channels,num_layers,norm_type=norm_type,
+        super().__init__(in_channels,num_layers,norm_type=norm_type,norm_affine=norm_affine,
                          norm_input=norm_input,norm_momentum=norm_momentum,**kwargs)
         if bottleneck_factor is not None:
             raise Exception("The bottleneck has not be implemented in ResCNN".format(bottleneck_factor))
@@ -296,7 +299,7 @@ class ResCNN(StackCNN):
                     setting[key] = value[index]
                 else:
                     setting[key] = value
-            cnn = CANBlock(in_num,norm_type=self.norm_type,**setting)
+            cnn = CANBlock(in_num,norm_type=self.norm_class,**setting)
             cnn.name=str(index)
             self.cnns.append(cnn)
             setattr(self, 'cnn_'+str(index), cnn)
@@ -315,7 +318,7 @@ class ResCNN(StackCNN):
             self._distribution.update(cnn.saved_distribution)
             if index > 0:
                 x = self.add(pre_x,x)
-        self._distribution['cnn_result'] = x
+        self.update_distribution(x,key='cnn_result')
         return x,lengths,weights
     
 STACK_CNN_CLASS = {'ConcatCNN':ConcatCNN,'ResCNN':ResCNN}

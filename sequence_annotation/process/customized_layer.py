@@ -138,8 +138,31 @@ class BasicModel(nn.Module,metaclass=ABCMeta):
         super().__init__()
         self.in_channels = None
         self.out_channels = None
+        self._save_distribution = True
         self._distribution = {}
-
+        
+    @property
+    def save_distribution(self):
+        return self._save_distribution
+    
+    @save_distribution.setter
+    def save_distribution(self,value):
+        self._save_distribution = value
+        for module in self.children():
+            if isinstance(module,BasicModel):
+                module.save_distribution=value
+        
+    def update_distribution(self,value,key=None):
+        if self.save_distribution:
+            if isinstance(value,dict):
+                self._distribution.update(value)
+            else:
+                if key is None:
+                    raise Exception("To save distribution of {}, you need to assign with its name".format(self.__class__.__name__))
+                if isinstance(value,torch.Tensor):
+                    value = value.cpu().detach().numpy()
+                self._distribution[key] = value
+        
     @property
     def saved_distribution(self):
         return self._distribution

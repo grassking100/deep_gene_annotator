@@ -12,6 +12,8 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--id_path",required=True)
     parser.add_argument("-o", "--output_path",required=True)
     parser.add_argument("-t", "--id_convert_path")
+    parser.add_argument("--exclude_with_id",action='store_true',
+                        help='If it is true, then matched data would be output, otherwirse unmatched data would be output')
     parser.add_argument("--query_column",type=str,default='id')
     
     args = parser.parse_args()
@@ -26,7 +28,12 @@ if __name__ == "__main__":
         if id_table is not None:
             #Convert to id based on table
             query_id = id_table[query_id]
-        if query_id in ids:
-            new_bed.append(item)
+        if not args.exclude_with_id:
+            if query_id in ids:
+                new_bed.append(item)
+        else:
+            if query_id not in ids:
+                new_bed.append(item)
+
     new_bed = pd.DataFrame.from_dict(new_bed)
     write_bed(new_bed,args.output_path)

@@ -20,65 +20,88 @@ def get_coord_id(block):
 
 def create_missing_UTRs(exons,subexons):
     missing_UTRs = []
-    orf_start = None
-    orf_end = None
-    CDSs = [e for e in subexons if e['feature'] == 'CDS']
-    if len(CDSs) != 0:
-        orf_start = min([CDS['start'] for CDS in CDSs])
-        orf_end = max([CDS['end'] for CDS in CDSs])
+    orf_start = orf_end = None
+    CDSs_ = [e for e in subexons if e['feature'] == 'CDS']
+    #If they beloings coding transcript
+    if len(CDSs_) != 0:
+        orf_start = min([CDS['start'] for CDS in CDSs_])
+        orf_end = max([CDS['end'] for CDS in CDSs_])
+        for exon in exons:
+            #Create missing UTR
+            strand = exon['strand']
+            start = end = None
+            selected_subexons = []
+            for subexon in subexons:
+                if not(subexon['end'] < exon['start'] or exon['end'] < subexon['start']):
+                    selected_subexons.append(subexon)
+            CDSs = [e for e in selected_subexons if e['feature'] == 'CDS']
+            five_prime_UTRs = [e for e in selected_subexons if e['feature'] == 'five_prime_UTR']
+            three_prime_UTRs = [e for e in selected_subexons if e['feature'] == 'three_prime_UTR']
+            if len(CDSs) > 1:
+                raise Exception("Wrong number of CDSs")
+            if len(five_prime_UTRs) > 1:
+                raise Exception("Wrong number of five_prime_UTRs")
+            if len(three_prime_UTRs) > 1:
+                raise Exception("Wrong number of three_prime_UTRs")
 
-    for exon in exons:
-        #Create missing UTR
-        start = end = None
-        selected_subexons = []
-        for subexon in subexons:
-            if not(subexon['end'] < exon['start'] or exon['end'] < subexon['start']):
-                selected_subexons.append(subexon)
-        CDSs = [e for e in selected_subexons if e['feature'] == 'CDS']
-        five_prime_UTRs = [e for e in selected_subexons if e['feature'] == 'five_prime_UTR']
-        three_prime_UTRs = [e for e in selected_subexons if e['feature'] == 'three_prime_UTR']
-        if len(five_prime_UTRs) > 1:
-            raise Exception("Wrong number of five_prime_UTRs")
-        if len(three_prime_UTRs) > 1:
-            raise Exception("Wrong number of three_prime_UTRs")
-        strand = exon['strand']
-        three_prime_UTR = dict(exon)
-        three_prime_UTR['feature'] = 'three_prime_UTR'
-        five_prime_UTR = dict(exon)
-        five_prime_UTR['feature'] = 'five_prime_UTR'
-        if len(CDSs)==0:
-            if orf_start is not None:
-                if strand=='+':
-                    if five_prime_UTR['end'] < orf_start and len(five_prime_UTRs)==0:
+            if len(five_prime_UTRs)!=len(five_prime_UTRs):
+                raise Exception("Inconsist annotation")
+                
+            #if there is no CDS in this exon, then make this exon into UTR
+            if len(CDSs)==0:
+                UTR = dict(exon)
+                #Try to fix exon's 5'UTR or exon's 3'UTR, if exon dosn't have one
+                if len(five_prime_UTRs+three_prime_UTRs)==0:
+                    if strand=='+':
+                        if exon['end'] < orf_start:
+                            UTR['feature'] = 'five_prime_UTR'
+                            missing_UTRs.append(UTR)
+                        elif exon['start'] > orf_end:
+                            UTR['feature'] = 'three_prime_UTR'
+                            missing_UTRs.append(three_prime_UTR)
+                    else:
+                        if exon['start'] > orf_end:
+                            UTR['feature'] = 'five_prime_UTR'
+                            missing_UTRs.append(UTR)
+                        elif exon['end'] < orf_start:
+                            UTR['feature'] = 'three_prime_UTR'
+                            missing_UTRs.append(three_prime_UTR)
+            #if there is one CDS in this exon, then make create UTR by exon's ORF if it doesn't have one
+            else:
+                CDS = CDSs[0]
+                if len(five_prime_UTRs)==0:
+                    five_prime_UTR = dict(exon)
+                    five_prime_UTR['feature'] = 'five_prime_UTR'
+                    if strand == '+': 
+                        five_prime_UTR['end'] = CDS['start'] - 1
+                    else:
+                        five_prime_UTR['start'] = CDS['end'] + 1
+                    five_length = five_prime_UTR['end'] - five_prime_UTR['start'] + 1
+                    if five_length > 0:
                         missing_UTRs.append(five_prime_UTR)
-                    if three_prime_UTR['start'] > orf_end and len(three_prime_UTRs)==0:
-                        missing_UTRs.append(three_prime_UTR)
-                else:
-                    if five_prime_UTR['start'] > orf_end and len(five_prime_UTRs)==0:
-                        missing_UTRs.append(five_prime_UTR)
-                    if three_prime_UTR['end'] < orf_start and len(three_prime_UTRs)==0:
-                        missing_UTRs.append(three_prime_UTR)
-        elif len(CDSs)==1:
-            CDS = CDSs[0]
-            if strand == '+': 
-                five_prime_UTR['end'] = CDS['start'] - 1
-                three_prime_UTR['start'] = CDS['end'] + 1
-            else:   
-                five_prime_UTR['start'] = CDS['end'] + 1
-                three_prime_UTR['end'] = CDS['start'] - 1
-            five_length = five_prime_UTR['end'] - five_prime_UTR['start'] + 1
-            three_length = three_prime_UTR['end'] - three_prime_UTR['start'] + 1
-            if five_length > 0 and len(five_prime_UTRs)==0:
-                missing_UTRs.append(five_prime_UTR)
 
-            if three_length > 0 and len(three_prime_UTRs)==0:
-                missing_UTRs.append(three_prime_UTR)
-        else:
-            raise Exception("Multiple CDS in one exon")
+                if len(three_prime_UTRs)==0:
+                    three_prime_UTR = dict(exon)
+                    three_prime_UTR['feature'] = 'three_prime_UTR'
+                    if strand == '+': 
+                        three_prime_UTR['start'] = CDS['end'] + 1
+                    else:   
+                        three_prime_UTR['end'] = CDS['start'] - 1
+                    three_length = three_prime_UTR['end'] - three_prime_UTR['start'] + 1
+                    if three_length > 0:
+                        missing_UTRs.append(three_prime_UTR)
+
+    else:
+        #Try to fix exon's UTR, if exon dosn't have one
+        for exon in exons:
+            UTR = dict(exon)
+            UTR['feature'] = 'UTR'
+            missing_UTRs.append(UTR)
 
     return missing_UTRs
 
 def create_blocks(subblock_group,feature):
+    """Create a list of block, if two blocks are neighbor, then they would be merged to one block"""
     starts = [item['start'] for item in subblock_group]
     ends = [item['end'] for item in subblock_group]
     template = dict(subblock_group[0])
@@ -117,9 +140,8 @@ def repair_by_subgroup(data,subdata):
     if len(subdata) != 0:
         start = min([item['start'] for item in subdata])
         end = max([item['end'] for item in subdata])
-        if start != data['start'] or end != data['end']:
-            data_['start'] = start
-            data_['end'] = end
+        data_['start'] = start
+        data_['end'] = end
     return data_
 
 def repair_iterative(data,level,groups):
@@ -151,7 +173,6 @@ def add_iterative(data,returned):
         returned.append(data)
 
 def gff_repair(gff):
-    
     strand = set(gff['strand'])
     if len(strand - set(['+','-']))!=0:
         raise Exception("Wrong strand",strand)
@@ -167,7 +188,6 @@ def gff_repair(gff):
     subexon_group = subexons.groupby('parent')
     #Recreate subexon data
     exon_list = []
-    created_exons = []
     subexons_list = []
     print("Create exon and UTR")
     index=0
@@ -176,12 +196,12 @@ def gff_repair(gff):
         index+=1
         sys.stdout.write('\033[K')
         rna = rnas[rnas['id']==rna_id].to_dict('record')[0]
-        #If exon exists, then try to use it repair rna
         try:
             exons_ = exon_group.get_group(rna_id).to_dict('record')
         except KeyError:
             continue
-        #If subexon exists, then try to use it to repair exon
+        #If subexon exists, then try to use it to repair UTRs and exons and exons to list
+        #Otherwise, exons to list
         try:
             subexons_ = subexon_group.get_group(rna_id).to_dict('record')
             missing_UTRs_ = create_missing_UTRs(exons_,subexons_)
@@ -195,12 +215,11 @@ def gff_repair(gff):
                 if len(list_) > 0:
                     created_subexons += create_blocks(list_,type_)
             subexons_list += created_subexons
-            created_exons_ = create_exons(created_subexons)
-            if len(exons_) != len(created_exons_):
+            created_exons = create_exons(created_subexons)
+            if len(exons_) != len(created_exons):
                 raise Exception("Inonsist exon number at {}, got {} and {}".format(rna_id,len(exons_),
-                                                                                   len(created_exons_)))
-            created_exons += created_exons_
-            exon_list += created_exons_
+                                                                                   len(created_exons)))
+            exon_list += created_exons
             
         except KeyError:
             exon_list += exons_

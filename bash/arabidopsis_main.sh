@@ -16,7 +16,7 @@ usage(){
  echo ""
 }
 
-while getopts u:d:r:o:s:mch option
+while getopts u:d:r:o:s:mcxh option
  do
   case "${option}"
   in
@@ -27,6 +27,7 @@ while getopts u:d:r:o:s:mch option
    s )source_name=$OPTARG;;
    m )merge_overlapped=true;;
    c )remove_alt_site=true;;
+   x )remove_non_coding=true;;
    h )usage; exit 1;;
    : )echo "Option $OPTARG requires an argument"
       usage; exit 1
@@ -73,6 +74,10 @@ fi
 
 if [ ! "$remove_alt_site" ]; then
     remove_alt_site=false
+fi
+
+if [ ! "$remove_non_coding" ]; then
+    remove_non_coding=false
 fi
 
 preprocessed_root=$saved_root/preprocessed
@@ -129,8 +134,7 @@ python3 $gene_info_root/classify_sites.py -o $preprocessed_root/valid_official.b
 echo "Step 4: Get maximize signal sites data located on external UTR"
 python3 $gene_info_root/consist_sites.py --ig $preprocessed_root/inner_gro_sites.tsv \
 --ic $preprocessed_root/inner_cleavage_sites.tsv --lg $preprocessed_root/long_dist_gro_sites.tsv \
---lc $preprocessed_root/long_dist_cleavage_sites.tsv --tg $preprocessed_root/transcript_gro_sites.tsv \
---tc $preprocessed_root/transcript_cleavage_sites.tsv -s $preprocessed_root
+--lc $preprocessed_root/long_dist_cleavage_sites.tsv -s $preprocessed_root
 
 echo "Step 5: Create coordiante data based on origin data and site data"
 python3 $gene_info_root/create_coordinate_data.py -g $preprocessed_root/safe_gro_sites.tsv -c $preprocessed_root/safe_cleavage_sites.tsv -t $id_convert_table_path --single_start_end -o $preprocessed_root/coordinate_data.tsv
@@ -151,19 +155,21 @@ echo "The number of mRNAs with both GRO and DRS sites supported and are passed b
 echo "Step 6: Execute process_data.sh"
 
 if [ ! -e "$processed_root/result/selected_region.bed" ]; then
+    command="$bash_root/process_data.sh -u $upstream_dist -d $downstream_dist -g $genome_path -i $preprocessed_root/coordinate_consist.bed -o $processed_root -s $source_name -t $id_convert_table_path -b $processed_bed_path"
+
     if $merge_overlapped; then
-        if $remove_alt_site; then
-            bash $bash_root/process_data.sh -u $upstream_dist -d $downstream_dist -g $genome_path -i $preprocessed_root/coordinate_consist.bed -o $processed_root -s $source_name -t $id_convert_table_path -b $processed_bed_path -m -c
-        else
-            bash $bash_root/process_data.sh -u $upstream_dist -d $downstream_dist -g $genome_path -i $preprocessed_root/coordinate_consist.bed -o $processed_root -s $source_name -t $id_convert_table_path -b $processed_bed_path -m
-        fi
-    else
-        if $remove_alt_site; then
-            bash $bash_root/process_data.sh -u $upstream_dist -d $downstream_dist -g $genome_path -i $preprocessed_root/coordinate_consist.bed -o $processed_root -s $source_name -t $id_convert_table_path -b $processed_bed_path -c
-        else
-            bash $bash_root/process_data.sh -u $upstream_dist -d $downstream_dist -g $genome_path -i $preprocessed_root/coordinate_consist.bed -o $processed_root -s $source_name -t $id_convert_table_path -b $processed_bed_path
-        fi
+        command="${command} -m"
     fi
+    
+    if $remove_alt_site; then
+        command="${command} -c"
+    fi
+    
+    if $remove_non_coding; then
+        command="${command} -x"
+    fi
+    echo $command
+    bash $command
 else
     echo "The program process_data.sh is skipped"
 fi

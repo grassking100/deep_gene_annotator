@@ -35,7 +35,7 @@ torch.backends.cudnn.benchmark = True
 sys.path.append("/home/sequence_annotation")
 from sequence_annotation.utils.utils import write_fasta, create_folder
 from sequence_annotation.process.seq_ann_engine import SeqAnnEngine
-from sequence_annotation.process.callback import ModelCheckpoint, ExecutorCheckpoint
+from sequence_annotation.process.callback import ModelCheckpoint, ExecutorCheckpoint,ModelExecutorCheckpoint
 from sequence_annotation.process.inference import seq_ann_inference
 from sequence_annotation.process.utils import param_num
 from sequence_annotation.genome_handler.ann_seq_processor import class_count
@@ -79,8 +79,8 @@ def train(model,executor,train_data,val_data=None,saved_root=None,
                                            patient=patient,save_best_weights=True,
                                            restore_best_weights=True,path=saved_root,
                                            period = period)
-        other_callbacks.append(model_checkpoint)
-        checkpoint = ExecutorCheckpoint(path=saved_root,period = period)
+        executor_checkpoint = ExecutorCheckpoint(path=saved_root,period = period)
+        checkpoint = ModelExecutorCheckpoint(model_checkpoint,executor_checkpoint)
         other_callbacks.append(checkpoint)
     
     engine.other_callbacks.add(other_callbacks)

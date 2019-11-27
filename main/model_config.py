@@ -28,17 +28,20 @@ if __name__ == '__main__':
     #parser.add_argument("--compression_factor",type=float)
     #parser.add_argument("--feature_dropout",type=float)
     parser.add_argument("--norm_mode",default='after_activation')
-    parser.add_argument("--norm_type")
+    parser.add_argument("--norm_type",type=str)
     parser.add_argument("--out_channels",type=int,default=3)
     parser.add_argument("--rnn_dropout",type=float,default=0)    
     parser.add_argument("--use_common_atten",action='store_true')
     parser.add_argument("--not_use_first_atten",action='store_true')
     parser.add_argument("--not_use_second_atten",action='store_true')
     parser.add_argument("--atten_hidden_size",type=int,default=None)
+    parser.add_argument("--atten_num_layers",type=int,default=None)
     parser.add_argument("--norm_input",action='store_true')
     parser.add_argument("--norm_momentum",type=float,default=None)
+    parser.add_argument("--not_norm_affine",action='store_true')
     parser.add_argument("--hier_option")
     
+    parser.add_argument("--last_act",type=str)
     
     args = parser.parse_args()
 
@@ -55,6 +58,7 @@ if __name__ == '__main__':
     builder.feature_block_config['customized_init'] = args.customized_cnn
     builder.feature_block_config['norm_input'] = args.norm_input
     builder.feature_block_config['norm_momentum'] = args.norm_momentum
+    builder.feature_block_config['norm_affine'] = not args.not_norm_affine
     
     builder.feature_block_config['bottleneck_factor'] = args.bottleneck_factor
     #builder.feature_block_config['compression_factor'] = args.compression_factor
@@ -71,9 +75,11 @@ if __name__ == '__main__':
     builder.relation_block_config['use_first_atten'] = not args.not_use_first_atten
     builder.relation_block_config['use_second_atten'] = not args.not_use_second_atten
     builder.relation_block_config['atten_hidden_size'] = args.atten_hidden_size
+    builder.relation_block_config['atten_num_layers'] = args.atten_num_layers
     builder.relation_block_config['hier_option'] = args.hier_option
 
     builder.out_channels = args.out_channels
+    builder.last_act = args.last_act
     
     with open(args.config_path,"w") as fp:
         json.dump(builder.config, fp, indent=4)

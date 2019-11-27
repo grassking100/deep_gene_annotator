@@ -233,15 +233,7 @@ class SeqAnnEngine:
                 json.dump(self.executor.get_config(),fp, indent=4)
 
         #Execute worker
-        pre_time = time.time()
         worker.work()
-        time_spend = time.time() - pre_time
-        #Save record and model
-        if self._path is not None:
-            time_path = os.path.join(self._path,"time.txt")
-            with open(time_path,'a+') as fp:
-                fp.write("Time spend: {} seconds\n".format(time_spend))
-
         return worker
 
     def test(self,model,batch_size=None,use_default_callback=True):

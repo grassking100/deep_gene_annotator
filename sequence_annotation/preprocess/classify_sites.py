@@ -59,7 +59,7 @@ def belong_by_boundary(exp_sites,boundarys,exp_site_name,boundary_start_name,
                                                               exp_site_name,boundary_start_name,
                                                               boundary_end_name,ref_name)
                 returned_data += selected_exp_site
-    df = pd.DataFrame.from_dict(returned_data)
+    df = pd.DataFrame.from_dict(returned_data).drop_duplicates()
     return  df
 
 def belong_by_distance(exp_sites,ref_sites,five_dist,three_dist,exp_site_name,ref_site_name,ref_name):
@@ -86,7 +86,7 @@ def belong_by_distance(exp_sites,ref_sites,five_dist,three_dist,exp_site_name,re
                                                               upstream_dist,downstream_dist,
                                                               exp_site_name,ref_site_name,ref_name)
                 returned_data += selected_exp_site
-    df = pd.DataFrame.from_dict(returned_data)
+    df = pd.DataFrame.from_dict(returned_data).drop_duplicates()
     return  df
 
 if __name__ == "__main__":
