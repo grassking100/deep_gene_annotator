@@ -135,40 +135,44 @@ mkdir -p $stats_root
 
 cp $bed_path $saved_root/input.bed
 
-echo "Step 2: Remove overlapped gene on the same strand"
+
 if [ ! "$id_convert_table_path" ]; then
     id_convert_table_path=$saved_root/id_table.tsv
     python3 $preprocess_root/create_id_table_by_coord.py -i $saved_root/input.bed -o $id_convert_table_path -p gene
     
 fi
 
+echo "Step 2: Remove overlapped gene on the same strand"
 python3 $preprocess_root/nonoverlap_filter.py -i $saved_root/input.bed -s $cleaning_root --use_strand --id_convert_path $id_convert_table_path 
+
+echo "Step 2 (Optional): Remove transcript which its gene has alternative donor or accept site"
+if $remove_alt_site ; then
+    python3 $preprocess_root/path_decode.py -i $cleaning_root/nonoverlap.bed -o $cleaning_root/temp.gff -t $id_convert_table_path
+    python3 $preprocess_root/remove_alt_site.py -i $cleaning_root/temp.gff -o $cleaning_root/temp.gff
+    python3 $preprocess_root/gff2bed.py -i $cleaning_root/temp.gff -o $cleaning_root/temp.bed
+    bash $bash_root/get_ids.sh -i $cleaning_root/temp.bed > $cleaning_root/pass_filter_gene.id
+    python3 $preprocess_root/get_subbed.py -i $cleaning_root/nonoverlap.bed -d $cleaning_root/pass_filter_gene.id \
+-o $cleaning_root/pass_filter_temp.bed -t $id_convert_table_path
+    rm $cleaning_root/temp.gff
+    rm $cleaning_root/temp.bed
+else
+    cp $cleaning_root/nonoverlap.bed $cleaning_root/pass_filter_temp.bed
+fi
+
 echo "Step 2 (Optional): Remove transcript which its gene has non-coding transcript"
 if $remove_non_coding ; then
-    python3 $preprocess_root/convert_bed_id.py -i $cleaning_root/nonoverlap.bed -t $id_convert_table_path -o $cleaning_root/nonoverlap_gene.bed
+    python3 $preprocess_root/convert_bed_id.py -i $cleaning_root/pass_filter_temp.bed -t $id_convert_table_path -o $cleaning_root/pass_filter_temp_gene.bed
     awk -F '\t' -v OFS='\t' '{
         if($7==$8)
         {
             print($4)
         }
-    }' $cleaning_root/nonoverlap_gene.bed > $cleaning_root/noncoding_trnascript_gene.id
+    }' $cleaning_root/pass_filter_temp_gene.bed > $cleaning_root/pass_filter_temp_gene.id
     #Get all-coding-transcript gene's transcript
-    python3 $preprocess_root/get_subbed.py -i $cleaning_root/nonoverlap.bed -d $cleaning_root/noncoding_trnascript_gene.id \
--o $cleaning_root/pass_filter_temp.bed -t $id_convert_table_path --exclude_with_id
-else
-    cp $cleaning_root/nonoverlap.bed $cleaning_root/pass_filter_temp.bed
-fi
-
-echo "Step 2 (Optional): Remove transcript which its gene has alternative donor or accept site"
-if $remove_alt_site ; then
-    python3 $preprocess_root/path_decode.py -i $cleaning_root/pass_filter_temp.bed -o $cleaning_root/temp.gff -t $id_convert_table_path
-    python3 $preprocess_root/remove_alt_site.py -i $cleaning_root/temp.gff -o $cleaning_root/temp.gff
-    python3 $preprocess_root/gff2bed.py -i $cleaning_root/temp.gff -o $cleaning_root/temp.bed
-    bash $bash_root/get_ids.sh -i $cleaning_root/temp.bed > $cleaning_root/pass_filter_gene.id
-    python3 $preprocess_root/get_subbed.py -i $cleaning_root/pass_filter_temp.bed -d $cleaning_root/pass_filter_gene.id \
--o $cleaning_root/pass_filter.bed -t $id_convert_table_path
-    rm $cleaning_root/temp.gff
-    rm $cleaning_root/temp.bed
+    python3 $preprocess_root/get_subbed.py -i $cleaning_root/pass_filter_temp.bed -d $cleaning_root/pass_filter_temp_gene.id \
+-o $cleaning_root/pass_filter.bed -t $id_convert_table_path --exclude_with_id
+    rm $cleaning_root/pass_filter_temp_gene.bed
+    rm $cleaning_root/pass_filter_temp_gene.id
 else
     cp $cleaning_root/pass_filter_temp.bed $cleaning_root/pass_filter.bed
 fi
@@ -190,8 +194,6 @@ fi
 
 #Get potential regions
 
-$rna_bed_path
-
 awk -F '\t' -v OFS='\t' '{
     print($1,$2,$3,$4,$5,$6)
 }' $rna_bed_path > $gene_bed_path
@@ -205,7 +207,7 @@ awk -F '\t' -v OFS='\t' '{
     print($1,$2,$3,".",".","-")
 }' $region_selected_root/potential_region.bed > $region_selected_root/potential_region.temp && mv $region_selected_root/potential_region.temp $region_selected_root/potential_region.bed
 
-bash $bash_root/gene_to_region_mapping.sh -i $region_selected_root/potential_region.bed -d $gene_bed_path -o $region_selected_root/rna_region_mapping.bed -s $region_selected_root/rna_region_mapping.count
+bash $bash_root/gene_to_region_mapping.sh -i $region_selected_root/potential_region.bed -d $gene_bed_path -o $region_selected_root/rna_region_mapping.bed -c $region_selected_root/rna_region_mapping.count
 
 if  $merge_overlapped ; then
     echo "Merge region on same strand"
@@ -215,9 +217,9 @@ else
     python3 $preprocess_root/region_filter.py -i $region_selected_root/rna_region_mapping.bed -r $gene_bed_path -o $region_selected_root/selected_region.bed -e $region_selected_root/discarded_region.bed -u $upstream_dist -d $downstream_dist
 fi
 
-echo "Check regions have both strands"
-mv $region_selected_root/selected_region.bed $region_selected_root/selected_region_before_strand_filter.bed
-python3 $preprocess_root/both_strand_include_filter.py -i $region_selected_root/selected_region_before_strand_filter.bed -o $region_selected_root/selected_region.bed
+#echo "Check regions have both strands"
+#mv $region_selected_root/selected_region.bed $region_selected_root/selected_region_before_strand_filter.bed
+#python3 $preprocess_root/both_strand_include_filter.py -i $region_selected_root/selected_region_before_strand_filter.bed -o $region_selected_root/selected_region.bed  -d $region_selected_root/fail_both_strand_include_filter.bed 
 
 #Get RNAs in selected regions
 bash $bash_root/get_ids.sh -i $region_selected_root/selected_region.bed > $region_selected_root/selected_gene.id
@@ -254,7 +256,7 @@ python3 $preprocess_root/alt_anns_creator.py -i $result_root/alt_region.gff \
 echo "Step 7: Get fasta of region around TSSs, CAs, donor sites, accept sites and get fasta of peptide and cDNA"
 echo "       , and write statistic data"
 
-bash $bash_root/bed_analysis.sh -i $rna_bed_path -f $result_root/selected_region_no_strand.fasta -o $fasta_root -s $stats_root 1 > $stats_root/log.txt 2>&1
+bash $bash_root/bed_analysis.sh -i $rna_bed_path -f $result_root/selected_region_no_strand.fasta -o $fasta_root -s $stats_root -c 500 1> $stats_root/log.txt 2>&1
 
 num_input_RNAs=$(wc -l < $bed_path )
 num_background_RNAs=$(wc -l < $background_bed_path )

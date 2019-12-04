@@ -10,11 +10,15 @@ class AttenGRU(BasicModel):
                  hidden_size=None,atten_hidden_size=None,use_softmax=False,
                  atten_num_layers=None,**kwargs):
         super().__init__()
-        self.name = ''
-        self.atten_name = 'atten'
-        if name is not None:
+        if name is None or name=='':
+            self.name = ''
+            self.atten_name = 'atten'
+            self.result_name = 'post_attention_rnn'  
+        else:
             self.name = name
             self.atten_name = '{}_atten'.format(name)
+            self.result_name = "{}_post_attention_rnn".format(self.name)
+            
         if atten_num_layers is None:
             atten_num_layers = num_layers
         if atten_hidden_size is None:
@@ -24,9 +28,9 @@ class AttenGRU(BasicModel):
                                   num_layers=atten_num_layers,name=self.atten_name,use_softmax=use_softmax,**kwargs)
         self.rnn = ProjectedGRU(in_channels,out_channels,hidden_size=hidden_size,num_layers=num_layers,
                                 name=self.name,**kwargs)
-        self.result_name = 'post_attention_rnn'
-        if self.name != '':
-            self.result_name = "{}_{}".format(self.name,self.result_name)
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+
         self.reset_parameters()
         
     def forward(self,features,lengths,target_feature=None):
@@ -37,7 +41,7 @@ class AttenGRU(BasicModel):
         return result
         
     def get_config(self):
-        config = {}
+        config = super().get_config()
         config['atten'] = self.atten.get_config()
         config['rnn'] = self.rnn.get_config()
         config['name'] = self.name

@@ -22,6 +22,8 @@ if __name__ == '__main__':
     parser.add_argument("--grad_norm",type=float)
     parser.add_argument("--optim_type",type=str,required=True)
     parser.add_argument("--momentum",type=float)
+    parser.add_argument("--target_weight_decay",type=lambda x: [float(v) for v in x.split(',')])
+    parser.add_argument("--weight_decay_name",type=lambda x:x.split(','))
     parser.add_argument("--nesterov",action='store_true')
     parser.add_argument("--reduce_lr_on_plateau",action='store_true')
     parser.add_argument("--amsgrad",action='store_true')

@@ -13,7 +13,7 @@ def get_copied_state_dict(model):
 def get_seq_mask(lengths,max_length=None,to_tensor=True,to_cuda=True):
     max_length = max_length or max(lengths)
     if to_tensor:
-        mask = (torch.arange(max_length)[None,:]<= torch.LongTensor(lengths)[:,None]).float()
+        mask = (torch.arange(max_length)[None,:] < torch.LongTensor(lengths)[:,None]).float()
         if to_cuda:
             mask = mask.cuda()    
     else:
@@ -29,7 +29,7 @@ def param_num(model,requires_grad=True):
         model_parameters = model.parameters()
     return sum([p.numel() for p in model_parameters])
 
-def xavier_uniform_extend_(tensor, gain=1.,mode=None,n=None):
+def _get_std(tensor,mode=None,n=None):
     #Reference:https://pytorch.org/docs/stable/_modules/torch/nn/init.html
     mode = mode or 'both'
     VALID_MODES = ['fan_in','fan_out','both']
@@ -43,6 +43,22 @@ def xavier_uniform_extend_(tensor, gain=1.,mode=None,n=None):
             n = fan_in
         else:
             n = fan_out
-    std = gain * math.sqrt(1/n)
-    bound = math.sqrt(3.0) * std
+    std = math.sqrt(1/n)
+    return std
+    
+def xavier_uniform_extend_(tensor, gain=1.,mode=None,n=None):
+    #Reference:https://pytorch.org/docs/stable/_modules/torch/nn/init.html
+    std = _get_std(tensor,mode=mode,n=n)
+    bound = math.sqrt(3.0) * gain * std
     return _no_grad_uniform_(tensor, -bound, bound)
+
+def get_name_parameter(model,names):
+    parameters = []
+    returned_names = []
+    for name_,parameter in model.named_parameters():
+        for target_name in names:
+            if target_name in name_:
+                parameters.append(parameter)
+                returned_names.append(name_)
+    return returned_names,parameters
+

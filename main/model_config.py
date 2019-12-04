@@ -25,8 +25,6 @@ if __name__ == '__main__':
                         help='Handle padding issue, valid options are {}'.format(', '.join(PADDING_HANDLE)))
     parser.add_argument("--padding_value",type=float,default=0)
     parser.add_argument("--bottleneck_factor",type=float)
-    #parser.add_argument("--compression_factor",type=float)
-    #parser.add_argument("--feature_dropout",type=float)
     parser.add_argument("--norm_mode",default='after_activation')
     parser.add_argument("--norm_type",type=str)
     parser.add_argument("--out_channels",type=int,default=3)
@@ -59,10 +57,7 @@ if __name__ == '__main__':
     builder.feature_block_config['norm_input'] = args.norm_input
     builder.feature_block_config['norm_momentum'] = args.norm_momentum
     builder.feature_block_config['norm_affine'] = not args.not_norm_affine
-    
     builder.feature_block_config['bottleneck_factor'] = args.bottleneck_factor
-    #builder.feature_block_config['compression_factor'] = args.compression_factor
-    #builder.feature_block_config['dropout'] = args.feature_dropout
     
     builder.relation_block_config['rnn_type'] = args.rnn_type
     builder.relation_block_config['num_layers'] = args.rnn_num

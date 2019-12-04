@@ -27,8 +27,7 @@ class TestDataContainer(unittest.TestCase):
             ann_seq2.set_ann('Black',1,3,3)
             ann_seq2.set_ann('White',1,0,2)
             ann_seqs.add(ann_seq2)
-            data = AnnSeqProcessor({'training':{'inputs':{'A':'AATCG','B':'TTTC'},'answers':ann_seqs}},
-                              padding={'inputs':0,'answers':-1})
+            data = AnnSeqProcessor({'training':{'inputs':{'A':'AATCG','B':'TTTC'},'answers':ann_seqs}})
             data.process()
         except Exception as e:
             raise e

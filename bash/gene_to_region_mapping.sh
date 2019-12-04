@@ -1,25 +1,27 @@
 #!/bin/bash
 ## function print usage
 usage(){
- echo "Usage: Get genes partialy mapping to region on same strand"
+ echo "Usage: Get genes partialy mapping to region"
  echo "  Arguments:"
  echo "    -i  <string>  Input region bed path"
  echo "    -d  <string>  Input gene bed path"
  echo "    -o  <string>  Output path"
  echo "  Options:"
- echo "    -s  <string>  Path to write regions which contain genes number at single strand"
+ echo "    -c  <string>  Path to write regions which contain genes number at single strand"
+ echo "    -s  Consider strand"
  echo "    -h  Print help message and exit"
  echo "Example: bash gene_to_region_mapping.sh -i region.bed -d gene.bed -o filter.bed"
  echo ""
 }
-while getopts i:d:o:s:h option
+while getopts i:d:o:c:sh option
  do
   case "${option}"
   in
    i ) region_path=$OPTARG;;
    d ) data_path=$OPTARG;;
    o ) output_path=$OPTARG;;
-   s ) single_count_path=$OPTARG;;
+   c ) single_count_path=$OPTARG;;
+   s ) strand=true;;
    h ) usage; exit 1;;
    : ) echo "Option $OPTARG requires an argument"
        usage; exit 1
@@ -48,6 +50,11 @@ if [ ! "$output_path" ]; then
     exit 1
 fi
 
+if [ ! "$strand" ]; then
+    strand=false
+fi
+
+
 script_root="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 bedtools sort -i $region_path > _region_sorted.temp
@@ -57,7 +64,11 @@ awk -F '\t' -v OFS='\t' '{
     print($1,$2,$3,$4,$5,$6)
 }' _region_sorted.temp > _region_sorted.simple
 
-bedtools map -a _region_sorted.simple -b _data_sorted.temp -c 4,4 -o count_distinct,distinct -s > _temp.bed
+if $strand; then
+    bedtools map -a _region_sorted.simple -b _data_sorted.temp -c 4,4 -o count_distinct,distinct -s > _temp.bed
+else
+    bedtools map -a _region_sorted.simple -b _data_sorted.temp -c 4,4 -o count_distinct,distinct > _temp.bed
+fi
     
 if [  "$single_count_path" ]; then
     awk -F '\t' -v OFS='\t' '{print($1,$2,$3,$8,$5,$6,$7)}' _temp.bed > $single_count_path

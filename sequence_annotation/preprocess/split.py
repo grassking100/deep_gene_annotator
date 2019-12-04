@@ -49,6 +49,13 @@ if __name__ == "__main__":
         train.to_csv(train_path,header=False,index=None)
         val.to_csv(val_path,header=False,index=None)
 
+    train_chroms = train_val_chrom_ids
+    train_val = region_rename_table[region_rename_table['chr'].isin(train_val_chrom_ids)]['new_id']
+    train_val = train_val.drop_duplicates()
+    train_val_chroms_str = '_'.join([str(chrom) for chrom in train_val_chrom_ids])
+    train_val_path = os.path.join(args.splitted_id_root,'chrom_{}_new_id.tsv'.format(train_val_chroms_str))
+    train_val.to_csv(train_val_path,header=False,index=None)
+
     test = region_rename_table[region_rename_table['chr'].isin([min_chrom])]['new_id']
     test = test.drop_duplicates()
     test_path = os.path.join(args.splitted_id_root,'test_chrom_{}_new_id.tsv'.format(min_chrom))

@@ -160,14 +160,18 @@ if __name__ == '__main__':
         executor_config = json.load(fp)
     
     executor = get_executor(model,**executor_config)
-
-    train(model,executor,train_data,val_data,args.saved_root,
-          args.epoch,args.batch_size,args.augmentation_max,
-          patient=args.patient,use_gffcompare=args.use_gffcompare,
-          epoch_start=epoch_start,
-          monitor_target=args.monitor_target,
-          period=args.period,
-          **map_order_config)
+    
+    try:
+        train(model,executor,train_data,val_data,args.saved_root,
+              args.epoch,args.batch_size,args.augmentation_max,
+              patient=args.patient,use_gffcompare=args.use_gffcompare,
+              epoch_start=epoch_start,
+              monitor_target=args.monitor_target,
+              period=args.period,
+              **map_order_config)
+    except RuntimeError:
+        raise Exception("Something wrong ocuurs in {}".format(args.saved_root))
+        
     #Test
     if not args.only_train:
         executor = get_executor(model,set_loss=False,set_optimizer=False,**executor_config)

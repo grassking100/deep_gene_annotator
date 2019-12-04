@@ -147,6 +147,7 @@ class SeqAnnLoss(nn.Module):
             else:
                 nontranscript_loss = mean_by_mask(nontranscript_loss,nontranscript_mask)
             loss = loss + nontranscript_loss
+        loss = loss / (self.intron_coef+self.nontranscript_coef+self.nontranscript_coef)
         return loss
 
 class LabelLoss(nn.Module):

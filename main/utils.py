@@ -1,18 +1,15 @@
 import os
 import sys
-import warnings
 from argparse import ArgumentParser
 import pandas as pd
 import json
 from numpy import median
 import torch
-from torch import optim
 sys.path.append("/home/sequence_annotation")
 from sequence_annotation.genome_handler.load_data import load_data as _load_data
-from sequence_annotation.process.loss import SeqAnnLoss, FocalLoss, LabelLoss
-from sequence_annotation.process.executor import BasicExecutor
-from sequence_annotation.process.inference import seq_ann_inference, seq_ann_reverse_inference, basic_inference
+from sequence_annotation.process.executor import ExecutorBuilder
 from sequence_annotation.process.model import SeqAnnBuilder
+from sequence_annotation.process.utils import get_name_parameter
 
 BEFORE_MIX_SIMPLIFY_MAP = {'exon':['exon'],'intron':['intron','alt_accept','alt_donor'],'other':['other']}
 SIMPLIFY_MAP = {'exon':['exon'],'intron':['intron'],'other':['other']}
@@ -72,86 +69,52 @@ def load_data(fasta_path,ann_seqs_path,id_paths,select_each_type=False,**kwargs)
     
     return data
 
-OPTIMIZER_CLASS = {'Adam':optim.Adam,'SGD':optim.SGD,'AdamW':optim.AdamW,'RMSprop':optim.RMSprop}
-
-def optimizer_generator(type_,model,momentum=None,nesterov=False,amsgrad=False,adam_betas=None,**kwargs):
-    
-    momentum = momentum or 0
-    adam_betas = adam_betas or [0.9,0.999]
-    if type_ not in OPTIMIZER_CLASS:
-        raise Exception("Optimizer should be {}, but got {}".format(OPTIMIZER_CLASS,type_))
-        
-    filter_ = filter(lambda p: p.requires_grad, model.parameters())
-    optimizer = OPTIMIZER_CLASS[type_]
-    if type_ == 'AdamW':
-        warnings.warn("\n!!!\n\nAdamW's weight decay is implemented differnetly in paper and pytorch 1.3.0, please see https://github.com/pytorch/pytorch/pull/21250#issuecomment-520559993 for more information!\n\n!!!\n")
-        
-    if optimizer in [optim.Adam,optim.AdamW]:
-        if momentum > 0 or nesterov:
-            raise
-        return optimizer(filter_,amsgrad=amsgrad,betas=adam_betas,**kwargs)
-    elif optimizer in [optim.RMSprop]:
-        if nesterov or amsgrad:
-            raise
-        return optimizer(filter_,momentum=momentum,**kwargs)
-    else:
-        if amsgrad:
-            raise
-        return optimizer(filter_,momentum=momentum,
-                          nesterov=nesterov,**kwargs)
-
 def get_executor(model,optim_type,use_naive=True,set_loss=True,set_optimizer=True,
-                 learning_rate=None,intron_coef=None,other_coef=None,
-                 nontranscript_coef=None,gamma=None,transcript_answer_mask=True,
-                 transcript_output_mask=False,mean_by_mask=False,frozed_names=None,
                  label_num=None,predict_label_num=None,answer_label_num=None,output_label_num=None,
-                 grad_clip=None,grad_norm=None,reduce_lr_on_plateau=False,**kwargs):
+                 grad_clip=None,grad_norm=None,
+                 learning_rate=None,reduce_lr_on_plateau=False,
+                 gamma=None,intron_coef=None,other_coef=None,nontranscript_coef=None,
+                 transcript_answer_mask=True,transcript_output_mask=False,mean_by_mask=False,
+                 target_weight_decay=None,weight_decay_name=None,
+                 **kwargs):
 
-    learning_rate = learning_rate or 1e-3
+    builder = ExecutorBuilder(use_naive=use_naive,label_num=label_num,
+                              predict_label_num=predict_label_num,
+                              answer_label_num=answer_label_num,
+                              output_label_num=output_label_num,
+                              grad_clip=grad_clip,grad_norm=grad_norm)
 
-    if use_naive:
-        output_label_num = predict_label_num = answer_label_num = label_num or 3
+    target_weight_decay = target_weight_decay or []
+    weight_decay_name = weight_decay_name or []
+    params = model.parameters()
+    if len(target_weight_decay) == len(weight_decay_name):
+        params = []
+        special_names = []
+        for name,weight_decay_ in zip(weight_decay_name,target_weight_decay):
+            returned_names,parameters = get_name_parameter(model,[name])
+            special_names += returned_names
+            params += [{'params':parameters,'weight_decay':weight_decay_}]
+        default_parameters = []
+        for name_,parameter in model.named_parameters():
+            if name_ not in special_names:
+                default_parameters.append(parameter)
+        params += [{'params':default_parameters}]
     else:
-        predict_label_num = predict_label_num or 2
-        answer_label_num = answer_label_num or 3
-        output_label_num = output_label_num or 3
-
-    executor = BasicExecutor()
-        
-    executor.grad_clip = grad_clip
-    executor.grad_norm = grad_norm
-        
-    if use_naive:
-        executor.inference = basic_inference(output_label_num)
-    else:
-        executor.inference = seq_ann_inference
-
-
+        raise Exception("Different number between target_weight_decay and weight_decay_name")
+    
     if set_optimizer:
+        builder.set_optimizer(params,optim_type,learning_rate=learning_rate,
+                              reduce_lr_on_plateau=reduce_lr_on_plateau,**kwargs)
 
-        executor.optimizer = optimizer_generator(optim_type,model,lr=learning_rate,**kwargs)
-        if reduce_lr_on_plateau:
-            executor.lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(executor.optimizer,verbose=True,
-                                                                         threshold=0.1)
-    
-    executor.loss = None
-    
     if set_loss:
-        if use_naive:
-            loss = FocalLoss(gamma)
-        else:    
-            loss = SeqAnnLoss(intron_coef=intron_coef,other_coef=other_coef,
-                              nontranscript_coef=nontranscript_coef,
-                              transcript_answer_mask=transcript_answer_mask,
-                              transcript_output_mask=transcript_output_mask,
-                              mean_by_mask=mean_by_mask)
-        label_loss = LabelLoss(loss)
-        label_loss.predict_inference = basic_inference(predict_label_num)
-        label_loss.answer_inference = basic_inference(answer_label_num)
-    
-        executor.loss = label_loss
+        builder.set_loss(gamma=gamma,intron_coef=intron_coef,
+                         other_coef=other_coef,
+                         nontranscript_coef=nontranscript_coef,
+                         transcript_answer_mask=transcript_answer_mask,
+                         transcript_output_mask=transcript_output_mask,
+                         mean_by_mask=mean_by_mask)
         
-    return executor
+    return builder.build()
 
 def get_model(path_or_json,model_weights_path=None,frozen_names=None):
     builder = SeqAnnBuilder()

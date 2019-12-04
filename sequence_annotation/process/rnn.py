@@ -227,10 +227,10 @@ class ProjectedGRU(BasicModel):
         self.batch_first = batch_first 
         self.dropout = dropout or 0
         self.bidirectional = bidirectional
-        if name is None:
-            self.name = ''
+        if name is None or name == '':
+            self.name = 'rnn'
         else:
-            self.name = "{}_".format(name)
+            self.name = "{}_rnn".format(name)
         #print(kwargs)
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -264,7 +264,7 @@ class ProjectedGRU(BasicModel):
         
     def forward(self,x,lengths,return_intermediate=False):
         post_rnn = self.rnn(x,lengths)
-        self.update_distribution(post_rnn,key='{}rnn'.format(self.name))
+        self.update_distribution(post_rnn,key=self.name)
         if self.norm_type is not None:
             post_rnn = self.norm(post_rnn,lengths)
         result,lengths,_,_ = self.project(post_rnn,lengths=lengths)

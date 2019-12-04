@@ -18,21 +18,23 @@ def kaiming_uniform_cnn_init(cnn,mode=None):
     mode = mode or 'fan_in'
     gain = nn.init.calculate_gain('relu')
     xavier_uniform_extend_(cnn.weight,gain,mode)
-    zeros_(cnn.bias)
+    if cnn.bias is not None:
+        zeros_(cnn.bias)
     
 def xavier_uniform_cnn_init(cnn,mode=None):
     mode = mode or 'fan_in'
     gain = nn.init.calculate_gain('linear')
     xavier_uniform_extend_(cnn.weight,gain,mode)
-    zeros_(cnn.bias)
+    if cnn.bias is not None:
+        zeros_(cnn.bias)
 
 CNN_INIT_MODE = {None:None,'kaiming_uniform_cnn_init':kaiming_uniform_cnn_init,'xavier_uniform_cnn_init':xavier_uniform_cnn_init}
 
 def create_mask(x,lengths):
-    mask = torch.zeros(*x.shape).to(x.dtype)
+    mask = torch.zeros(x.shape[0],1,x.shape[2]).to(x.dtype)
     if x.is_cuda:
         mask = mask.cuda()
-    mask_ = get_seq_mask(lengths,to_cuda=x.is_cuda).unsqueeze(1).repeat(1,x.shape[1],1).to(x.dtype)
+    mask_ = get_seq_mask(lengths,to_cuda=x.is_cuda).to(x.dtype).unsqueeze(1)##.repeat(1,x.shape[1],1)
     mask[:,:,:max(lengths)] += mask_
     return mask
 
@@ -90,14 +92,15 @@ class Conv1d(nn.Conv1d,BasicModel):
         origin_shape = x.shape
         if lengths is None:
             lengths = [x.shape[2]]*x.shape[0]
-        if self.kernel_size[0] > 1:
-            if mask is None:
-                mask = create_mask(x,lengths)
-            x = mask * x
+        #if self.kernel_size[0] > 1:
+        if mask is None:
+            mask = create_mask(x,lengths)
         if self._padding_handle == 'same' or self.kernel_size[0] == 1:
             if self.kernel_size[0] > 1:
                 x = self._pad_func(x)
             x = super().forward(x)
+            if self.kernel_size[0] > 1:
+                x = mask.repeat(1,x.shape[1],1) * x
             new_lengths = lengths
         elif self._padding_handle == 'valid':
             x = super().forward(x)
@@ -107,23 +110,26 @@ class Conv1d(nn.Conv1d,BasicModel):
             change = 2*padding-dilation*(self.kernel_size[0]-1)-1
             new_lengths = [math.floor((length + change)/stride) + 1 for length in lengths]
             mask = create_mask(x,new_lengths)
+            x = mask[:,:x.shape[2]].repeat(1,x.shape[1],1) * x
             x = x[:,:,:max(new_lengths)]
-            x = mask[:,:,:x.shape[2]] * x
         elif self._padding_handle == 'partial':
             new_lengths = lengths
             if weights is None:
                 warnings.warn("Caution: weights can be reused ONLY if kernel sizes of previous layer "+
                               "and current layer is the same, please check this by yourself")
                 padded_mask = self._pad_func(mask)
+                if x.is_cuda:
+                    padded_mask = padded_mask.cuda()
                 mask_sum = F.conv1d(padded_mask, self.mask_kernel, bias=None)
                 weights = self.full_size /(mask_sum+ EPSILON)
+                if x.is_cuda:
+                    weights = weights.cuda()
             x = self._pad_func(x)
+            x = F.conv1d(x, self.weight, bias=None)
+            x = torch.mul(x,weights)
             if self.bias is not None:
-                x = F.conv1d(x, self.weight, bias=None)
-                x = torch.mul(x,weights)+self.bias.view(1, self.out_channels, 1)
-            else:
-                x = F.conv1d(x, self.weight, bias=None)
-                x = torch.mul(x,weights)
+                x = x+self.bias.view(1, self.out_channels, 1)
+            x = mask.repeat(1,x.shape[1],1) * x                
         else:
             new_lengths = lengths
         return x, new_lengths, weights, mask

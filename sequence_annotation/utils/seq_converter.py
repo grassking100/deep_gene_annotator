@@ -6,26 +6,26 @@ DNA_CODES = 'ATCG'
 AA_CODES = 'ARNDCQEGHILKMFPSTWYV'
 
 class SeqConverter:
-    def __init__(self,code_vec_dictionay=None,codes=None,
+    def __init__(self,code_vec_dictionary=None,codes=None,
                  is_case_sensitivity=False,with_soft_masked_status=False):
-        if code_vec_dictionay is not None:
-            if self._is_dict_inversible(code_vec_dictionay):
+        if code_vec_dictionary is not None:
+            if self._is_dict_inversible(code_vec_dictionary):
                 if is_case_sensitivity:
-                    self._code_vec_dictionay = code_vec_dictionay
-                    self._codes = list(code_vec_dictionay.keys())
+                    self._code_vec_dictionary = code_vec_dictionary
+                    self._codes = list(code_vec_dictionary.keys())
                 else:
-                    self._code_vec_dictionay = {}
+                    self._code_vec_dictionary = {}
                     self._codes = []
-                    for code,vec in code_vec_dictionay.items():
+                    for code,vec in code_vec_dictionary.items():
                         code_key = str(code).upper()
-                        self._code_vec_dictionay[code_key]=vec
+                        self._code_vec_dictionary[code_key]=vec
                         self._codes.append(code_key)
             else:
                 raise Exception("Diciotnary is not inversible")
         else:
             self._codes=codes or list(DNA_CODES)
             if self._is_values_unique(self._codes):
-                self._code_vec_dictionary = self._codes_to_vecs_dictionay(self._codes)
+                self._code_vec_dictionary = self._codes_to_vecs_dictionary(self._codes)
             else:
                 raise Exception("Codes is not unique")
         self._vec_code_dictionary = {str(v):k for k,v in self._code_vec_dictionary.items()}
@@ -47,7 +47,7 @@ class SeqConverter:
     def _is_dict_inversible(self, dict_):
         dict_values = list(dict_.values())
         return self._is_values_unique(dict_values)
-    def _codes_to_vecs_dictionay(self, codes):
+    def _codes_to_vecs_dictionary(self, codes):
         dict_ = {}
         for index,code in enumerate(codes):
             zero = np.zeros(len(codes),dtype='int')
@@ -61,14 +61,14 @@ class SeqConverter:
         else:
             return value.upper()
     def _element_convert(self,element,dictionary):
-        """convert element by dictionay"""
+        """convert element by dictionary"""
         result = dictionary.get(self._preprocess(element))
         if result is None:
             raise CodeException(str(element),list(dictionary.keys()))
         else:
             return result
     def _array_convert(self,array,element_convert_method):
-        """convert sequence by dictionay"""
+        """convert sequence by dictionaty"""
         code_list = list(array)
         arr = []
         for code in code_list:

@@ -1,9 +1,39 @@
-import torch.nn as nn
-import torch
+import warnings
 from abc import abstractmethod,ABCMeta,abstractproperty
-from .loss import CCELoss,bce_loss,mean_by_mask
+import torch
+import torch.nn as nn
+from torch import optim
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from .utils import get_seq_mask
-from .inference import basic_inference
+from .loss import CCELoss,bce_loss,mean_by_mask,SeqAnnLoss, FocalLoss, LabelLoss
+from .inference import basic_inference,seq_ann_inference, seq_ann_reverse_inference
+
+OPTIMIZER_CLASS = {'Adam':optim.Adam,'SGD':optim.SGD,'AdamW':optim.AdamW,'RMSprop':optim.RMSprop}
+
+def optimizer_generator(type_,parameters,momentum=None,nesterov=False,amsgrad=False,adam_betas=None,**kwargs):
+    momentum = momentum or 0
+    adam_betas = adam_betas or [0.9,0.999]
+    if type_ not in OPTIMIZER_CLASS:
+        raise Exception("Optimizer should be {}, but got {}".format(OPTIMIZER_CLASS,type_))
+        
+    #filter_ = filter(lambda p: p.requires_grad, model.parameters())
+    optimizer = OPTIMIZER_CLASS[type_]
+    if type_ == 'AdamW':
+        warnings.warn("\n!!!\n\nAdamW's weight decay is implemented differnetly in paper and pytorch 1.3.0, please see https://github.com/pytorch/pytorch/pull/21250#issuecomment-520559993 for more information!\n\n!!!\n")
+        
+    if optimizer in [optim.Adam,optim.AdamW]:
+        if momentum > 0 or nesterov:
+            raise
+        return optimizer(parameters,amsgrad=amsgrad,betas=adam_betas,**kwargs)
+    elif optimizer in [optim.RMSprop]:
+        if nesterov or amsgrad:
+            raise
+        return optimizer(parameters,momentum=momentum,**kwargs)
+    else:
+        if amsgrad:
+            raise
+        return optimizer(parameters,momentum=momentum,
+                          nesterov=nesterov,**kwargs)
 
 def _evaluate(loss,model,inputs, labels,lengths,inference):
     model.train(False)
@@ -156,3 +186,46 @@ class BasicExecutor(_Executor):
 
         if self.lr_scheduler is not None:
             self.lr_scheduler.step(metric[self.lr_scheduler_target],epoch=epoch)
+        
+class ExecutorBuilder:
+    def __init__(self,use_naive=True,label_num=None,grad_clip=None,grad_norm=None,
+                 predict_label_num=None,answer_label_num=None,output_label_num=None):
+        self.executor = BasicExecutor()
+        self.executor.grad_clip = grad_clip
+        self.executor.grad_norm = grad_norm
+        self.executor.loss = None
+        self.use_naive=use_naive
+        if self.use_naive:
+            self.output_label_num = self.predict_label_num = self.answer_label_num = label_num or 3
+            self.executor.inference = basic_inference(self.output_label_num)
+        else:
+            self.predict_label_num = predict_label_num or 2
+            self.answer_label_num = answer_label_num or 3
+            self.output_label_num = output_label_num or 3
+            self.executor.inference = seq_ann_inference
+        
+    def set_optimizer(self,parameters,optim_type,learning_rate=None,reduce_lr_on_plateau=False,**kwargs):
+        learning_rate = learning_rate or 1e-3
+        self.executor.optimizer = optimizer_generator(optim_type,parameters,lr=learning_rate,**kwargs)
+        if reduce_lr_on_plateau:
+            self.executor.lr_scheduler = ReduceLROnPlateau(self.executor.optimizer,
+                                                           verbose=True,threshold=0.1)
+   
+    def set_loss(self,gamma=None,intron_coef=None,other_coef=None,nontranscript_coef=None,
+                 transcript_answer_mask=True,transcript_output_mask=False,mean_by_mask=False):
+        if self.use_naive:
+            loss = FocalLoss(gamma)
+        else:    
+            loss = SeqAnnLoss(intron_coef=intron_coef,other_coef=other_coef,
+                              nontranscript_coef=nontranscript_coef,
+                              transcript_answer_mask=transcript_answer_mask,
+                              transcript_output_mask=transcript_output_mask,
+                              mean_by_mask=mean_by_mask)
+        label_loss = LabelLoss(loss)
+        label_loss.predict_inference = basic_inference(self.predict_label_num)
+        label_loss.answer_inference = basic_inference(self.answer_label_num)
+        self.executor.loss = label_loss
+        
+    def build(self):
+        return self.executor
+            

@@ -24,18 +24,21 @@ class RNNAttention(BasicModel):
         
         if self.use_softmax:
             self.softmax_log = nn.LogSoftmax(dim=1)
-        if name is None:
+            
+        if name is None or name=='':
             self.name = ''
+            self._name=''
         else:
             self.name = "{}_".format(name)
+            self._name=name
         self.reset_parameters()
         
     def get_config(self):
         config = super().get_config()
-        config.update(self.projected_rnn.get_config())
+        config['rnn'] = self.projected_rnn.get_config()
         config['use_softmax'] = self.use_softmax
         config['on_site'] = self.on_site
-        config['name'] = self.name
+        config['name'] = self._name
         return config
         
     def forward(self,features,lengths,target_feature=None):

@@ -34,18 +34,13 @@ def region_filter(region_bed,gene_bed,upstream_distance,downstream_distance):
         if has_partial:
             invalid_bed_items.append(region)
         else:    
-            count = {'+':0,'-':0}
-            for gene_id in gene_ids:
-                subset = selected[selected['id'] == gene_id]
-                strands = set(list(subset['strand']))
-                if len(strands)==1:
-                    count[list(strands)[0]] += 1
-                else:
-                    raise Exception("Inconsist strand for same gene, {}".format(gene_id))
-            if count['+'] <= 1 and count['-'] <= 1:
+            count = len(selected)
+            if count <= 1:
                 valid_bed_items.append(region)
             else:
+                print(count,region)
                 invalid_bed_items.append(region)
+                raise Exception("")
     valid_bed = pd.DataFrame.from_dict(valid_bed_items)
     invalid_bed = pd.DataFrame.from_dict(invalid_bed_items)
     return valid_bed, invalid_bed
@@ -60,7 +55,7 @@ def main(region_bed_path,gene_bed_path,region_output_path,upstream_distance,down
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="This program will print region which have at most one gene"+
-                            "(with specific distance) at both strands, it will also discard"+
+                            "(with specific distance) on both strand, it will also discard"+
                             "regions contain partial gene")
     parser.add_argument("-i", "--region_bed_path",required=True,
                         help='Regions which have at most one gene at each strand')

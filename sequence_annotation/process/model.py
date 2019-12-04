@@ -4,11 +4,12 @@ from .customized_layer import BasicModel
 from .rnn import GRU, LSTM,GRU_INIT_MODE
 from .customized_rnn import RNN_TYPES, ConcatGRU
 from .attention import ATTENTION_LAYER
-from .hier_atten_rnn import HierAttenGRU
+from .hier_atten_rnn import HierAttenGRU,AttenGRU
 from .cnn import STACK_CNN_CLASS,Conv1d
 
 RNN_TYPES = dict(RNN_TYPES)
 RNN_TYPES['HierAttenGRU'] = HierAttenGRU
+RNN_TYPES['AttenGRU'] = AttenGRU
 
 class FeatureBlock(BasicModel):
     def __init__(self,in_channels,num_layers,stack_cnn_class=None,**kwargs):

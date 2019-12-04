@@ -430,7 +430,7 @@ class ModelExecutorCheckpoint(Callback):
             raise Exception(message)
 
     def on_work_end(self):
-        self.callbacks.on_work_end(**kwargs)
+        self.callbacks.on_work_end()
 
     def on_epoch_begin(self,**kwargs):
         self.callbacks.on_epoch_begin(**kwargs)
