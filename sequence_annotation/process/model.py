@@ -68,7 +68,10 @@ class RelationBlock(BasicModel):
 class SeqAnnModel(BasicModel):
     def __init__(self,feature_block,relation_block,last_act=None):
         super().__init__()
-        self.last_act=last_act
+        if last_act == 'none':
+            self.last_act=None
+        else:
+            self.last_act=last_act
         self.feature_block = feature_block
         self.relation_block = relation_block
         self.in_channels = self.feature_block.in_channels
@@ -97,8 +100,10 @@ class SeqAnnModel(BasicModel):
         if self.last_act is not None:
             if self.last_act == 'softmax':
                 x = torch.softmax(x,1)
-            else:
+            elif self.last_act == 'sigmoid':
                 x = torch.sigmoid(x)
+            else:
+                raise Exception("Wrong activation name, {}".format(self.last_act))
         return x,lengths
 
 class SeqAnnBuilder:

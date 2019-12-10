@@ -8,17 +8,15 @@ import pandas as pd
 import torch
 import seqlogo
 from skimage.filters import threshold_otsu
-from ..utils.utils import create_folder
+from ..utils.utils import create_folder,write_gff,gff_to_bed_command,gffcompare_command,save_as_gff_and_bed
 from ..utils.seq_converter import DNA_CODES
 from ..genome_handler.region_extractor import GeneInfoExtractor
-from ..genome_handler.seq_container import SeqInfoContainer
+from ..genome_handler.seq_container import EmptyContainerException
 from .metric import F1,accuracy,precision,recall,categorical_metric,contagion_matrix
 from .warning import WorkerProtectedWarning
-from .inference import ann_seq2one_hot_seq, AnnSeq2InfoConverter,basic_inference
+from .inference import ann_vec2one_hot_vec, AnnVec2InfoConverter,basic_inference
 from .signal import get_signal_ppm, ppms2meme
 from .utils import get_copied_state_dict
-
-preprocess_src_root = '/home/sequence_annotation/sequence_annotation/preprocess'
 
 class ICallback(metaclass=ABCMeta):
     @abstractmethod
@@ -124,13 +122,13 @@ class Callbacks(ICallback):
                 for type_,value in callback.data.items():
                     record[type_]=value
         return record
-
+    
 class GFFCompare(Callback):
-    def __init__(self,ann_types,path,simplify_map,dist,prefix=None):
+    def __init__(self,ann_vec2info_converter,path,fix_boundary=False,prefix=None):
         super().__init__(prefix)
-        self.converter = AnnSeq2InfoConverter(ann_types,simplify_map,dist)
-        self.answer_inference = basic_inference(len(ann_types))
-        self.fix_boundary = False
+        self.converter = ann_vec2info_converter
+        self.answer_inference = basic_inference(len(self.converter.ann_types))
+        self.fix_boundary = fix_boundary
         self._path = path
         self._counter = None
         
@@ -140,55 +138,55 @@ class GFFCompare(Callback):
     def get_config(self,**kwargs):
         config = super().get_config(**kwargs)
         config['path'] = self._path
-        config['simplify_map'] = self.converter.simplify_map
-        config['ann_types'] = self.converter.ann_types
-        config['dist'] = self.converter.dist
-        config['donor_site_pattern'] = self.converter.donor_site_pattern
-        config['accept_site_pattern'] = self.converter.accept_site_pattern
-        config['converter'] = str(self.converter)
+        config['ann_vec2info_converter'] = self.converter.get_config()
         config['fix_boundary'] = self.fix_boundary
-        config['alt'] = self.converter.extractor.alt
-        config['alt_num'] = self.converter.extractor.alt_num
         return config
 
     def on_epoch_begin(self,counter,**kwargs):
-        self._outputs = SeqInfoContainer()
-        self._answers = SeqInfoContainer()
+        self._outputs = []
+        self._answers = []
         self._counter = counter
 
     def on_batch_end(self,outputs,seq_data,masks,**kwargs):
-        chrom_ids,seqs,answers,lengths = seq_data.ids,seq_data.seqs,seq_data.answers,seq_data.lengths
+        chrom_ids,dna_seqs,answers,lengths = seq_data.ids,seq_data.seqs,seq_data.answers,seq_data.lengths
         answers = self.answer_inference(answers,masks).cpu().numpy()
         outputs = outputs.cpu().numpy()
-        output_info = self.converter.convert(chrom_ids,seqs,outputs,lengths,fix_boundary=self.fix_boundary)
-        self._outputs.add(output_info)
+        try:
+            if self.fix_boundary:
+                output_info = self.converter.vecs2fixed_info(chrom_ids,lengths,dna_seqs,outputs)
+            else:
+                output_info = self.converter.vecs2info(chrom_ids,lengths,outputs)
+            self._outputs.append(output_info)
+        except EmptyContainerException:
+            pass
+
         if self._counter == 1:
-            label_info = self.converter.convert(chrom_ids,seqs,answers,lengths,fix_boundary=False)
-            self._answers.add(label_info)
+            label_info = self.converter.vecs2info(chrom_ids,lengths,answers)
+            self._answers.append(label_info)
 
     def on_epoch_end(self,**kwargs):
-        path = os.path.join(self._path,"{}gffcompare_{}").format(self.prefix,self._counter)
-        answer_path = os.path.join(self._path,"answers")
-        to_bed_command = 'python3 {}/gff2bed.py -i {}.gff3 -o {}.bed'
-        gffcompare_command = 'gffcompare --strict-match --no-merge -T -r {}.gff3 {}.gff3  -o {}'
+        prefix = "{}gffcompare_{}".format(self.prefix,self._counter)
+        prefix_path = os.path.join(self._path,prefix)
+        answer_bed_path = os.path.join(self._path,"answers.bed")
+        answer_gff_path = os.path.join(self._path,"answers.gff3")
+        predict_bed_path = os.path.join(self._path,"{}.bed".format(prefix))
+        predict_gff_path = os.path.join(self._path,"{}.gff3".format(prefix))
         if self._counter == 1:
-            self._answers.to_gff().to_csv(self._path+"/answers.gff3",index=None,header=None,sep='\t')
-            command = to_bed_command.format(preprocess_src_root,answer_path,answer_path)
-            os.system(command)
+            answers = pd.concat(self._answers)
+            save_as_gff_and_bed(answers,answer_gff_path,answer_bed_path)
 
-        if not self._outputs.is_empty():
-            self._outputs.to_gff().to_csv(path+".gff3",index=None,header=None,sep='\t')
-            command = gffcompare_command.format(answer_path,path,path)
-            os.system(command)
-            os.system('rm {}.annotated.gtf'.format(path))
-            os.system('rm {}.loci'.format(path))
-            command = to_bed_command.format(preprocess_src_root,path,path)
-            os.system(command)
+        if len(self._outputs) > 0:
+            outputs = pd.concat(self._outputs)
+            save_as_gff_and_bed(outputs,predict_gff_path,predict_bed_path)
+            gffcompare_command(answer_gff_path,predict_gff_path,prefix_path)
 
 def _read_status(root,read_path):
     with open(read_path,"r") as fp:
         status = json.load(fp)
-        epoch = int(status['epoch'])
+        if 'epoch' in status:
+            epoch = int(status['epoch'])
+        else:
+            epoch = int(status['best_epoch'])
         if 'relative_path' in status:
             path = os.path.join(root,status['relative_path'])
         else:
@@ -200,6 +198,18 @@ def _write_status(root,saved_path,epoch,relative_path):
         path = os.path.join(root,relative_path)
         status = {"epoch":epoch,"relative_path":relative_path,"path":path}
         json.dump(status,fp, indent=4)
+
+def save_best_model(path,best_epoch,model_weights):
+    model_path = os.path.join(path,'best_model.pth')
+    print("Save best model of epoch {} at {}".format(best_epoch,model_path))
+    torch.save(model_weights,model_path)
+    best_status_path = os.path.join(path,'best_model.status')
+    with open(best_status_path,"w") as fp:
+        best_status = {'best_epoch':best_epoch,
+                       'relative_path':'best_model.pth',
+                       "path":model_path,
+                       'formula':'(self._counter-self.best_epoch) >= self.patient'}
+        json.dump(best_status,fp, indent=4)
         
 class ModelCheckpoint(Callback):
     def __init__(self,target=None,optimize_min=True,patient=None,path=None,
@@ -230,14 +240,23 @@ class ModelCheckpoint(Callback):
         self._model_weights = None
         last_status_path = os.path.join(self.path,'last_model.status')
         latest_status_path = os.path.join(self.path,'latest_model.status')
+        best_status_path = os.path.join(self.path,'best_model.status')
         model_path = None  
         biggest_epoch = 0
         self._best_epoch = self._worker.best_epoch
         if self._worker.best_result is not None:
             self._best_result = self._worker.best_result[self.target]
+            
         if self.save_best_weights:
-            self._model_weights = get_copied_state_dict(worker.model)
-
+            if os.path.exists(best_status_path):
+                best_epoch,best_model_path = _read_status(self.path,best_status_path)
+                if best_epoch != self._best_epoch:
+                    raise Exception("Best epoch is not same in files, get {} and {}".format(best_epoch,self._best_epoch))
+                print("Load existed best model of epoch {} from {}".format(best_epoch,best_model_path))
+                self._model_weights = torch.load(best_model_path)
+            else:
+                self._model_weights = get_copied_state_dict(worker.model)
+            
         if os.path.exists(latest_status_path):
             biggest_epoch,model_path = _read_status(self.path,latest_status_path)
 
@@ -298,6 +317,8 @@ class ModelCheckpoint(Callback):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore",category=WorkerProtectedWarning)
                 self._worker.best_epoch = self._best_epoch
+            if self.path is not None and self.save_best_weights:
+                save_best_model(self.path,self.best_epoch,self._model_weights)
         
         if self.patient is not None:
             if (self._counter-self.best_epoch) >= self.patient:
@@ -331,16 +352,7 @@ class ModelCheckpoint(Callback):
                 print("Restore best weight of epoch {}".format(self._best_epoch))
                 self._worker.model.load_state_dict(self._model_weights)
             if self.path is not None:
-                model_path = os.path.join(self.path,'best_model.pth')
-                print("Save best model of epoch {} at {}".format(self.best_epoch,model_path))
-                torch.save(self._model_weights,model_path)
-                best_status_path = os.path.join(self.path,'best_model.status')
-                with open(best_status_path,"w") as fp:
-                    best_status = {'best_epoch':self.best_epoch,
-                                   'relative_path':'best_model.pth',
-                                   "path":model_path,
-                                   'formula':'(self._counter-self.best_epoch) >= self.patient'}
-                    json.dump(best_status,fp, indent=4)
+                save_best_model(self.path,self.best_epoch,self._model_weights)
             
 class ExecutorCheckpoint(Callback):
     def __init__(self,path,period=None,prefix=None,explicit_period=False):
@@ -529,7 +541,7 @@ class SeqFigCallback(Callback):
                                         counter=self._counter,title=name)
         outputs = outputs.cpu().numpy()[0]
         C,L = outputs.shape
-        onehot = ann_seq2one_hot_seq(outputs)
+        onehot = ann_vec2one_hot_vec(outputs)
         onehot = np.transpose(onehot)
         self._writer.add_figure("result_figure",onehot,prefix=self._prefix,colors=self.colors,
                                 labels=self.label_names,title="Result figure",use_stack=True)
@@ -902,7 +914,7 @@ class OptunaPruning(Callback):
         return config
 
     def on_epoch_begin(self,counter,**kwargs):
-        self._counter = counter - 1
+        self._counter = counter
 
     def on_epoch_end(self,metric,**kwargs):
         target = metric[self.target]

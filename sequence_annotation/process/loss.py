@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch.nn.functional import binary_cross_entropy as BCE
 import torch.nn.functional as F
 from torch.autograd import Variable
-from .inference import basic_inference,ann_seq2one_hot_seq
+from .inference import basic_inference,ann_vec2one_hot_vec
 from ..genome_handler.ann_seq_processor import get_start, get_end
 
 EPSILON=1e-32
@@ -139,15 +139,14 @@ class SeqAnnLoss(nn.Module):
             intron_loss = mean_by_mask(intron_loss,mask)
         else:
             intron_loss = mean_by_mask(intron_loss,transcript_mask)
-        loss = other_loss
-        loss = loss + intron_loss
+        loss = other_loss + intron_loss
         if self.nontranscript_coef > 0:
             if self.mean_by_mask:
                 nontranscript_loss = mean_by_mask(nontranscript_loss,mask)
             else:
                 nontranscript_loss = mean_by_mask(nontranscript_loss,nontranscript_mask)
             loss = loss + nontranscript_loss
-        loss = loss / (self.intron_coef+self.nontranscript_coef+self.nontranscript_coef)
+        loss = loss / (self.intron_coef+self.nontranscript_coef+self.other_coef)
         return loss
 
 class LabelLoss(nn.Module):

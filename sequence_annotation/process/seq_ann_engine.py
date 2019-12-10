@@ -29,15 +29,12 @@ class SeqAnnEngine:
         self._path = None
         self._writer = None
         self._train_writer = self._val_writer = self._test_writer = None
-        self.gene_map = None
-        self.alt = False
         self.use_gffcompare = True
-        self.alt_num = 0
         self.is_verbose_visible = True
-        self.fix_distance = 16
         self.fix_boundary = False
         self._ann_types = ann_types
         self._channel_order = channel_order or self.ann_types
+        self.ann_vec2info_converter = None
 
     def update_settings(self,key,params):
         params = dict(params)
@@ -104,14 +101,10 @@ class SeqAnnEngine:
                 self._test_writer = TensorboardWriter(SummaryWriter(fp))
 
     def _create_gff_compare(self,path,prefix=None):
-        if self.gene_map is None:
-            raise Exception("The gene_map must be set first")
-        gff_compare = GFFCompare(self.ann_types,path,
-                                 simplify_map=self.gene_map,
-                                 dist=self.fix_distance,prefix=prefix)
-        gff_compare.fix_boundary = self.fix_boundary
-        gff_compare.converter.extractor.alt = self.alt
-        gff_compare.converter.extractor.alt_num = self.alt_num
+        if self.ann_vec2info_converter is None:
+            raise Exception("The ann_vec2info_converter must be set first")            
+        gff_compare = GFFCompare(self.ann_vec2info_converter,path,
+                                 fix_boundary=self.fix_boundary,prefix=prefix)
         return gff_compare
 
     def _create_categorical_metric(self,prefix=None):
@@ -154,11 +147,7 @@ class SeqAnnEngine:
         return callbacks
 
     def update_common_setting(self):
-        self.update_settings('setting',{'gene_map':self.gene_map,
-                                        'alt':self.alt,
-                                        'use_gffcompare':self.use_gffcompare,
-                                        'alt_num':self.alt_num,
-                                        'fix_distance':self.fix_distance,
+        self.update_settings('setting',{'use_gffcompare':self.use_gffcompare,
                                         'fix_boundary':self.fix_boundary,
                                         'ann_types':self._ann_types,
                                         'channel_order':self._channel_order})

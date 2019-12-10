@@ -6,6 +6,8 @@ import pandas as pd
 from Bio import SeqIO
 from pathlib import Path
 
+preprocess_src_root = '/home/sequence_annotation/sequence_annotation/preprocess'
+
 BED_COLUMNS = ['chr','start','end','id','score','strand','thick_start','thick_end',
                'rgb','count','block_size','block_related_start']
 GFF_COLUMNS = ['chr','source','feature','start','end','score','strand','frame','attribute']
@@ -24,6 +26,7 @@ def create_folder(path):
     try:
         if not os.path.exists(path):
             os.makedirs(path)
+            #os.system("mkdir -p {}".format(path))
     except OSError as erro:
         if erro.errno != errno.EEXIST:
             raise
@@ -260,3 +263,22 @@ def model_settings_generator(hidden_size_base,depth_base,phi=None,step=None,min_
     for key,value in setting_coef.items():
         setting_coef[key] = value[np.argmax([sorted(tuple_)[0] for tuple_ in value])]
     return setting_coef
+
+def gff_to_bed_command(gff_path,bed_path):
+    to_bed_command = 'python3 {}/gff2bed.py -i {} -o {}'
+    command = to_bed_command.format(preprocess_src_root,gff_path,bed_path)
+    os.system(command)
+    
+def gffcompare_command(answer_gff_path,predict_gff_path,prefix_path):
+    gffcompare_command = 'gffcompare --strict-match --no-merge -T -r {} {}  -o {}'
+    command = gffcompare_command.format(answer_gff_path,predict_gff_path,prefix_path)
+    os.system(command)
+    gft_path = '{}.annotated.gtf'.format(prefix_path)
+    loci_path = '{}.annotated.loci'.format(prefix_path)
+    for path in [gft_path,loci_path]:
+        if os.path.exists(path):
+            os.system('rm {}'.format(path))
+
+def save_as_gff_and_bed(gff,gff_path,bed_path):
+    write_gff(gff,gff_path)
+    gff_to_bed_command(gff_path,bed_path)

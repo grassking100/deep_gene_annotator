@@ -201,7 +201,6 @@ class ExecutorBuilder:
         else:
             self.predict_label_num = predict_label_num or 2
             self.answer_label_num = answer_label_num or 3
-            self.output_label_num = output_label_num or 3
             self.executor.inference = seq_ann_inference
         
     def set_optimizer(self,parameters,optim_type,learning_rate=None,reduce_lr_on_plateau=False,**kwargs):

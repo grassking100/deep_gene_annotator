@@ -353,6 +353,7 @@ class TestWorker(Worker):
                                self.executor,self._callbacks)
             status = 100*index/len(self._loader)
             self.print_verbose(batch_info.format(status))
+
         self.model.save_distribution = save_distribution
         record = callbacks.get_data()
         self._recoder.on_epoch_end(metric=record)

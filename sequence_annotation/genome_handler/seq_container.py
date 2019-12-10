@@ -6,6 +6,10 @@ from ..utils.utils import GFF_COLUMNS
 from .exception import InvalidAnnotation
 from .sequence import AnnSequence,SeqInformation,Sequence
 
+class EmptyContainerException(Exception):
+    def __init__(self):
+        super().__init__("Container is empty")
+
 class SeqContainer(metaclass=ABCMeta):
     def __init__(self):
         self._data = {}
@@ -93,6 +97,7 @@ class SeqContainer(metaclass=ABCMeta):
         pass
 
     def from_dict(self, dict_):
+        self.clean()
         for data in dict_['data']:
             seq = self._create_sequence()
             seq.from_dict(data)
@@ -137,7 +142,7 @@ class SeqInfoContainer(SeqContainer):
 
     def to_gff(self):
         if self.is_empty():
-            raise Exception("Container is empty")
+            raise EmptyContainerException()
         df = self.to_data_frame()
         selected_df = df[['id','source','strand']].copy()
         selected_df['source']=selected_df['source'].str.replace("", '.')
@@ -151,6 +156,24 @@ class SeqInfoContainer(SeqContainer):
         selected_df['strand']=selected_df['strand'].str.replace("plus", '+')
         selected_df['strand']=selected_df['strand'].str.replace("minus", '-')
         return selected_df[GFF_COLUMNS]
+    
+    def from_gff(self,gff):
+        if len(gff) == 0:
+            raise Exception("GFF is empty")
+        gff.rename(columns={"chr": "chromosome_id", "feature": "ann_type"})
+        gff = gff.to_dict('record')
+        for item in gff:
+            item['start'] -= 1
+            item['end'] -= 1
+            item['strand'] = itme['strand'].replace("+","plus").replace("-","minus")
+            for attribute in item['attribute'].split(";"):
+                if attribute.startswith("ID="):
+                    item['attribute'] = attribute[3:]
+                    break
+            seq = self._create_sequence()
+            seq.from_dict(item)
+            self.add(seq)
+        return self
 
 class AnnSeqContainer(SeqContainer):
     def __init__(self,ann_types=None):
