@@ -4,25 +4,22 @@ import pandas as pd
 from argparse import ArgumentParser
 from sequence_annotation.utils.utils import read_bed,write_bed
 
-def redefine_coordinate(bed,renamed_table,use_strand,flip):
+def redefine_coordinate(bed,renamed_table,flip):
     belong_table = {}
     for item in renamed_table.to_dict('record'):
         id_ = item['old_id']
         belong_table[id_] = item['new_id']
     redefined_bed = []
-    for item in bed.to_dict('record'):
-        match_strand = renamed_table['strand'] == item['strand']
-        match_chr = renamed_table['chr'] == item['chr']
-        match_start = renamed_table['start'] <= item['start']
-        match_end = renamed_table['end'] >= item['end']
-        if use_strand:
-            selected = renamed_table[(match_strand) & (match_chr) & (match_start) & (match_end)]
-        else:    
-            selected = renamed_table[(match_chr) & (match_start) & (match_end)]
-        if len(selected) < 1:
-            raise Exception("Cannot locate {}".format(item['id']))
-        for region in selected.to_dict('record'):
-            bed_item = dict(item)
+    for bed_item_ in bed.to_dict('record'):
+        match_strand = renamed_table['strand'] == bed_item_['strand']
+        match_chr = renamed_table['chr'] == bed_item_['chr']
+        match_start = renamed_table['start'] <= bed_item_['start']
+        match_end = renamed_table['end'] >= bed_item_['end']
+        selected_regions = renamed_table[(match_strand) & (match_chr) & (match_start) & (match_end)]
+        if len(selected_regions) < 1:
+            raise Exception("Cannot locate {}".format(bed_item_['id']))
+        for region in selected_regions.to_dict('record'):
+            bed_item = dict(bed_item_)
             if not flip:
                 anchor = region['start'] - 1
                 bed_item['start'] -= anchor
@@ -61,28 +58,10 @@ def redefine_coordinate(bed,renamed_table,use_strand,flip):
     redefined_bed = pd.DataFrame.from_dict(redefined_bed).sort_values(by=['id'])
     return redefined_bed
 
-def rename_chrom(bed,renamed_table):
-    belong_table = {}
-    for item in renamed_table.to_dict('record'):
-        id_ = item['old_id']
-        belong_table[id_] = item['new_id']
-
-    redefined_bed = []
-    for item in bed.to_dict('record'):
-        bed_item = dict(item)
-        bed_item['chr'] = belong_table[item['chr']]
-        redefined_bed += [bed_item]
-
-    redefined_bed = pd.DataFrame.from_dict(redefined_bed).sort_values(by=['id'])
-    return redefined_bed
-
-def main(bed_path,table_path,simple_mode,use_strand,flip,output_path):
+def main(bed_path,table_path,flip,output_path):
     bed = read_bed(bed_path)
     renamed_table = pd.read_csv(table_path,sep='\t',dtype={'chr':str,'start':int,'end':int})
-    if simple_mode:
-        redefined_bed = rename_chrom(bed,renamed_table)
-    else:    
-        redefined_bed = redefine_coordinate(bed,renamed_table,use_strand,flip)
+    redefined_bed = redefine_coordinate(bed,renamed_table,flip)
     write_bed(redefined_bed,output_path)
 
 if __name__ == "__main__":
@@ -91,13 +70,10 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--bed_path",help="Bed file to be redefined coordinate",required=True)
     parser.add_argument("-t", "--table_path",help="Table about renamed region",required=True)
     parser.add_argument("-o", "--output_path",help="Path to saved redefined bed file",required=True)
-    parser.add_argument("--simple_mode",action='store_true',
-                       help="Just rename chromosome id, otherwise redefine coorindate data and rename chromosome id.")
-    parser.add_argument("-s", "--use_strand",action='store_true')
     parser.add_argument("-f", "--flip",action="store_true",
                         help="Flip sequence info which are minus strand to plus strand")
                         
     
     args = parser.parse_args()
-    main(args.bed_path,args.table_path,args.simple_mode,args.use_strand,args.flip,args.output_path)
+    main(args.bed_path,args.table_path,args.flip,args.output_path)
     

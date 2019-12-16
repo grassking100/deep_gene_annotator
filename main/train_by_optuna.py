@@ -37,79 +37,89 @@ import pickle
 import deepdish as dd
 import optuna
 from optuna.pruners import MedianPruner,NopPruner
-from optuna.structs import TrialPruned
+from optuna.structs import TrialPruned,FrozenTrial
+from optuna.trial import Trial
 from optuna.integration import SkoptSampler
-from optuna.structs import FrozenTrial
+from optuna import trial as trial_module
 import torch
 torch.backends.cudnn.enabled = True
 torch.backends.cudnn.benchmark = True
 sys.path.append("/home/sequence_annotation")
 from sequence_annotation.utils.utils import write_fasta, create_folder
 from sequence_annotation.process.optuna import add_exist_trials
-from sequence_annotation.process.callback import OptunaPruning
+from sequence_annotation.process.callback import OptunaCallback
 from sequence_annotation.genome_handler.ann_genome_processor import simplify_genome
 from main.utils import load_data, get_model, get_executor, copy_path, SIMPLIFY_MAP
 from main.train_model import train
 from main.space_generator import Builder
     
 def evaluate_generator(data,executor_config,epoch=None,batch_size=None):
-    def evaluate(saved_root,model_config,trial):
+    def evaluate(saved_root,model_config,trial,frozen_trial=None):
         if not os.path.exists(saved_root):
             os.mkdir(saved_root)
         if hasattr(trial,'set_user_attr'):
             trial.set_user_attr('resource_path',saved_root)
             trial.set_user_attr('generate_by_exist',False)
         path = os.path.join(saved_root,'trial.pkl') 
-        frozen = FrozenTrial(number=trial.number,trial_id=trial.trial_id,
-                             datetime_start=trial.datetime_start,params=trial.params,
-                             distributions=trial.distributions,user_attrs=trial.user_attrs,
-                             system_attrs=trial.system_attrs,                            
+        trial_id = trial.trial_id
+        params = trial.params
+        distributions = trial.distributions
+        if frozen_trial is not None:
+            trial_id = frozen_trial.trial_id
+            params = frozen_trial.params
+            distributions = frozen_trial.distributions
+        trial_number = trial_id - 1
+        
+        frozen = FrozenTrial(number=trial_number,trial_id=trial_id,
+                             datetime_start=trial.datetime_start,params=params,
+                             distributions=distributions,user_attrs=trial.user_attrs,
+                             system_attrs={'_number':trial_number},                            
                              state=TrialState.RUNNING,
                              value=None,
                              datetime_complete=None,
-                             intermediate_values=None)
+                             intermediate_values={})
 
         with open(path,'wb') as fp:
             pickle.dump(frozen, fp)
-        path = os.path.join(saved_root,'trial_{}_model_config.json'.format(trial.number))
+        path = os.path.join(saved_root,'trial_{}_model_config.json'.format(trial_number))
         with open(path,"w") as fp:
             json.dump(model_config,fp, indent=4)
-        path = os.path.join(saved_root,'trial_{}_executor_config.json'.format(trial.number))
+        path = os.path.join(saved_root,'trial_{}_executor_config.json'.format(trial_number))
         with open(path,"w") as fp:
             json.dump(executor_config,fp, indent=4)
-        path = os.path.join(saved_root,'trial_{}_params.json'.format(trial.number))
+        path = os.path.join(saved_root,'trial_{}_params.json'.format(trial_number))
         with open(path,"w") as fp:
-            json.dump(trial.params,fp, indent=4)
+            json.dump(params,fp, indent=4)
 
         train_data, val_data = data
         model = get_model(model_config)
         executor = get_executor(model,**executor_config)
-        pruning = OptunaPruning(trial)
-        other_callbacks = [pruning]
-        worker = train(model,executor,train_data,val_data,saved_root,
-                       epoch=epoch,batch_size=batch_size,period=1,
-                       use_gffcompare=False,other_callbacks=other_callbacks)
+        optuna_callback = OptunaCallback(trial)
+        other_callbacks = [optuna_callback]
+        worker = train(saved_root,epoch,model,executor,train_data,val_data,
+                       batch_size=batch_size,other_callbacks=other_callbacks)
         #Save best result as final result
         trial.report(worker.best_result['val_loss'])
         
         path = os.path.join(saved_root,'trial.pkl') 
-        if pruning.is_prune:
+        if optuna_callback.is_prune:
             state = TrialState.PRUNED
         else:
             state = TrialState.COMPLETE
         
         range_ = list(range(1,1+len(worker.result['val_loss'])))
-        frozen = FrozenTrial(number=trial.number,trial_id=trial.trial_id,value=worker.best_result['val_loss'],
-                             datetime_start=trial.datetime_start,params=trial.params,
-                             distributions=trial.distributions,user_attrs=trial.user_attrs,
-                             system_attrs=trial.system_attrs,
-                             intermediate_values=dict(zip(range_,worker.result['val_loss'])),
+        frozen = FrozenTrial(number=trial_number,trial_id=trial_id,
+                             datetime_start=trial.datetime_start,params=params,
+                             distributions=distributions,user_attrs=trial.user_attrs,
+                             system_attrs={'_number':trial_number},
                              state=state,
+                             value=worker.best_result['val_loss'],
+                             intermediate_values=dict(zip(range_,worker.result['val_loss'])),
                              datetime_complete=datetime.datetime.now())
         with open(path,'wb') as fp:
             pickle.dump(frozen, fp)
 
-        if pruning.is_prune:
+        if optuna_callback.is_prune:
             raise TrialPruned()
         return worker.best_result['val_loss']
     return evaluate
@@ -129,12 +139,14 @@ def objective_generator(saved_root,data,space_generator,executor_config,epoch=No
         return result
     return objective
 
-def fixed_trial_evaluate(saved_root,data,space_generator,executor_config,epoch=None,batch_size=None):
+def fixed_trial_evaluate(study,saved_root,data,space_generator,executor_config,epoch=None,batch_size=None):
     evaluate = evaluate_generator(data,executor_config,epoch=epoch,batch_size=batch_size)
     with open(os.path.join(saved_root,'trial.pkl'),'rb') as fp:
         frozen_trial=pickle.load(fp)
     model_config = space_generator(frozen_trial)
-    result = evaluate(saved_root,model_config,frozen_trial)
+    trial_id = study._storage.create_new_trial(0)
+    trial = Trial(study,trial_id)
+    result = evaluate(saved_root,model_config,trial,frozen_trial)
     return result
 
 if __name__ == '__main__':
@@ -194,16 +206,21 @@ if __name__ == '__main__':
         os.mkdir(trials_path)
     objective = objective_generator(trials_path,data,space_generator,executor_config,
                                     epoch=args.epoch,batch_size=args.batch_size)
-    study = optuna.create_study(study_name='seq_ann',
-                                storage='sqlite:///{}/trials.db'.format(trials_path),
-                                load_if_exists=True,
-                                pruner=pruner,
-                                sampler=SkoptSampler(skopt_kwargs={'n_initial_points':args.n_initial_points}))
+    if args.frozen_trial_path is not None:
+        study = optuna.create_study()
+    else:
+        skopt_kwargs={'n_initial_points':args.n_initial_points}
+        storage_path = 'sqlite:///{}/trials.db'.format(trials_path)
+        study = optuna.create_study(study_name='seq_ann',
+                                    storage=storage_path,
+                                    load_if_exists=True,
+                                    pruner=pruner,
+                                    sampler=SkoptSampler(skopt_kwargs=skopt_kwargs))
     if args.saved_trials_path is not None:
         print("Load exist trials from {} into study".format(args.saved_trials_path))
         add_exist_trials(study,args.saved_trials_path)
     if args.frozen_trial_path is not None:
-        fixed_trial_evaluate(args.frozen_trial_path,data,space_generator,executor_config,
+        fixed_trial_evaluate(study,args.frozen_trial_path,data,space_generator,executor_config,
                              epoch=args.epoch,batch_size=args.batch_size)
     else:
         if len(study.trials) < args.n_trials:

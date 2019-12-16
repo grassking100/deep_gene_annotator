@@ -5,21 +5,25 @@ from argparse import ArgumentParser
 from sequence_annotation.utils.utils import read_bed,write_bed
 from utils import get_id_table
 
+def convert_bed_id(bed,id_convert_table,query):
+    returned = []
+    for item in bed.to_dict('record'):
+        item = dict(item)
+        item[query] = id_convert_table[item[query]]
+        returned.append(item) 
+    returned = pd.DataFrame.from_dict(returned).sort_values(by=['id'])
+    return returned
+
 if __name__ == "__main__":
     #Reading arguments
-    parser = ArgumentParser(description="This program will rename from RNA id to gene id")
+    parser = ArgumentParser(description="This program will rename by table")
     parser.add_argument("-i", "--input_bed_path",help="Input BED file",required=True)
-    parser.add_argument("-t", "--id_convert_path",help="Table about translation between gene id and RNA id",required=True)
+    parser.add_argument("-t", "--id_convert_path",help="Table about id conversion",required=True)
     parser.add_argument("-o", "--output_bed_path",help="Onput BED file",required=True)
+    parser.add_argument("--query",help="Column name to query and replace",default='id')
     args = parser.parse_args()
     
-    bed = read_bed(args.input_bed_path).to_dict('record')
-    id_convert = get_id_table(args.id_convert_path)
-    returned = []
-    for item in bed:
-        translated = dict(item)
-        translated['id'] = id_convert[item['id']]
-        returned.append(translated) 
-
-    returned = pd.DataFrame.from_dict(returned)
+    bed = read_bed(args.input_bed_path)
+    id_convert_table = get_id_table(args.id_convert_path)
+    returned = convert_bed_id(bed,id_convert_table,args.query)
     write_bed(returned,args.output_bed_path)

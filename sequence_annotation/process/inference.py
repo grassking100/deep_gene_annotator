@@ -5,7 +5,8 @@ from ..genome_handler.region_extractor import GeneInfoExtractor
 from ..genome_handler.ann_seq_processor import vecs2seq
 from .boundary_process import fix_ann_seq
 
-def basic_inference(first_n_channel,before=True):
+def basic_inference(first_n_channel=None,before=True):
+    first_n_channel = first_n_channel or 3
     def _inference(ann,mask=None):
         if first_n_channel > ann.shape[1]:
             raise Exception("Wrong channel size, got {} and {}".format(first_n_channel,ann.shape[1]))
@@ -14,45 +15,41 @@ def basic_inference(first_n_channel,before=True):
         else:
             ann = ann[:,first_n_channel:,:]
         if mask is not None:
-            ann = ann.transpose(0,1)
             L = ann.shape[2]
+            ann = ann.transpose(0,1)
             ann = ann*(mask[:,:L].to(ann.dtype))
             ann = ann.transpose(0,1)
         return ann
     return _inference
 
-def seq_ann_inference(ann,mask):
+def seq_ann_inference(ann,mask,transcript_threshold=None,intron_threshold=None):
     """
         Data shape is N,C,L (where C>=2)
-        Input channel order: Transcription potential, Intron potential,*
+        Input channel order: Transcription potential, Intron potential
         Output channel order: Exon, Intron , Other
     """
-    if ann.shape[1] != 2:
-        raise Exception("Channel size should be equal to two, but got {}".format(ann.shape[1]))
+    N,C,L = ann.shape
+    if C != 2:
+        raise Exception("Channel size should be equal to two, but got {}".format(C))
+        
+    if mask is not None:
+        mask = mask[:,:L].unsqueeze(1).float()
+        
+    transcript_threshold = transcript_threshold or 0.5
+    intron_threshold = intron_threshold or 0.5
     transcript_potential = ann[:,0,:].unsqueeze(1)
     intron_potential = ann[:,1,:].unsqueeze(1)
+    
+    transcript_mask = (transcript_potential>=transcript_threshold).float()
+    intron_mask = (intron_potential>=intron_threshold).float()
+    exon = transcript_mask * (1-intron_mask)
+    intron = transcript_mask * intron_mask
     other = 1-transcript_potential
     if mask is not None:
-        mask = mask[:,:ann.shape[2]].unsqueeze(1)
-        other = other * mask.float()
-    transcript_mask = (transcript_potential>=0.5).float()
-    intron = transcript_mask * intron_potential
-    exon = transcript_mask * (1-intron_potential)
+        exon = exon * mask
+        intron = intron * mask
+        other = other * mask
     result = torch.cat([exon,intron,other],dim=1)
-    return result
-
-def seq_ann_reverse_inference(ann,mask):
-    """
-        Data shape is N,C,L
-        Input channel order: Exon, Intron , Other,*
-        Output channel order: Transcription potential, Intron potential
-    """
-    if ann.shape[1] != 3:
-        raise Exception("Channel size should be eqaul to three")
-    intron_potential = ann[:,1,:].unsqueeze(1)
-    other_potential = ann[:,2,:].unsqueeze(1)
-    transcript_potential = 1 - other_potential
-    result = torch.cat([transcript_potential,intron_potential],dim=1)
     return result
 
 def index2one_hot(index,channel_size):

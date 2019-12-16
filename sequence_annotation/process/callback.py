@@ -1,6 +1,7 @@
 import os
 import warnings
 from abc import abstractmethod, abstractproperty, ABCMeta
+import deepdish as dd
 import json
 import math
 import numpy as np
@@ -16,7 +17,6 @@ from .metric import F1,accuracy,precision,recall,categorical_metric,contagion_ma
 from .warning import WorkerProtectedWarning
 from .inference import ann_vec2one_hot_vec, AnnVec2InfoConverter,basic_inference
 from .signal import get_signal_ppm, ppms2meme
-from .utils import get_copied_state_dict
 
 class ICallback(metaclass=ABCMeta):
     @abstractmethod
@@ -36,7 +36,7 @@ class ICallback(metaclass=ABCMeta):
         pass
 
 class Callback(ICallback):
-    def __init__(self,prefix=None,**kwargs):
+    def __init__(self,prefix=None,*args,**kwargs):
         self._prefix = ""
         self.prefix = prefix
 
@@ -126,14 +126,21 @@ class Callbacks(ICallback):
 class GFFCompare(Callback):
     def __init__(self,ann_vec2info_converter,path,fix_boundary=False,prefix=None):
         super().__init__(prefix)
+        if ann_vec2info_converter is None:
+            raise Exception("The ann_vec2info_converter should not be None")
+        if path is None:
+            raise Exception("The path should not be None")
         self.converter = ann_vec2info_converter
-        self.answer_inference = basic_inference(len(self.converter.ann_types))
         self.fix_boundary = fix_boundary
         self._path = path
         self._counter = None
+        self._outputs = None
+        self._answers = None
+        self._model = None
         
-    def on_work_begin(self,**kwargs):
+    def on_work_begin(self,worker,**kwargs):
         self._counter = 0
+        self._model = worker.model
 
     def get_config(self,**kwargs):
         config = super().get_config(**kwargs)
@@ -147,22 +154,25 @@ class GFFCompare(Callback):
         self._answers = []
         self._counter = counter
 
-    def on_batch_end(self,outputs,seq_data,masks,**kwargs):
+    def on_batch_end(self,predict_result,seq_data,masks,**kwargs):
         chrom_ids,dna_seqs,answers,lengths = seq_data.ids,seq_data.seqs,seq_data.answers,seq_data.lengths
-        answers = self.answer_inference(answers,masks).cpu().numpy()
-        outputs = outputs.cpu().numpy()
+        answers = answers.cpu().numpy()
+        predict_result = predict_result.cpu().numpy()
         try:
             if self.fix_boundary:
-                output_info = self.converter.vecs2fixed_info(chrom_ids,lengths,dna_seqs,outputs)
+                output_info = self.converter.vecs2fixed_info(chrom_ids,lengths,dna_seqs,predict_result)
             else:
-                output_info = self.converter.vecs2info(chrom_ids,lengths,outputs)
+                output_info = self.converter.vecs2info(chrom_ids,lengths,predict_result)
             self._outputs.append(output_info)
         except EmptyContainerException:
             pass
 
         if self._counter == 1:
-            label_info = self.converter.vecs2info(chrom_ids,lengths,answers)
-            self._answers.append(label_info)
+            try:
+                label_info = self.converter.vecs2info(chrom_ids,lengths,answers)
+                self._answers.append(label_info)
+            except EmptyContainerException:
+                pass
 
     def on_epoch_end(self,**kwargs):
         prefix = "{}gffcompare_{}".format(self.prefix,self._counter)
@@ -179,282 +189,51 @@ class GFFCompare(Callback):
             outputs = pd.concat(self._outputs)
             save_as_gff_and_bed(outputs,predict_gff_path,predict_bed_path)
             gffcompare_command(answer_gff_path,predict_gff_path,prefix_path)
-
-def _read_status(root,read_path):
-    with open(read_path,"r") as fp:
-        status = json.load(fp)
-        if 'epoch' in status:
-            epoch = int(status['epoch'])
-        else:
-            epoch = int(status['best_epoch'])
-        if 'relative_path' in status:
-            path = os.path.join(root,status['relative_path'])
-        else:
-            path = status['path']
-        return epoch,path
-          
-def _write_status(root,saved_path,epoch,relative_path):
-    with open(saved_path,"w") as fp:
-        path = os.path.join(root,relative_path)
-        status = {"epoch":epoch,"relative_path":relative_path,"path":path}
-        json.dump(status,fp, indent=4)
-
-def save_best_model(path,best_epoch,model_weights):
-    model_path = os.path.join(path,'best_model.pth')
-    print("Save best model of epoch {} at {}".format(best_epoch,model_path))
-    torch.save(model_weights,model_path)
-    best_status_path = os.path.join(path,'best_model.status')
-    with open(best_status_path,"w") as fp:
-        best_status = {'best_epoch':best_epoch,
-                       'relative_path':'best_model.pth',
-                       "path":model_path,
-                       'formula':'(self._counter-self.best_epoch) >= self.patient'}
-        json.dump(best_status,fp, indent=4)
-        
-class ModelCheckpoint(Callback):
-    def __init__(self,target=None,optimize_min=True,patient=None,path=None,
-                 period=None,save_best_weights=False,restore_best_weights=False,
-                 prefix=None,explicit_period=False):
+            
+class SignalSaver(Callback):
+    def __init__(self,path,prefix=None):
         super().__init__(prefix)
-        self.target = target or 'val_loss'
-        self.optimize_min = optimize_min
-        self.patient = patient
-        self.path = path
-        self.period = period
-        self.save_best_weights = save_best_weights
-        self.restore_best_weights = restore_best_weights
-        self._counter = None
-        self._best_result = None
-        self._best_epoch = None
-        self._model_weights = None
-        self._worker = None
-        self.explicit_period = explicit_period
+        if path is None:
+            raise Exception("The path should not be None")
+        self._path = path
+        self._raw_outputs = None
+        self._raw_answers = None
         
-    @property
-    def counter(self):
-        return self._counter
-        
-    def on_work_begin(self, worker,**kwargs):
-        self._worker = worker
-        self._best_result = None
-        self._model_weights = None
-        last_status_path = os.path.join(self.path,'last_model.status')
-        latest_status_path = os.path.join(self.path,'latest_model.status')
-        best_status_path = os.path.join(self.path,'best_model.status')
-        model_path = None  
-        biggest_epoch = 0
-        self._best_epoch = self._worker.best_epoch
-        if self._worker.best_result is not None:
-            self._best_result = self._worker.best_result[self.target]
-            
-        if self.save_best_weights:
-            if os.path.exists(best_status_path):
-                best_epoch,best_model_path = _read_status(self.path,best_status_path)
-                if best_epoch != self._best_epoch:
-                    raise Exception("Best epoch is not same in files, get {} and {}".format(best_epoch,self._best_epoch))
-                print("Load existed best model of epoch {} from {}".format(best_epoch,best_model_path))
-                self._model_weights = torch.load(best_model_path)
-            else:
-                self._model_weights = get_copied_state_dict(worker.model)
-            
-        if os.path.exists(latest_status_path):
-            biggest_epoch,model_path = _read_status(self.path,latest_status_path)
-
-        if os.path.exists(last_status_path):
-            biggest_epoch_,model_path_ = _read_status(self.path,last_status_path)
-            if biggest_epoch_ >= biggest_epoch:
-                biggest_epoch = biggest_epoch_
-                model_path = model_path_
-
-        if model_path is not None:
-            print("Load epoch {}'s model from {}".format(biggest_epoch,model_path))
-            self._worker.model.load_state_dict(torch.load(model_path),strict=False)
-        self._counter = biggest_epoch
+    def on_work_begin(self,worker,**kwargs):
+        self._counter = 0
+        self._model = worker.model
 
     def get_config(self,**kwargs):
         config = super().get_config(**kwargs)
-        config['target'] = self.target
-        config['optimize_min'] = self.optimize_min
-        config['patient'] = self.patient
-        config['period'] = self.period
-        config['save_best_weights'] = self.save_best_weights
-        config['restore_best_weights'] = self.restore_best_weights
-        config['explicit_period'] = self.explicit_period
-        return config
-
-    @property
-    def best_result(self):
-        return self._best_result
-    @property
-    def best_epoch(self):
-        return self._best_epoch
-
-    def on_epoch_begin(self,counter,**kwargs):
-        self._counter = counter
-
-    def on_epoch_end(self,metric,**kwargs):
-        target = metric[self.target]
-        if str(target) == 'nan':
-            return
-        update = False
-        if self._best_result is None:
-            update = True
-        else:
-            if self.optimize_min:
-                if self._best_result > target:
-                    update = True
-            else:
-                if self._best_result < target:
-                    update = True
-
-        if update:
-            if self.save_best_weights:
-                print("Save best weight of epoch {}".format(self._counter))
-                self._model_weights = get_copied_state_dict(self._worker.model)
-            self._best_epoch = self._counter
-            self._best_result = target
-            print("Update best weight of epoch {}".format(self._counter))
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore",category=WorkerProtectedWarning)
-                self._worker.best_epoch = self._best_epoch
-            if self.path is not None and self.save_best_weights:
-                save_best_model(self.path,self.best_epoch,self._model_weights)
-        
-        if self.patient is not None:
-            if (self._counter-self.best_epoch) >= self.patient:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore",category=WorkerProtectedWarning)
-                    self._worker.is_running = False
-
-        if self.path is not None and self.period is not None:
-            if (self._counter%self.period) == 0:
-                if self.explicit_period:
-                    relative_path = 'model_epoch_{}.pth'.format(self._counter)
-                else:
-                    relative_path = 'latest_model.pth'
-                model_path = os.path.join(self.path,relative_path)
-                print("Save model at "+model_path)
-                torch.save(self._worker.model.state_dict(),model_path)
-                _write_status(self.path,os.path.join(self.path,'latest_model.status'),
-                              self._counter,relative_path)
-
-    def on_work_end(self):
-        if self.path is not None:
-            model_path =  os.path.join(self.path,'last_model.pth')
-            torch.save(self._worker.model.state_dict(),model_path)
-            print("Save last model of epoch {} at {}".format(self._counter,model_path))
-            _write_status(self.path,os.path.join(self.path,'last_model.status'),
-                          self._counter,'last_model.pth')
-
-        print("Best "+str(self.target)+": "+str(self._best_result))
-        if self.save_best_weights:
-            if self.restore_best_weights:
-                print("Restore best weight of epoch {}".format(self._best_epoch))
-                self._worker.model.load_state_dict(self._model_weights)
-            if self.path is not None:
-                save_best_model(self.path,self.best_epoch,self._model_weights)
-            
-class ExecutorCheckpoint(Callback):
-    def __init__(self,path,period=None,prefix=None,explicit_period=False):
-        super().__init__(prefix)
-        self.path = path
-        self.period = period or 1
-        self._counter = None
-        self._executor_state_dict = None
-        self._executor = None
-        self.explicit_period = explicit_period
-        
-    @property
-    def counter(self):
-        return self._counter
-        
-    def on_work_begin(self, worker,**kwargs):
-        self._executor = worker.executor
-        self._executor_state_dict = self._executor.state_dict()
-        
-        last_status_path = os.path.join(self.path,'last_executor.status')
-        latest_status_path = os.path.join(self.path,'latest_executor.status')
-
-        executor_path = None
-        biggest_epoch = 0
-        if os.path.exists(latest_status_path):
-            biggest_epoch,executor_path = _read_status(self.path,latest_status_path)
-                
-        if os.path.exists(last_status_path):
-            biggest_epoch_,executor_path_ = _read_status(self.path,last_status_path)
-            if biggest_epoch_ >= biggest_epoch:
-                biggest_epoch = biggest_epoch_
-                executor_path = executor_path_
-            
-        if executor_path is not None:
-            print("Load epoch {}'s executor from {}".format(biggest_epoch,executor_path))
-            self._executor.load_state_dict(torch.load(executor_path))
-        self._counter = biggest_epoch
-
-    def get_config(self,**kwargs):
-        config = super().get_config(**kwargs)
-        config['period'] = self.period
+        config['path'] = self._path
         return config
 
     def on_epoch_begin(self,counter,**kwargs):
+        self._raw_outputs = []
+        self._raw_answers = []
         self._counter = counter
 
-    def on_epoch_end(self,metric,**kwargs):
-        self._executor_state_dict = self._executor.state_dict()
-        if (self._counter%self.period) == 0:
-            if self.explicit_period:
-                relative_path = 'executor_epoch_{}.pth'.format(self._counter)
-            else:
-                relative_path = 'latest_executor.pth'
-            executor_path = os.path.join(self.path,relative_path)
-            print("Save epoch {}'s executor at {}".format(self._counter,executor_path))
-            torch.save(self._executor_state_dict,executor_path)
-            _write_status(self.path,os.path.join(self.path,'latest_executor.status'),
-                          self._counter,relative_path)
+    def on_batch_end(self,outputs,seq_data,**kwargs):
+        chrom_ids,dna_seqs,answers,lengths = seq_data.ids,seq_data.seqs,seq_data.answers,seq_data.lengths
+        answers = answers.cpu().numpy()
+        self._raw_outputs.append({'outputs':outputs,
+                                  'chrom_ids':chrom_ids,
+                                  'dna_seqs':dna_seqs,
+                                  'lengths':lengths})
 
-    def on_work_end(self):
-        relative_path = 'last_executor.pth'
-        executor_path =  os.path.join(self.path,relative_path)
-        torch.save(self._executor_state_dict,executor_path)
-        status_path = os.path.join(self.path,'last_executor.status')
-        print("Save last epoch {}'s of executor at {}".format(self._counter,executor_path))
-        _write_status(self.path,os.path.join(self.path,'last_executor.status'),
-                      self._counter,relative_path)
-
-class ModelExecutorCheckpoint(Callback):
-    def __init__(self,model_checkpoint,executor_checkpoint,prefix=None):
-        super().__init__(prefix)
-        self.model_checkpoint = model_checkpoint
-        self.executor_checkpoint = executor_checkpoint
-        self.callbacks = Callbacks([self.model_checkpoint,self.executor_checkpoint])
-        
-    def get_config(self,**kwargs):
-        config = super().get_config(**kwargs)
-        config['model_checkpoint'] = self.model_checkpoint.get_config(**kwargs)
-        config['executor_checkpoint'] = self.executor_checkpoint.get_config(**kwargs)
-        return config
-
-    def on_work_begin(self,**kwargs):
-        self.callbacks.on_work_begin(**kwargs)
-        if self.model_checkpoint.counter != self.executor_checkpoint.counter:
-            message = "Checkpoint at model and executor are not the same, got {} and {}".format(self.model_checkpoint.counter,
-                                                                                               self.executor_checkpoint.counter)
-            raise Exception(message)
-
-    def on_work_end(self):
-        self.callbacks.on_work_end()
-
-    def on_epoch_begin(self,**kwargs):
-        self.callbacks.on_epoch_begin(**kwargs)
+        if self._counter == 1:
+            self._raw_answers.append({'answers':answers,
+                                      'chrom_ids':chrom_ids,
+                                      'dna_seqs':dna_seqs,
+                                      'lengths':lengths})
 
     def on_epoch_end(self,**kwargs):
-        self.callbacks.on_epoch_end(**kwargs)
+        raw_output_path = os.path.join(self._path,'{}raw_output_{}.h5').format(self.prefix,self._counter)
+        raw_answer_path = os.path.join(self._path,'{}raw_answer.h5').format(self.prefix)
+        dd.io.save(raw_output_path , self._raw_outputs)
 
-    def on_batch_begin(self):
-        self.callbacks.on_batch_begin(**kwargs)
-
-    def on_batch_end(self,**kwargs):
-        self.callbacks.on_batch_end(**kwargs)
+        if self._counter == 1:
+            dd.io.save(raw_answer_path, self._raw_answers)
         
 class TensorboardCallback(Callback):
     def __init__(self,tensorboard_writer,prefix=None):
@@ -529,7 +308,7 @@ class SeqFigCallback(Callback):
 
     def on_epoch_end(self,**kwargs):
         #Value's shape should be (1,C,L)
-        outputs,lengths,masks = self._executor.predict(self._model,self._data,[self._data.shape[2]])
+        predict_result = self._executor.predict(self._model,self._data,[self._data.shape[2]])[0]
         if self.do_add_distribution and hasattr(self._model,'saved_distribution'):
             for name,value in self._model.saved_distribution.items():
                 self._writer.add_distribution(name,value,prefix=self._prefix,
@@ -539,13 +318,13 @@ class SeqFigCallback(Callback):
                 value = value.transpose()
                 self._writer.add_figure(name+"_figure",value,prefix=self._prefix,
                                         counter=self._counter,title=name)
-        outputs = outputs.cpu().numpy()[0]
-        C,L = outputs.shape
-        onehot = ann_vec2one_hot_vec(outputs)
+        predict_result = predict_result.cpu().numpy()[0]
+        C,L = predict_result.shape
+        onehot = ann_vec2one_hot_vec(predict_result)
         onehot = np.transpose(onehot)
         self._writer.add_figure("result_figure",onehot,prefix=self._prefix,colors=self.colors,
                                 labels=self.label_names,title="Result figure",use_stack=True)
-        diff = np.transpose(outputs) - self._answer[0][:L,:]
+        diff = np.transpose(predict_result) - self._answer[0][:L,:]
         self._writer.add_figure("diff_figure",diff,prefix=self._prefix,colors=self.colors,
                                 labels=self.label_names,title="Predict - Answer figure",use_stack=False)
         
@@ -566,19 +345,21 @@ class DataCallback(Callback):
         self._reset()
 
 class Recorder(DataCallback):
-    def __init__(self,prefix=None,path=None):
+    def __init__(self,prefix=None,path=None,force_reset=False):
         super().__init__(prefix)
         self.path = path
+        self._force_reset = force_reset
         self._worker = None
 
     def get_config(self,**kwargs):
         config = super().get_config(**kwargs)
         config['path'] = self.path
+        config['force_reset'] = self._force_reset
         return config
 
     def _reset(self):
         self._data = {}
-        if self.path is not None and os.path.exists(self.path):
+        if self.path is not None and os.path.exists(self.path) and not self._force_reset:
             with open(self.path,'r') as fp:
                 self._data = json.load(fp)
 
@@ -681,10 +462,10 @@ class CategoricalMetric(DataCallback):
     def on_epoch_begin(self,**kwargs):
         self._reset()
 
-    def on_batch_end(self,outputs,seq_data,masks,**kwargs):
+    def on_batch_end(self,predict_result,seq_data,masks,**kwargs):
         labels = self.answer_inference(seq_data.answers,masks)
         #N,C,L
-        data = categorical_metric(outputs,labels,masks)
+        data = categorical_metric(predict_result,labels,masks)
         for type_ in ['TPs','FPs','TNs','FNs']:
             for index in range(self.label_num):
                 self._data[type_][index] += data[type_][index]
@@ -783,10 +564,10 @@ class ContagionMatrix(DataCallback):
     def on_epoch_begin(self,**kwargs):
         self._reset()
 
-    def on_batch_end(self,outputs,seq_data,masks,**kwargs):
+    def on_batch_end(self,predict_result,seq_data,masks,**kwargs):
         labels = self.inference(seq_data.answers,masks)
         #N,C,L
-        data = contagion_matrix(outputs,labels,masks)
+        data = contagion_matrix(predict_result,labels,masks)
         for answer_index in range(self.label_num):
             for predict_index in range(self.label_num):
                 self._data[answer_index][predict_index] += data[answer_index][predict_index]
@@ -834,7 +615,7 @@ class SeqLogo(Callback):
         self._model = worker.model
         self._signals = {}
 
-    def on_batch_end(self,outputs,seq_data,**kwargs):
+    def on_batch_end(self,seq_data,**kwargs):
         lengths,inputs = seq_data.lengths,seq_data.inputs
         self._lengths += lengths.tolist()
         self._seqs += inputs.tolist()
@@ -892,7 +673,7 @@ class SeqLogo(Callback):
         background_freq_ = background_freq[index]
         ppms2meme(ppm_dfs,names,self._meme_path,strands='+',background=background_freq_)
 
-class OptunaPruning(Callback):
+class OptunaCallback(Callback):
     def __init__(self,trial,target=None,prefix=None):
         super().__init__(prefix)
         self.trial = trial
@@ -905,7 +686,7 @@ class OptunaPruning(Callback):
         self._counter = 0
         self._worker = worker
         if not hasattr(self._worker,'best_epoch') or not hasattr(self._worker,'best_result'):
-            raise Exception("The worker should has best_epoch and best_result to work with OptunaPruning")
+            raise Exception("The worker should has best_epoch and best_result to work with OptunaCallback")
         self.is_prune = False
 
     def get_config(self,**kwargs):

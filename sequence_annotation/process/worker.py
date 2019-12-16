@@ -1,7 +1,7 @@
 """This submodule provides trainer to train model"""
 import signal
 import warnings
-import os,sys
+import os
 import time
 import json
 import torch
@@ -10,25 +10,24 @@ from time import gmtime, strftime
 from abc import ABCMeta, abstractmethod
 from .data_generator import SeqDataset,SeqGenerator
 from .executor import BasicExecutor
-from .callback import Accumulator, Recorder, Callbacks
+from .callback import Accumulator, Recorder, Callbacks, SignalSaver
 from .warning import WorkerProtectedWarning
-from ..utils.utils import create_folder
+from ..utils.utils import create_folder,print_progress
 
 def _batch_process(model,seq_data,process,callbacks):
     torch.cuda.empty_cache()
     callbacks.on_batch_begin()
-    ids,inputs,labels,lengths,seqs = seq_data.data
+    ids,inputs,labels,lengths,seqs,strands = seq_data.data
     inputs = inputs.cuda()
     labels = labels.cuda()
     returned = process(model,inputs,labels,lengths=lengths)
     torch.cuda.empty_cache()
-    metric,outputs,lengths,masks = returned
-    seq_data = SeqDataset([ids,inputs,labels,lengths,seqs])
+    metric,predict_result,lengths,masks,outputs = returned
+    seq_data = SeqDataset([ids,inputs,labels,lengths,seqs,strands])
     with torch.no_grad():
-        callbacks.on_batch_end(outputs=outputs,
-                               seq_data=seq_data,
-                               metric=metric,
-                               masks=masks)
+        callbacks.on_batch_end(predict_result=predict_result,
+                               outputs=outputs,seq_data=seq_data,
+                               metric=metric,masks=masks)
     torch.cuda.empty_cache()
 
 def train_per_batch(model,seq_data,executor,callbacks):
@@ -37,6 +36,16 @@ def train_per_batch(model,seq_data,executor,callbacks):
 def evaluate_per_batch(model,seq_data,executor,callbacks):
     _batch_process(model,seq_data,executor.evaluate,callbacks)
 
+def validate_gradient(model,message_recorder=None):
+    for name,param in model.named_parameters():
+        if param.grad is not None:
+            grad = param.grad.cpu().detach().numpy()
+            if (grad>1).any():
+                warning = gradient_warning.format(epoch,name,grad.max())
+                print(warning)
+                if message_recorder is not None:
+                    message_recorder.notify([warning])
+    
 class MessageRecorder:
     def __init__(self,path=None):
         self.path = path
@@ -87,8 +96,7 @@ class Worker(metaclass=ABCMeta):
  
     def print_verbose(self,info):
         if self.is_verbose_visible:
-            print(info,end='\r')
-            sys.stdout.write('\033[K')
+            print_progress(info)
             
     def handle_signal(self, signum, frame):
         pass
@@ -236,14 +244,7 @@ class TrainWorker(Worker):
                 train_per_batch(self.model,seq_data,self.executor,self._train_callbacks)
                 status = 100*index/len(self._train_loader)
                 self.print_verbose(batch_info.format(epoch,self._epoch,'training',status))
-                for name,param in self.model.named_parameters():
-                    if param.grad is not None:
-                        grad = param.grad.cpu().detach().numpy()
-                        if (grad>1).any():
-                            warning = gradient_warning.format(epoch,name,grad.max())
-                            print(warning)
-                            if self._message_recorder is not None:
-                                self._message_recorder.notify([warning])
+                validate_gradient(self.model,message_recorder=self._message_recorder)
                 
             if self._val_loader is not None:
                 for index,item in enumerate(self._val_loader):
@@ -331,8 +332,10 @@ class TestWorker(Worker):
         if self.path is not None:   
             record_path = os.path.join(self.path,"test_record.json")
         accum = Accumulator(prefix='test')
-        self._recoder = Recorder(path=record_path)
+        self._recoder = Recorder(path=record_path,force_reset=True)
+        signal_saver = SignalSaver(path=self.path,prefix='test')
         self._callbacks.add(accum)
+        self._callbacks.add(signal_saver)
         self.executor.process(self.model)
         self._save_setting()
 

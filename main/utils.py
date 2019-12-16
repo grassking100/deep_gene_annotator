@@ -69,7 +69,7 @@ def load_data(fasta_path,ann_seqs_path,id_paths,select_each_type=False,**kwargs)
     
     return data
 
-def get_executor(model,optim_type,use_naive=True,set_loss=True,set_optimizer=True,
+def get_executor(model,optim_type=None,use_native=True,set_loss=True,set_optimizer=True,
                  label_num=None,predict_label_num=None,answer_label_num=None,output_label_num=None,
                  grad_clip=None,grad_norm=None,
                  learning_rate=None,reduce_lr_on_plateau=False,
@@ -78,7 +78,7 @@ def get_executor(model,optim_type,use_naive=True,set_loss=True,set_optimizer=Tru
                  target_weight_decay=None,weight_decay_name=None,
                  **kwargs):
 
-    builder = ExecutorBuilder(use_naive=use_naive,label_num=label_num,
+    builder = ExecutorBuilder(use_native=use_native,label_num=label_num,
                               predict_label_num=predict_label_num,
                               answer_label_num=answer_label_num,
                               output_label_num=output_label_num,

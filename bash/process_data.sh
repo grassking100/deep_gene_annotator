@@ -190,8 +190,6 @@ if [ -e "$result_root/selected_region.fasta.fai" ]; then
     rm $result_root/selected_region.fasta.fai
 fi
 
-#echo "Merge: $merge_overlapped"
-
 #Get potential regions
 
 awk -F '\t' -v OFS='\t' '{
@@ -213,13 +211,9 @@ if  $merge_overlapped ; then
     echo "Merge region on same strand"
     bash $bash_root/sort_merge.sh -i $region_selected_root/rna_region_mapping.bed -o $region_selected_root/selected_region.bed -s
 else
-    echo "Filter region with region_filter"
-    python3 $preprocess_root/region_filter.py -i $region_selected_root/rna_region_mapping.bed -r $gene_bed_path -o $region_selected_root/selected_region.bed -e $region_selected_root/discarded_region.bed -u $upstream_dist -d $downstream_dist
+    echo "Filter region with region_gene_count_filter"
+    python3 $preprocess_root/region_gene_count_filter.py -i $region_selected_root/rna_region_mapping.bed -r $gene_bed_path -o $region_selected_root/selected_region.bed -e $region_selected_root/discarded_region.bed -u $upstream_dist -d $downstream_dist
 fi
-
-#echo "Check regions have both strands"
-#mv $region_selected_root/selected_region.bed $region_selected_root/selected_region_before_strand_filter.bed
-#python3 $preprocess_root/both_strand_include_filter.py -i $region_selected_root/selected_region_before_strand_filter.bed -o $region_selected_root/selected_region.bed  -d $region_selected_root/fail_both_strand_include_filter.bed 
 
 #Get RNAs in selected regions
 bash $bash_root/get_ids.sh -i $region_selected_root/selected_region.bed > $region_selected_root/selected_gene.id
@@ -227,10 +221,9 @@ python3 $preprocess_root/get_subbed.py -i $rna_bed_path -d $region_selected_root
 -o $rna_bed_path -t $id_convert_table_path
 cp $region_selected_root/selected_region.bed $region_bed_path
 
-
 echo "Step 5: Rename region and get fasta"
 
-python3 $preprocess_root/rename_bed.py -i $region_bed_path -p region -t $result_root/region_rename_table.tsv -o $region_bed_path --use_strand
+python3 $preprocess_root/rename_id_by_coordinate.py -i $region_bed_path -p region -t $result_root/region_rename_table.tsv -o $region_bed_path --use_strand --coord_id_as_old_id
 
 bedtools getfasta -name -fi $genome_path -bed $region_bed_path -fo $result_root/selected_region_no_strand.fasta
 bedtools getfasta -s -name -fi $genome_path -bed $region_bed_path -fo $result_root/selected_region.fasta
@@ -240,7 +233,7 @@ samtools faidx $result_root/selected_region.fasta
 
 cp $rna_bed_path $result_root/origin_rna.bed
 
-python3 $preprocess_root/redefine_coordinate.py -i $rna_bed_path -t $result_root/region_rename_table.tsv -o $rna_bed_path --use_strand
+python3 $preprocess_root/redefine_coordinate.py -i $rna_bed_path -t $result_root/region_rename_table.tsv -o $rna_bed_path
 
 echo "Step 6: Canonical path decoding"
 python3 $preprocess_root/path_decode.py -i $rna_bed_path -o $result_root/alt_region.gff -t $id_convert_table_path

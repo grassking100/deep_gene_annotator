@@ -4,9 +4,14 @@ import json
 import pickle
 
 def add_exist_trial(study,folder_path):
-    with open(os.path.join(folder_path,'trial.pkl'),'rb') as fp:
+    path = os.path.join(folder_path,'trial.pkl')
+    with open(path,'rb') as fp:
         trial=pickle.load(fp)
-    study._storage.create_new_trial(study.study_id, template_trial=trial)
+    try:
+        study._storage.create_new_trial(study.study_id, template_trial=trial)
+    except:
+        print("Fail to load trial {}  from {}".format(trial.trial_id,path))
+        raise
 
 def add_exist_trials(study,folder_path):
     df = pd.read_csv(folder_path,sep='\t',index_col=False)

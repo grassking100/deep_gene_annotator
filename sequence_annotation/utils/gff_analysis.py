@@ -44,7 +44,6 @@ def transcript_end_diff(answer,predict,absolute=True):
 def site_diff_table(roots,names):
     site_diff_ = {}
     for name,root in zip(names,roots):
-        #if os.path.exists(root):
         answer_path = os.path.join(root,'answers.gff3')
         predict_path = os.path.join(root,'test_gffcompare_1.gff3')
         try:
@@ -60,7 +59,7 @@ def site_diff_table(roots,names):
             site_diff_[name]['donor_site'] = np.median(donor_site_diff_)
             site_diff_[name]['accept_site'] = np.median(accept_site_diff_)
         except:
-            print(name)
+            print("The path, {}, has something wrong".format(root))
     return pd.DataFrame.from_dict(site_diff_)
 
 def miss_nove_sensitivity_precision_table(roots,names):
@@ -88,3 +87,8 @@ def miss_nove_sensitivity_precision_table(roots,names):
     precision = pd.DataFrame.from_dict(precision)
     sensitivity = pd.DataFrame.from_dict(sensitivity)
     return miss_novel_stats,sensitivity,precision
+
+def get_length(gff,type_):
+    block = gff[gff['feature']==type_]
+    lengths = block['end']-block['start']+1
+    return list(lengths)

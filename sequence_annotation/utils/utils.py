@@ -1,3 +1,4 @@
+import sys
 import os
 import errno
 import math
@@ -269,8 +270,10 @@ def gff_to_bed_command(gff_path,bed_path):
     command = to_bed_command.format(preprocess_src_root,gff_path,bed_path)
     os.system(command)
     
-def gffcompare_command(answer_gff_path,predict_gff_path,prefix_path):
-    gffcompare_command = 'gffcompare --strict-match --no-merge -T -r {} {}  -o {}'
+def gffcompare_command(answer_gff_path,predict_gff_path,prefix_path,no_merge=True):
+    gffcompare_command = 'gffcompare --strict-match -T -r {} {} -o {}'
+    if no_merge:
+        gffcompare_command += ' --no-merge'
     command = gffcompare_command.format(answer_gff_path,predict_gff_path,prefix_path)
     os.system(command)
     gft_path = '{}.annotated.gtf'.format(prefix_path)
@@ -282,3 +285,7 @@ def gffcompare_command(answer_gff_path,predict_gff_path,prefix_path):
 def save_as_gff_and_bed(gff,gff_path,bed_path):
     write_gff(gff,gff_path)
     gff_to_bed_command(gff_path,bed_path)
+
+def print_progress(info):
+    print(info,end='\r')
+    sys.stdout.write('\033[K')

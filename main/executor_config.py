@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument("--config_path",help="Path to save config",required=True)
-    parser.add_argument("--use_naive",action="store_true")
+    parser.add_argument("--use_native",action="store_true")
     parser.add_argument("--learning_rate",type=float)
     parser.add_argument("--intron_coef",type=float,default=1)
     parser.add_argument("--other_coef",type=float,default=1)

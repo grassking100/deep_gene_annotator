@@ -6,7 +6,7 @@ from torch import optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from .utils import get_seq_mask
 from .loss import CCELoss,bce_loss,mean_by_mask,SeqAnnLoss, FocalLoss, LabelLoss
-from .inference import basic_inference,seq_ann_inference, seq_ann_reverse_inference
+from .inference import basic_inference,seq_ann_inference
 
 OPTIMIZER_CLASS = {'Adam':optim.Adam,'SGD':optim.SGD,'AdamW':optim.AdamW,'RMSprop':optim.RMSprop}
 
@@ -15,8 +15,7 @@ def optimizer_generator(type_,parameters,momentum=None,nesterov=False,amsgrad=Fa
     adam_betas = adam_betas or [0.9,0.999]
     if type_ not in OPTIMIZER_CLASS:
         raise Exception("Optimizer should be {}, but got {}".format(OPTIMIZER_CLASS,type_))
-        
-    #filter_ = filter(lambda p: p.requires_grad, model.parameters())
+
     optimizer = OPTIMIZER_CLASS[type_]
     if type_ == 'AdamW':
         warnings.warn("\n!!!\n\nAdamW's weight decay is implemented differnetly in paper and pytorch 1.3.0, please see https://github.com/pytorch/pytorch/pull/21250#issuecomment-520559993 for more information!\n\n!!!\n")
@@ -39,20 +38,20 @@ def _evaluate(loss,model,inputs, labels,lengths,inference):
     model.train(False)
     with torch.no_grad():
         outputs,lengths = model(inputs,lengths=lengths)
+        outputs = outputs.float()
         masks = get_seq_mask(lengths)
         predict_result = inference(outputs, masks)
-        outputs = outputs.float()
         loss_ = loss(outputs, labels, masks,predict_result=predict_result).item()
-    return loss_,predict_result,lengths,masks
+    return loss_,predict_result,lengths,masks,outputs.cpu().numpy()
 
 def _predict(model,inputs,lengths,inference):
     model.train(False)
     with torch.no_grad():
         outputs,lengths = model(inputs,lengths=lengths)
-        masks = get_seq_mask(lengths)
         outputs = outputs.float()
-        outputs = inference(outputs,masks)
-    return outputs,lengths,masks
+        masks = get_seq_mask(lengths)
+        predict_result = inference(outputs,masks)
+    return predict_result,lengths,masks,outputs.cpu().numpy()
 
 class IExecutor(metaclass=ABCMeta):
     @abstractmethod
@@ -98,18 +97,19 @@ class _Executor(IExecutor):
         return config
 
     def predict(self,model,inputs,lengths,**kwargs):
-        outputs,lengths,masks = _predict(model,inputs,lengths,
-                                         inference=self.inference,**kwargs)
-        return outputs,lengths,masks
+        returned = _predict(model,inputs,lengths,inference=self.inference,**kwargs)
+        return returned
     
     def evaluate(self,model,inputs,labels,lengths,**kwargs):
         if self.loss is not None:
-            loss, outputs,lengths,masks = _evaluate(self.loss,model,inputs,labels,lengths,
-                                                    inference=self.inference,**kwargs)
-            return {'loss':loss},outputs,lengths,masks
+            returned = _evaluate(self.loss,model,inputs,labels,lengths,
+                                 inference=self.inference,**kwargs)
+            loss_,predict_result,lengths,masks,outputs = returned
+            return ({'loss':loss_}),predict_result,lengths,masks,outputs
         else:
-            outputs,lengths,masks = _predict(model,inputs,lengths,inference=self.inference,**kwargs)
-            return {},outputs,lengths,masks
+            returned = _predict(model,inputs,lengths,inference=self.inference,**kwargs)
+            predict_result,lengths,masks,outputs = returned
+            return {},predict_result,lengths,masks,outputs
 
 class BasicExecutor(_Executor):
     def __init__(self):
@@ -172,7 +172,7 @@ class BasicExecutor(_Executor):
         if self.grad_norm is not None:
             nn.utils.clip_grad_norm_(model.parameters(),self.grad_norm)
         self.optimizer.step()
-        return {'loss':loss_.item()},predict_result,lengths,masks
+        return {'loss':loss_.item()},predict_result,lengths,masks,outputs
 
     def process(self,model):
         if self.optimizer is None:
@@ -188,14 +188,14 @@ class BasicExecutor(_Executor):
             self.lr_scheduler.step(metric[self.lr_scheduler_target],epoch=epoch)
         
 class ExecutorBuilder:
-    def __init__(self,use_naive=True,label_num=None,grad_clip=None,grad_norm=None,
+    def __init__(self,use_native=True,label_num=None,grad_clip=None,grad_norm=None,
                  predict_label_num=None,answer_label_num=None,output_label_num=None):
         self.executor = BasicExecutor()
         self.executor.grad_clip = grad_clip
         self.executor.grad_norm = grad_norm
         self.executor.loss = None
-        self.use_naive=use_naive
-        if self.use_naive:
+        self.use_native=use_native
+        if self.use_native:
             self.output_label_num = self.predict_label_num = self.answer_label_num = label_num or 3
             self.executor.inference = basic_inference(self.output_label_num)
         else:
@@ -212,7 +212,7 @@ class ExecutorBuilder:
    
     def set_loss(self,gamma=None,intron_coef=None,other_coef=None,nontranscript_coef=None,
                  transcript_answer_mask=True,transcript_output_mask=False,mean_by_mask=False):
-        if self.use_naive:
+        if self.use_native:
             loss = FocalLoss(gamma)
         else:    
             loss = SeqAnnLoss(intron_coef=intron_coef,other_coef=other_coef,

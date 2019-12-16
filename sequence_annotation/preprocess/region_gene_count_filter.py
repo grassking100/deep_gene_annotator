@@ -5,7 +5,8 @@ from argparse import ArgumentParser
 from sequence_annotation.utils.utils import read_bed, write_bed
 from sequence_annotation.genome_handler.exception import InvalidStrandType
 
-def region_filter(region_bed,gene_bed,upstream_distance,downstream_distance):
+def region_gene_count_filter(region_bed,gene_bed,upstream_distance,
+                             downstream_distance):
     regions = region_bed.to_dict('record')
     invalid_strand = gene_bed[~gene_bed['strand'].isin(['+','-'])]
     if len(invalid_strand) != 0:
@@ -45,10 +46,13 @@ def region_filter(region_bed,gene_bed,upstream_distance,downstream_distance):
     invalid_bed = pd.DataFrame.from_dict(invalid_bed_items)
     return valid_bed, invalid_bed
 
-def main(region_bed_path,gene_bed_path,region_output_path,upstream_distance,downstream_distance,discard_output_path=None):
+def main(region_bed_path,gene_bed_path,region_output_path,upstream_distance,
+         downstream_distance,discard_output_path=None):
     region_bed = read_bed(region_bed_path)
     gene_bed = read_bed(gene_bed_path)
-    valid_bed, invalid_bed = region_filter(region_bed,gene_bed,upstream_distance,downstream_distance)
+    valid_bed, invalid_bed = region_gene_count_filter(region_bed,gene_bed,
+                                                      upstream_distance,
+                                                      downstream_distance)
     write_bed(valid_bed,region_output_path)
     if discard_output_path is not None:
         write_bed(invalid_bed,discard_output_path)

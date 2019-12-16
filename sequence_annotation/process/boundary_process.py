@@ -142,7 +142,7 @@ def get_exon_boundary(rna_boundary,intron_boundarys):
         exon_boundarys.append((exon_start,exon_end))
     return exon_boundarys
 
-def fix_intron_boundary(rna_boundary,intron_boundarys):
+def get_fixed_intron_boundary(rna_boundary,intron_boundarys):
     """Get list of intron boundarys based on gene boundary and intron boundarys,
     introns will be discarded if it will cause wrong annotation
         
@@ -224,63 +224,6 @@ def guess_boundarys(seq,donor_site_pattern=None,accept_site_pattern=None):
                     previous_site = None
     return boundarys
 
-def fix_ann_seq(chrom,length,seq,gff,dist,donor_site_pattern=None,accept_site_pattern=None):
-    """Get intron-boundary fixed AnnSequence by specific distance and site pattern
-        
-    Parameters:
-    ----------
-    chrom : str
-        Chromosome id to be chosen
-    seq : str
-        DNA sequence which its direction is 5' to 3'
-    length : int
-        Length of chromosome
-    gff : pd.DataFrame    
-        GFF data about RNAs and introns
-    dist : int
-        Valid distance  
-    donor_site_pattern : str (default : GT)
-        Regular expression of donor site
-    accept_site_pattern : str (default : AG)
-        Regular expression of accept site
-
-    Returns:
-    ----------
-    AnnSequence
-        intron-boundary fixed AnnSequence
-    """
-    donor_site_pattern = donor_site_pattern or 'GT'
-    accept_site_pattern = accept_site_pattern or 'AG'
-    gff = gff[gff['chr']==chrom]
-    rnas = gff[gff['feature'].isin(RNA_TYPES)].to_dict('record')
-    splice_pairs = get_splice_pairs(gff)
-    ann_donor_sites = [site + 1 for site in find_substr(donor_site_pattern,seq)]
-    ann_accept_sites = [site + 1 for site in find_substr(accept_site_pattern,seq,False)]
-    intron_boundarys = fix_splice_pairs(splice_pairs,ann_donor_sites,ann_accept_sites,dist)
-    ANN_TYPES = ['exon','intron','other']
-    ann_seq = AnnSequence(ANN_TYPES,length)
-    ann_seq.id = ann_seq.chromosome_id = chrom
-    ann_seq.strand = 'plus'
-    for rna in rnas:
-        rna_boundary = rna['start'],rna['end']
-        rna_intron_boundarys = []
-        for intron_boundary in intron_boundarys:
-            if rna['start'] <= intron_boundary[0] <= intron_boundary[1] <= rna['end']:
-                rna_intron_boundarys.append(intron_boundary)
-        rna_intron_boundarys = fix_intron_boundary(rna_boundary,rna_intron_boundarys)
-        rna_exon_boundarys = get_exon_boundary(rna_boundary,rna_intron_boundarys)
-        for boundary in rna_exon_boundarys:
-            try:
-                ann_seq.add_ann('exon',1,boundary[0]-1,boundary[1]-1)
-            except:
-                print(rna_boundary,rna_intron_boundarys,rna_exon_boundarys)
-                raise Exception()
-        for boundary in rna_intron_boundarys:
-            ann_seq.add_ann('intron',1,boundary[0]-1,boundary[1]-1)
-    other = get_background(ann_seq,['exon','intron'])
-    ann_seq.add_ann('other',other)
-    return ann_seq
-
 def guess_ann(chrom,strand,length,seq,gff,donor_site_pattern=None,accept_site_pattern=None):
     """Get guessed AnnSequence based on donor site pattern and accept site pattern
         
@@ -320,13 +263,79 @@ def guess_ann(chrom,strand,length,seq,gff,donor_site_pattern=None,accept_site_pa
         intron_boundarys = guess_boundarys(subseq,donor_site_pattern=donor_site_pattern,
                                            accept_site_pattern=accept_site_pattern)
         intron_boundarys = [(start+site[0]-1,start+site[1]-1) for site in intron_boundarys]
-        intron_boundarys = fix_intron_boundary(rna_boundary,intron_boundarys)
+        intron_boundarys = get_fixed_intron_boundary(rna_boundary,intron_boundarys)
         exon_boundarys = get_exon_boundary(rna_boundary,intron_boundarys)
         for boundary in intron_boundarys:
             ann_seq.add_ann('intron',1,boundary[0]-1,boundary[1]-1)
         for boundary in exon_boundarys:
             ann_seq.add_ann('exon',1,boundary[0]-1,boundary[1]-1)
 
+    other = get_background(ann_seq,['exon','intron'])
+    ann_seq.add_ann('other',other)
+    return ann_seq
+
+def fix_ann_seq(chrom,length,seq,gff,dist,
+                donor_site_pattern=None,accept_site_pattern=None,
+                length_threshold=None):
+    """Get fixed AnnSequence by specific distance, length, and site pattern
+        
+    Parameters:
+    ----------
+    chrom : str
+        Chromosome id to be chosen
+    seq : str
+        DNA sequence which its direction is 5' to 3'
+    length : int
+        Length of chromosome
+    gff : pd.DataFrame    
+        GFF data about RNAs and introns
+    dist : int
+        Valid distance  
+    donor_site_pattern : str (default : GT)
+        Regular expression of donor site
+    accept_site_pattern : str (default : AG)
+        Regular expression of accept site
+
+    Returns:
+    ----------
+    AnnSequence
+        intron-boundary fixed AnnSequence
+    """
+    length_threshold = length_threshold or 0
+    donor_site_pattern = donor_site_pattern or 'GT'
+    accept_site_pattern = accept_site_pattern or 'AG'
+    gff = gff[gff['chr']==chrom]
+    strand = list(set(gff['strand']))
+    if len(strand)!=1 or strand[0] != '+':
+        raise Exception("Got strands, {}".format(strand))
+
+    rnas = gff[gff['feature'].isin(RNA_TYPES)].to_dict('record')
+    splice_pairs = get_splice_pairs(gff)
+    ann_donor_sites = [site + 1 for site in find_substr(donor_site_pattern,seq)]
+    ann_accept_sites = [site + 1 for site in find_substr(accept_site_pattern,seq,False)]
+    intron_boundarys = fix_splice_pairs(splice_pairs,ann_donor_sites,ann_accept_sites,dist)
+    ANN_TYPES = ['exon','intron','other']
+    ann_seq = AnnSequence(ANN_TYPES,length)
+    ann_seq.id = ann_seq.chromosome_id = chrom
+    ann_seq.strand = 'plus'
+    for rna in rnas:
+        rna_boundary = rna['start'],rna['end']
+        length = rna['end'] - rna['start'] + 1
+        if length >= length_threshold:
+            rna_intron_boundarys = []
+            for intron_boundary in intron_boundarys:
+                if rna['start'] <= intron_boundary[0] <= intron_boundary[1] <= rna['end']:
+                    rna_intron_boundarys.append(intron_boundary)
+            rna_intron_boundarys = get_fixed_intron_boundary(rna_boundary,rna_intron_boundarys)
+            rna_exon_boundarys = get_exon_boundary(rna_boundary,rna_intron_boundarys)
+            for boundary in rna_exon_boundarys:
+                try:
+                    ann_seq.add_ann('exon',1,boundary[0]-1,boundary[1]-1)
+                except:
+                    print(rna_boundary,rna_intron_boundarys,rna_exon_boundarys)
+                    raise Exception()
+            for boundary in rna_intron_boundarys:
+                ann_seq.add_ann('intron',1,boundary[0]-1,boundary[1]-1)
     other = get_background(ann_seq,['exon','intron'])
     ann_seq.add_ann('other',other)
     return ann_seq

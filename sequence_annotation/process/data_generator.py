@@ -15,9 +15,14 @@ class SeqDataset(Dataset):
         self._lengths = None
         self._length = None
         self._seqs = None
+        self._strands = None
         if data is not None:
             self.data = data
  
+    @property    
+    def strands(self):
+        return self._strands
+
     @property    
     def ids(self):
         return self._ids
@@ -50,12 +55,14 @@ class SeqDataset(Dataset):
             self._answers = data['answers']
             self._lengths = data['lengths']
             self._seqs = data['seqs']  
+            self._strands = data['strands']  
         elif isinstance(data,list) or isinstance(data,tuple):
             self._ids = data[0]
             self._inputs = data[1]
             self._answers = data[2]
             self._lengths = data[3]
             self._seqs = data[4]
+            self._strands = data[5]  
         else:
             raise Exception("Data should be dictionary or list")
         self._length = len(self._ids)
@@ -67,8 +74,9 @@ class SeqDataset(Dataset):
     def __getitem__(self, idx):
         id_,input_ = self._ids[idx],self._inputs[idx]
         answer_,length = self._answers[idx],self._lengths[idx]
+        strands = self._strands[idx]
         seqs_ = self._seqs[idx]
-        return id_, input_,answer_, length, seqs_
+        return id_, input_,answer_, length, seqs_, strands
 
 def augmentation_seqs(inputs,answers,lengths,augmentation_max):
     inputs_ = []
@@ -94,7 +102,7 @@ def seq_collate_wrapper(augmentation_max=None,padding_first=False):
     augmentation_max = augmentation_max or 0
     def seq_collate_fn(data):
         transposed_data  = list(zip(*data))
-        ids, inputs, answers, lengths, seqs = transposed_data
+        ids, inputs, answers, lengths, seqs,strands = transposed_data
         if not padding_first:
             if augmentation_max > 0:
                 inputs,answers,lengths = augmentation_seqs(inputs,answers,lengths,augmentation_max)
@@ -108,7 +116,7 @@ def seq_collate_wrapper(augmentation_max=None,padding_first=False):
         seqs = order(seqs,length_order)
         inputs = torch.FloatTensor(inputs).transpose(1,2)
         answers = torch.LongTensor(answers).transpose(1,2)
-        return ids, inputs, answers, lengths, seqs
+        return ids, inputs, answers, lengths, seqs,strands
     return seq_collate_fn
     
 class SeqLoader(DataLoader):
@@ -130,7 +138,7 @@ class SeqLoader(DataLoader):
         if 'batch_size' in kwargs:
             batch_size = kwargs['batch_size']
         else:    
-            batch_size = 1
+            batch_size = 32
         
         self._length = int(np.ceil(len(dataset) /batch_size))
 

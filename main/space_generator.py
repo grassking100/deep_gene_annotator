@@ -12,7 +12,6 @@ def _add_rnn(trial,builder,rnn_type,rnn_hidden,rnn_hidden_coef_max):
     if rnn_hidden_coef_max >= 0:
         builder.relation_block_config['hidden_size'] = rnn_hidden*(2**trial.suggest_int('rnn_hidden_coef',0,rnn_hidden_coef_max))
 
-
 class Builder:
     def __init__(self):
         self.cnn_num = 2
@@ -63,10 +62,12 @@ class Builder:
         builder.relation_block_config['customized_cnn_init'] = 'xavier_uniform_cnn_init'
         
         def generator(trial):
-            if not from_trial_params:
-                _add_cnn(trial,builder,cnn_num,cnn_out,radius)
-                _add_rnn(trial,builder,rnn_type,rnn_hidden,rnn_hidden_coef_max)
-            else:
+            params = dict(trial.params)
+            _add_cnn(trial,builder,cnn_num,cnn_out,radius)
+            _add_rnn(trial,builder,rnn_type,rnn_hidden,rnn_hidden_coef_max)
+            if from_trial_params:
+                for name, value in params.items():
+                    trial._suggested_params[name] = value
                 builder.feature_block_config['num_layers'] = cnn_num*(2**trial.params['cnn_num_coef'])
                 builder.feature_block_config['out_channels'] = cnn_num*(2**trial.params['cnn_out_coef'])
                 builder.feature_block_config['kernel_size'] = 2*(radius*(4**trial.params['radius_coef']))+1
