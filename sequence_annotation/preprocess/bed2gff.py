@@ -19,7 +19,7 @@ def bed_item2gff_item(item,id_convert=None):
     if id_convert is not None:
         gene_id = id_convert[mRNA_id]
     else:    
-        gene_id = mRNA_id
+        gene_id = "{}_gene".format(mRNA_id)
     strand = strand_convert[item['strand']]
     basic_block = {'chr':item['chr'],'strand':strand,'source':'.',
                    'score':item['score'],'frame':'.'}

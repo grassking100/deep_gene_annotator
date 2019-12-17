@@ -54,7 +54,6 @@ predict_gene_gff_path=$saved_root/predict_gene.gff
 id_convert_table_path=$saved_root/id_convert_table.tsv
 
 mkdir -p $saved_root
-#python3 $preprocess_root/bed2gff.py -i $answer_bed_path -o $answer_gff_path
 python3 $preprocess_root/gff2bed.py -i $predict_gff_path -o $predict_bed_path
 python3 $preprocess_root/get_id_table.py -i $predict_gff_path -o $id_convert_table_path
 python3 $preprocess_root/path_decode.py -i $predict_bed_path -o $predict_canonical_gff_path --select_site_by_election -t $id_convert_table_path

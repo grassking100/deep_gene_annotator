@@ -101,6 +101,12 @@ class Worker(metaclass=ABCMeta):
     def handle_signal(self, signum, frame):
         pass
 
+def get_best_result(best_epoch,result):
+    best_result = {}
+    for key,value in result.items():
+        best_result[key] = result[key][best_epoch - 1]
+    return best_result
+    
 class TrainWorker(Worker):
     """a worker which will train and evaluate the model"""
     def __init__(self,model,data,executor=None,train_generator=None,val_generator=None,
@@ -187,17 +193,6 @@ class TrainWorker(Worker):
         self.executor.process(self.model)
         self._is_running = True
         self._save_setting()
-        #Load best record 
-        self._best_epoch = 0
-
-        best_path = os.path.join(self.path,"best_record.json")
-        if os.path.exists(best_path):
-            with open(best_path,"r") as fp:
-                status = json.load(fp)
-                self._best_epoch = status['best_epoch']
-                self._best_result = status['best_result']
-            print("Load best record from of epoch {} from {}".format(self._best_epoch,best_path))
-
         start_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
         time_messgae = "Start time at {}".format(start_time)
         print(time_messgae)
@@ -285,9 +280,7 @@ class TrainWorker(Worker):
     def _after_work(self):
         self.result = self._recoder.data
         if self.best_epoch is not None:
-            self._best_result = {}
-            for key,value in self.result.items():
-                self._best_result[key] = self.result[key][self.best_epoch - 1]
+            self._best_result = get_best_result(self.best_epoch,self.result)
             print("Save best result of epoch {}".format(self.best_epoch))
             if self.path is not None:    
                 best_path = os.path.join(self.path,"best_record.json")

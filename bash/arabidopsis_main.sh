@@ -95,14 +95,14 @@ script_root=$bash_root/..
 preprocess_main_root=$script_root/sequence_annotation/preprocess
 mkdir -p $saved_root
 
-command="$preprocess_main_root/arabidopsis_data_prepair.sh -u $upstream_dist -d $downstream_dist -r $root -o $preprocessed_root -s $source_name"
+command="$bash_root/arabidopsis_data_prepair.sh -u $upstream_dist -d $downstream_dist -r $root -o $preprocessed_root -s $source_name"
 if $remove_inner_end; then
-    command="${command} --remove_inner_end"
+    command="${command} -i"
 fi
 echo $command
 bash $command
 
-command="$preprocess_main_root/region_select_split.sh -u $upstream_dist -d $downstream_dist -r $root -p $preprocessed_root -o $processed_root -s $source_name"
+command="$bash_root/region_select_split.sh -u $upstream_dist -d $downstream_dist -r $root -p $preprocessed_root -o $processed_root -s $source_name"
 
 if $merge_overlapped; then
     command="${command} -m"

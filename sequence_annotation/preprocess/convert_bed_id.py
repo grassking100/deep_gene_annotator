@@ -24,6 +24,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     bed = read_bed(args.input_bed_path)
-    id_convert_table = get_id_table(args.id_convert_path)
+    try:
+        id_convert_table = get_id_table(args.id_convert_path)
+    except:
+        print(args.id_convert_path)
+        raise
     returned = convert_bed_id(bed,id_convert_table,args.query)
     write_bed(returned,args.output_bed_path)

@@ -17,10 +17,11 @@ def get_coordinate_id_table(bed,query_columns,id_prefix):
         if coord_id not in id_table.keys():
             id_table[coord_id] = new_id
             index += 1
+    return id_table
 
-def get_rename_table(id_table,query_columns,coord_id_as_old_id):
+def get_rename_table(bed,id_table,query_columns,coord_id_as_old_id):
     renamed_table = []
-    for item in bed:
+    for item in bed.to_dict('record'):
         old_id = item['id']
         coord_id = '_'.join([str(item[key]) for key in query_columns])
         table_item = {}
@@ -47,8 +48,8 @@ def main(bed_path,use_strand,coord_id_as_old_id,id_prefix,saved_table_path,renam
     if use_strand:
         query_columns.append('strand')
     id_convert_table = get_coordinate_id_table(bed,query_columns,id_prefix)
-    renamed_table = get_rename_table(id_convert_table,query_columns,coord_id_as_old_id)
-    bed['id'] = bed[query_columns].apply(lambda x: '_'.join(x), axis=1)
+    renamed_table = get_rename_table(bed,id_convert_table,query_columns,coord_id_as_old_id)
+    bed['id'] = bed[query_columns].apply(lambda x: '_'.join([str(item) for item in x]), axis=1)
     renamed_bed = convert_bed_id(bed,id_convert_table,'id')
     renamed_table.to_csv(saved_table_path,index=None,sep='\t')
     write_bed(renamed_bed,renamed_bed_path)

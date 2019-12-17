@@ -130,9 +130,9 @@ if  (( $result_num > 0 )) ; then
 
     python3 $preprocess_main_root/rename_id_by_coordinate.py -i $saved_root/result/selected_region.bed -p region -t $saved_root/result/region_rename_table_both_strand.tsv -o $saved_root/result/selected_region_both_strand.bed
 
-    python3 $preprocess_main_root/convert_bed_id.py -i $saved_root/result/rna.bed -t $saved_root/result/region_rename_table_both_strand.tsv -o $saved_root/result/rna_both_strand.bed --query 'chr'
+    python3 $preprocess_main_root/rename_bed_chrom.py -i $saved_root/result/rna.bed -t $saved_root/result/region_rename_table_both_strand.tsv -o $saved_root/result/rna_both_strand.bed
     
-    python3 $preprocess_main_root/convert_bed_id.py -i $saved_root/result/canonical.bed -t $saved_root/result/region_rename_table_both_strand.tsv -o $saved_root/result/canonical_both_strand.bed --query 'chr'
+    python3 $preprocess_main_root/rename_bed_chrom.py -i $saved_root/result/canonical.bed -t $saved_root/result/region_rename_table_both_strand.tsv -o $saved_root/result/canonical_both_strand.bed
     
     bedtools getfasta -name -fi $genome_path -bed $saved_root/result/selected_region_both_strand.bed -fo $saved_root/result/selected_region_both_strand.fasta
 
@@ -153,6 +153,7 @@ if  (( $result_num > 0 )) ; then
         python3 $preprocess_main_root/bed2gff.py -i $split_root/$file_name.bed -o $split_root/$file_name.gff -t $id_convert_table_path
         python3 $preprocess_main_root/bed2gff.py -i $split_root/${file_name}_canonical.bed -o $split_root/${file_name}_canonical.gff
         python3 $preprocess_main_root/get_subfasta.py -i $saved_root/result/selected_region_both_strand.fasta -d $split_root/$file_name.tsv -o $split_root/$file_name.fasta
+        samtools faidx $split_root/$file_name.fasta
     done
     
     single_strand_split_root=$saved_root/single_strand_split
@@ -171,6 +172,7 @@ if  (( $result_num > 0 )) ; then
         -o $single_strand_split_root/${file_name}_canonical.bed --query_column chr
         
         python3 $preprocess_main_root/get_subfasta.py -i $saved_root/result/selected_region.fasta -d $single_strand_split_root/$file_name.tsv -o $single_strand_split_root/$file_name.fasta
+        samtools faidx $single_strand_split_root/$file_name.fasta
     done
 
     exit 0

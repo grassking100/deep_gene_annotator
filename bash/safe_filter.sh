@@ -12,7 +12,7 @@ usage(){
  echo "  Options:"
  echo "    -s  <bool>    Filter with same strand [default: false]"
  echo "    -h  Print help message and exit"
- echo "Example: bash safe_filter.sh -i want.bed -x unwant.bed -u 1000 -d 500 -f genime.fai -o result.bed"
+ echo "Example: bash safe_filter.sh -i want.bed -x unwant.bed -u 1000 -d 500 -f genome.fai -o result.bed"
  echo ""
 }
 while getopts i:x:f:u:d:o:sh option
