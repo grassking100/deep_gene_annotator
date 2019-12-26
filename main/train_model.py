@@ -6,7 +6,8 @@ from argparse import ArgumentParser
 
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument("-m","--model_config_path",help="Path of model config build by SeqAnnBuilder",required=True)
+    parser.add_argument("-m","--model_config_path",help="Path of model config "
+                        "build by SeqAnnBuilder",required=True)
     parser.add_argument("-e","--executor_config_path",help="Path of Executor config",required=True)
     parser.add_argument("-s","--saved_root",help="Root to save file",required=True)
     parser.add_argument("-t","--train_data_path",help="Path of training data",required=True)
@@ -17,11 +18,13 @@ if __name__ == '__main__':
     parser.add_argument("--epoch",type=int,default=100)
     parser.add_argument("--batch_size",type=int,default=32)
     parser.add_argument("--period",default=5,type=int)
-    parser.add_argument("--no_merge",action="store_true")
+    parser.add_argument("--merge",action="store_true")
     parser.add_argument("--model_weights_path")
+    parser.add_argument("--executor_weights_path")
     parser.add_argument("--only_train",action='store_true')
     parser.add_argument("--save_distribution",action='store_true')
-    parser.add_argument("--patient",help="Dafault value is 5. If lower(value) is 'none', then model won't be stopped",
+    parser.add_argument("--patient",help="Dafault value is 5. If lower(value) "
+                        "is 'none', then model won't be stopped",
                         type=lambda x: int(x) if x.lower() != 'none' else None,default=5)
     parser.add_argument("--frozen_names",type=lambda x:x.split(','),default=None)
     parser.add_argument("--monitor_target")
@@ -36,7 +39,7 @@ torch.backends.cudnn.benchmark = True
 sys.path.append("/home/sequence_annotation")
 from sequence_annotation.utils.utils import write_fasta, create_folder
 from sequence_annotation.process.seq_ann_engine import SeqAnnEngine
-from sequence_annotation.process.inference import AnnVec2InfoConverter
+from sequence_annotation.process.inference import build_converter
 from sequence_annotation.process.utils import param_num
 from sequence_annotation.process.callback import Callbacks
 from sequence_annotation.genome_handler.ann_seq_processor import class_count
@@ -66,7 +69,8 @@ def train(saved_root,epoch,model,executor,train_data,val_data=None,
     other_callbacks = Callbacks()
     if val_data is not None and add_seq_fig:
         seq,ann_seq = _get_max_target_seqs(val_data[0],val_data[1])
-        seq_fig = engine.get_seq_fig(seq,ann_seq,color_settings=color_settings or BASIC_COLOR_SETTING)
+        color_settings = color_settings or BASIC_COLOR_SETTING
+        seq_fig = engine.get_seq_fig(seq,ann_seq,color_settings=color_settings)
         other_callbacks.add(seq_fig)
 
     worker = engine.train(model,executor,train_data,val_data=val_data,
@@ -79,9 +83,10 @@ def train(saved_root,epoch,model,executor,train_data,val_data=None,
 
 def main(saved_root,model_config_path,executor_config_path,
          train_data_path,val_data_path=None,batch_size=None,
-         model_weights_path=None,frozen_names=None,save_distribution=False,
-         no_merge=True,map_order_config_path=None,
-         only_train=False,test_data_path=None,epoch=None,**kwargs):
+         model_weights_path=None,executor_weights_path=None,
+         frozen_names=None,save_distribution=False,merge=False,
+         map_order_config_path=None,only_train=False,
+         test_data_path=None,epoch=None,**kwargs):
 
     map_order_config = {}
     if map_order_config_path is not None:
@@ -115,10 +120,11 @@ def main(saved_root,model_config_path,executor_config_path,
     with open(executor_config_path,"r") as fp:
         executor_config = json.load(fp)
     
-    executor = get_executor(model,**executor_config)
+    executor = get_executor(model,executor_weights_path=executor_weights_path,
+                            **executor_config)
     
-    ann_vec2info_converter = AnnVec2InfoConverter(ANN_TYPES,GENE_MAP)
-    
+    ann_vec2info_converter = build_converter(ANN_TYPES,GENE_MAP)
+
     try:
         train(saved_root,epoch,model,executor,train_data,val_data,
               batch_size=batch_size,**map_order_config,**kwargs)     
@@ -143,7 +149,7 @@ def main(saved_root,model_config_path,executor_config_path,
             test(path,model,executor,data,
                  batch_size=batch_size,use_gffcompare=True,
                  ann_vec2info_converter=ann_vec2info_converter,
-                 no_merge=no_merge,**map_order_config)
+                 merge=merge,**map_order_config)
     
 if __name__ == '__main__':
     #Create folder

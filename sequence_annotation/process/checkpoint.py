@@ -317,7 +317,7 @@ def use_checkpoint(path,monitor_target=None,patient=None,period=None):
             with open(best_record_path,"r") as fp:
                 best_record = json.load(fp)
             best_epoch = best_record['best_epoch']
-            best_target = best_record[model_checkpoint.target]
+            best_target = best_record['best_result'][model_checkpoint.target]
             if best_epoch != best_status['best_epoch']:
                 raise Exception()
             best_status['best_target'] = best_target

@@ -5,12 +5,6 @@ from .seq_container import AnnSeqContainer,SeqInfoContainer
 from .sequence import AnnSequence
 from . import ann_seq_processor
 
-def mixed_typed_genome_generate(seqs):
-    mixed_seqs = AnnSeqContainer(['exon','intron','mix','other'])
-    for seq in seqs:
-        mixed_seqs.add(ann_seq_processor.get_mixed_seq(seq))
-    return mixed_seqs
-
 def get_genome_region_info(ann_genome,focus_types=None):
     """Get region information about genome"""
     genome_region_info = SeqInfoContainer()

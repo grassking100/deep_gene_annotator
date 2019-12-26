@@ -10,7 +10,8 @@ from .inference import basic_inference,seq_ann_inference
 
 OPTIMIZER_CLASS = {'Adam':optim.Adam,'SGD':optim.SGD,'AdamW':optim.AdamW,'RMSprop':optim.RMSprop}
 
-def optimizer_generator(type_,parameters,momentum=None,nesterov=False,amsgrad=False,adam_betas=None,**kwargs):
+def optimizer_generator(type_,parameters,momentum=None,nesterov=False,
+                        amsgrad=False,adam_betas=None,**kwargs):
     momentum = momentum or 0
     adam_betas = adam_betas or [0.9,0.999]
     if type_ not in OPTIMIZER_CLASS:
@@ -18,7 +19,10 @@ def optimizer_generator(type_,parameters,momentum=None,nesterov=False,amsgrad=Fa
 
     optimizer = OPTIMIZER_CLASS[type_]
     if type_ == 'AdamW':
-        warnings.warn("\n!!!\n\nAdamW's weight decay is implemented differnetly in paper and pytorch 1.3.0, please see https://github.com/pytorch/pytorch/pull/21250#issuecomment-520559993 for more information!\n\n!!!\n")
+        warnings.warn("\n!!!\n\nAdamW's weight decay is implemented differnetly"
+                      "in paper and pytorch 1.3.0, please see https://github.com"
+                      "/pytorch/pytorch/pull/21250#issuecomment-520559993 for more "
+                      "information!\n\n!!!\n")
         
     if optimizer in [optim.Adam,optim.AdamW]:
         if momentum > 0 or nesterov:
@@ -130,15 +134,17 @@ class BasicExecutor(_Executor):
         self._optimizer = optimizer
         
     def state_dict(self):
-        state_dict = {'optimizer':self.optimizer.state_dict()}
+        state_dict = {}
+        if self.optimizer is not None:
+            state_dict['optimizer'] = self.optimizer.state_dict()
         state_dict['lr_history'] = self._lr_history
         if self.lr_scheduler is not None:
             state_dict['lr_scheduler'] = self.lr_scheduler.state_dict()
-        
         return state_dict
         
     def load_state_dict(self,state_dicts):
-        self.optimizer.load_state_dict(state_dicts['optimizer'])
+        if self.optimizer is not None:
+            self.optimizer.load_state_dict(state_dicts['optimizer'])
         self._lr_history = state_dicts['lr_history']
         if self.lr_scheduler is not None:
             self.lr_scheduler.load_state_dict(state_dicts['lr_scheduler'])
@@ -147,8 +153,9 @@ class BasicExecutor(_Executor):
         config = super().get_config(**kwargs)
         config['grad_clip'] = self.grad_clip
         config['grad_norm'] = self.grad_norm
-        config['optimizer_name'] = self.optimizer.__class__.__name__
-        config['optimizer'] = self.optimizer.state_dict()
+        if self.optimizer is not None:
+            config['optimizer_name'] = self.optimizer.__class__.__name__
+            config['optimizer'] = self.optimizer.state_dict()
         if self.lr_scheduler is not None:
             config['lr_scheduler_name'] = self.lr_scheduler.__class__.__name__
             config['lr_scheduler'] = self.lr_scheduler.state_dict()
@@ -190,25 +197,24 @@ class BasicExecutor(_Executor):
 class ExecutorBuilder:
     def __init__(self,use_native=True,label_num=None,grad_clip=None,grad_norm=None,
                  predict_label_num=None,answer_label_num=None,output_label_num=None):
-        self.executor = BasicExecutor()
-        self.executor.grad_clip = grad_clip
-        self.executor.grad_norm = grad_norm
-        self.executor.loss = None
+        self.grad_clip = grad_clip
+        self.grad_norm = grad_norm
+        self.loss = None
         self.use_native=use_native
         if self.use_native:
             self.output_label_num = self.predict_label_num = self.answer_label_num = label_num or 3
-            self.executor.inference = basic_inference(self.output_label_num)
+            self.inference = basic_inference(self.output_label_num)
         else:
             self.predict_label_num = predict_label_num or 2
             self.answer_label_num = answer_label_num or 3
-            self.executor.inference = seq_ann_inference
+            self.inference = seq_ann_inference
         
-    def set_optimizer(self,parameters,optim_type,learning_rate=None,reduce_lr_on_plateau=False,**kwargs):
+    def set_optimizer(self,parameters,optim_type,learning_rate=None,
+                      reduce_lr_on_plateau=False,**kwargs):
         learning_rate = learning_rate or 1e-3
-        self.executor.optimizer = optimizer_generator(optim_type,parameters,lr=learning_rate,**kwargs)
+        self.optimizer = optimizer_generator(optim_type,parameters,lr=learning_rate,**kwargs)
         if reduce_lr_on_plateau:
-            self.executor.lr_scheduler = ReduceLROnPlateau(self.executor.optimizer,
-                                                           verbose=True,threshold=0.1)
+            self.lr_scheduler = ReduceLROnPlateau(self.optimizer,verbose=True,threshold=0.1)
    
     def set_loss(self,gamma=None,intron_coef=None,other_coef=None,nontranscript_coef=None,
                  transcript_answer_mask=True,transcript_output_mask=False,mean_by_mask=False):
@@ -223,8 +229,15 @@ class ExecutorBuilder:
         label_loss = LabelLoss(loss)
         label_loss.predict_inference = basic_inference(self.predict_label_num)
         label_loss.answer_inference = basic_inference(self.answer_label_num)
-        self.executor.loss = label_loss
+        self.loss = label_loss
         
-    def build(self):
-        return self.executor
-            
+    def build(self,executor_weights_path=None):
+        executor = BasicExecutor()
+        executor.grad_clip = self.grad_clip
+        executor.grad_norm = self.grad_norm
+        executor.loss = self.loss
+        executor.inference = self.inference
+        if executor_weights_path is not None:
+            weights = torch.load(executor_weights_path)
+            executor.load_state_dict(weights)
+        return executor

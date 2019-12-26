@@ -59,33 +59,48 @@ class RegionExtractor:
 
 class IInfoExtractor:
     @abstractmethod
-    def extract(self,anns,simply_map):
+    def extract(self,anns):
         pass
+
     @abstractmethod
-    def extract_per_seq(self,ann,simply_map):
+    def extract_per_seq(self,ann):
+        pass
+
+    @abstractmethod
+    def get_config(self):
         pass
 
 class GeneInfoExtractor(IInfoExtractor):
     """Create gene region information from annotation"""
-    def __init__(self):
+    def __init__(self,simply_map):
+        """The simply_map defines rule to simplify inputed annotation, it must have \'gene\' in its key"""
         self.extractor = RegionExtractor()
-        self.alt = False
-        self.alt_num = 0
+        self._simply_map = simply_map
+        self._use_alt = False
+        self._alt_num = 0
         self._alt_region_id = 0
-
-    def extract(self,anns,simply_map):
+        if 'gene' not in self._simply_map.keys():
+            raise Exception("Gene must in map's key.")
+        
+    def get_config(self):
+        config = {}
+        config['simply_map'] = self._simply_map
+        config['alt_num'] = self._alt_num
+        config['use_alt'] = self._use_alt
+        return config
+        
+    def extract(self,anns):
         """Create SeqInfoContainer of SeqAnnContainer"""
         seq_infos = SeqInfoContainer()
         for ann in anns:
-            seq_infos.add(self.extract_per_seq(ann,simply_map))
+            seq_infos.add(self.extract_per_seq(ann))
         return seq_infos
 
-    def extract_per_seq(self,ann,simply_map):
+    def extract_per_seq(self,ann):
         """Create SeqInformation of SeqAnnotation"""
-        if 'gene' not in simply_map.keys():
-            raise Exception("Gene must in map's key.")
+
         seq_infos = SeqInfoContainer()
-        simple_seq = simplify_seq(ann,simply_map)
+        simple_seq = simplify_seq(ann,self._simply_map)
         simple_seq.chromosome_id = ann.chromosome_id or ann.id
         genes = [region for region in self.extractor.extract(simple_seq) if region.ann_type=='gene']
         seq_infos.add(genes)
@@ -99,7 +114,7 @@ class GeneInfoExtractor(IInfoExtractor):
             subseq.chromosome_id = mRNA.chromosome_id
             subseq.source = mRNA.source
             regions = self.extractor.extract(subseq)
-            if self.alt:
+            if self._use_alt:
                 self._add_alt_regions(mRNA,regions,seq_infos)
             else:
                 self._add_regions(mRNA,regions,seq_infos)
@@ -122,7 +137,7 @@ class GeneInfoExtractor(IInfoExtractor):
             else:
                 others.append(region)
 
-        if len(alt_introns) > self.alt_num:
+        if len(alt_introns) > self._alt_num:
             #warn = "There are {} alternative statuses in {}, it will be discarded."
             #warnings.warn(warn.format(len(alt_introns),mRNA.id))
             return

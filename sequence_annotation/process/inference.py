@@ -1,9 +1,11 @@
-import numpy as np
 import torch
-from ..genome_handler.seq_container import AnnSeqContainer,SeqInfoContainer
+import pandas as pd
+import numpy as np
+from ..genome_handler.seq_container import AnnSeqContainer,SeqInfoContainer,EmptyContainerException
 from ..genome_handler.region_extractor import GeneInfoExtractor
 from ..genome_handler.ann_seq_processor import vecs2seq
 from .boundary_process import fix_ann_seq
+from .post_processor import GeneAnnProcessor
 
 def basic_inference(first_n_channel=None,before=True):
     first_n_channel = first_n_channel or 3
@@ -69,43 +71,30 @@ def ann_vec2one_hot_vec(ann_vec,length=None):
     return index2one_hot(index,C)
 
 class AnnVec2InfoConverter:
-    def __init__(self,ann_types,gene_map,dist=None,
-                 donor_site_pattern=None,accept_site_pattern=None):
-        self.extractor = GeneInfoExtractor()
-        self.donor_site_pattern = donor_site_pattern
-        self.accept_site_pattern = accept_site_pattern
-        self.ann_types = ann_types
-        self.gene_map = gene_map
-        self.dist = dist or 16
-        
+    def __init__(self,channel_order,gene_ann_processor):
+        self.channel_order = channel_order
+        self.gene_ann_processor = gene_ann_processor
+
     def get_config(self):
         config = {}
         config['class'] = self.__class__.__name__
-        config['donor_site_pattern'] = self.donor_site_pattern
-        config['accept_site_pattern'] = self.accept_site_pattern
-        config['ann_types'] = self.ann_types
-        config['gene_map'] = self.gene_map
-        config['dist'] = self.dist
-        config['alt'] = self.extractor.alt
-        config['alt_num'] = self.extractor.alt_num
+        config['channel_order'] = self.channel_order
+        config['alt_num'] = self.gene_ann_processor.get_config()
         return config
-        
-    def _fixed_info(self,chrom_id,length,dna_seq,gff):
-        """Convert GFF to SeqInfoContainer about fixed region data"""
-        fixed_ann_seq = fix_ann_seq(chrom_id,length,dna_seq,gff,self.dist,
-                                    self.donor_site_pattern,self.accept_site_pattern)
-        info = self.extractor.extract_per_seq(fixed_ann_seq,self.gene_map)
-        return info
-        
-    def _info_dict2fixed_info(self,chrom_ids,lengths,dna_seqs,seq_info_dict):
+
+    def _info_dict2fixed_gff(self,chrom_ids,lengths,dna_seqs,seq_info_dict):
         """Convert dictionay of SeqInformation to SeqInfoContainer about fixed region data"""
-        returned = SeqInfoContainer()
+        returned = []
         for chrom_id,dna_seq, length in zip(chrom_ids,dna_seqs,lengths):
             info = seq_info_dict[chrom_id]
             if len(info) > 0:
                 gff = info.to_gff()
-                info = self._fixed_info(chrom_id,length,dna_seq,gff)
-                returned.add(info)
+                try:
+                    info = self.gene_ann_processor.process(chrom_id,length,dna_seq,gff)
+                    returned.append(info)
+                except EmptyContainerException:
+                    pass
+        returned = pd.concat(returned)
         return returned
 
     def _vecs2info_dict(self,chrom_ids,lengths,ann_vecs):
@@ -113,9 +102,9 @@ class AnnVec2InfoConverter:
         seq_info_dict = {}
         for chrom_id,ann_vec, length in zip(chrom_ids,ann_vecs,lengths):
             one_hot_vec = ann_vec2one_hot_vec(ann_vec,length)
-            ann_seq = vecs2seq(one_hot_vec,chrom_id,'plus',self.ann_types)
-            infos = self.extractor.extract_per_seq(ann_seq,self.gene_map)
-            seq_info_dict[chrom_id] = infos
+            ann_seq = vecs2seq(one_hot_vec,chrom_id,'plus',self.channel_order)
+            info = self.gene_ann_processor.gene_info_extractor.extract_per_seq(ann_seq)
+            seq_info_dict[chrom_id] = info
         return seq_info_dict
     
     def vecs2info(self,chrom_ids,lengths,ann_vecs):
@@ -129,17 +118,22 @@ class AnnVec2InfoConverter:
     def vecs2fixed_info(self,chrom_ids,lengths,dna_seqs,ann_vecs):
         """Convert annotation vectors to GFF about fixed region data"""
         info_dict = self._vecs2info_dict(chrom_ids,lengths,ann_vecs)
-        fixed_info = self._info_dict2fixed_info(chrom_ids,lengths,dna_seqs,info_dict)
-        return info_dict.to_gff()
+        fixed_gff = self._info_dict2fixed_gff(chrom_ids,lengths,dna_seqs,info_dict)
+        return fixed_gff
     
     def fix_boundary(self,gff,dna_dict):
-        gff_group = gff.groupby('chr')
         chroms = set(gff['chr'])
-        returned = SeqInfoContainer()
+        returned = []
         for chrom_id in chroms:
             dna_seq = dna_dict[chrom_id]
             length = len(dna_seq)
-            part_gff = gff_group.get_group(chrom_id)
-            info = self._fixed_info(chrom_id,length,dna_seq,part_gff)
-            returned.add(info)
-        return returned.to_gff()
+            info = self.gene_ann_processor.process(chrom_id,length,dna_seq,gff)
+            returned.append(info)
+        returned = pd.concat(returned)
+        return returned
+    
+def build_converter(channel_order,simply_map,**kwargs):
+    gene_info_extractor = GeneInfoExtractor(simply_map)
+    gene_ann_processor = GeneAnnProcessor(gene_info_extractor,**kwargs)
+    converter = AnnVec2InfoConverter(channel_order,gene_ann_processor)
+    return converter

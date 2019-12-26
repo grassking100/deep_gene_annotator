@@ -25,9 +25,10 @@ class AttenGRU(BasicModel):
             atten_hidden_size = hidden_size
             
         self.atten = RNNAttention(in_channels,hidden_size=atten_hidden_size,
-                                  num_layers=atten_num_layers,name=self.atten_name,use_softmax=use_softmax,**kwargs)
-        self.rnn = ProjectedGRU(in_channels,out_channels,hidden_size=hidden_size,num_layers=num_layers,
-                                name=self.name,**kwargs)
+                                  num_layers=atten_num_layers,name=self.atten_name,
+                                  use_softmax=use_softmax,**kwargs)
+        self.rnn = ProjectedGRU(in_channels,out_channels,hidden_size=hidden_size,
+                                num_layers=num_layers,name=self.name,**kwargs)
         self.in_channels = in_channels
         self.out_channels = out_channels
 

@@ -60,4 +60,4 @@ python3 $preprocess_root/path_decode.py -i $predict_bed_path -o $predict_canonic
 python3 $preprocess_root/gff2bed.py -i $predict_canonical_gff_path -o $predict_canonical_bed_path
 python3 $preprocess_root/bed2gff.py -i $predict_canonical_bed_path -o $predict_gene_gff_path
 cd $saved_root
-gffcompare --strict-match --debug --no-merge -T -r $answer_gff_path $predict_gene_gff_path 
+gffcompare --strict-match --debug --no-merge -T -e 0 -d 0 -r $answer_gff_path $predict_gene_gff_path 

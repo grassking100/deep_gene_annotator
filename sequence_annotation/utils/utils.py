@@ -27,7 +27,6 @@ def create_folder(path):
     try:
         if not os.path.exists(path):
             os.makedirs(path)
-            #os.system("mkdir -p {}".format(path))
     except OSError as erro:
         if erro.errno != errno.EEXIST:
             raise
@@ -226,53 +225,14 @@ def write_fasta(path,seqs):
             file.write(">" + id_ + "\n")
             file.write(seq + "\n")
 
-def model_setting_generator(hidden_size_base,depth_base,phi=0,alpha=1,beta=1):
-    """
-    length:round(radius_base*alpha^phi)*2+1
-    hidden_size:round(hidden_size_base*beta^phi)
-    depth:round(depth_base*gamma^phi)
-    """
-    hidden_size = int(round(hidden_size_base*alpha**phi))
-    depth = int(round(depth_base*beta**phi))
-    return hidden_size,depth
-            
-def model_settings_generator(hidden_size_base,depth_base,phi=None,step=None,min_value=None,max_coef=None,remove_one=False):
-    setting = set()
-    setting_coef={}
-    step = step or 0.05
-    phi = phi or 1
-    min_value = min_value or 1
-    max_coef= max_coef or 2
-    #for alpha in np.arange(min_value,max_coef+1,step):
-    for alpha_suqare in np.arange(min_value,max_coef+1,step):
-        alpha = round(alpha_suqare**0.5,1)
-        beta_square = max_coef/alpha_suqare
-        beta =  round(beta_square**0.5,1)
-        setting_ = model_setting_generator(hidden_size_base,depth_base,phi=phi,alpha=alpha,beta=beta)
-        add=False
-        if beta_square >= min_value and max_coef-step <= (alpha**2)*(beta**2) <= max_coef+step:
-            if remove_one:
-                if alpha > 1.0 and beta > 1.0:
-                    add=True
-            else:
-                add=True
-        if add:
-            setting.add(setting_)
-            if setting_ not in setting_coef:
-                setting_coef[setting_] = []
-            setting_coef[setting_] += [[alpha,beta,phi]]
-    for key,value in setting_coef.items():
-        setting_coef[key] = value[np.argmax([sorted(tuple_)[0] for tuple_ in value])]
-    return setting_coef
-
 def gff_to_bed_command(gff_path,bed_path):
     to_bed_command = 'python3 {}/gff2bed.py -i {} -o {}'
     command = to_bed_command.format(preprocess_src_root,gff_path,bed_path)
     os.system(command)
     
-def gffcompare_command(answer_gff_path,predict_gff_path,prefix_path,no_merge=True):
-    gffcompare_command = 'gffcompare --strict-match -T -r {} {} -o {}'
-    if no_merge:
+def gffcompare_command(answer_gff_path,predict_gff_path,prefix_path,merge=False):
+    gffcompare_command = 'gffcompare --strict-match --chr-stats --debug -T -e 0 -d 0 -r {} {} -o {}'
+    if not merge:
         gffcompare_command += ' --no-merge'
     command = gffcompare_command.format(answer_gff_path,predict_gff_path,prefix_path)
     os.system(command)
@@ -280,7 +240,8 @@ def gffcompare_command(answer_gff_path,predict_gff_path,prefix_path,no_merge=Tru
     loci_path = '{}.annotated.loci'.format(prefix_path)
     for path in [gft_path,loci_path]:
         if os.path.exists(path):
-            os.system('rm {}'.format(path))
+            pass
+            #os.system('rm {}'.format(path))
 
 def save_as_gff_and_bed(gff,gff_path,bed_path):
     write_gff(gff,gff_path)

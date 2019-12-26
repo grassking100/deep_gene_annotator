@@ -11,11 +11,10 @@ import seqlogo
 from skimage.filters import threshold_otsu
 from ..utils.utils import create_folder,write_gff,gff_to_bed_command,gffcompare_command,save_as_gff_and_bed
 from ..utils.seq_converter import DNA_CODES
-from ..genome_handler.region_extractor import GeneInfoExtractor
 from ..genome_handler.seq_container import EmptyContainerException
-from .metric import F1,accuracy,precision,recall,categorical_metric,contagion_matrix
+from .metric import calculate_metric,categorical_metric,contagion_matrix
 from .warning import WorkerProtectedWarning
-from .inference import ann_vec2one_hot_vec, AnnVec2InfoConverter,basic_inference
+from .inference import ann_vec2one_hot_vec,basic_inference
 from .signal import get_signal_ppm, ppms2meme
 
 class ICallback(metaclass=ABCMeta):
@@ -241,8 +240,8 @@ class TensorboardCallback(Callback):
         self.tensorboard_writer = tensorboard_writer
         self._model = None
         self._counter = None
-        self.do_add_grad = True
-        self.do_add_weights = True
+        self.do_add_grad = False
+        self.do_add_weights = False
         self.do_add_scalar = True
 
     def on_work_begin(self,worker,**kwargs):
@@ -465,65 +464,21 @@ class CategoricalMetric(DataCallback):
     def on_batch_end(self,predict_result,seq_data,masks,**kwargs):
         labels = self.answer_inference(seq_data.answers,masks)
         #N,C,L
-        data = categorical_metric(predict_result,labels,masks)
+        data = categorical_metric(predict_result.cpu().numpy(),
+                                  labels.cpu().numpy(),
+                                  masks.cpu().numpy())
         for type_ in ['TPs','FPs','TNs','FNs']:
             for index in range(self.label_num):
                 self._data[type_][index] += data[type_][index]
         self._data['T'] += data['T']
         self._data['F'] += data['F']
-        self._result = self._calculate()
-
-    def _calculate(self):
-        T,F = self._data['T'], self._data['F']
-        TPs,FPs = self._data['TPs'], self._data['FPs']
-        TNs,FNs = self._data['TNs'], self._data['FNs']
-        data = {}
-        for name,value in zip(['T','F'],[T,F]):
-            data[self.prefix+name] = value
-        recall_ = recall(TPs,FNs)
-        precision_ = precision(TPs,FPs)
-        accuracy_ = accuracy(T,F)
-        f1 = F1(TPs,FPs,FNs)
-
-        macro_precision_sum = 0
-        for index,val in enumerate(precision_):
-            macro_precision_sum += val
-            if self.show_precision:
-                if self.label_names is not None:
-                    postfix = self.label_names[index]
-                else:
-                    postfix = str(index)
-                data[self.prefix+"precision_"+postfix] = round(val,self.round_value)
-        macro_precision = macro_precision_sum/self.label_num
-        if self.show_precision:
-            data[self._prefix+"macro_precision"] = round(macro_precision,self.round_value)
-        macro_recall_sum = 0
-        for index,val in enumerate(recall_):
-            macro_recall_sum += val
-            if self.show_recall:
-                if self.label_names is not None:
-                    postfix = self.label_names[index]
-                else:
-                    postfix = str(index)
-                data[self._prefix+"recall_"+postfix] = round(val,self.round_value)
-        macro_recall = macro_recall_sum/self.label_num
-        if self.show_recall:
-            data[self.prefix+"macro_recall"] = round(macro_recall,self.round_value)
-        if self.show_acc:
-            data[self.prefix+"accuracy"] = round(accuracy_,self.round_value)
-        if self.show_f1:
-            for index,val in enumerate(f1):
-                if self.label_names is not None:
-                    postfix = self.label_names[index]
-                else:
-                    postfix = str(index)
-                data[self.prefix+"F1_"+postfix] = round(val,self.round_value)
-            if macro_precision+macro_recall > 0:
-                macro_F1 = (2*macro_precision*macro_recall)/(macro_precision+macro_recall)
-            else:
-                macro_F1 = 0
-            data[self.prefix+"macro_F1"] = round(macro_F1,self.round_value)
-        return data
+        self._result = calculate_metric(self._data,prefix=self.prefix,
+                                        label_names=self.label_names,
+                                        calculate_precision=self.show_precision,
+                                        calculate_recall=self.show_recall,
+                                        calculate_F1=self.show_f1,
+                                        calculate_accuracy=self.show_acc,
+                                        round_value=self.round_value)
 
     @property
     def data(self):
@@ -567,17 +522,17 @@ class ContagionMatrix(DataCallback):
     def on_batch_end(self,predict_result,seq_data,masks,**kwargs):
         labels = self.inference(seq_data.answers,masks)
         #N,C,L
-        data = contagion_matrix(predict_result,labels,masks)
-        for answer_index in range(self.label_num):
-            for predict_index in range(self.label_num):
-                self._data[answer_index][predict_index] += data[answer_index][predict_index]
+        data = contagion_matrix(predict_result.cpu().numpy(),
+                                labels.cpu().numpy(),
+                                masks.cpu().numpy())
+        self._data += np.array(data)
 
     @property
     def data(self):
-        return {self.prefix+'contagion_matrix':self._data}
+        return {self.prefix+'contagion_matrix':self._data.tolist()}
 
     def _reset(self):
-        self._data = [[0]*self.label_num for _ in range(self.label_num)]
+        self._data = np.array([[0]*self.label_num] * self.label_num)
         
 class SeqLogo(Callback):
     def __init__(self,saved_distribution_name,saved_root,ratio=None,radius=None,prefix=None):

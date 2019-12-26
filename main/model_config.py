@@ -9,6 +9,7 @@ from sequence_annotation.process.cnn import PADDING_HANDLE
 if __name__ == '__main__':    
     parser = ArgumentParser()
     parser.add_argument("--config_path",help="Path to save config",required=True)
+    parser.add_argument("--feature_dropout",type=float,default=0)
     parser.add_argument("--cnn_act",default='NoisyReLU')
     parser.add_argument("--cnn_out",type=int,default=16)
     parser.add_argument("--cnn_kernel",type=int,default=16)
@@ -28,7 +29,7 @@ if __name__ == '__main__':
     parser.add_argument("--norm_mode",default='after_activation')
     parser.add_argument("--norm_type",type=str)
     parser.add_argument("--out_channels",type=int,default=3)
-    parser.add_argument("--rnn_dropout",type=float,default=0)    
+    parser.add_argument("--relation_dropout",type=float,default=0)
     parser.add_argument("--use_common_atten",action='store_true')
     parser.add_argument("--not_use_first_atten",action='store_true')
     parser.add_argument("--not_use_second_atten",action='store_true')
@@ -44,6 +45,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     builder = SeqAnnBuilder()
+    builder.feature_block_config['dropout'] = args.feature_dropout
     builder.feature_block_config['stack_cnn_class'] = args.stack_cnn_class
     builder.feature_block_config['num_layers'] = args.cnn_num
     builder.feature_block_config['norm_mode'] = args.norm_mode
@@ -65,7 +67,7 @@ if __name__ == '__main__':
     builder.relation_block_config['train_init_value'] = args.train_init_value
     builder.relation_block_config['customized_gru_init'] = args.customized_gru_init
     builder.relation_block_config['customized_cnn_init'] = args.customized_rnn_cnn
-    builder.relation_block_config['dropout'] = args.rnn_dropout
+    builder.relation_block_config['dropout'] = args.relation_dropout
     builder.relation_block_config['use_common_atten'] = args.use_common_atten
     builder.relation_block_config['use_first_atten'] = not args.not_use_first_atten
     builder.relation_block_config['use_second_atten'] = not args.not_use_second_atten

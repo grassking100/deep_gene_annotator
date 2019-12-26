@@ -13,7 +13,7 @@ if __name__ == '__main__':
     parser.add_argument("--use_naive",action="store_true")
     parser.add_argument("--use_gffcompare",action="store_true")
     parser.add_argument("--use_seqlogo",action="store_true")
-    parser.add_argument("--no_merge",action="store_true")
+    parser.add_argument("--merge",action="store_true")
     parser.add_argument("--map_order_config_path")
 
     args = parser.parse_args()
@@ -30,7 +30,7 @@ from sequence_annotation.genome_handler.seq_container import EmptyContainerExcep
 from sequence_annotation.process.seq_ann_engine import SeqAnnEngine
 from sequence_annotation.process.inference import seq_ann_inference
 from sequence_annotation.process.callback import SeqLogo,Callbacks
-from sequence_annotation.process.inference import AnnVec2InfoConverter
+from sequence_annotation.process.inference import build_converter
 from sequence_annotation.utils.utils import create_folder, save_as_gff_and_bed, gffcompare_command, read_gff
 from main.utils import load_data, get_model, get_executor,ANN_TYPES,GENE_MAP
 
@@ -46,7 +46,7 @@ def _fix_gff(dna_dict,ann_vec2info_converter,input_gff_path,output_root):
     except EmptyContainerException:
         raise 
 
-def _fix_gff_and_compare(origin_path,fixed_path,dna_dict,ann_vec2info_converter,no_merge):
+def _fix_gff_and_compare(origin_path,fixed_path,dna_dict,ann_vec2info_converter,merge):
     input_gff_path = os.path.join(origin_path,'test','test_gffcompare_1.gff3')
     answer_gff_path = os.path.join(origin_path,'test',"answers.gff3")
     predict_gff_path = os.path.join(fixed_path,"test_gffcompare_1.gff3")
@@ -54,12 +54,12 @@ def _fix_gff_and_compare(origin_path,fixed_path,dna_dict,ann_vec2info_converter,
     if os.path.exists(input_gff_path):
         try:
             _fix_gff(dna_dict,ann_vec2info_converter,input_gff_path,fixed_path)
-            gffcompare_command(answer_gff_path,predict_gff_path,prefix_path,no_merge=no_merge)
+            gffcompare_command(answer_gff_path,predict_gff_path,prefix_path,merge=merge)
         except EmptyContainerException:
             pass
 
 def test(saved_root,model,executor,data,batch_size=None,
-         use_gffcompare=False,no_merge=True,
+         use_gffcompare=False,merge=False,
          ann_vec2info_converter=None,use_seqlogo=False,**kwargs):
     
     if use_gffcompare and use_seqlogo:
@@ -81,7 +81,7 @@ def test(saved_root,model,executor,data,batch_size=None,
     if use_gffcompare and ann_vec2info_converter is not None:
         test_by_fixed_path = os.path.join(saved_root,'test_by_fixed')
         create_folder(test_by_fixed_path)    
-        _fix_gff_and_compare(saved_root,test_by_fixed_path,data[0],ann_vec2info_converter,no_merge)
+        _fix_gff_and_compare(saved_root,test_by_fixed_path,data[0],ann_vec2info_converter,merge)
     
     return worker
 
@@ -94,7 +94,7 @@ def main(saved_root,data_path,model_config_path,model_weights_path=None,
     model = get_model(model_config_path,model_weights_path=model_weights_path)
     executor = get_executor(model,use_naive=use_naive,set_loss=False,set_optimizer=False)
     data = dd.io.load(data_path)
-    ann_vec2info_converter = AnnVec2InfoConverter(ANN_TYPES,GENE_MAP)
+    ann_vec2info_converter = build_converter(ANN_TYPES,GENE_MAP)
     worker = test(saved_root,model,executor,data,ann_vec2info_converter=ann_vec2info_converter,
                   **map_order_config,**kwargs)
 

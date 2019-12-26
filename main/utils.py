@@ -23,7 +23,8 @@ def copy_path(root,path):
 
 def select_data_by_length_each_type(fasta,ann_seqs,**kwargs):
     if len(set(ANN_TYPES) - set(ann_seqs.ANN_TYPES)) > 0:
-        raise Exception("ANN_TYPES should include {}, but got {}".format(ANN_TYPES,ann_seqs.ANN_TYPES))
+        raise Exception("ANN_TYPES should include {}, but "
+                        "got {}".format(ANN_TYPES,ann_seqs.ANN_TYPES))
     multiple_exon_transcripts = []
     single_exon_transcripts = []
     no_transcripts = []
@@ -69,14 +70,16 @@ def load_data(fasta_path,ann_seqs_path,id_paths,select_each_type=False,**kwargs)
     
     return data
 
-def get_executor(model,optim_type=None,use_native=True,set_loss=True,set_optimizer=True,
-                 label_num=None,predict_label_num=None,answer_label_num=None,output_label_num=None,
+def get_executor(model,optim_type=None,use_native=True,
+                 set_loss=True,set_optimizer=True,
+                 label_num=None,predict_label_num=None,
+                 answer_label_num=None,output_label_num=None,
                  grad_clip=None,grad_norm=None,
                  learning_rate=None,reduce_lr_on_plateau=False,
                  gamma=None,intron_coef=None,other_coef=None,nontranscript_coef=None,
-                 transcript_answer_mask=True,transcript_output_mask=False,mean_by_mask=False,
-                 target_weight_decay=None,weight_decay_name=None,
-                 **kwargs):
+                 transcript_answer_mask=True,transcript_output_mask=False,
+                 mean_by_mask=False,target_weight_decay=None,weight_decay_name=None,
+                 executor_weights_path=None,**kwargs):
 
     builder = ExecutorBuilder(use_native=use_native,label_num=label_num,
                               predict_label_num=predict_label_num,
@@ -114,7 +117,8 @@ def get_executor(model,optim_type=None,use_native=True,set_loss=True,set_optimiz
                          transcript_output_mask=transcript_output_mask,
                          mean_by_mask=mean_by_mask)
         
-    return builder.build()
+    executor = builder.build(executor_weights_path=executor_weights_path)
+    return executor
 
 def get_model(path_or_json,model_weights_path=None,frozen_names=None):
     builder = SeqAnnBuilder()

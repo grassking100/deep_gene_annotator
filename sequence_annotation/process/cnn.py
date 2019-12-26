@@ -136,7 +136,7 @@ class Conv1d(nn.Conv1d,BasicModel):
 
 class CANBlock(BasicModel):
     def __init__(self,in_channels,norm_mode=None,norm_type=None,
-                 activation_function=None,**kwargs):
+                 activation_function=None,dropout=None,**kwargs):
         super().__init__()
         self.name = ""
         self.in_channels = in_channels
@@ -145,7 +145,8 @@ class CANBlock(BasicModel):
         if norm_mode in ["before_cnn","after_cnn","after_activation",None]:
             self.norm_mode = norm_mode
         else:
-            raise Exception('The norm_mode should be "before_cnn", "after_cnn", None, or "after_activation", but got {}'.format(norm_mode))
+            raise Exception("The norm_mode should be \"before_cnn\", \"after_cnn\","
+                            "None, or \"after_activation\", but got {}".format(norm_mode))
         if activation_function is None:
             self.activation_function = NoisyReLU()
         else:
@@ -161,6 +162,7 @@ class CANBlock(BasicModel):
             in_channel = {"before_cnn":self.in_channels,"after_cnn":self.out_channels,
                           "after_activation":self.out_channels}
             self.norm = self.norm_type(in_channel[self.norm_mode])
+        self.dropout = dropout or 0
         self.reset_parameters()
 
     def _normalized(self,x,lengths):
@@ -180,6 +182,8 @@ class CANBlock(BasicModel):
         self.update_distribution(x,key='post_act_x_{}'.format(self.name))
         if self.norm_mode=='after_activation':
             x = self._normalized(x,lengths)
+        if self.dropout is not None and self.training:
+            x = F.dropout(x,self.dropout,self.training)
         return x,lengths,weights,mask
     
     def get_config(self):
@@ -189,6 +193,7 @@ class CANBlock(BasicModel):
         config['norm_type'] = str(self.norm_type)
         config['norm_mode'] = self.norm_mode
         config['activation_function'] = str(self.activation_function)
+        config['dropout'] = self.dropout
         return config
 
 class StackCNN(BasicModel):
