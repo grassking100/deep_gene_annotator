@@ -39,9 +39,7 @@ def region_gene_count_filter(region_bed,gene_bed,upstream_distance,
             if count <= 1:
                 valid_bed_items.append(region)
             else:
-                print(count,region)
                 invalid_bed_items.append(region)
-                raise Exception("")
     valid_bed = pd.DataFrame.from_dict(valid_bed_items)
     invalid_bed = pd.DataFrame.from_dict(invalid_bed_items)
     return valid_bed, invalid_bed

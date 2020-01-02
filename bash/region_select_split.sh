@@ -1,36 +1,26 @@
 #!/bin/bash
 ## function print usage
 usage(){
- echo "Usage: Pipeline select and split regions"
+ echo "Usage: The pipeline to select and split regions"
  echo "  Arguments:"
- echo "    -u  <int>     Upstream distance"
- echo "    -d  <int>     Downstream distance"
- echo "    -r  <string>  Directory of Arabidopsis thaliana data"
- echo "    -o  <string>  Directory of preprocess folder"
+ echo "    -g  <string>  Path of genome fasta"
+ echo "    -t  <string>  Path of id_convert_table"
  echo "    -o  <string>  Directory of output folder"
- echo "    -s  <string>  Source name"
  echo "  Options:"
- echo "    -m  <bool>    Merge regions which are overlapped                 [default: false]"
- echo "    -c  <bool>    Remove gene with altenative donor site and accept site    [default: false]"
- echo "    -x  <bool>    Remove gene with non-coding transcript    [default: false]"
  echo "    -h            Print help message and exit"
- echo "Example: bash region_select_split.sh -u 10000 -d 10000 -p /home/io/preprocess -o ./data/2019_07_12 -s Arabidopsis_1"
+ echo "    -n  <int>     Fold number (exclude testing dataset), if it is not provided then it would decided by chromosome number"
+ echo "Example: bash region_select_split.sh -i /home/io/preprocess/id_convert.tsv -o ./data/2019_07_12 -g genome.fasta"
  echo ""
 }
 
-while getopts u:d:r:p:o:s:mcxh option
+while getopts g:t:o:n:h option
  do
   case "${option}"
   in
-   u )upstream_dist=$OPTARG;;
-   d )downstream_dist=$OPTARG;;
-   r )root=$OPTARG;;
-   p )preprocessed_root=$OPTARG;;
+   g )genome_path=$OPTARG;;
+   t )id_convert_table_path=$OPTARG;;
    o )saved_root=$OPTARG;;
-   s )source_name=$OPTARG;;
-   m )merge_overlapped=true;;
-   c )remove_alt_site=true;;
-   x )remove_non_coding=true;;
+   n )fold_num=$OPTARG;;
    h )usage; exit 1;;
    : )echo "Option $OPTARG requires an argument"
       usage; exit 1
@@ -41,26 +31,14 @@ while getopts u:d:r:p:o:s:mcxh option
  esac
 done
 
-if [ ! "$root" ]; then
-    echo "Missing option -r"
+if [ ! "$genome_path" ]; then
+    echo "Missing option -g"
     usage
     exit 1
 fi
 
-if [ ! "$preprocessed_root" ]; then
-    echo "Missing option -p"
-    usage
-    exit 1
-fi
-
-if [ ! "$upstream_dist" ]; then
-    echo "Missing option -u"
-    usage
-    exit 1
-fi
-
-if [ ! "$downstream_dist" ]; then
-    echo "Missing option -w"
+if [ ! "$id_convert_table_path" ]; then
+    echo "Missing option -t"
     usage
     exit 1
 fi
@@ -71,58 +49,14 @@ if [ ! "$saved_root" ]; then
     exit 1
 fi
 
-if [ ! "$source_name" ]; then
-    echo "Missing option -s"
-    usage
-    exit 1
-fi
-
-if [ ! "$merge_overlapped" ]; then
-    merge_overlapped=false
-fi
-
-if [ ! "$remove_alt_site" ]; then
-    remove_alt_site=false
-fi
-
-if [ ! "$remove_non_coding" ]; then
-    remove_non_coding=false
-fi
-
+#Set parameter
 bash_root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 script_root=$bash_root/..
 preprocess_main_root=$script_root/sequence_annotation/preprocess
 
 echo "Start of program"
 #Create folder
-echo "Step 1: Create folder"
 mkdir -p $saved_root
-
-#Set parameter
-genome_path=$root/raw_data/araport_11_Arabidopsis_thaliana_Col-0_rename.fasta
-id_convert_table_path=$preprocessed_root/id_convert.tsv
-processed_bed_path=$preprocessed_root/processed.bed
-
-if [ ! -e "$saved_root/result/selected_region.bed" ]; then
-    command="$bash_root/process_data.sh -u $upstream_dist -d $downstream_dist -g $genome_path -i $preprocessed_root/coordinate_consist.bed -o $saved_root -s $source_name -t $id_convert_table_path -b $processed_bed_path"
-
-    if $merge_overlapped; then
-        command="${command} -m"
-    fi
-    
-    if $remove_alt_site; then
-        command="${command} -c"
-    fi
-    
-    if $remove_non_coding; then
-        command="${command} -x"
-    fi
-    
-    echo $command
-    bash $command
-else
-    echo "The program process_data.sh is skipped"
-fi
 
 result_num=$(wc -l < $saved_root/result/selected_region.bed )
 
@@ -139,7 +73,11 @@ if  (( $result_num > 0 )) ; then
     split_root=$saved_root/split
     mkdir -p $split_root
 
-    python3 $preprocess_main_root/split.py --region_bed_path $saved_root/result/selected_region_both_strand.bed --region_rename_table_path $saved_root/result/region_rename_table_both_strand.tsv --fai_path $genome_path.fai --splitted_id_root $split_root
+    if [ ! "$fold_num" ]; then
+        python3 $preprocess_main_root/split.py --region_rename_table_path $saved_root/result/region_rename_table_both_strand.tsv --fai_path $genome_path.fai --saved_root $split_root
+    else
+        python3 $preprocess_main_root/split.py --region_rename_table_path $saved_root/result/region_rename_table_both_strand.tsv --fai_path $genome_path.fai --saved_root $split_root --fold_num $fold_num
+    fi
 
     for path in $(find $split_root/* -name '*.tsv');
     do
@@ -159,7 +97,11 @@ if  (( $result_num > 0 )) ; then
     single_strand_split_root=$saved_root/single_strand_split
     mkdir -p $single_strand_split_root
 
-    python3 $preprocess_main_root/split.py --region_bed_path $saved_root/result/selected_region.bed --region_rename_table_path $saved_root/result/region_rename_table.tsv --fai_path $genome_path.fai --splitted_id_root $single_strand_split_root
+    if [ ! "$fold_num" ]; then
+        python3 $preprocess_main_root/split.py --region_rename_table_path $saved_root/result/region_rename_table.tsv --fai_path $genome_path.fai --saved_root $single_strand_split_root
+    else
+        python3 $preprocess_main_root/split.py --region_rename_table_path $saved_root/result/region_rename_table.tsv --fai_path $genome_path.fai --saved_root $single_strand_split_root --fold_num $fold_num
+    fi
 
     for path in $(find $single_strand_split_root/* -name '*.tsv');
     do

@@ -179,21 +179,14 @@ def block_performance(predict,answer,round_value=None):
         _set_gene_intron_status(gff)
 
         parent_dict = dict(zip(gff['id'],gff['parent']))
-        #gff.loc[gff['feature'].isin(GENE_TYPES),'belong_gene'] = gff['id']
-        #gff.loc[gff['feature'].isin(RNA_TYPES),'belong_gene'] = gff['parent']
         parents = []
         is_exon_intron = gff['feature'].isin(EXON_TYPES+['intron'])
         for parent in gff[is_exon_intron]['parent']:
             parents.append(parent_dict[parent])
         gff.loc[is_exon_intron,'belong_gene'] = parents
         
-        
     _compare_block(predict,answer,EXON_TYPES+['intron'])
     _compare_internal_exon(predict,answer)
-    
-    predict[['coord_id','partner_gene','belong_gene','match']].to_csv('predict.tsv',sep='\t',index=None)
-    answer[['coord_id','partner_gene','belong_gene','match']].to_csv('answer.tsv',sep='\t',index=None)
-    
     _compare_chain_block(predict,answer,EXON_TYPES,'match')
     _compare_chain_block(predict,answer,['intron'],'intron_chain_match')
 

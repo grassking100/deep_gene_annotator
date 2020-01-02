@@ -87,12 +87,16 @@ if [ ! "$remove_inner_end" ]; then
     remove_inner_end=false
 fi
 
-
+#Set parameter
+genome_path=$root/raw_data/araport_11_Arabidopsis_thaliana_Col-0_rename.fasta
 preprocessed_root=$saved_root/preprocessed
 processed_root=$saved_root/processed
+id_convert_table_path=$preprocessed_root/id_convert.tsv
+processed_bed_path=$preprocessed_root/processed.bed
 bash_root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 script_root=$bash_root/..
 preprocess_main_root=$script_root/sequence_annotation/preprocess
+
 mkdir -p $saved_root
 
 command="$bash_root/arabidopsis_data_prepair.sh -u $upstream_dist -d $downstream_dist -r $root -o $preprocessed_root -s $source_name"
@@ -102,19 +106,28 @@ fi
 echo $command
 bash $command
 
-command="$bash_root/region_select_split.sh -u $upstream_dist -d $downstream_dist -r $root -p $preprocessed_root -o $processed_root -s $source_name"
+if [ ! -e "$processed_root/result/selected_region.bed" ]; then
+    command="$bash_root/process_data.sh -u $upstream_dist -d $downstream_dist -g $genome_path -i $preprocessed_root/coordinate_consist.bed -o $processed_root -s $source_name -t $id_convert_table_path -b $processed_bed_path"
 
-if $merge_overlapped; then
-    command="${command} -m"
+    if $merge_overlapped; then
+        command="${command} -m"
+    fi
+    
+    if $remove_alt_site; then
+        command="${command} -c"
+    fi
+    
+    if $remove_non_coding; then
+        command="${command} -x"
+    fi
+    
+    echo $command
+    bash $command
+else
+    echo "The program process_data.sh is skipped"
 fi
 
-if $remove_alt_site; then
-    command="${command} -c"
-fi
-
-if $remove_non_coding; then
-    command="${command} -x"
-fi
+command="$bash_root/region_select_split.sh -g $genome_path -t $preprocessed_root/id_convert.tsv -o $processed_root"
 
 echo $command
 bash $command
