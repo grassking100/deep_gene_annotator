@@ -1,5 +1,8 @@
+import sys
 import json
 from argparse import ArgumentParser
+sys.path.append("/home/sequence_annotation")
+from sequence_annotation.utils.utils import write_json
 
 if __name__ == '__main__':
     parser = ArgumentParser()
@@ -34,5 +37,4 @@ if __name__ == '__main__':
     config = vars(args)
     del config['config_path']
     
-    with open(config_path,"w") as fp:
-        json.dump(config, fp, indent=4)
+    write_json(config,config_path)

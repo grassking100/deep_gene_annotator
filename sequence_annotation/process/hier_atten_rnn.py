@@ -34,7 +34,7 @@ class AttenGRU(BasicModel):
 
         self.reset_parameters()
         
-    def forward(self,features,lengths,target_feature=None):
+    def forward(self,features,lengths,target_feature=None,**kwargs):
         features = self.atten(features,lengths,target_feature=target_feature)
         result = self.rnn(features,lengths)
         self.update_distribution(self.atten.saved_distribution)
@@ -106,7 +106,7 @@ class HierAttenGRU(BasicModel):
             config['common_atten'] = self.common_atten.get_config()
         return config
         
-    def forward(self,x,lengths):
+    def forward(self,x,lengths,answers=None,**kwargs):
         if self.use_common_atten:
             common_atten_value = self.common_atten(x,lengths)
             x = common_atten_value
@@ -133,3 +133,21 @@ class HierAttenGRU(BasicModel):
         self.update_distribution(gated_result_1,key='gated_result_1')
         self.update_distribution(result,key='gated_stack_result')
         return result
+
+class HierGRU(BasicModel):
+    def __init__(self,in_channels,**kwargs):
+        super().__init__()
+        for key in ['use_first_atten','use_second_atten','use_common_atten']:
+            if key in kwargs:
+                del kwargs[key]
+        self.rnn = HierAttenGRU(in_channels,use_first_atten=False,use_second_atten=False,
+                                use_common_atten=False,**kwargs)
+        
+    def get_config(self):
+        config = self.rnn.get_config()
+        config.update(super().get_config())
+        
+    def forward(self,x,lengths,**kwargs):
+        x = self.rnn(x,lengths,**kwargs)
+        self.update_distribution(self.rnn.saved_distribution)
+        return x

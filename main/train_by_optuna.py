@@ -45,7 +45,7 @@ import torch
 torch.backends.cudnn.enabled = True
 torch.backends.cudnn.benchmark = True
 sys.path.append("/home/sequence_annotation")
-from sequence_annotation.utils.utils import write_fasta, create_folder
+from sequence_annotation.utils.utils import write_fasta, create_folder,write_json
 from sequence_annotation.process.optuna import add_exist_trials
 from sequence_annotation.process.callback import OptunaCallback
 from sequence_annotation.genome_handler.ann_genome_processor import simplify_genome
@@ -82,14 +82,11 @@ def evaluate_generator(data,executor_config,epoch=None,batch_size=None):
         with open(path,'wb') as fp:
             pickle.dump(frozen, fp)
         path = os.path.join(saved_root,'trial_{}_model_config.json'.format(trial_number))
-        with open(path,"w") as fp:
-            json.dump(model_config,fp, indent=4)
+        write_json(model_config,path)
         path = os.path.join(saved_root,'trial_{}_executor_config.json'.format(trial_number))
-        with open(path,"w") as fp:
-            json.dump(executor_config,fp, indent=4)
+        write_json(executor_config,path)
         path = os.path.join(saved_root,'trial_{}_params.json'.format(trial_number))
-        with open(path,"w") as fp:
-            json.dump(params,fp, indent=4)
+        write_json(params,path)
 
         train_data, val_data = data
         model = get_model(model_config)
@@ -173,8 +170,7 @@ if __name__ == '__main__':
     #Save setting
     copy_path(args.saved_root,args.executor_config_path)
     setting_path = os.path.join(args.saved_root,"main_setting.json")
-    with open(setting_path,"w") as fp:
-        json.dump(config, fp, indent=4)
+    write_json(config,setting_path)
 
     #Load, parse and save data
     train_data = dd.io.load(args.train_data_path)

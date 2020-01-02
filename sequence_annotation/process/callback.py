@@ -9,7 +9,7 @@ import pandas as pd
 import torch
 import seqlogo
 from skimage.filters import threshold_otsu
-from ..utils.utils import create_folder,write_gff,gff_to_bed_command,gffcompare_command,save_as_gff_and_bed
+from ..utils.utils import create_folder,write_gff,gff_to_bed_command,gffcompare_command,save_as_gff_and_bed,write_json
 from ..utils.seq_converter import DNA_CODES
 from ..genome_handler.seq_container import EmptyContainerException
 from .metric import calculate_metric,categorical_metric,contagion_matrix
@@ -375,8 +375,7 @@ class Recorder(DataCallback):
             self._data[type_].append(value)
 
         if self.path is not None:
-            with open(self.path,'w') as fp:
-                json.dump(self.data,fp, indent=4)
+            write_json(self.data,self.path)
 
     @property
     def data(self):

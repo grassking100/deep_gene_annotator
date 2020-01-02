@@ -180,7 +180,8 @@ def calculate_metric(data,prefix=None,label_names=None,calculate_precision=True,
         data["{}macro_F1".format(prefix)] = macro_F1
 
     if round_value is not None:
-        for key,values in data.items():
-            data[key] = round(values,round_value)
+        for key,value in data.items():
+            if isinstance(value,float):
+                data[key] = round(value,round_value)
     return data
 

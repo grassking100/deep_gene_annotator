@@ -31,7 +31,7 @@ from sequence_annotation.process.seq_ann_engine import SeqAnnEngine
 from sequence_annotation.process.inference import seq_ann_inference
 from sequence_annotation.process.callback import SeqLogo,Callbacks
 from sequence_annotation.process.inference import build_converter
-from sequence_annotation.utils.utils import create_folder, save_as_gff_and_bed, gffcompare_command, read_gff
+from sequence_annotation.utils.utils import create_folder, save_as_gff_and_bed, gffcompare_command, read_gff, write_json
 from main.utils import load_data, get_model, get_executor,ANN_TYPES,GENE_MAP
 
 def _fix_gff(dna_dict,ann_vec2info_converter,input_gff_path,output_root):
@@ -104,8 +104,7 @@ if __name__ == '__main__':
     create_folder(args.saved_root)
     setting = vars(args)
     setting_path = os.path.join(args.saved_root,"test_setting.json")
-    with open(setting_path,"w") as fp:
-        json.dump(setting, fp, indent=4)
+    write_json(setting,setting_path)
 
     kwargs = dict(setting)
     del kwargs['data_path']

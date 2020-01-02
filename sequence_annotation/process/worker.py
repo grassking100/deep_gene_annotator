@@ -8,11 +8,11 @@ import torch
 import numpy as np
 from time import gmtime, strftime
 from abc import ABCMeta, abstractmethod
+from ..utils.utils import create_folder,print_progress,write_json
 from .data_generator import SeqDataset,SeqGenerator
 from .executor import BasicExecutor
 from .callback import Accumulator, Recorder, Callbacks, SignalSaver
 from .warning import WorkerProtectedWarning
-from ..utils.utils import create_folder,print_progress
 
 def _batch_process(model,seq_data,process,callbacks):
     torch.cuda.empty_cache()
@@ -172,8 +172,8 @@ class TrainWorker(Worker):
                     attr = attr.get_config()
                 self._settings[key] = attr
 
-            with open(os.path.join(self.path,"train_worker_setting.json"),'w') as fp:
-                json.dump(self._settings,fp, indent=4)
+            path = os.path.join(self.path,"train_worker_setting.json")
+            write_json(self._settings,path)
 
     def _before_work(self):
         self._train_loader = self._train_generator(SeqDataset(self.data['training']))
@@ -286,8 +286,7 @@ class TrainWorker(Worker):
                 best_path = os.path.join(self.path,"best_record.json")
                 best_result = {'best_epoch':self.best_epoch,
                                'best_result':self.best_result}
-                with open(best_path,'w') as fp:
-                    json.dump(best_result,fp)
+                write_json(best_result,best_path)
 
         end_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
         time_messgae = "End time at {}".format(end_time)
@@ -315,8 +314,9 @@ class TestWorker(Worker):
                 if hasattr(attr,'get_config'):
                     attr = attr.get_config()
                 self._settings[key] = attr
-            with open(os.path.join(self.path,"test_worker_setting.json"),'w') as fp:
-                json.dump(self._settings,fp, indent=4)
+                
+            path = os.path.join(self.path,"test_worker_setting.json")
+            write_json(self._settings,path)
             
     def _before_work(self):
         self._loader = self._generator(SeqDataset(self.data['testing']))

@@ -5,16 +5,16 @@ import numpy as np
 import torch
 import os
 from torch.utils.tensorboard import SummaryWriter
+from ..process.data_processor import AnnSeqProcessor
+from ..utils.utils import split,get_subdict,create_folder,write_json
+from ..genome_handler.utils import ann_count
+from ..utils.seq_converter import SeqConverter
+from ..genome_handler import ann_seq_processor
 from .worker import TrainWorker,TestWorker
 from .tensorboard_writer import TensorboardWriter
 from .callback import CategoricalMetric,TensorboardCallback
 from .callback import GFFCompare,SeqFigCallback, Callbacks,ContagionMatrix
 from .inference import basic_inference
-from ..process.data_processor import AnnSeqProcessor
-from ..utils.utils import split,get_subdict,create_folder
-from ..genome_handler.utils import ann_count
-from ..utils.seq_converter import SeqConverter
-from ..genome_handler import ann_seq_processor
 from .data_generator import SeqGenerator
 from .checkpoint import use_checkpoint
 
@@ -197,14 +197,11 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
             model_config_path = os.path.join(self._path,"model_config.json")
             model_component_path = os.path.join(self._path,"model_component.txt")
             exec_config_path = os.path.join(self._path,"executor_config.json")
-            with open(setting_path,'w') as fp:
-                json.dump(self._settings,fp, indent=4)
-            with open(model_config_path,'w') as fp:
-                json.dump(model.get_config(),fp, indent=4)
-            with open(model_component_path,'w') as fp:
-                fp.write(str(model))
-            with open(exec_config_path,'w') as fp:
-                json.dump(executor.get_config(),fp, indent=4)
+            
+            write_json(self._settings,setting_path)
+            write_json(model.get_config(),model_config_path)
+            write_json(str(model),model_component_path)
+            write_json(executor.get_config(),exec_config_path)
 
         #Execute worker
         worker.work()
@@ -231,8 +228,8 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
                             path=self._path)
 
         if self._path is not None:
-            fp = os.path.join(self._path,"test_facade_setting.json")
-            with open(fp,'w') as fp:
-                json.dump(self._settings,fp, indent=4)
+            path = os.path.join(self._path,"test_facade_setting.json")
+            write_json(self._settings,path)
+
         worker.work()
         return worker.result

@@ -10,17 +10,15 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument("--saved_root",help="Root to save file",required=True)
     parser.add_argument("--raw_output_path",help="The path of raw output file in h5 format",required=True)
-    parser.add_argument("--answer_gff_path",help="The path of answer file in GFF format",required=True)
     parser.add_argument("--region_path",help="The path of region data",required=True)
-    parser.add_argument("--fai_path",help="The path of fai file",required=True)
     parser.add_argument("-g","--gpu_id",type=str,default='0',help="GPU to used")
     parser.add_argument("--no_fix",action='store_true')
     parser.add_argument("--transcript_threshold",type=float,default=0.5)
     parser.add_argument("--intron_threshold",type=float,default=0.5)
     parser.add_argument("--length_threshold",type=int,default=0)
     parser.add_argument("--distance",type=int,default=0)
+    parser.add_argument("--gene_length_threshold",type=int,default=0)
     parser.add_argument("--use_native",action="store_true")
-    parser.add_argument("--merge",action="store_true")
     args = parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] =  args.gpu_id
 
@@ -31,7 +29,7 @@ sys.path.append("/home/sequence_annotation")
 from sequence_annotation.preprocess.flip_coordinate import flip_gff
 from sequence_annotation.process.inference import basic_inference,seq_ann_inference,build_converter
 from sequence_annotation.process.utils import get_seq_mask
-from sequence_annotation.utils.utils import create_folder, write_gff, gffcompare_command, read_gff,print_progress,read_fai
+from sequence_annotation.utils.utils import create_folder, write_gff, gffcompare_command, read_gff,print_progress, write_json
 from main.utils import ANN_TYPES,GENE_MAP
 
 basic_inference_ = basic_inference()
@@ -77,33 +75,33 @@ def convert_inference(raw_output_path,**kwargs):
                     outputs['dna_seqs'],outputs['outputs'],**kwargs)
     return gff
 
-def main(saved_root,raw_output_path,answer_gff_path,region_path,fai_path,
-         merge=False,length_threshold=None,distance=None,**kwargs):
+def main(saved_root,raw_output_path,region_path,
+         length_threshold=None,distance=None,
+         gene_length_threshold=None,**kwargs):
     predicted_gff_path = os.path.join(saved_root,'predicted.gff')
     prefix_path = os.path.join(saved_root,"gffcompare")
     ann_vec2info_converter = build_converter(ANN_TYPES,GENE_MAP,distance=distance,
-                                             length_threshold=length_threshold)
+                                             length_threshold=length_threshold,
+                                             gene_length_threshold=gene_length_threshold)
+    config = ann_vec2info_converter.get_config()
+    config_path = os.path.join(saved_root,"ann_vec2info_converter_config.json")
+    write_json(config,config_path)
     gff = convert_inference(raw_output_path,ann_vec2info_converter=ann_vec2info_converter,**kwargs)
     regions = pd.read_csv(region_path,sep='\t',dtype={'chr':str,'start':int,'end':int})
-    fai = read_fai(fai_path)
-    redefined_gff = flip_gff(gff,regions,fai)
+    redefined_gff = flip_gff(gff,regions)
     write_gff(redefined_gff,predicted_gff_path)
-    gffcompare_command(answer_gff_path,predicted_gff_path,prefix_path,merge=merge)
 
 if __name__ == '__main__':    
     create_folder(args.saved_root)
     setting = vars(args)
     setting_path = os.path.join(args.saved_root,"inference_setting.json")
-    with open(setting_path,"w") as fp:
-        json.dump(setting, fp, indent=4)
+    write_json(setting,setting_path)
 
     kwargs = dict(setting)
     del kwargs['saved_root']
     del kwargs['raw_output_path']
-    del kwargs['answer_gff_path']
     del kwargs['gpu_id']
     del kwargs['region_path']
-    del kwargs['fai_path']
         
-    main(args.saved_root,args.raw_output_path,args.answer_gff_path,
-         args.region_path,args.fai_path,**kwargs)
+    main(args.saved_root,args.raw_output_path,
+         args.region_path,**kwargs)

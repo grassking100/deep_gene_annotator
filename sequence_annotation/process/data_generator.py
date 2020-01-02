@@ -108,7 +108,7 @@ def seq_collate_wrapper(augmentation_max=None,padding_first=False):
                 inputs,answers,lengths = augmentation_seqs(inputs,answers,lengths,augmentation_max)
             inputs = pad_sequences(inputs,padding='post')
             answers = pad_sequences(answers,padding='post')
-        length_order = np.flip(np.argsort(lengths))
+        length_order = np.flip(np.argsort(lengths),axis=0)
         ids = order(ids,length_order)
         inputs = order(inputs,length_order)
         answers = order(answers,length_order)

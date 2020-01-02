@@ -7,7 +7,7 @@ import torch
 from torch import nn
 from ..genome_handler.load_data import load_data
 from ..genome_handler.alt_count import max_alt_count
-from ..utils.utils import write_fasta
+from ..utils.utils import write_fasta, write_json
 from .loss import SeqAnnAltLoss,SeqAnnLoss
 from .executer import BasicExecutor
 from .model import SeqAnnModel,FeatureBlock,RelationBlock,ProjectLayer
@@ -149,8 +149,7 @@ class SpaceEvaluator:
                 model_path = os.path.join(self._saved_root,'paramter_sharing.pth')
                 torch.save(model.state_dict(), model_path)
                 saved_setting = {'path':model_path,self.eval_target:best,'source':id_}
-                with open(paramter_sharing_setting_path,"w") as fp:
-                    json.dump(saved_setting,fp)
+                write_json(saved_setting,paramter_sharing_setting_path)
 
         return {'loss':loss,'status': STATUS_OK,'eval_time': time.time()}
 

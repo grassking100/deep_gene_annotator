@@ -5,35 +5,33 @@ import pandas as pd
 from argparse import ArgumentParser
 
 sys.path.append("/home/sequence_annotation")
-from sequence_annotation.utils.utils import read_gff, read_fai, create_folder, write_gff
+from sequence_annotation.utils.utils import read_gff, read_fai, create_folder, write_gff, write_json
 from sequence_annotation.process.performance import gff_performance,draw_contagion_matrix
+from sequence_annotation.preprocess.utils import get_gff_with_intron
 
 def main(predict_path,answer_path,fai_path,saved_root):
-    predict = read_gff(predict_path)
-    answer = read_gff(answer_path)
+    predict = get_gff_with_intron(read_gff(predict_path))
+    answer = get_gff_with_intron(read_gff(answer_path))
     chrom_lengths = read_fai(fai_path)
     
     for chr_ in set(answer['chr']):
         if chr_ not in list(chrom_lengths.keys()):
             raise Exception(chr_,chrom_lengths)
     
-    result = gff_performance(predict,answer,chrom_lengths,3)
-    base_performance,contagion_matrix,block_performance,error_status = result
+    result = gff_performance(predict,answer,chrom_lengths,5)
+    base_perform,contagion,block_perform,errors,site_p_a_diff,site_a_p_abs_diff = result
     
-    contagion_matrix_path = os.path.join(saved_root,'contagion_matrix.json')
-    with open(contagion_matrix_path,"w") as fp:
-        json.dump(contagion_matrix.tolist(), fp, indent=4)
+    write_json(base_perform,os.path.join(saved_root,'base_performance.json'))
+    
+    write_json(contagion.tolist(),os.path.join(saved_root,'contagion_matrix.json'))
 
-    base_performance_path = os.path.join(saved_root,'base_performance.json')
-    with open(base_performance_path,"w") as fp:
-        json.dump(base_performance, fp, indent=4)
-
-    block_performance_path = os.path.join(saved_root,'block_performance.json')
-    with open(block_performance_path,"w") as fp:
-        json.dump(block_performance, fp, indent=4)
+    write_json(block_perform,os.path.join(saved_root,'block_performance.json'))
         
-    error_status_path = os.path.join(saved_root,'error_status.gff')
-    write_gff(error_status,error_status_path)
+    write_gff(errors, os.path.join(saved_root,'error_status.gff'))
+    
+    write_json(site_p_a_diff,os.path.join(saved_root,'p_a_abs_diff.json'))
+    
+    write_json(site_a_p_abs_diff,os.path.join(saved_root,'a_p_abs_diff.json'))
 
 if __name__ == '__main__':
     parser = ArgumentParser()
@@ -46,10 +44,9 @@ if __name__ == '__main__':
     
     create_folder(args.saved_root)
     
-    config_path = os.path.join(args.saved_root,'config.json')
+    config_path = os.path.join(args.saved_root,'performance_setting.json')
     config = vars(args)
     
-    with open(config_path,"w") as fp:
-        json.dump(config, fp, indent=4)
+    write_json(config,config_path)
 
     main(args.predict_path,args.answer_path,args.fai_path,args.saved_root)

@@ -2,10 +2,12 @@ import sys
 import os
 import errno
 import math
+import json
 import numpy as np
 import pandas as pd
 from Bio import SeqIO
 from pathlib import Path
+from scipy.stats import wilcoxon
 
 preprocess_src_root = '/home/sequence_annotation/sequence_annotation/preprocess'
 
@@ -236,12 +238,12 @@ def gffcompare_command(answer_gff_path,predict_gff_path,prefix_path,merge=False)
         gffcompare_command += ' --no-merge'
     command = gffcompare_command.format(answer_gff_path,predict_gff_path,prefix_path)
     os.system(command)
-    gft_path = '{}.annotated.gtf'.format(prefix_path)
-    loci_path = '{}.annotated.loci'.format(prefix_path)
-    for path in [gft_path,loci_path]:
-        if os.path.exists(path):
-            pass
-            #os.system('rm {}'.format(path))
+    #gft_path = '{}.annotated.gtf'.format(prefix_path)
+    #loci_path = '{}.annotated.loci'.format(prefix_path)
+    #for path in [gft_path,loci_path]:
+    #    if os.path.exists(path):
+    #        pass
+    #        #os.system('rm {}'.format(path))
 
 def save_as_gff_and_bed(gff,gff_path,bed_path):
     write_gff(gff,gff_path)
@@ -250,3 +252,54 @@ def save_as_gff_and_bed(gff,gff_path,bed_path):
 def print_progress(info):
     print(info,end='\r')
     sys.stdout.write('\033[K')
+    
+def write_json(json_,path,mode=None):
+    mode = mode or 'w'
+    with open(path,mode) as fp:
+        json.dump(json_, fp, indent=4,sort_keys=True)
+
+def read_json(path,mode=None):
+    mode = mode or 'r'
+    with open(path,mode) as fp:
+        return json.load(fp)
+    
+def wilcoxon_compare(df,lhs_name,rhs_name,threshold=None):
+    threshold = threshold or 0.05
+    table = []
+    targets = set(df['target'])
+    lhs_mean_name = 'mean({})'.format(lhs_name)
+    rhs_mean_name = 'mean({})'.format(rhs_name)
+    lhs_median_name = 'median({})'.format(lhs_name)
+    rhs_median_name = 'median({})'.format(rhs_name)
+    for target in targets:
+        lhs_values = list(df[(df['target']==target) & (df['name']==lhs_name)]['value'])
+        rhs_values = list(df[(df['target']==target) & (df['name']==rhs_name)]['value'])
+        try:
+            less_p_val = wilcoxon(lhs_values,rhs_values,'pratt',alternative='less')[1]
+            greater_p_val = wilcoxon(lhs_values,rhs_values,'pratt',alternative='greater')[1]
+        except ValueError:
+            print("{}'s p value cannot be calculated".format(target))
+            continue
+        
+        if less_p_val < greater_p_val:
+            alternative ='less'
+            p_val = less_p_val
+        else:
+            alternative ='greater'
+            p_val = greater_p_val
+        
+        p_val = round(p_val,3)
+        item = {}
+        item['target'] = target
+        item[lhs_mean_name] = np.mean(lhs_values)
+        item[rhs_mean_name] = np.mean(rhs_values)
+        item[lhs_median_name] = np.median(lhs_values)
+        item[rhs_median_name] = np.median(rhs_values)
+        item['alternative'] = alternative
+        item['p_val'] = p_val
+        item['pass'] = p_val<=threshold
+        table.append(item)
+
+    return pd.DataFrame.from_dict(table)[['target','alternative','p_val','pass',
+                                           lhs_mean_name,rhs_mean_name,
+                                           lhs_median_name,rhs_median_name]]

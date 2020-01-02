@@ -37,7 +37,7 @@ import torch
 torch.backends.cudnn.enabled = True
 torch.backends.cudnn.benchmark = True
 sys.path.append("/home/sequence_annotation")
-from sequence_annotation.utils.utils import write_fasta, create_folder
+from sequence_annotation.utils.utils import write_fasta, create_folder, write_json
 from sequence_annotation.process.seq_ann_engine import SeqAnnEngine
 from sequence_annotation.process.inference import build_converter
 from sequence_annotation.process.utils import param_num
@@ -156,9 +156,8 @@ if __name__ == '__main__':
     create_folder(args.saved_root)
     #Save setting
     setting_path = os.path.join(args.saved_root,"main_setting.json")
-    with open(setting_path,"w") as fp:
-        setting = vars(args)
-        json.dump(setting, fp, indent=4)
+    setting = vars(args)
+    write_json(setting,setting_path)
 
     copy_path(args.saved_root,sys.argv[0])
     copy_path(args.saved_root,args.model_config_path)

@@ -2,9 +2,9 @@ import sys,os
 sys.path.append(os.path.dirname(__file__)+"/../..")
 import pandas as pd
 try:
-    from sequence_annotation.sequence_annotation.utils.utils import BED_COLUMNS,GFF_COLUMNS
+    from sequence_annotation.sequence_annotation.utils.utils import BED_COLUMNS,GFF_COLUMNS,get_gff_with_attribute
 except:    
-    from sequence_annotation.utils.utils import BED_COLUMNS,GFF_COLUMNS
+    from sequence_annotation.utils.utils import BED_COLUMNS,GFF_COLUMNS,get_gff_with_attribute
 
 GENE_TYPES = ['gene','transposable_element','transposable_element_gene','pseudogene']
 RNA_TYPES = ['mRNA','pseudogenic_tRNA','pseudogenic_transcript','antisense_lncRNA','lnc_RNA',
@@ -139,3 +139,25 @@ def merge_bed_by_coord(bed):
         item['id'] = new_id
         data+=[item]
     return pd.DataFrame.from_dict(data).drop_duplicates()
+
+def get_gff_with_intron(gff):
+    gff=get_gff_with_attribute(gff)
+    ids = set(gff[gff['feature'].isin(RNA_TYPES)]['id'])
+    exons = gff[gff['feature'].isin(EXON_TYPES)]
+    exon_groups = exons.groupby('parent')
+    exon_parents = set(exons['parent'])
+    for id_ in ids:
+        if id_ in exon_parents:
+            item = gff[(gff['id']==id_) & (gff['feature'].isin(RNA_TYPES))].to_dict('record')[0]
+            start,end = item['start'],item['end']
+            exon_group = exon_groups.get_group(id_).sort_values('start')
+            exon_sites = sorted(exon_group['start'].tolist()+exon_group['end'].tolist())
+            for index in range(0,len(exon_sites)-2,2):
+                template = dict(exon_group.to_dict('record')[0])
+                template['feature'] = 'intron'
+                template['id'] = '{}_intron_{}'.format(template['parent'],index+1)
+                template['start'] = exon_sites[index+1]
+                template['end'] = exon_sites[index+2]
+                template['attribute'] = 'ID={};Parent={}'.format(template['id'],template['parent'])
+                gff = gff.append(template,ignore_index=True,verify_integrity=True)
+    return gff

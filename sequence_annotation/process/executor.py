@@ -168,7 +168,7 @@ class BasicExecutor(_Executor):
 
         model.train()
         self.optimizer.zero_grad()
-        outputs,lengths = model(inputs,lengths=lengths)
+        outputs,lengths = model(inputs,lengths=lengths,answers=labels)
         outputs = outputs.float()
         masks = get_seq_mask(lengths)
         predict_result = self.inference(outputs, masks)

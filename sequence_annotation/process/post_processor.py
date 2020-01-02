@@ -14,7 +14,8 @@ def _create_ann_seq(chrom,length,ann_types):
 class GeneAnnProcessor:
     def __init__(self,gene_info_extractor,
                  donor_site_pattern=None,accept_site_pattern=None,
-                 length_threshold=None,distance=None):
+                 length_threshold=None,distance=None,
+                 gene_length_threshold=None):
         """
         distance : int
             Valid distance  
@@ -28,7 +29,8 @@ class GeneAnnProcessor:
         self.donor_site_pattern = donor_site_pattern or 'GT'
         self.accept_site_pattern = accept_site_pattern or 'AG'
         self.length_threshold = length_threshold or 0
-        self.distance = distance or 16
+        self.distance = distance or 0
+        self.gene_length_threshold = gene_length_threshold or 0
         self._ann_types = ['exon','intron','other']
         
     def get_config(self):
@@ -38,6 +40,7 @@ class GeneAnnProcessor:
         config['donor_site_pattern'] = self.donor_site_pattern
         config['accept_site_pattern'] = self.accept_site_pattern
         config['length_threshold'] = self.length_threshold
+        config['gene_length_threshold'] = self.gene_length_threshold
         config['distance'] = self.distance
         config['ann_types'] = self._ann_types
         return config
@@ -91,18 +94,18 @@ class GeneAnnProcessor:
 
     def _process_transcript(self,rna,intron_boundarys,ann_seq):
         rna_boundary = rna['start'],rna['end']
-        length = rna['end']-rna['end']+1
-        #if length >= self.length_threshold:
-        rna_intron_boundarys = []
-        for intron_boundary in intron_boundarys:
-            if rna['start'] <= intron_boundary[0] <= intron_boundary[1] <= rna['end']:
-                rna_intron_boundarys.append(intron_boundary)
-        rna_intron_boundarys = get_fixed_intron_boundary(rna_boundary,rna_intron_boundarys)
-        rna_exon_boundarys = get_exon_boundary(rna_boundary,rna_intron_boundarys)
-        for boundary in rna_exon_boundarys:
-            ann_seq.add_ann('exon',1,boundary[0]-1,boundary[1]-1)
-        for boundary in rna_intron_boundarys:
-            ann_seq.add_ann('intron',1,boundary[0]-1,boundary[1]-1)
+        length = rna['end']-rna['start']+1
+        if length >= self.gene_length_threshold:
+            rna_intron_boundarys = []
+            for intron_boundary in intron_boundarys:
+                if rna['start'] <= intron_boundary[0] <= intron_boundary[1] <= rna['end']:
+                    rna_intron_boundarys.append(intron_boundary)
+            rna_intron_boundarys = get_fixed_intron_boundary(rna_boundary,rna_intron_boundarys)
+            rna_exon_boundarys = get_exon_boundary(rna_boundary,rna_intron_boundarys)
+            for boundary in rna_exon_boundarys:
+                ann_seq.add_ann('exon',1,boundary[0]-1,boundary[1]-1)
+            for boundary in rna_intron_boundarys:
+                ann_seq.add_ann('intron',1,boundary[0]-1,boundary[1]-1)
 
     def process(self,chrom,length,seq,gff):
         """Get fixed AnnSequence

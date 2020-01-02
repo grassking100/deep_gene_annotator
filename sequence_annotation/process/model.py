@@ -4,11 +4,12 @@ from .customized_layer import BasicModel
 from .rnn import GRU, LSTM,GRU_INIT_MODE
 from .customized_rnn import RNN_TYPES, ConcatGRU
 from .attention import ATTENTION_LAYER
-from .hier_atten_rnn import HierAttenGRU,AttenGRU
+from .hier_atten_rnn import HierAttenGRU,AttenGRU,HierGRU
 from .cnn import STACK_CNN_CLASS,Conv1d
 
 RNN_TYPES = dict(RNN_TYPES)
 RNN_TYPES['HierAttenGRU'] = HierAttenGRU
+RNN_TYPES['HierGRU'] = HierGRU
 RNN_TYPES['AttenGRU'] = AttenGRU
 
 class FeatureBlock(BasicModel):
@@ -53,14 +54,14 @@ class RelationBlock(BasicModel):
         config['setting'] = self.rnn.get_config()
         return config
 
-    def forward(self, x, lengths):
+    def forward(self, x, lengths,answers=None):
         #X shape : N,C,L
         if isinstance(x,list):
             for i in range(len(x)):
                 self.update_distribution(x[i],key="pre_rnn_result_{}".format(i))
         else:
             self.update_distribution(x,key="pre_rnn_result")
-        x = self.rnn(x,lengths)
+        x = self.rnn(x,lengths,answers=answers)
         self.update_distribution(self.rnn.saved_distribution)
         self.update_distribution(x,key="pre_last_result")
         return x,lengths
@@ -89,13 +90,13 @@ class SeqAnnModel(BasicModel):
             config['relation_block'] = self.relation_block.get_config()
         return config
 
-    def forward(self, x, lengths):
+    def forward(self, x, lengths,answers=None):
         #X shape : N,C,L
         features,lengths = self.feature_block(x, lengths)
         self.update_distribution(self.feature_block.saved_distribution)
         x = features
         if self.relation_block is not None:
-            x,lengths = self.relation_block(x, lengths)
+            x,lengths = self.relation_block(x, lengths,answers=answers)
             self.update_distribution(self.relation_block.saved_distribution)
         if self.last_act is not None:
             if self.last_act == 'softmax':

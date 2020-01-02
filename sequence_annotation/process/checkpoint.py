@@ -2,6 +2,7 @@ import os
 import json
 import torch
 import warnings
+from ..utils.utils import write_json
 from .warning import WorkerProtectedWarning
 from .utils import get_copied_state_dict
 from .callback import Callback,Callbacks
@@ -30,8 +31,7 @@ def _read_best_status(root,read_path):
 def _write_status(root,saved_path,epoch,relative_path):
     path = os.path.join(root,relative_path)
     status = {"epoch":epoch,"relative_path":relative_path,"path":path}
-    with open(saved_path,"w") as fp:
-        json.dump(status,fp, indent=4)
+    write_json(status,saved_path)
         
 def save_best(best_model_path,best_status_path,best_epoch,best_target,model_weights):
     relative_path = best_model_path.split('/')[-1]
@@ -42,8 +42,7 @@ def save_best(best_model_path,best_status_path,best_epoch,best_target,model_weig
                    "path":best_model_path,
                    'best_target':best_target,
                    'formula':'(self._counter-self.best_epoch) >= self.patient'}
-    with open(best_status_path,"w") as fp:
-        json.dump(best_status,fp, indent=4)
+    write_json(best_status,best_status_path)
 
 class Checkpoint(Callback):
     def __init__(self,path,prefix=None,period=None):
@@ -122,7 +121,7 @@ class ModelCheckpoint(Checkpoint):
                 model_path = model_path_
         if model_path is not None:
             print("Load epoch {}'s model from {}".format(biggest_epoch,model_path))
-            self._worker.model.load_state_dict(torch.load(model_path),strict=False)
+            self._worker.model.load_state_dict(torch.load(model_path),strict=True)
         self._counter = biggest_epoch
 
     def get_config(self,**kwargs):
@@ -322,8 +321,7 @@ def use_checkpoint(path,monitor_target=None,patient=None,period=None):
                 raise Exception()
             best_status['best_target'] = best_target
             print("Write best target, {}, to {}".format(best_target,model_checkpoint.best_status_path))
-            with open(model_checkpoint.best_status_path,"w") as fp:
-                json.dump(best_status,fp, indent=4)
+            write_json(best_status,model_checkpoint.best_status_path)
         
     epoch_start = 0
     if os.path.exists(model_checkpoint.latest_status_path):

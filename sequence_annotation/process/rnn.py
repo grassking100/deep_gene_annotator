@@ -196,7 +196,7 @@ class GRU(_RNN):
     def _create_rnn(self,in_channels,**kwargs):
         return nn.GRU(in_channels,**kwargs)
     
-    def forward(self,x,lengths=None,state=None):
+    def forward(self,x,lengths=None,state=None,**kwargs):
         if lengths is None:
             lengths = [x.shape[2]]*len(x)
         if state is None:
@@ -208,7 +208,7 @@ class LSTM(_RNN):
     def _create_rnn(self,in_channels,**kwargs):
         return nn.LSTM(in_channels,**kwargs)
     
-    def forward(self,x,lengths,state=None):
+    def forward(self,x,lengths,state=None,**kwargs):
         if state is None:
             state = self.init_states.repeat(len(x),1).cuda()
         x = _forward(self.rnn,x,lengths,state,self.batch_first)
@@ -262,7 +262,7 @@ class ProjectedGRU(BasicModel):
         
         return config
         
-    def forward(self,x,lengths,return_intermediate=False):
+    def forward(self,x,lengths,return_intermediate=False,**kwargs):
         post_rnn = self.rnn(x,lengths)
         self.update_distribution(post_rnn,key=self.name)
         if self.norm_type is not None:

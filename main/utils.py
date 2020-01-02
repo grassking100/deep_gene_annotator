@@ -132,7 +132,7 @@ def get_model(path_or_json,model_weights_path=None,frozen_names=None):
     
     if model_weights_path is not None:
         weight = torch.load(model_weights_path)
-        model.load_state_dict(weight,strict=False)
+        model.load_state_dict(weight,strict=True)
         
     frozen_names = frozen_names or []
     for name in frozen_names:
