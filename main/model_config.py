@@ -2,7 +2,7 @@ import os
 import sys
 from argparse import ArgumentParser
 import json
-sys.path.append("/home/sequence_annotation")
+sys.path.append(os.path.dirname(os.path.abspath(__file__+"/..")))
 from sequence_annotation.utils.utils import write_json
 from sequence_annotation.process.model import SeqAnnBuilder
 from sequence_annotation.process.cnn import PADDING_HANDLE

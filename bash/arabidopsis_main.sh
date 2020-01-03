@@ -127,7 +127,5 @@ else
     echo "The program process_data.sh is skipped"
 fi
 
-command="$bash_root/region_select_split.sh -g $genome_path -t $preprocessed_root/id_convert.tsv -o $processed_root"
-
-echo $command
-bash $command
+bash $bash_root/region_select_split.sh -g $genome_path -t $preprocessed_root/id_convert.tsv -p $processed_root -o $processed_root/split
+bash $bash_root/region_select_split.sh -g $genome_path -t $preprocessed_root/id_convert.tsv -p $processed_root -o $processed_root/split_with_strand -s
