@@ -306,11 +306,17 @@ class ExecutorCheckpoint(Checkpoint):
         print("Save last epoch {}'s of executor at {}".format(self._counter,self.last_executor_path))
         _write_status(self.last_status_path,self._counter,self.last_executor_path)
 
+
+def copy_file(source_path,target_path):
+    command = 'cp {} {}'.format(source_path,target_path)
+    os.system(command)
+        
 class ModelExecutorCheckpoint(Callback):
-    def __init__(self,model_checkpoint,executor_checkpoint,prefix=None):
+    def __init__(self,model_checkpoint,executor_checkpoint,checkpoint_root,prefix=None):
         super().__init__(prefix)
         self.model_checkpoint = model_checkpoint
         self.executor_checkpoint = executor_checkpoint
+        self.checkpoint_root = checkpoint_root
         self.callbacks = Callbacks([self.model_checkpoint,self.executor_checkpoint])
         
     @property
@@ -321,10 +327,42 @@ class ModelExecutorCheckpoint(Callback):
         
     def get_config(self,**kwargs):
         config = super().get_config(**kwargs)
+        config['model_checkpoint'] = self.checkpoint_root
         config['model_checkpoint'] = self.model_checkpoint.get_config(**kwargs)
         config['executor_checkpoint'] = self.executor_checkpoint.get_config(**kwargs)
         return config
 
+    def _save_checkpoint(self):
+        create_folder(self.checkpoint_root)
+        for path_dict in self.paths:
+            for dict_ in path_dict.values():
+                patient = None
+                status_path = dict_['status']
+                weights_path = dict_['weights']
+                if os.path.exists(status_path):
+                    status = read_json(status_path)
+                    is_best_related='best_epoch' in status
+                    if is_best_related:
+                        epoch = status['best_epoch']
+                        best_target = status['best_target']
+                        if 'patient' in status:
+                            patient = status['patient']
+                    else:
+                        epoch = status['epoch']
+
+                    new_status_path = status_path.split('/')[-1].split('.')[0]
+                    new_weights_path = weights_path.split('/')[-1].split('.')[0]
+                    new_status_path = '{}_epoch_{}.status'.format(new_status_path,epoch)
+                    new_weights_path = '{}_epoch_{}.pth'.format(new_weights_path,epoch)
+                    new_status_path = os.path.join(self.checkpoint_root,new_status_path)
+                    new_weights_path = os.path.join(self.checkpoint_root,new_weights_path)
+
+                    if is_best_related:
+                        _write_best_status(new_status_path,epoch,best_target,new_weights_path,patient)
+                    else:
+                        _write_status(new_status_path,epoch,new_weights_path)
+                    copy_file(weights_path,new_weights_path)
+    
     def on_work_begin(self,**kwargs):
         self.callbacks.on_work_begin(**kwargs)
         if self.model_checkpoint.counter != self.executor_checkpoint.counter:
@@ -332,9 +370,11 @@ class ModelExecutorCheckpoint(Callback):
             ", got {} and {}".format(self.model_checkpoint.counter,
                                      self.executor_checkpoint.counter)
             raise Exception(message)
+        self._save_checkpoint()
 
     def on_work_end(self):
         self.callbacks.on_work_end()
+        self._save_checkpoint()
 
     def on_epoch_begin(self,**kwargs):
         self.callbacks.on_epoch_begin(**kwargs)
@@ -347,19 +387,16 @@ class ModelExecutorCheckpoint(Callback):
 
     def on_batch_end(self,**kwargs):
         self.callbacks.on_batch_end(**kwargs)
-        
-def copy_file(source_path,target_path):
-    command = 'cp {} {}'.format(source_path,target_path)
-    os.system(command)
-        
+
 def use_checkpoint(path,monitor_target=None,patient=None,period=None):
+    checkpoint_root = os.path.join(path,'checkpoint')
     model_checkpoint = ModelCheckpoint(target=monitor_target,patient=patient,
                                        save_best_weights=True,restore_best_weights=True,
                                        path=path,period=period)
     executor_checkpoint = ExecutorCheckpoint(path=path,period=period)
-    checkpoint = ModelExecutorCheckpoint(model_checkpoint,executor_checkpoint)
+    checkpoint = ModelExecutorCheckpoint(model_checkpoint,executor_checkpoint,checkpoint_root)
     
-    #If best record exist, then write best target to best_model_status.json
+    #If best record exist, then write best target to best_model.status
     best_record_path = os.path.join(path,'best_record.json')
     if model_checkpoint.save_best_weights and os.path.exists(best_record_path):
         with open(model_checkpoint.best_status_path,"r") as fp:
@@ -370,43 +407,11 @@ def use_checkpoint(path,monitor_target=None,patient=None,period=None):
             best_epoch = best_record['best_epoch']
             best_target = best_record['best_result'][model_checkpoint.target]
             if best_epoch != best_status['best_epoch']:
-                raise Exception()
+                raise Exception("Inconsist best epoch between {} and {}".format(best_epoch,best_status['best_epoch']))
             best_status['best_target'] = best_target
             print("Write best target, {}, to {}".format(best_target,model_checkpoint.best_status_path))
             write_json(best_status,model_checkpoint.best_status_path)
 
-    patient = model_checkpoint.patient
-    checkpoint_root = os.path.join(path,'checkpoint')
-    print(checkpoint_root)
-    create_folder(checkpoint_root)
-    for path_dict in checkpoint.paths:
-        for dict_ in path_dict.values():
-            status_path = dict_['status']
-            weights_path = dict_['weights']
-            if os.path.exists(status_path):
-                status = read_json(status_path)
-                is_best_related='best_epoch' in status
-                if is_best_related:
-                    epoch = status['best_epoch']
-                    best_target = status['best_target']
-                    if 'patient' in status:
-                        patient = status['patient']
-                else:
-                    epoch = status['epoch']
-
-                new_status_path = status_path.split('/')[-1].split('.')[0]
-                new_weights_path = weights_path.split('/')[-1].split('.')[0]
-                new_status_path = '{}_epoch_{}.status'.format(new_status_path,epoch)
-                new_weights_path = '{}_epoch_{}.pth'.format(new_weights_path,epoch)
-                new_status_path = os.path.join(checkpoint_root,new_status_path)
-                new_weights_path = os.path.join(checkpoint_root,new_weights_path)
-
-                if is_best_related:
-                    _write_best_status(new_status_path,epoch,best_target,new_weights_path,patient)
-                else:
-                    _write_status(new_status_path,epoch,new_weights_path)
-                copy_file(weights_path,new_weights_path)
-            
     epoch_start = 0
     if os.path.exists(model_checkpoint.latest_status_path):
         with open(model_checkpoint.latest_status_path,"r") as fp:
