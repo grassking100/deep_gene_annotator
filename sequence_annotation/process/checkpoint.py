@@ -2,7 +2,7 @@ import os
 import json
 import torch
 import warnings
-from ..utils.utils import write_json
+from ..utils.utils import write_json,create_folder,read_json
 from .warning import WorkerProtectedWarning
 from .utils import get_copied_state_dict
 from .callback import Callback,Callbacks
@@ -28,22 +28,26 @@ def _read_best_status(root,read_path):
         path = status['path']
     return epoch,best_target,path
           
-def _write_status(root,saved_path,epoch,relative_path):
-    path = os.path.join(root,relative_path)
-    status = {"epoch":epoch,"relative_path":relative_path,"path":path}
+def _write_status(saved_path,epoch,weights_path):
+    relative_path = weights_path.split('/')[-1]
+    status = {"epoch":epoch,"relative_path":relative_path,"path":weights_path}
     write_json(status,saved_path)
-        
-def save_best(best_model_path,best_status_path,best_epoch,best_target,model_weights):
-    relative_path = best_model_path.split('/')[-1]
-    print("Save best model of epoch {} at {}".format(best_epoch,best_model_path))
-    torch.save(model_weights,best_model_path)
+    
+def _write_best_status(saved_path,best_epoch,best_target,weights_path,patient):
+    relative_path = weights_path.split('/')[-1]
     best_status = {'best_epoch':best_epoch,
                    'relative_path':relative_path,
-                   "path":best_model_path,
+                   "path":weights_path,
                    'best_target':best_target,
+                   'patient':patient,
                    'formula':'(self._counter-self.best_epoch) >= self.patient'}
-    write_json(best_status,best_status_path)
-
+    write_json(best_status,saved_path)
+        
+def _save_best(model_path,status_path,best_epoch,best_target,model_weights,patient):
+    print("Save best model of epoch {} at {}".format(best_epoch,model_path))
+    torch.save(model_weights,model_path)
+    _write_best_status(status_path,best_epoch,best_target,model_path,patient)
+    
 class Checkpoint(Callback):
     def __init__(self,path,prefix=None,period=None):
         super().__init__(prefix)
@@ -63,6 +67,10 @@ class Checkpoint(Callback):
         config['path'] = self.path
         config['period'] = self.period
         return config
+    
+    @property
+    def paths(self):
+        pass
 
 class ModelCheckpoint(Checkpoint):
     def __init__(self,path,target=None,optimize_min=True,
@@ -87,6 +95,26 @@ class ModelCheckpoint(Checkpoint):
         self.last_model_path =  os.path.join(self.path,'last_model.pth')
         self.latest_model_path =  os.path.join(self.path,'latest_model.pth')
         self.best_model_path = os.path.join(path,'best_model.pth')
+        
+    @property
+    def paths(self):
+        paths = {}
+        paths['last'] = {'status':self.last_status_path,
+                         'weights':self.last_model_path}
+        
+        paths['best'] = {'status':self.best_status_path,
+                         'weights':self.best_model_path}
+        
+        paths['latest'] = {'status':self.latest_status_path,
+                         'weights':self.latest_model_path}
+        
+        return paths
+
+    def should_stop(self):
+        if self.patient is not None:
+            return (self._counter-self.best_epoch) >= self.patient
+        else:
+            return False
         
     def on_work_begin(self, worker,**kwargs):
         self._worker = worker
@@ -123,6 +151,11 @@ class ModelCheckpoint(Checkpoint):
             print("Load epoch {}'s model from {}".format(biggest_epoch,model_path))
             self._worker.model.load_state_dict(torch.load(model_path),strict=True)
         self._counter = biggest_epoch
+        
+        if self.should_stop():
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore",category=WorkerProtectedWarning)
+                self._worker.is_running = False
 
     def get_config(self,**kwargs):
         config = super().get_config(**kwargs)
@@ -140,7 +173,7 @@ class ModelCheckpoint(Checkpoint):
     @property
     def best_epoch(self):
         return self._best_epoch
-
+    
     def on_epoch_begin(self,counter,**kwargs):
         self._counter = counter
 
@@ -170,39 +203,39 @@ class ModelCheckpoint(Checkpoint):
                 warnings.simplefilter("ignore",category=WorkerProtectedWarning)
                 self._worker.best_epoch = self._best_epoch
             if self.save_best_weights:
-                save_best(self.best_model_path,self.best_status_path,
-                          self.best_epoch,self._best_result,self._model_weights)
+                _save_best(self.best_model_path,self.best_status_path,
+                           self.best_epoch,self._best_result,
+                           self._model_weights,self.patient)
         
-        if self.patient is not None:
-            if (self._counter-self.best_epoch) >= self.patient:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore",category=WorkerProtectedWarning)
-                    self._worker.is_running = False
+        if self.should_stop():
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore",category=WorkerProtectedWarning)
+                self._worker.is_running = False
 
         if (self._counter%self.period) == 0:
             if self.explicit_period:
                 relative_path = 'model_epoch_{}.pth'.format(self._counter)
+                model_path = os.path.join(self.path,relative_path)
             else:
-                relative_path = 'latest_model.pth'
-            model_path = os.path.join(self.path,relative_path)
+                model_path = self.latest_model_path
+
             print("Save model at "+model_path)
             torch.save(self._worker.model.state_dict(),model_path)
-            _write_status(self.path,self.latest_status_path,
-                          self._counter,relative_path)
+            _write_status(self.latest_status_path,self._counter,model_path)
 
     def on_work_end(self):
         torch.save(self._worker.model.state_dict(),self.last_model_path)
         print("Save last model of epoch {} at {}".format(self._counter,self.last_model_path))
-        _write_status(self.path,self.last_status_path,
-                      self._counter,'last_model.pth')
+        _write_status(self.last_status_path,self._counter,self.last_model_path)
 
         print("Best "+str(self.target)+": "+str(self._best_result))
         if self.save_best_weights:
             if self.restore_best_weights:
                 print("Restore best weight of epoch {}".format(self._best_epoch))
                 self._worker.model.load_state_dict(self._model_weights)
-            save_best(self.best_model_path,self.best_status_path,
-                      self.best_epoch,self._best_result,self._model_weights)
+            _save_best(self.best_model_path,self.best_status_path,
+                       self.best_epoch,self._best_result,
+                       self._model_weights,self.patient)
             
 class ExecutorCheckpoint(Checkpoint):
     def __init__(self,path,period=None,prefix=None,explicit_period=False):
@@ -213,7 +246,19 @@ class ExecutorCheckpoint(Checkpoint):
         #Path
         self.last_status_path = os.path.join(self.path,'last_executor.status')
         self.latest_status_path = os.path.join(self.path,'latest_executor.status')
-        self.latest_executor_path =  os.path.join(self.path,'latest_executor.pth')
+        self.latest_executor_path = os.path.join(self.path,'latest_executor.pth')
+        self.last_executor_path =  os.path.join(self.path,'last_executor.pth')
+        
+    @property
+    def paths(self):
+        paths = {}
+        paths['last'] = {'status':self.last_status_path,
+                         'weights':self.last_executor_path}
+
+        paths['latest'] = {'status':self.latest_status_path,
+                         'weights':self.latest_executor_path}
+        
+        return paths
         
     def on_work_begin(self, worker,**kwargs):
         self._executor = worker.executor
@@ -248,21 +293,18 @@ class ExecutorCheckpoint(Checkpoint):
         if (self._counter%self.period) == 0:
             if self.explicit_period:
                 relative_path = 'executor_epoch_{}.pth'.format(self._counter)
+                executor_path = os.path.join(self.path,relative_path)
             else:
-                relative_path = 'latest_executor.pth'
-            executor_path = os.path.join(self.path,relative_path)
+                executor_path = self.latest_executor_path
+
             print("Save epoch {}'s executor at {}".format(self._counter,executor_path))
             torch.save(self._executor_state_dict,executor_path)
-            _write_status(self.path,self.latest_status_path,
-                          self._counter,relative_path)
+            _write_status(self.latest_status_path,self._counter,executor_path)
 
     def on_work_end(self):
-        relative_path = 'last_executor.pth'
-        executor_path =  os.path.join(self.path,relative_path)
-        torch.save(self._executor_state_dict,executor_path)
-        print("Save last epoch {}'s of executor at {}".format(self._counter,executor_path))
-        _write_status(self.path,self.last_status_path,
-                      self._counter,relative_path)
+        torch.save(self._executor_state_dict,self.last_executor_path)
+        print("Save last epoch {}'s of executor at {}".format(self._counter,self.last_executor_path))
+        _write_status(self.last_status_path,self._counter,self.last_executor_path)
 
 class ModelExecutorCheckpoint(Callback):
     def __init__(self,model_checkpoint,executor_checkpoint,prefix=None):
@@ -270,6 +312,12 @@ class ModelExecutorCheckpoint(Callback):
         self.model_checkpoint = model_checkpoint
         self.executor_checkpoint = executor_checkpoint
         self.callbacks = Callbacks([self.model_checkpoint,self.executor_checkpoint])
+        
+    @property
+    def paths(self):
+        paths = [self.executor_checkpoint.paths,
+                 self.model_checkpoint.paths]
+        return paths
         
     def get_config(self,**kwargs):
         config = super().get_config(**kwargs)
@@ -300,6 +348,10 @@ class ModelExecutorCheckpoint(Callback):
     def on_batch_end(self,**kwargs):
         self.callbacks.on_batch_end(**kwargs)
         
+def copy_file(source_path,target_path):
+    command = 'cp {} {}'.format(source_path,target_path)
+    os.system(command)
+        
 def use_checkpoint(path,monitor_target=None,patient=None,period=None):
     model_checkpoint = ModelCheckpoint(target=monitor_target,patient=patient,
                                        save_best_weights=True,restore_best_weights=True,
@@ -322,7 +374,39 @@ def use_checkpoint(path,monitor_target=None,patient=None,period=None):
             best_status['best_target'] = best_target
             print("Write best target, {}, to {}".format(best_target,model_checkpoint.best_status_path))
             write_json(best_status,model_checkpoint.best_status_path)
-        
+
+    patient = model_checkpoint.patient
+    checkpoint_root = os.path.join(path,'checkpoint')
+    print(checkpoint_root)
+    create_folder(checkpoint_root)
+    for path_dict in checkpoint.paths:
+        for dict_ in path_dict.values():
+            status_path = dict_['status']
+            weights_path = dict_['weights']
+            if os.path.exists(status_path):
+                status = read_json(status_path)
+                is_best_related='best_epoch' in status
+                if is_best_related:
+                    epoch = status['best_epoch']
+                    best_target = status['best_target']
+                    if 'patient' in status:
+                        patient = status['patient']
+                else:
+                    epoch = status['epoch']
+
+                new_status_path = status_path.split('/')[-1].split('.')[0]
+                new_weights_path = weights_path.split('/')[-1].split('.')[0]
+                new_status_path = '{}_epoch_{}.status'.format(new_status_path,epoch)
+                new_weights_path = '{}_epoch_{}.pth'.format(new_weights_path,epoch)
+                new_status_path = os.path.join(checkpoint_root,new_status_path)
+                new_weights_path = os.path.join(checkpoint_root,new_weights_path)
+
+                if is_best_related:
+                    _write_best_status(new_status_path,epoch,best_target,new_weights_path,patient)
+                else:
+                    _write_status(new_status_path,epoch,new_weights_path)
+                copy_file(weights_path,new_weights_path)
+            
     epoch_start = 0
     if os.path.exists(model_checkpoint.latest_status_path):
         with open(model_checkpoint.latest_status_path,"r") as fp:

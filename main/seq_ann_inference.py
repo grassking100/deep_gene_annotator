@@ -25,7 +25,7 @@ if __name__ == '__main__':
 import torch
 torch.backends.cudnn.benchmark = True
 from keras.preprocessing.sequence import pad_sequences
-sys.path.append("/home/sequence_annotation")
+sys.path.append(os.path.dirname(os.path.abspath(__file__+"/..")))
 from sequence_annotation.preprocess.flip_coordinate import flip_gff
 from sequence_annotation.process.inference import basic_inference,seq_ann_inference,build_converter
 from sequence_annotation.process.utils import get_seq_mask

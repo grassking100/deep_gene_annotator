@@ -36,7 +36,7 @@ if __name__ == '__main__':
 import torch
 torch.backends.cudnn.enabled = True
 torch.backends.cudnn.benchmark = True
-sys.path.append("/home/sequence_annotation")
+sys.path.append(os.path.dirname(os.path.abspath(__file__+"/..")))
 from sequence_annotation.utils.utils import write_fasta, create_folder, write_json
 from sequence_annotation.process.seq_ann_engine import SeqAnnEngine
 from sequence_annotation.process.inference import build_converter

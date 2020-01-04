@@ -1,5 +1,5 @@
-import sys
-sys.path.append("/home/sequence_annotation")
+import sys,os
+sys.path.append(os.path.dirname(os.path.abspath(__file__+"/..")))
 from sequence_annotation.process.model import SeqAnnBuilder
 
 def _add_cnn(trial,builder,cnn_num,cnn_out,radius):

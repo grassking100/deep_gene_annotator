@@ -226,54 +226,57 @@ class TrainWorker(Worker):
         epoch_info = "Epoch: ({}/{}), Time cost of: {}, {}"
         gradient_warning = "Epoch {}: {} have gradients which are larger than one, the max value is {}"
         print("Start from {} to {}".format(start,end-1))
-        save_distribution = self.model.save_distribution
-        for epoch in range(start,end):
-            self._current_epoch = epoch
-            pre_time = time.time()
-            if self._writer is not None:
-                self._writer.counter = epoch
-            all_callbacks.on_epoch_begin(counter=epoch)
-            self.model.save_distribution=False
-            for index,item in enumerate(self._train_loader):
-                seq_data = SeqDataset(item)
-                train_per_batch(self.model,seq_data,self.executor,self._train_callbacks)
-                status = 100*index/len(self._train_loader)
-                self.print_verbose(batch_info.format(epoch,self._epoch,'training',status))
-                validate_gradient(self.model,message_recorder=self._message_recorder)
-                
-            if self._val_loader is not None:
-                for index,item in enumerate(self._val_loader):
+        if not self.is_running:
+            self.print_verbose("Stop at {}".format(start))
+        else:
+            save_distribution = self.model.save_distribution
+            for epoch in range(start,end):
+                self._current_epoch = epoch
+                pre_time = time.time()
+                if self._writer is not None:
+                    self._writer.counter = epoch
+                all_callbacks.on_epoch_begin(counter=epoch)
+                self.model.save_distribution=False
+                for index,item in enumerate(self._train_loader):
                     seq_data = SeqDataset(item)
-                    evaluate_per_batch(self.model,seq_data,self.executor,self._val_callbacks)
-                    status = 100*index/len(self._val_loader)
-                    self.print_verbose(batch_info.format(epoch,self._epoch,'validating',status))
+                    train_per_batch(self.model,seq_data,self.executor,self._train_callbacks)
+                    status = 100*index/len(self._train_loader)
+                    self.print_verbose(batch_info.format(epoch,self._epoch,'training',status))
+                    validate_gradient(self.model,message_recorder=self._message_recorder)
 
-            self.model.save_distribution = save_distribution
-            train_record = self._train_callbacks.get_data()
-            val_record = self._val_callbacks.get_data()
-            other_record = self._other_callbacks.get_data()
-            if str(train_record['loss']) == 'nan':
-                self._is_running = False
-            if 'val_loss' in val_record.keys() and str(val_record['val_loss']) == 'nan':
-                self._is_running = False
+                if self._val_loader is not None:
+                    for index,item in enumerate(self._val_loader):
+                        seq_data = SeqDataset(item)
+                        evaluate_per_batch(self.model,seq_data,self.executor,self._val_callbacks)
+                        status = 100*index/len(self._val_loader)
+                        self.print_verbose(batch_info.format(epoch,self._epoch,'validating',status))
 
-            record = {}
-            record.update(train_record)
-            record.update(val_record)
-            record.update(other_record)
-            
-            self.executor.on_epoch_end(epoch=epoch,metric=record)
-            self._train_callbacks.on_epoch_end(metric=train_record)
-            self._val_callbacks.on_epoch_end(metric=val_record)
-            self._other_callbacks.on_epoch_end(metric=record)
-            self._recoder.on_epoch_end(metric=record)
+                self.model.save_distribution = save_distribution
+                train_record = self._train_callbacks.get_data()
+                val_record = self._val_callbacks.get_data()
+                other_record = self._other_callbacks.get_data()
+                if str(train_record['loss']) == 'nan':
+                    self._is_running = False
+                if 'val_loss' in val_record.keys() and str(val_record['val_loss']) == 'nan':
+                    self._is_running = False
 
-            time_cost = round(time.time()-pre_time,3)
-            self.print_verbose(epoch_info.format(epoch,self._epoch,time_cost,record))
-            
-            if not self.is_running:
-                self.print_verbose("Stop at {}".format(epoch))
-                break
+                record = {}
+                record.update(train_record)
+                record.update(val_record)
+                record.update(other_record)
+
+                self.executor.on_epoch_end(epoch=epoch,metric=record)
+                self._train_callbacks.on_epoch_end(metric=train_record)
+                self._val_callbacks.on_epoch_end(metric=val_record)
+                self._other_callbacks.on_epoch_end(metric=record)
+                self._recoder.on_epoch_end(metric=record)
+
+                time_cost = round(time.time()-pre_time,3)
+                self.print_verbose(epoch_info.format(epoch,self._epoch,time_cost,record))
+
+                if not self.is_running:
+                    self.print_verbose("Stop at {}".format(epoch))
+                    break
 
         all_callbacks.on_work_end()
 

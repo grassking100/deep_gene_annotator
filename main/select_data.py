@@ -2,7 +2,7 @@ import os
 import sys
 import deepdish as dd
 from argparse import ArgumentParser
-sys.path.append("/home/sequence_annotation")
+sys.path.append(os.path.dirname(os.path.abspath(__file__+"/..")))
 from main.utils import load_data
 
 if __name__ == '__main__':

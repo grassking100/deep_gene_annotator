@@ -4,7 +4,6 @@ import json
 import numpy as np
 import torch
 import os
-from torch.utils.tensorboard import SummaryWriter
 from ..process.data_processor import AnnSeqProcessor
 from ..utils.utils import split,get_subdict,create_folder,write_json
 from ..genome_handler.utils import ann_count
@@ -59,22 +58,22 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         self._path = path
         create_folder(self._path)
         if create_tensorboard:    
-            self._writer = TensorboardWriter(SummaryWriter(path))
+            self._writer = TensorboardWriter(path)
         if with_train:
-            fp = os.path.join(path,"train")
-            create_folder(fp)
+            path_ = os.path.join(path,"train")
+            create_folder(path_)
             if create_tensorboard:
-                self._train_writer = TensorboardWriter(SummaryWriter(fp))
+                self._train_writer = TensorboardWriter(path_)
         if with_val:
-            fp = os.path.join(path,"val")
-            create_folder(fp)
+            path_ = os.path.join(path,"val")
+            create_folder(path_)
             if create_tensorboard:
-                self._val_writer = TensorboardWriter(SummaryWriter(fp))
+                self._val_writer = TensorboardWriter(path_)
         if with_test:
-            fp = os.path.join(path,"test")
-            create_folder(fp)
+            path_ = os.path.join(path,"test")
+            create_folder(path_)
             if create_tensorboard:
-                self._test_writer = TensorboardWriter(SummaryWriter(fp))
+                self._test_writer = TensorboardWriter(path_)
 
     def _record_ann_count(self,name,ann_seqs):
         if ann_seqs is not None:

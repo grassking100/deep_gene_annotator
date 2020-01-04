@@ -296,14 +296,15 @@ class SeqFigCallback(Callback):
 
     def on_epoch_begin(self,counter,**kwargs):
         self._counter = counter
+        if self._counter == 1:
+            self._writer.add_figure("answer_figure",self._answer[0],
+                                    prefix=self._prefix,colors=self.colors,
+                                    labels=self.label_names,title="Answer figure",
+                                    use_stack=True)
 
     def on_work_begin(self,worker,**kwargs):
         self._model = worker.model
         self._executor = worker.executor
-        self._writer.add_figure("answer_figure",self._answer[0],
-                                prefix=self._prefix,colors=self.colors,
-                                labels=self.label_names,title="Answer figure",
-                                use_stack=True)
 
     def on_epoch_end(self,**kwargs):
         #Value's shape should be (1,C,L)

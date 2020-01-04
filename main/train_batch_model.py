@@ -1,7 +1,7 @@
 import os,sys
 import pandas as pd
 from argparse import ArgumentParser
-sys.path.append("/home/sequence_annotation")
+sys.path.append(os.path.dirname(os.path.abspath(__file__+"/..")))
 from sequence_annotation.utils.utils import model_setting_generator, model_settings_generator
 
 train_main_path = 'python3 /home/sequence_annotation/main/train_model.py'

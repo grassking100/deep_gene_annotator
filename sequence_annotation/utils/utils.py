@@ -9,7 +9,7 @@ from Bio import SeqIO
 from pathlib import Path
 from scipy.stats import ttest_rel
 
-preprocess_src_root = '/home/sequence_annotation/sequence_annotation/preprocess'
+preprocess_src_root = os.path.dirname(os.path.abspath(__file__+"/.."))+"/preprocess"
 
 BED_COLUMNS = ['chr','start','end','id','score','strand','thick_start','thick_end',
                'rgb','count','block_size','block_related_start']
@@ -233,7 +233,7 @@ def gff_to_bed_command(gff_path,bed_path):
     os.system(command)
     
 def gffcompare_command(answer_gff_path,predict_gff_path,prefix_path,merge=False):
-    gffcompare_command = 'gffcompare --strict-match --chr-stats --debug -T -e 0 -d 0 -r {} {} -o {}'
+    gffcompare_command = '$GFFCOMPARE --strict-match --chr-stats --debug -T -e 0 -d 0 -r {} {} -o {}'
     if not merge:
         gffcompare_command += ' --no-merge'
     command = gffcompare_command.format(answer_gff_path,predict_gff_path,prefix_path)

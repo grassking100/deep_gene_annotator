@@ -24,7 +24,7 @@ import json
 import deepdish as dd
 import torch
 torch.backends.cudnn.benchmark = True
-sys.path.append("/home/sequence_annotation")
+sys.path.append(os.path.dirname(os.path.abspath(__file__+"/..")))
 from sequence_annotation.genome_handler.load_data import load_data
 from sequence_annotation.genome_handler.seq_container import EmptyContainerException
 from sequence_annotation.process.seq_ann_engine import SeqAnnEngine

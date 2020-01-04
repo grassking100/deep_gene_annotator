@@ -5,7 +5,7 @@ import pandas as pd
 import json
 from numpy import median
 import torch
-sys.path.append("/home/sequence_annotation")
+sys.path.append(os.path.dirname(os.path.abspath(__file__+"/..")))
 from sequence_annotation.genome_handler.load_data import load_data as _load_data
 from sequence_annotation.process.executor import ExecutorBuilder
 from sequence_annotation.process.model import SeqAnnBuilder

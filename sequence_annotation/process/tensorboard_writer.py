@@ -1,14 +1,23 @@
 import torch
 from  matplotlib import pyplot
+pyplot.switch_backend('agg')
 import numpy as np
+from torch.utils.tensorboard import SummaryWriter
 
 class TensorboardWriter:
     def __init__(self,writer):
         self._writer = writer
         self.counter = 0
 
+    @property
+    def writer(self):
+        if isinstance(self._writer,str):
+            self._writer = SummaryWriter(self._writer)
+        return self._writer
+        
     def close(self):
-        self._writer.close()
+        if not isinstance(self._writer,str):
+            self._writer.close()
         
     def add_scalar(self,record,prefix=None,counter=None):
         prefix = prefix or ''
@@ -17,7 +26,7 @@ class TensorboardWriter:
             if 'val' in name:
                 name = '_'.join(name.split('_')[1:])
             if len(val)==1:
-                self._writer.add_scalar(prefix+name, val, counter)
+                self.writer.add_scalar(prefix+name, val, counter)
 
     def add_grad(self,named_parameters,prefix=None,counter=None):
         prefix = prefix or ''
@@ -28,7 +37,7 @@ class TensorboardWriter:
                 if  np.isnan(grad).any():
                     print(grad)
                     raise Exception(name+" has at least one NaN in it.")
-                self._writer.add_histogram("layer_"+prefix+'grad_'+name, grad, counter)
+                self.writer.add_histogram("layer_"+prefix+'grad_'+name, grad, counter)
 
     def add_distribution(self,name,data,prefix=None,counter=None):
         prefix = prefix or ''
@@ -43,7 +52,7 @@ class TensorboardWriter:
             print(data)
             raise Exception(name+" has at least one NaN in it.")
         try:
-            self._writer.add_histogram(prefix+name, data.flatten(),counter)
+            self.writer.add_histogram(prefix+name, data.flatten(),counter)
         except:
             print(data)
             raise Exception("{} causes something wrong occur".format(name))
@@ -56,7 +65,7 @@ class TensorboardWriter:
             if  np.isnan(w).any():
                 print(w)
                 raise Exception(name+" has at least one NaN in it.")
-            self._writer.add_histogram("layer_"+prefix+name, w, counter)
+            self.writer.add_histogram("layer_"+prefix+name, w, counter)
 
     def add_figure(self,name,value,prefix=None,counter=None,title='',labels=None,
                    colors=None,use_stack=False,*args,**kwargs):
@@ -99,7 +108,7 @@ class TensorboardWriter:
         pyplot.ylabel("Value")
         pyplot.title(title)
         pyplot.close(fig)
-        self._writer.add_figure(prefix+name,fig,global_step=counter,*args,**kwargs)
+        self.writer.add_figure(prefix+name,fig,global_step=counter,*args,**kwargs)
 
     def add_matshow(self,name,value,prefix=None,counter=None,title='',*args,**kwargs):
         prefix = prefix or ''
@@ -112,4 +121,5 @@ class TensorboardWriter:
         fig.colorbar(cax)
         pyplot.title(title)
         pyplot.close(fig)
-        self._writer.add_figure(prefix+name,fig,global_step=counter,*args,**kwargs)
+        self.writer.add_figure(prefix+name,fig,global_step=counter,*args,**kwargs)
+        

@@ -3,8 +3,7 @@ import sys
 import json
 import pandas as pd
 from argparse import ArgumentParser
-
-sys.path.append("/home/sequence_annotation")
+sys.path.append(os.path.dirname(os.path.abspath(__file__+"/..")))
 from sequence_annotation.utils.utils import read_gff, read_fai, create_folder, write_gff, write_json
 from sequence_annotation.process.performance import gff_performance,draw_contagion_matrix
 from sequence_annotation.preprocess.utils import get_gff_with_intron
