@@ -10,11 +10,11 @@ def add_exist_trial(study,folder_path):
     try:
         study._storage.create_new_trial(study.study_id, template_trial=trial)
     except:
-        print("Fail to load trial {}  from {}".format(trial.trial_id,path))
+        print("Fail to load trial {} from {}".format(trial.trial_id,path))
         raise
 
 def add_exist_trials(study,folder_path):
-    df = pd.read_csv(folder_path,sep='\t',index_col=False)
+    df = pd.read_csv(folder_path,sep='\t',index_col=False,dtype={'trial_id':int})
     df = df.sort_values(by=['trial_id'])['path']
     for path in list(df):
         add_exist_trial(study,path)

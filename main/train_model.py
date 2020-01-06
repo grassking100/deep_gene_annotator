@@ -3,36 +3,6 @@ import sys
 import json
 import deepdish as dd
 from argparse import ArgumentParser
-
-if __name__ == '__main__':
-    parser = ArgumentParser()
-    parser.add_argument("-m","--model_config_path",help="Path of model config "
-                        "build by SeqAnnBuilder",required=True)
-    parser.add_argument("-e","--executor_config_path",help="Path of Executor config",required=True)
-    parser.add_argument("-s","--saved_root",help="Root to save file",required=True)
-    parser.add_argument("-t","--train_data_path",help="Path of training data",required=True)
-    parser.add_argument("-v","--val_data_path",help="Path of validation data")
-    parser.add_argument("-x","--test_data_path",help="Path of testing data")
-    parser.add_argument("-g","--gpu_id",type=str,default='0',help="GPU to used")
-    parser.add_argument("--augmentation_max",type=int,default=0)
-    parser.add_argument("--epoch",type=int,default=100)
-    parser.add_argument("--batch_size",type=int,default=32)
-    parser.add_argument("--period",default=5,type=int)
-    parser.add_argument("--merge",action="store_true")
-    parser.add_argument("--model_weights_path")
-    parser.add_argument("--executor_weights_path")
-    parser.add_argument("--only_train",action='store_true')
-    parser.add_argument("--save_distribution",action='store_true')
-    parser.add_argument("--patient",help="Dafault value is 5. If lower(value) "
-                        "is 'none', then model won't be stopped",
-                        type=lambda x: int(x) if x.lower() != 'none' else None,default=5)
-    parser.add_argument("--frozen_names",type=lambda x:x.split(','),default=None)
-    parser.add_argument("--monitor_target")
-    parser.add_argument("--map_order_config_path")
-
-    args = parser.parse_args()
-    os.environ["CUDA_VISIBLE_DEVICES"] =  args.gpu_id
-
 import torch
 torch.backends.cudnn.enabled = True
 torch.backends.cudnn.benchmark = True
@@ -113,6 +83,7 @@ def main(saved_root,model_config_path,executor_config_path,
     dd.io.save(data_path,data)
 
     #Create model
+    
     model = get_model(model_config_path,model_weights_path,frozen_names)
     model.save_distribution = save_distribution
 
@@ -150,8 +121,35 @@ def main(saved_root,model_config_path,executor_config_path,
                  batch_size=batch_size,use_gffcompare=True,
                  ann_vec2info_converter=ann_vec2info_converter,
                  merge=merge,**map_order_config)
-    
+
 if __name__ == '__main__':
+    parser = ArgumentParser()
+    parser.add_argument("-m","--model_config_path",help="Path of model config "
+                        "build by SeqAnnBuilder",required=True)
+    parser.add_argument("-e","--executor_config_path",help="Path of Executor config",required=True)
+    parser.add_argument("-s","--saved_root",help="Root to save file",required=True)
+    parser.add_argument("-t","--train_data_path",help="Path of training data",required=True)
+    parser.add_argument("-v","--val_data_path",help="Path of validation data")
+    parser.add_argument("-x","--test_data_path",help="Path of testing data")
+    parser.add_argument("-g","--gpu_id",type=str,default='0',help="GPU to used")
+    parser.add_argument("--augmentation_max",type=int,default=0)
+    parser.add_argument("--epoch",type=int,default=100)
+    parser.add_argument("--batch_size",type=int,default=32)
+    parser.add_argument("--period",default=5,type=int)
+    parser.add_argument("--merge",action="store_true")
+    parser.add_argument("--model_weights_path")
+    parser.add_argument("--executor_weights_path")
+    parser.add_argument("--only_train",action='store_true')
+    parser.add_argument("--save_distribution",action='store_true')
+    parser.add_argument("--patient",help="Dafault value is 5. If lower(value) "
+                        "is 'none', then model won't be stopped",
+                        type=lambda x: int(x) if x.lower() != 'none' else None,default=5)
+    parser.add_argument("--frozen_names",type=lambda x:x.split(','),default=None)
+    parser.add_argument("--monitor_target")
+    parser.add_argument("--map_order_config_path")
+
+    args = parser.parse_args()
+                
     #Create folder
     create_folder(args.saved_root)
     #Save setting
@@ -168,4 +166,7 @@ if __name__ == '__main__':
     del kwargs['model_config_path']
     del kwargs['executor_config_path']
     del kwargs['gpu_id']
-    main(args.saved_root,args.model_config_path,args.executor_config_path,**kwargs)
+    
+    with torch.cuda.device(int(args.gpu_id)):
+        main(args.saved_root,args.model_config_path,
+             args.executor_config_path,**kwargs)

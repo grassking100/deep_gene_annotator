@@ -1,23 +1,5 @@
 import os
 from argparse import ArgumentParser
-
-if __name__ == '__main__':    
-    parser = ArgumentParser()
-    parser.add_argument("-m","--model_config",help="Model config build by SeqAnnBuilder",required=True)
-    parser.add_argument("-s","--saved_root",help="Root to save file",required=True)
-    parser.add_argument("-d","--data_path",help="Path of data",required=True)
-    parser.add_argument("-w","--model_weights_path",required=True)
-    parser.add_argument("-g","--gpu_id",type=str,default='0',help="GPU to used")
-    parser.add_argument("--max_len",type=int,default=-1,help="Sequences' max length, if it is negative then it will be ignored")
-    parser.add_argument("--batch_size",type=int,default=32)
-    parser.add_argument("--use_naive",action="store_true")
-    parser.add_argument("--use_gffcompare",action="store_true")
-    parser.add_argument("--use_seqlogo",action="store_true")
-    parser.add_argument("--merge",action="store_true")
-    parser.add_argument("--map_order_config_path")
-
-    args = parser.parse_args()
-    os.environ["CUDA_VISIBLE_DEVICES"] =  args.gpu_id
     
 import sys
 import json
@@ -95,12 +77,30 @@ def main(saved_root,data_path,model_config_path,model_weights_path=None,
     executor = get_executor(model,use_naive=use_naive,set_loss=False,set_optimizer=False)
     data = dd.io.load(data_path)
     ann_vec2info_converter = build_converter(ANN_TYPES,GENE_MAP)
+    
     worker = test(saved_root,model,executor,data,ann_vec2info_converter=ann_vec2info_converter,
                   **map_order_config,**kwargs)
 
     return worker
 
-if __name__ == '__main__':
+if __name__ == '__main__':    
+    parser = ArgumentParser()
+    parser.add_argument("-m","--model_config",help="Model config build by SeqAnnBuilder",required=True)
+    parser.add_argument("-s","--saved_root",help="Root to save file",required=True)
+    parser.add_argument("-d","--data_path",help="Path of data",required=True)
+    parser.add_argument("-w","--model_weights_path",required=True)
+    parser.add_argument("-g","--gpu_id",type=str,default='0',help="GPU to used")
+    parser.add_argument("--max_len",type=int,default=-1,
+                        help="Sequences' max length, if it is negative then it will be ignored")
+    parser.add_argument("--batch_size",type=int,default=32)
+    parser.add_argument("--use_naive",action="store_true")
+    parser.add_argument("--use_gffcompare",action="store_true")
+    parser.add_argument("--use_seqlogo",action="store_true")
+    parser.add_argument("--merge",action="store_true")
+    parser.add_argument("--map_order_config_path")
+
+    args = parser.parse_args()
+    
     create_folder(args.saved_root)
     setting = vars(args)
     setting_path = os.path.join(args.saved_root,"test_setting.json")
@@ -112,4 +112,5 @@ if __name__ == '__main__':
     del kwargs['gpu_id']
     del kwargs['saved_root']
         
-    main(args.saved_root,args.data_path,args.model_config,**kwargs)
+    with torch.cuda.device(int(args.gpu_id)):
+        main(args.saved_root,args.data_path,args.model_config,**kwargs)
