@@ -55,6 +55,15 @@ def _write_stats_data(lengths,path):
     stats['MAD derived threshold'] = mad_threshold(lengths)
     write_json(stats,path)
 
+def get_relative_paths(paths):
+    relative_paths = []
+    for path_dict in paths:
+        relative_path = {}
+        for key,path in path_dict.items():
+            relative_path[key] = path.split('/')[-1]
+        relative_paths.append(relative_path)
+    return relative_paths
+    
 def split_by_chr(region_rename_table,fai,saved_root,split_with_strand=False):
     test_chrom = _get_min_chrom(fai)
     region_rename_table['length'] = region_rename_table['end'] - region_rename_table['start'] + 1
@@ -115,6 +124,8 @@ def split_by_chr(region_rename_table,fai,saved_root,split_with_strand=False):
 
     for item in split_table:
         item['testing_path'] = test_path
+        
+    split_table = get_relative_paths(split_table)
     split_table = pd.DataFrame.from_dict(split_table)[['training_path','validation_path','testing_path']]
     split_table_path = os.path.join(saved_root,'split_table.csv')
     split_table.to_csv(split_table_path,index=None)
@@ -174,6 +185,8 @@ def split_by_num(region_rename_table,fai,saved_root,fold_num,split_with_strand=F
 
     for item in split_table:
         item['testing_path'] = test_path
+        
+    split_table = get_relative_paths(split_table)
     split_table = pd.DataFrame.from_dict(split_table)[['training_path','validation_path','testing_path']]
     split_table_path = os.path.join(saved_root,'split_table.csv')
     split_table.to_csv(split_table_path,index=None)

@@ -2,8 +2,12 @@ import os
 import pandas as pd
 from argparse import ArgumentParser
 
-def _get_name(path):
-    return path.split('/')[-1].split('.')[0]
+def _get_name(path,with_postfix=False):
+    rel_path = path.split('/')[-1]
+    if with_postfix:
+        return rel_path
+    else:
+        return rel_path.split('.')[0]
 
 if __name__ == '__main__':    
     parser = ArgumentParser()
@@ -28,14 +32,18 @@ if __name__ == '__main__':
     saved_roots = []
     train_paths = []
     val_paths = []
+    data_usage_root = '/'.join(args.data_usage_table_path.split('/')[:-1])
     data_usage = pd.read_csv(args.data_usage_table_path,comment='#').to_dict('record')
     for item in data_usage:
-        name = "{}_{}".format(_get_name(item['training_path']),
-                              _get_name(item['validation_path']))
+        name = "{}_{}".format(_get_name(item['training_path']),_get_name(item['validation_path']))
         saved_root = os.path.join(args.saved_root,name)
+        training_path = _get_name(item['training_path'],with_postfix=True)
+        validation_path = _get_name(item['validation_path'],with_postfix=True)
+        training_path = os.path.join(data_usage_root,training_path)
+        validation_path = os.path.join(data_usage_root,validation_path)
         saved_roots.append(saved_root)
-        train_paths.append(item['training_path'])
-        val_paths.append(item['validation_path'])
+        train_paths.append(training_path)
+        val_paths.append(validation_path)
         
     for paths in zip(train_paths,val_paths):
         if not all([os.path.exists(p) for p in paths]):

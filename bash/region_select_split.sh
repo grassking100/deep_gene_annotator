@@ -8,7 +8,7 @@ usage(){
  echo "    -p  <string>  Path of processed folder"
  echo "    -o  <string>  Path of output folder"
  echo "  Options:"
- echo "    -s  <bool>    Split training and validation dataset with strand"
+ echo "    -s  <bool>    Split training and validation dataset with and without strand (default: without strand only)"
  echo "    -n  <int>     Fold number (exclude testing dataset), if it is not provided then it would decided by chromosome number"
  echo "    -h            Print help message and exit"
  echo "Example: bash region_select_split.sh -p /home/io/process -t /home/io/preprocess/id_convert.tsv -o ./data/2019_07_12 -g genome.fasta"

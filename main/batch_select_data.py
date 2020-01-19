@@ -6,12 +6,18 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__+"/..")))
 from sequence_annotation.utils.utils import create_folder,write_json,read_json
 from main.select_data import main as select_data_main
 
-def _get_name(path):
-    return path.split('/')[-1].split('.')[0]
+def _get_name(path,with_postfix=False):
+    rel_path = path.split('/')[-1]
+    if with_postfix:
+        return rel_path
+    else:
+        return rel_path.split('.')[0]
     
 def main(saved_root,usage_table_path=None,stats_path=None,max_len=None,**kwargs):
-    usage_table = pd.read_csv(usage_table_path)
     
+    usage_table_root='/'.join(usage_table_path.split('/')[:-1])
+    
+    usage_table = pd.read_csv(usage_table_path)
     usage_table = usage_table.to_dict('record')
 
     if stats_path is not None:
@@ -22,9 +28,10 @@ def main(saved_root,usage_table_path=None,stats_path=None,max_len=None,**kwargs)
     for item in usage_table:
         paths = {}
         for key,path in item.items():
-            file_name = '{}.h5'.format(_get_name(path))
-            saved_path = os.path.join(saved_root,file_name)
-            paths[key] = saved_path
+            path = os.path.join(usage_table_root,_get_name(path,with_postfix=True))
+            saved_rel_path = '{}.h5'.format(_get_name(path))
+            saved_path = os.path.join(saved_root,saved_rel_path)
+            paths[key] = saved_rel_path
             select_data_main(id_path=path,saved_path=saved_path,max_len=max_len,**kwargs)
         new_table.append(paths)
 
