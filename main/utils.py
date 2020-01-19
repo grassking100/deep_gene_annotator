@@ -1,73 +1,44 @@
 import os
 import sys
-from argparse import ArgumentParser
-import pandas as pd
 import json
-from numpy import median
 import torch
+import deepdish as dd
+import pandas as pd
+from numpy import median
 sys.path.append(os.path.dirname(os.path.abspath(__file__+"/..")))
-from sequence_annotation.genome_handler.load_data import load_data as _load_data
+from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES,BASIC_GENE_MAP
+from sequence_annotation.utils.seq_converter import DNA_CODES
+from sequence_annotation.genome_handler.select_data import select_data as _select_data
+from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
 from sequence_annotation.process.executor import ExecutorBuilder
 from sequence_annotation.process.model import SeqAnnBuilder
 from sequence_annotation.process.utils import get_name_parameter
 
+
 BEFORE_MIX_SIMPLIFY_MAP = {'exon':['exon'],'intron':['intron','alt_accept','alt_donor'],'other':['other']}
 SIMPLIFY_MAP = {'exon':['exon'],'intron':['intron'],'other':['other']}
-GENE_MAP = {'gene':['exon','intron'],'other':['other']}
 BASIC_COLOR_SETTING={'other':'blue','exon':'red','intron':'yellow'}
-ANN_TYPES = ['exon','intron','other']
 
 def copy_path(root,path):
     command = 'cp -t {} {}'.format(root,path)
     os.system(command)
 
-def select_data_by_length_each_type(fasta,ann_seqs,**kwargs):
-    if len(set(ANN_TYPES) - set(ann_seqs.ANN_TYPES)) > 0:
-        raise Exception("ANN_TYPES should include {}, but "
-                        "got {}".format(ANN_TYPES,ann_seqs.ANN_TYPES))
-    multiple_exon_transcripts = []
-    single_exon_transcripts = []
-    no_transcripts = []
-    #Classify sequence
-    for ann_seq in ann_seqs:
-        #If it is multiple exon transcript
-        if sum(ann_seq.get_ann('intron')) > 0:
-            multiple_exon_transcripts.append(ann_seq)
-        #If it is single exon transcript
-        elif sum(ann_seq.get_ann('exon')) > 0:
-            single_exon_transcripts.append(ann_seq)
-        #If there is no transcript
-        else:
-            no_transcripts.append(ann_seq)
-            
-    selected_seqs = {}
-    selected_anns = ann_seqs.copy()
-    selected_anns.clean()
-    
-    for seqs in [multiple_exon_transcripts,single_exon_transcripts,no_transcripts]:
-        median_length = median([seq.length for seq in seqs])
-        for seq in seqs:
-            if seq.length <= median_length:
-                selected_seqs[seq.id] = fasta[seq.id]
-                selected_anns.add(seq)
-    return selected_seqs,selected_anns
-    
-def load_data(fasta_path,ann_seqs_path,id_paths,select_each_type=False,**kwargs):
+def select_data(fasta_path,ann_seqs_path,id_paths,**kwargs):
     id_list = []
     for id_path in id_paths:
         id_list.append(list(pd.read_csv(id_path,header=None)[0]))
 
-    if 'max_len' in kwargs and kwargs['max_len'] < 0:
-        kwargs['max_len'] = None
+    data = _select_data(fasta_path,ann_seqs_path,id_list,
+                        before_mix_simplify_map=BEFORE_MIX_SIMPLIFY_MAP,
+                        simplify_map=SIMPLIFY_MAP,gene_map=BASIC_GENE_MAP,
+                        codes=DNA_CODES,**kwargs)
     
-    select_func = None
-    if select_each_type:
-        select_func = select_data_by_length_each_type
+    return data[0]
 
-    data = _load_data(fasta_path,ann_seqs_path,id_list,simplify_map=SIMPLIFY_MAP,
-                      before_mix_simplify_map=BEFORE_MIX_SIMPLIFY_MAP,
-                      gene_map=GENE_MAP,select_func=select_func,**kwargs)
-    
+def load_data(path):
+    data = dd.io.load(path)
+    if isinstance(data[1],dict):
+        data = data[0],AnnSeqContainer().from_dict(data[1])
     return data
 
 def get_executor(model,optim_type=None,use_native=True,

@@ -1,8 +1,6 @@
 import torch
-from torch import nn
 from .customized_layer import BasicModel
-from .cnn import Conv1d
-from .rnn import GRU,ProjectedGRU
+from .rnn import ProjectedGRU
 from .attention import RNNAttention
 
 class AttenGRU(BasicModel):

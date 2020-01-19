@@ -51,11 +51,12 @@ def simple_gff2bed(gff):
         bed_item['id'] = bed_item['source']
         bed_info_list.append(bed_item)
     bed = pd.DataFrame.from_dict(bed_info_list)
+    return bed
     
 def gff2bed(gff):
     gff = get_gff_with_attribute(gff,['parent'])
     gff = dupliacte_gff_by_parent(gff)
-    RNAs = gff[gff['feature'].isin(RNA_TYPES)]
+    RNAs = gff[gff['feature'].isin(RNA_TYPES)].copy(deep=True)
 
     if 'conf_rating' in RNAs.columns:
         ratings = []
@@ -69,7 +70,6 @@ def gff2bed(gff):
     if len(RNAs) == 0:
         RNAs = gff[gff['feature'].isin(GENE_TYPES)]
 
-    ids = set(RNAs['id'])
     exons = gff[gff['feature']=='exon'].groupby('parent')
     CDSs = gff[gff['feature']=='CDS'].groupby('parent')
     bed_info_list = []

@@ -9,16 +9,21 @@ from sequence_annotation.utils.utils import create_folder
 if __name__ == '__main__':    
     parser = ArgumentParser()
     parser.add_argument("--cmd_table_path",required=True)
-    parser.add_argument("-o","--output_path",help="Root to save result table (in tsv format)",required=True)
+    parser.add_argument("-o","--output_path",required=True,
+                        help="Root to save result table (in tsv format)")
     parser.add_argument("-g","--gpu_ids",type=lambda x: int(x).split(','),
                         default=list(range(torch.cuda.device_count())),help="GPUs to used")
     
     args = parser.parse_args()
     
-    if torch.cuda.device_count() != len(args.gpu_ids):
-        raise Exception("Inconsist GPU number")
+    device_count = torch.cuda.device_count()
+    if device_count != len(args.gpu_ids):
+        raise Exception("Inconsist GPU number between {} and {}".format(device_count,len(args.gpu_ids)))
     
-    commands = list(pd.read_csv(args.cmd_table_path)['command'])
+    if os.path.exists(args.output_path):
+        raise Exception("The output path, {}, is already exist".format(args.output_path))
+    
+    commands = list(pd.read_csv(args.cmd_table_path,comment='#')['command'])
     
     root = args.output_path.split('/')[:-1]
     if len(root)>=0:

@@ -7,20 +7,18 @@ import numpy as np
 import pandas as pd
 from Bio import SeqIO
 from pathlib import Path
-from scipy.stats import ttest_rel
-
-preprocess_src_root = os.path.dirname(os.path.abspath(__file__+"/.."))+"/preprocess"
 
 BED_COLUMNS = ['chr','start','end','id','score','strand','thick_start','thick_end',
                'rgb','count','block_size','block_related_start']
 GFF_COLUMNS = ['chr','source','feature','start','end','score','strand','frame','attribute']
+BASIC_GENE_MAP = {'gene':['exon','intron'],'other':['other']}
+BASIC_GENE_ANN_TYPES = ['exon','intron','other']
 
-NVIDIA_SMI_MEM_COMMEND = '"nvidia-smi" -i {} --query-gpu=memory.total,memory.used --format=csv,nounits,noheader'
-
-def gpu_memory_status(gpu_id):
-    status = os.popen(NVIDIA_SMI_MEM_COMMEND.format(gpu_id)).read().replace("\n","").replace(" ","").split(",")
-    total, used = [int(m) for v in status]
-    return used,total
+def get_gff_with_feature_coord(gff):
+    part_gff = gff[['feature','chr','strand','start','end']]
+    feature_coord = part_gff.apply(lambda x: '_'.join([str(item) for item in x]), axis=1)
+    gff = gff.assign(feature_coord=feature_coord)
+    return gff
 
 def logical_not(lhs, rhs):
     return np.logical_and(lhs,np.logical_not(rhs))
@@ -39,24 +37,6 @@ def get_protected_attrs_names(object_):
              and not attr.endswith('__')
              and not attr.startswith('_'+class_name+'__')]
     return attrs
-
-def reverse_weights(class_counts, epsilon=1e-6):
-    scale = len(class_counts.keys())
-    raw_weights = {}
-    weights = {}
-    for type_,count in class_counts.items():
-        if count > 0:
-            weight = 1 / count
-        else:
-            if epsilon > 0:
-                weight = 1 / (count+epsilon)
-            else:
-                raise Exception(type_+" has zero count,so it cannot get reversed count weight")
-        raw_weights[type_] = weight
-    sum_raw_weights = sum(raw_weights.values())
-    for type_,weight in raw_weights.items():
-        weights[type_] = scale * weight / (sum_raw_weights)
-    return weights
 
 def split(ids,ratios):
     if round(sum(ratios))!=1:
@@ -139,16 +119,13 @@ def write_gff(gff,path):
 def get_gff_item_with_attribute(item,split_attr=None):
     split_attr = split_attr or []
     attributes = item['attribute'].split(';')
-    type_ = item['feature']
     attribute_dict = {}
     for attribute in attributes:
         lhs,rhs = attribute.split('=')
         lhs = lhs.lower()
         if lhs in split_attr:
             rhs = rhs.split(',')
-
         attribute_dict[lhs] = rhs
-    data = []
     copied = dict(item)
     copied.update(attribute_dict)
     return copied
@@ -227,22 +204,15 @@ def write_fasta(path,seqs):
             file.write(">" + id_ + "\n")
             file.write(seq + "\n")
 
-def gff_to_bed_command(gff_path,bed_path):
-    to_bed_command = 'python3 {}/gff2bed.py -i {} -o {}'
-    command = to_bed_command.format(preprocess_src_root,gff_path,bed_path)
-    os.system(command)
-    
-def gffcompare_command(answer_gff_path,predict_gff_path,prefix_path,merge=False):
+def gffcompare_command(answer_gff_path,predict_gff_path,prefix_path,merge=False,verbose=False):
     gffcompare_command = '$GFFCOMPARE --strict-match --chr-stats --debug -T -e 0 -d 0 -r {} {} -o {}'
     if not merge:
         gffcompare_command += ' --no-merge'
     command = gffcompare_command.format(answer_gff_path,predict_gff_path,prefix_path)
+    if verbose:
+        print(command)
     os.system(command)
-
-def save_as_gff_and_bed(gff,gff_path,bed_path):
-    write_gff(gff,gff_path)
-    gff_to_bed_command(gff_path,bed_path)
-
+    
 def print_progress(info):
     print(info,end='\r')
     sys.stdout.write('\033[K')
@@ -256,45 +226,7 @@ def read_json(path,mode=None):
     mode = mode or 'r'
     with open(path,mode) as fp:
         return json.load(fp)
-    
-def ttest_rel_compare(df,lhs_name,rhs_name,threshold=None,one_tailed=True):
-    """calculate Wilcoxon Signed Rank Test by R's wilcox.exact function"""
-    threshold = threshold or 0.05
-    table = []
-    targets = set(df['target'])
-    lhs_mean_name = 'mean({})'.format(lhs_name)
-    rhs_mean_name = 'mean({})'.format(rhs_name)
-    lhs_median_name = 'median({})'.format(lhs_name)
-    rhs_median_name = 'median({})'.format(rhs_name)
-    for target in targets:
-        lhs_df = df[(df['target']==target) & (df['name']==lhs_name)].sort_values('source')
-        rhs_df = df[(df['target']==target) & (df['name']==rhs_name)].sort_values('source')
-        lhs_values = list(lhs_df['value'])
-        rhs_values = list(rhs_df['value'])
-        lhs_mean = np.mean(lhs_values)
-        rhs_mean = np.mean(rhs_values)
 
-        p_val = ttest_rel(lhs_values,rhs_values)[1]
-        if one_tailed:
-            p_val /= 2
-
-        if lhs_mean < rhs_mean:
-            status ='less'
-        elif lhs_mean == rhs_mean:
-            status = 'equal'
-        else:
-            status ='greater'
-        
-        p_val = round(p_val,5)
-        item = {}
-        item['target'] = target
-        item[lhs_mean_name] = lhs_mean
-        item[rhs_mean_name] = rhs_mean
-        item['status'] = status
-        item['p_val'] = p_val
-        item['pass'] = p_val<=threshold
-        item['one_tailed'] = one_tailed
-        table.append(item)
-
-    return pd.DataFrame.from_dict(table)[['target','status','one_tailed','p_val','pass',
-                                           lhs_mean_name,rhs_mean_name]]
+def read_region_table(path):
+    df = pd.read_csv(path,sep='\t',dtype={'chr':str,'start':int,'end':int})
+    return df

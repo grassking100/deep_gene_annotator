@@ -2,7 +2,7 @@ from collections import OrderedDict
 import math
 import numpy as np
 import torch
-from torch.nn.init import _calculate_fan_in_and_fan_out, _no_grad_uniform_,constant_
+from torch.nn.init import _calculate_fan_in_and_fan_out, _no_grad_uniform_
 
 def get_copied_state_dict(model):
     weights = OrderedDict()

@@ -3,14 +3,12 @@ import os
 import pandas as pd
 sys.path.append(os.path.dirname(__file__)+"/../..")
 from argparse import ArgumentParser
-from sequence_annotation.utils.utils import GFF_COLUMNS
 from sequence_annotation.utils.utils import write_gff
 from sequence_annotation.genome_handler.seq_info_parser import BedInfoParser
 from sequence_annotation.genome_handler.ann_seq_converter import GeneticBedSeqConverter
 from sequence_annotation.genome_handler.region_extractor import RegionExtractor
-from sequence_annotation.genome_handler.ann_seq_processor import get_mixed_seq,get_binary
-from sequence_annotation.genome_handler.seq_container import SeqInfoContainer,AnnSeqContainer
-from sequence_annotation.genome_handler.sequence import AnnSequence
+from sequence_annotation.genome_handler.ann_seq_processor import get_mixed_seq
+from sequence_annotation.genome_handler.seq_container import SeqInfoContainer
 
 class SingleSiteException(Exception):
     pass
@@ -360,7 +358,6 @@ def get_donor_site(parsed_data):
         canonical_regions = parsed['canonical_regions']
         alt_donors = parsed['alt_donors']
         start = parsed['start']
-        end = parsed['end']    
         for region in canonical_regions:
             if parsed['strand'] == 'plus':
                 site = region['start']
@@ -385,7 +382,6 @@ def get_accept_site(parsed_data):
         canonical_regions = parsed['canonical_regions']
         alt_accepts = parsed['alt_accepts']
         start = parsed['start']
-        end = parsed['end']
         for region in canonical_regions:
             if parsed['strand'] == 'plus':
                 site = region['end']
@@ -429,7 +425,7 @@ def get_safe_sites(sites,alt_sites=None,dist=None):
         alt_sites_ = None
         if alt_sites:        
             alt_sites_ = alt_sites[id_]
-        valid_sites_ = _get_safe_sites(sites[id_],alt_sites_,dist)
+        valid_sites_ = _get_safe_sites(sites_,alt_sites_,dist)
         valid_sites[id_] = valid_sites_
     return valid_sites
 

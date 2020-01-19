@@ -3,16 +3,15 @@ import signal
 import warnings
 import os
 import time
-import json
 import torch
-import numpy as np
 from time import gmtime, strftime
 from abc import ABCMeta, abstractmethod
 from ..utils.utils import create_folder,print_progress,write_json
 from .data_generator import SeqDataset,SeqGenerator
 from .executor import BasicExecutor
-from .callback import Accumulator, Recorder, Callbacks, SignalSaver
+from .callback import Accumulator, Callbacks
 from .warning import WorkerProtectedWarning
+from .checkpoint import build_checkpoint
 
 def _batch_process(model,seq_data,process,callbacks):
     torch.cuda.empty_cache()
@@ -25,7 +24,7 @@ def _batch_process(model,seq_data,process,callbacks):
     metric,predict_result,lengths,masks,outputs = returned
     seq_data = SeqDataset([ids,inputs,labels,lengths,seqs,strands])
     with torch.no_grad():
-        callbacks.on_batch_end(predict_result=predict_result,
+        callbacks.on_batch_end(predicts=predict_result,
                                outputs=outputs,seq_data=seq_data,
                                metric=metric,masks=masks)
     torch.cuda.empty_cache()
@@ -100,25 +99,20 @@ class Worker(metaclass=ABCMeta):
             
     def handle_signal(self, signum, frame):
         pass
-
-def get_best_result(best_epoch,result):
-    best_result = {}
-    for key,value in result.items():
-        best_result[key] = result[key][best_epoch - 1]
-    return best_result
     
 class TrainWorker(Worker):
     """a worker which will train and evaluate the model"""
     def __init__(self,model,data,executor=None,train_generator=None,val_generator=None,
                  train_callbacks=None,val_callbacks=None,other_callbacks=None,
-                 writer=None,epoch_start=None,epoch=None,path=None):
+                 writer=None,epoch=None,path=None,checkpoint_kwargs=None):
         super().__init__(model,data,executor,path=path)
         self._train_generator = train_generator
         self._val_generator = val_generator
         self._train_callbacks = train_callbacks
         self._val_callbacks = val_callbacks
         self._other_callbacks = other_callbacks
-
+        self.checkpoint_kwargs = checkpoint_kwargs
+        
         if train_generator is None:
             self._train_generator = SeqGenerator()
         if val_generator is None:
@@ -131,13 +125,12 @@ class TrainWorker(Worker):
             self._other_callbacks = Callbacks()
 
         self._writer = writer
-        self._epoch_start = epoch_start or 0
         self._epoch = 1 if epoch is None else epoch
         self._current_epoch = None
         self._best_epoch = None
         self._best_result = None
         self._is_running = True
-        self._recoder = None
+        self._checkpoint = None
         self._train_loader = None
         self._val_loader = None
 
@@ -157,16 +150,11 @@ class TrainWorker(Worker):
     @property
     def best_epoch(self):
         return self._best_epoch
-    
-    @best_epoch.setter
-    def best_epoch(self,value):
-        warnings.warn("Best_epoch SHOULD only be called by callback", WorkerProtectedWarning)
-        self._best_epoch = value
-
+   
     def _save_setting(self):
         if self.path is not None:
-            for key in ['_train_callbacks','_val_callbacks','_other_callbacks',
-                        '_epoch_start','_epoch','executor']:
+            for key in ['_train_callbacks','_val_callbacks','_other_callbacks','path',
+                        '_epoch','executor','checkpoint_kwargs']:
                 attr = getattr(self,key)
                 if hasattr(attr,'get_config'):
                     attr = attr.get_config()
@@ -189,7 +177,8 @@ class TrainWorker(Worker):
         accumulator = Accumulator()
         self._message_recorder = MessageRecorder(path=message_path)
         self._train_callbacks.add(accumulator)
-        self._recoder = Recorder(path=record_path)
+        self._checkpoint = build_checkpoint(self.path,record_path=record_path,
+                                            **self.checkpoint_kwargs)
         self.executor.process(self.model)
         self._is_running = True
         self._save_setting()
@@ -217,11 +206,11 @@ class TrainWorker(Worker):
             
     def _work(self):
         """Train model"""
-        start = self._epoch_start+1
-        end = self._epoch + 1
         all_callbacks = Callbacks([self._train_callbacks,self._val_callbacks,
-                                   self._other_callbacks,self._recoder])
-        all_callbacks.on_work_begin(worker=self,epoch_start=start)
+                                   self._other_callbacks,self._checkpoint])
+        all_callbacks.on_work_begin(worker=self)
+        start = self._checkpoint.epoch_start+1
+        end = self._epoch + 1
         batch_info = "Epoch: ({}/{}), {} {:.1f}% of data"
         epoch_info = "Epoch: ({}/{}), Time cost of: {}, {}"
         gradient_warning = "Epoch {}: {} have gradients which are larger than one, the max value is {}"
@@ -269,7 +258,7 @@ class TrainWorker(Worker):
                 self._train_callbacks.on_epoch_end(metric=train_record)
                 self._val_callbacks.on_epoch_end(metric=val_record)
                 self._other_callbacks.on_epoch_end(metric=record)
-                self._recoder.on_epoch_end(metric=record)
+                self._checkpoint.on_epoch_end(metric=record)
 
                 time_cost = round(time.time()-pre_time,3)
                 self.print_verbose(epoch_info.format(epoch,self._epoch,time_cost,record))
@@ -281,16 +270,9 @@ class TrainWorker(Worker):
         all_callbacks.on_work_end()
 
     def _after_work(self):
-        self.result = self._recoder.data
-        if self.best_epoch is not None:
-            self._best_result = get_best_result(self.best_epoch,self.result)
-            print("Save best result of epoch {}".format(self.best_epoch))
-            if self.path is not None:    
-                best_path = os.path.join(self.path,"best_record.json")
-                best_result = {'best_epoch':self.best_epoch,
-                               'best_result':self.best_result}
-                write_json(best_result,best_path)
-
+        self.result = self._checkpoint.record
+        self._best_result =  self._checkpoint.best_result
+        self._best_epoch =  self._checkpoint.best_epoch
         end_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
         time_messgae = "End time at {}".format(end_time)
         print(time_messgae)
@@ -303,7 +285,7 @@ class TestWorker(Worker):
         super().__init__(model,data,executor,path=path)
         self._generator = generator
         self._callbacks = callbacks
-        self._recoder = None
+        self._checkpoint = None
 
         if generator is None:
             self._generator = DataGenerator(shuffle=False)
@@ -312,7 +294,7 @@ class TestWorker(Worker):
 
     def _save_setting(self):
         if self.path is not None:
-            for key in ['_callbacks']:
+            for key in ['_callbacks','executor','path']:
                 attr = getattr(self,key)
                 if hasattr(attr,'get_config'):
                     attr = attr.get_config()
@@ -328,21 +310,21 @@ class TestWorker(Worker):
         if self.path is not None:   
             record_path = os.path.join(self.path,"test_record.json")
         accum = Accumulator(prefix='test')
-        self._recoder = Recorder(path=record_path,force_reset=True)
-        signal_saver = SignalSaver(path=self.path,prefix='test')
+        self._checkpoint = build_checkpoint(self.path,record_path,
+                                            only_recorder=True,force_reset=True)
         self._callbacks.add(accum)
-        self._callbacks.add(signal_saver)
         self.executor.process(self.model)
         self._save_setting()
 
     def _work(self):
         """Test model"""
+        epoch_start=1
         callbacks = Callbacks(self._callbacks)
-        self._recoder.on_work_begin(worker=self)
+        self._checkpoint.on_work_begin(worker=self)
         callbacks.on_work_begin(worker=self)
         record = {}
-        self._recoder.on_epoch_begin()
-        callbacks.on_epoch_begin(counter=1)
+        self._checkpoint.on_epoch_begin(counter=epoch_start)
+        callbacks.on_epoch_begin(counter=epoch_start)
         batch_info = "Testing data: {0:.1f}%"
         save_distribution = self.model.save_distribution
         self.model.save_distribution=False
@@ -355,10 +337,13 @@ class TestWorker(Worker):
 
         self.model.save_distribution = save_distribution
         record = callbacks.get_data()
-        self._recoder.on_epoch_end(metric=record)
+        self._checkpoint.on_epoch_end(metric=record)
         callbacks.on_epoch_end(metric=record)
         callbacks.on_work_end()
-        self._recoder.on_work_end()
+        self._checkpoint.on_work_end()
 
     def _after_work(self):
-        self.result = self._recoder.data
+        if hasattr(self._checkpoint,'record'):
+            self.result = self._checkpoint.record
+        else:
+            self.result = self._checkpoint.data

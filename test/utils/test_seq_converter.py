@@ -23,7 +23,7 @@ class TestDNAVector(unittest.TestCase):
     def test_vec2code_exception(self):
         converter = SeqConverter()
         invalid_vec=[1,1,0,0]
-        with self.assertRaises(CodeException) as context:
+        with self.assertRaises(CodeException):
             converter.vec2code(invalid_vec)
     def test_vecs2seq(self):
         codes=['A','T','C','G']

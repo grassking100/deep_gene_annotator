@@ -1,6 +1,4 @@
-import numpy as np
-from . import AnnSeqTestCase
-from sequence_annotation.genome_handler.exception import ProcessedStatusNotSatisfied
+from ..ann_seq_test_case import AnnSeqTestCase
 from sequence_annotation.genome_handler.sequence import AnnSequence,SeqInformation
 from sequence_annotation.genome_handler.ann_genome_processor import get_backgrounded_genome, get_one_hot_genome,get_sub_ann_seqs
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer,SeqInfoContainer

@@ -4,7 +4,7 @@ import numpy as np
 from ..genome_handler.seq_container import AnnSeqContainer
 from ..genome_handler import ann_genome_processor
 from ..utils.seq_converter import SeqConverter
-from ..utils.exception import LengthNotEqualException,DimensionNotSatisfy
+from ..utils.exception import LengthNotEqualException
 from ..utils.utils import get_subdict
 
 class AnnSeqProcessor:

@@ -2,7 +2,7 @@ import os,sys
 import pandas as pd
 sys.path.append(os.path.dirname(__file__)+"/../..")
 from argparse import ArgumentParser
-from sequence_annotation.utils.utils import read_bed, read_fasta,write_fasta
+from sequence_annotation.utils.utils import read_fasta, write_fasta
 
 if __name__ == "__main__":
     #Reading arguments

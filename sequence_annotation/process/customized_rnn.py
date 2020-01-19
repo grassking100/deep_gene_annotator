@@ -1,17 +1,11 @@
 import torch
-from torch import nn
-import torch.nn.functional as F
-from torch.nn.init import constant_,uniform_
 from .customized_layer import BasicModel
-from .cnn import Conv1d 
-from .noisy_activation import SymNoisyHardSigmoid
-from .rnn import _RNN,LSTM,GRU,RNN_TYPES
+from .rnn import RNN_TYPES, _RNN
 
 def _reverse(x,lengths):
     #Convert forward data data to reversed data with N-C-L shape to N-C-L shape
     x = x.transpose(1,2)
     N,L,C = x.shape
-    concat_data=[]
     reversed_ = torch.zeros(*x.shape).cuda()
     for index,(item,length) in enumerate(zip(x,lengths)):
         reversed_core = item[:length].flip(0)

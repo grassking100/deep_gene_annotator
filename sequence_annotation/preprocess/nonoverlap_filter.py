@@ -1,6 +1,5 @@
 import os,sys
 sys.path.append(os.path.dirname(__file__)+"/../..")
-import pandas as pd
 from argparse import ArgumentParser
 from sequence_annotation.utils.utils import read_bed, write_bed
 from utils import get_id_table, simply_coord_with_gene_id

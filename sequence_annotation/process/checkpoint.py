@@ -5,7 +5,56 @@ import warnings
 from ..utils.utils import write_json,create_folder,read_json
 from .warning import WorkerProtectedWarning
 from .utils import get_copied_state_dict
-from .callback import Callback,Callbacks
+from .callback import Callback, Callbacks, DataCallback
+from .warning import CheckpointProtectedWarning
+
+class Recorder(DataCallback):
+    def __init__(self,prefix=None,path=None,force_reset=False):
+        super().__init__(prefix)
+        self.path = path
+        self._force_reset = force_reset
+        self._epoch_start = None
+
+    @property
+    def epoch_start(self):
+        return self._epoch_start
+        
+    @epoch_start.setter
+    def epoch_start(self,value):
+        warnings.warn("epoch_start SHOULD only be called by checkpoint", CheckpointProtectedWarning)
+        self._epoch_start = value
+        
+    def get_config(self,**kwargs):
+        config = super().get_config(**kwargs)
+        config['path'] = self.path
+        config['force_reset'] = self._force_reset
+        return config
+
+    def _reset(self):
+        self._data = {}
+        if self.path is not None and os.path.exists(self.path) and not self._force_reset:
+            print("Load record from {}".format(self.path))
+            with open(self.path,'r') as fp:
+                self._data = json.load(fp)
+
+    def on_work_begin(self,**kwargs):
+        super().on_work_begin()
+        if self.epoch_start is not None:
+            for type_,value in self._data.items():
+                self._data[type_] = value[:self.epoch_start]
+
+    def on_epoch_end(self,metric,**kwargs):
+        for type_,value in metric.items():
+            if type_ not in self._data.keys():
+                self._data[type_] = []
+            self._data[type_].append(value)
+
+        if self.path is not None:
+            write_json(self.data,self.path)
+
+    @property
+    def data(self):
+        return self._data
 
 def _read_status(root,read_path):
     with open(read_path,"r") as fp:
@@ -16,18 +65,7 @@ def _read_status(root,read_path):
     else:
         path = status['path']
     return epoch,path
-    
-def _read_best_status(root,read_path):
-    with open(read_path,"r") as fp:
-        status = json.load(fp)
-    epoch = int(status['best_epoch'])
-    best_target = float(status['best_target'])
-    if 'relative_path' in status:
-        path = os.path.join(root,status['relative_path'])
-    else:
-        path = status['path']
-    return epoch,best_target,path
-          
+      
 def _write_status(saved_path,epoch,weights_path):
     relative_path = weights_path.split('/')[-1]
     status = {"epoch":epoch,"relative_path":relative_path,"path":weights_path}
@@ -48,9 +86,8 @@ def _save_best(model_path,status_path,best_epoch,best_target,model_weights,patie
     torch.save(model_weights,model_path)
     _write_best_status(status_path,best_epoch,best_target,model_path,patient)
     
-class Checkpoint(Callback):
-    def __init__(self,path,prefix=None,period=None):
-        super().__init__(prefix)
+class _Checkpoint(Callback):
+    def __init__(self,path,period=None):
         if path is None:
             raise Exception("Path should not be None")
         self.path = path
@@ -72,12 +109,12 @@ class Checkpoint(Callback):
     def paths(self):
         pass
 
-class ModelCheckpoint(Checkpoint):
+class ModelCheckpoint(_Checkpoint):
     def __init__(self,path,target=None,optimize_min=True,
                  patient=None,period=None,save_best_weights=False,
-                 restore_best_weights=False,prefix=None,
+                 restore_best_weights=False,
                  explicit_period=False):
-        super().__init__(path,prefix=prefix,period=period)
+        super().__init__(path,period=period)
         self.target = target or 'val_loss'
         self.optimize_min = optimize_min
         self.patient = patient
@@ -125,15 +162,15 @@ class ModelCheckpoint(Checkpoint):
         #Load best model weights, epoch, and value   
         if self.save_best_weights:
             if os.path.exists(self.best_status_path):
-                best_epoch,best_result,best_model_path = _read_best_status(self.path,self.best_status_path)
-                self._model_weights = torch.load(best_model_path)
+                best_status = read_json(self.best_status_path)
+                best_epoch = int(best_status['best_epoch'])
+                best_target =  float(best_status['best_target'])
+                self._model_weights = torch.load(self.best_model_path)
                 self._best_epoch = best_epoch
-                self._best_result = best_result
-                print("Load existed best model of epoch {} from {}".format(best_epoch,best_model_path))
-                print("Load best record, {}, of epoch {} from {}".format(best_result,best_epoch,best_model_path))
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore",category=WorkerProtectedWarning)
-                    self._worker.best_epoch = self._best_epoch
+                self._best_result = best_target
+                print("Load existed best model of epoch {} from {}".format(best_epoch,self.best_model_path))
+                print("Load best target, {}, of epoch {} from {}".format(best_target,best_epoch,self.best_status_path))
+
             else:
                 self._model_weights = get_copied_state_dict(worker.model)
 
@@ -199,9 +236,7 @@ class ModelCheckpoint(Checkpoint):
             self._best_epoch = self._counter
             self._best_result = target
             print("Update best weight of epoch {}".format(self._counter))
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore",category=WorkerProtectedWarning)
-                self._worker.best_epoch = self._best_epoch
+
             if self.save_best_weights:
                 _save_best(self.best_model_path,self.best_status_path,
                            self.best_epoch,self._best_result,
@@ -237,9 +272,9 @@ class ModelCheckpoint(Checkpoint):
                        self.best_epoch,self._best_result,
                        self._model_weights,self.patient)
             
-class ExecutorCheckpoint(Checkpoint):
-    def __init__(self,path,period=None,prefix=None,explicit_period=False):
-        super().__init__(path,prefix=prefix,period=period)
+class ExecutorCheckpoint(_Checkpoint):
+    def __init__(self,path,period=None,explicit_period=False):
+        super().__init__(path,period=period)
         self._executor_state_dict = None
         self._executor = None
         self.explicit_period = explicit_period
@@ -311,30 +346,68 @@ def copy_file(source_path,target_path):
     command = 'cp {} {}'.format(source_path,target_path)
     os.system(command)
         
-class ModelExecutorCheckpoint(Callback):
-    def __init__(self,model_checkpoint,executor_checkpoint,checkpoint_root,prefix=None):
-        super().__init__(prefix)
+def get_best_result(best_epoch,result):
+    best_result = {}
+    for key,value in result.items():
+        best_result[key] = result[key][best_epoch - 1]
+    return best_result
+
+def _get_name(path):
+    return path.split('/')[-1].split('.')[0]
+
+class Checkpoint(Callback):
+    def __init__(self,model_checkpoint,executor_checkpoint,recorder,checkpoint_root,best_record_path):
         self.model_checkpoint = model_checkpoint
         self.executor_checkpoint = executor_checkpoint
+        self.recorder = recorder
         self.checkpoint_root = checkpoint_root
-        self.callbacks = Callbacks([self.model_checkpoint,self.executor_checkpoint])
+        self.callbacks = Callbacks([self.model_checkpoint,self.executor_checkpoint,self.recorder])
+        self._best_record_path = best_record_path
+        self._best_result = None
+        self._best_epoch = None
+        self._record = None
+ 
+    @property
+    def record(self):
+        return self._record
+
+    @property
+    def best_result(self):
+        return self._best_result
+    
+    @property
+    def best_epoch(self):
+        return self._best_epoch
         
     @property
-    def paths(self):
+    def weights_status_paths(self):
         paths = [self.executor_checkpoint.paths,
                  self.model_checkpoint.paths]
         return paths
-        
+      
+    @property
+    def best_record_path(self):
+        return self._best_record_path
+
     def get_config(self,**kwargs):
         config = super().get_config(**kwargs)
-        config['model_checkpoint'] = self.checkpoint_root
+        config['best_record_path'] = self._best_record_path
+        config['checkpoint_root'] = self.checkpoint_root
         config['model_checkpoint'] = self.model_checkpoint.get_config(**kwargs)
         config['executor_checkpoint'] = self.executor_checkpoint.get_config(**kwargs)
+        config['recorder'] = self.recorder.get_config(**kwargs)
         return config
 
     def _save_checkpoint(self):
         create_folder(self.checkpoint_root)
-        for path_dict in self.paths:
+        
+        name = _get_name(self.recorder.path)
+        new_record_path = '{}_epoch_{}.json'.format(name,self.recorder.epoch_start)
+        new_record_path = os.path.join(self.checkpoint_root,new_record_path)
+        if not os.path.exists(new_record_path):
+            copy_file(self.recorder.path,new_record_path)
+        
+        for path_dict in self.weights_status_paths:
             for dict_ in path_dict.values():
                 patient = None
                 status_path = dict_['status']
@@ -350,31 +423,79 @@ class ModelExecutorCheckpoint(Callback):
                     else:
                         epoch = status['epoch']
 
-                    new_status_path = status_path.split('/')[-1].split('.')[0]
-                    new_weights_path = weights_path.split('/')[-1].split('.')[0]
-                    new_status_path = '{}_epoch_{}.status'.format(new_status_path,epoch)
-                    new_weights_path = '{}_epoch_{}.pth'.format(new_weights_path,epoch)
+                    new_status_name = _get_name(status_path)
+                    new_weights_name = _get_name(weights_path)
+                    new_status_path = '{}_epoch_{}.status'.format(new_status_name,epoch)
+                    new_weights_path = '{}_epoch_{}.pth'.format(new_weights_name,epoch)
                     new_status_path = os.path.join(self.checkpoint_root,new_status_path)
                     new_weights_path = os.path.join(self.checkpoint_root,new_weights_path)
 
-                    if is_best_related:
-                        _write_best_status(new_status_path,epoch,best_target,new_weights_path,patient)
-                    else:
-                        _write_status(new_status_path,epoch,new_weights_path)
-                    copy_file(weights_path,new_weights_path)
-    
-    def on_work_begin(self,**kwargs):
-        self.callbacks.on_work_begin(**kwargs)
+                    if not os.path.exists(new_status_path):
+                        if is_best_related:
+                            _write_best_status(new_status_path,epoch,best_target,new_weights_path,patient)
+                        else:
+                            _write_status(new_status_path,epoch,new_weights_path)
+                    if not os.path.exists(new_weights_path):
+                        copy_file(weights_path,new_weights_path)
+         
+    @property
+    def epoch_start(self):
+        return self._epoch_start
+        
+    def on_work_begin(self, worker,**kwargs):
+        self._worker = worker
+        self._best_result = None
+        self._best_epoch = 0
+        self._model_weights = None
+ 
+        if self.model_checkpoint.save_best_weights:
+            if os.path.exists(self.model_checkpoint.best_status_path) and os.path.exists(self.best_record_path):
+                best_record = read_json(self.best_record_path)
+                best_status = read_json(self.model_checkpoint.best_status_path)
+                #Validate best epoch
+                best_record_epoch = best_record['best_epoch']
+                best_status_epoch = int(best_status['best_epoch'])
+                if best_record_epoch != best_status_epoch:
+                    raise Exception("Inconsist best epoch between {} and {}".format(best_record_epoch,best_status_epoch))
+                #If best target is not writen in best status, then copy value from best record and write in best status
+                if 'best_target' not in best_status:
+                    best_target = best_record['best_result'][self.model_checkpoint.target]
+                    best_status['best_target'] = best_target
+                    print("Write best target, {}, to {}".format(best_target,self.model_checkpoint.best_status_path))
+                    write_json(best_status,self.model_checkpoint.best_status_path)
+        
+        self.model_checkpoint.on_work_begin(worker=worker,**kwargs)
+        self.executor_checkpoint.on_work_begin(worker=worker,**kwargs)
         if self.model_checkpoint.counter != self.executor_checkpoint.counter:
             message = "Checkpoint at model and executor are not the same"
             ", got {} and {}".format(self.model_checkpoint.counter,
                                      self.executor_checkpoint.counter)
             raise Exception(message)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore",category=CheckpointProtectedWarning)
+            self._epoch_start = self.model_checkpoint.counter
+            self.recorder.epoch_start = self._epoch_start
+        self.recorder.on_work_begin(worker=worker,**kwargs)
         self._save_checkpoint()
 
-    def on_work_end(self):
-        self.callbacks.on_work_end()
+    def on_work_end(self,**kwargs):
+        self.callbacks.on_work_end(**kwargs)
         self._save_checkpoint()
+        self._record = self.recorder.data
+        if self.model_checkpoint.best_epoch is not None:
+            best_result = get_best_result(self.model_checkpoint.best_epoch,self.record)
+            best_target_at_result = best_result[self.model_checkpoint.target]
+            if best_target_at_result != self.model_checkpoint.best_result:
+                raise Exception("Inconsist best result between {} and {}".format(best_target_at_result,
+                                                                                 self.model_checkpoint.best_result))
+            self._best_result = best_result
+            self._best_epoch = self.model_checkpoint.best_epoch
+            print("Save best result of epoch {}".format(self.model_checkpoint.best_epoch))
+            if self.best_record_path is not None:
+                best_result = get_best_result(self.model_checkpoint.best_epoch,self.record)
+                best_result = {'best_epoch':self.model_checkpoint.best_epoch,
+                               'best_result':best_result}
+                write_json(best_result,self.best_record_path)
 
     def on_epoch_begin(self,**kwargs):
         self.callbacks.on_epoch_begin(**kwargs)
@@ -388,38 +509,21 @@ class ModelExecutorCheckpoint(Callback):
     def on_batch_end(self,**kwargs):
         self.callbacks.on_batch_end(**kwargs)
 
-def use_checkpoint(path,monitor_target=None,patient=None,period=None):
-    checkpoint_root = os.path.join(path,'checkpoint')
-    model_checkpoint = ModelCheckpoint(target=monitor_target,patient=patient,
-                                       save_best_weights=True,restore_best_weights=True,
-                                       path=path,period=period)
-    executor_checkpoint = ExecutorCheckpoint(path=path,period=period)
-    checkpoint = ModelExecutorCheckpoint(model_checkpoint,executor_checkpoint,checkpoint_root)
+def build_checkpoint(path,record_path,only_recorder=False,force_reset=None,
+                     monitor_target=None,patient=None,period=None):
+
+    recorder = Recorder(path=record_path,force_reset=force_reset)
+    if only_recorder:
+        return recorder
+    else:
+        checkpoint_root = os.path.join(path,'checkpoint')
+        best_record_path = os.path.join(path,'best_record.json')
+        model_checkpoint = ModelCheckpoint(target=monitor_target,patient=patient,
+                                           save_best_weights=True,restore_best_weights=True,
+                                           path=path,period=period)
+        executor_checkpoint = ExecutorCheckpoint(path=path,period=period)
+
+        checkpoint = Checkpoint(model_checkpoint,executor_checkpoint,recorder,
+                                checkpoint_root,best_record_path)
     
-    #If best record exist, then write best target to best_model.status
-    best_record_path = os.path.join(path,'best_record.json')
-    if model_checkpoint.save_best_weights and os.path.exists(best_record_path):
-        with open(model_checkpoint.best_status_path,"r") as fp:
-            best_status = json.load(fp)
-        if 'best_target' not in best_status:                    
-            with open(best_record_path,"r") as fp:
-                best_record = json.load(fp)
-            best_epoch = best_record['best_epoch']
-            best_target = best_record['best_result'][model_checkpoint.target]
-            if best_epoch != best_status['best_epoch']:
-                raise Exception("Inconsist best epoch between {} and {}".format(best_epoch,best_status['best_epoch']))
-            best_status['best_target'] = best_target
-            print("Write best target, {}, to {}".format(best_target,model_checkpoint.best_status_path))
-            write_json(best_status,model_checkpoint.best_status_path)
-
-    epoch_start = 0
-    if os.path.exists(model_checkpoint.latest_status_path):
-        with open(model_checkpoint.latest_status_path,"r") as fp:
-            latest_status = json.load(fp)
-            epoch_start = max(epoch_start,latest_status['epoch'])
-
-    if os.path.exists(model_checkpoint.last_status_path):
-        with open(model_checkpoint.last_status_path,"r") as fp:
-            last_status = json.load(fp)
-            epoch_start = max(epoch_start,last_status['epoch'])
-    return epoch_start,checkpoint
+        return checkpoint

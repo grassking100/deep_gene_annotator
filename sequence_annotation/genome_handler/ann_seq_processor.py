@@ -4,12 +4,6 @@ import re
 from .exception import ProcessedStatusNotSatisfied,InvalidStrandType
 from .sequence import AnnSequence
 
-def is_dirty(seq, dirty_types):
-    for dirty_type in dirty_types:
-        if np.sum(seq.get_ann(dirty_type)) > 0:
-            return True
-    return False
-
 def get_certain_status(seq, focus_types=None):
     if not seq.processed_status == 'normalized':
         raise ProcessedStatusNotSatisfied(seq.processed_status,'normalized')
@@ -209,14 +203,6 @@ def vecs2seq(vecs,id_,strand,ann_types,length=None):
     for index,type_ in  enumerate(ann_types):
         ann_seq.set_ann(type_,vecs[index][:length])
     return ann_seq
-
-def get_binary(seq):
-    binary_seq = seq.copy().clean_space().init_space()
-    for type_ in binary_seq.ANN_TYPES:
-        temp = np.array(seq.get_ann(type_))
-        temp = (temp > 0).astype(int)
-        binary_seq.set_ann(type_,temp)
-    return binary_seq
 
 def get_mixed_seq(seq,map_=None):
     if 'DANGER' in seq.ANN_TYPES:

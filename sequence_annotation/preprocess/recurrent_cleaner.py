@@ -10,7 +10,6 @@ BASH_ROOT = "{}/../../bash".format(work_dir)
 SAFE_FILTER_BASH_PATH = os.path.join(BASH_ROOT,'safe_filter.sh')
 
 if __name__ == "__main__":
-    root_path = "/".join(sys.argv[0].split('/')[:-1])
     #Reading arguments
     parser = ArgumentParser()
     parser.add_argument("-r", "--raw_bed_path",required=True)
@@ -39,7 +38,6 @@ if __name__ == "__main__":
         coordinate_consist_bed = read_bed(args.coordinate_consist_bed_path)
         raw_bed['chr'] = raw_bed['chr'].str.replace('Chr', '')
         want_id = set(coordinate_consist_bed['id'])
-        all_id = set(raw_bed['id'])
         left_bed = raw_bed[~raw_bed['id'].isin(want_id)]
         all_bed = pd.concat([coordinate_consist_bed,left_bed])
         want_bed_path = os.path.join(args.saved_root,'want.bed')

@@ -2,11 +2,10 @@ import sys
 import os
 import pandas as pd
 import numpy as np
-import warnings
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__)+"/../..")
 from sequence_annotation.genome_handler.seq_info_parser import BedInfoParser
-from sequence_annotation.utils.utils import get_gff_item_with_attribute, read_bed, write_bed
+from sequence_annotation.utils.utils import get_gff_item_with_attribute, write_bed
 from sequence_annotation.preprocess.bed2gff import bed_item2gff_item
 
 def get_CDS_item(CDSs):

@@ -1,7 +1,6 @@
 import os, sys
 sys.path.append(os.path.dirname(__file__)+"/../..")
 import pandas as pd
-import csv
 from argparse import ArgumentParser
 from sequence_annotation.utils.utils import read_bed, write_bed, write_gff
 
@@ -13,7 +12,6 @@ if __name__ == "__main__":
     parser.add_argument("--gro_2_path",required=True)
     parser.add_argument("--cs_path",required=True)
     parser.add_argument("--output_root",required=True)
-    #parser.add_argument("--quality_threhold",type=int)
     args = parser.parse_args()
 
     official_bed_path = os.path.join(args.output_root,'valid_official.bed')
@@ -30,8 +28,6 @@ if __name__ == "__main__":
         official_bed = read_bed(args.bed_path)
         valid_chrs = [str(chr_) for chr_ in range(1,6)]
         official_bed = official_bed[official_bed['chr'].isin(valid_chrs)]
-        #if args.quality_threhold is not None:
-        #    official_bed = official_bed[official_bed['score'].astype(int) >= args.quality_threhold]
 
         gro_1 = pd.read_csv(args.gro_1_path,comment ='#',sep='\t')
         gro_2 = pd.read_csv(args.gro_2_path,comment ='#',sep='\t')
@@ -49,7 +45,7 @@ if __name__ == "__main__":
         valid_gro = valid_gro.drop('end', 1)
         valid_gro = valid_gro.assign(id=valid_gro.astype(str).apply(lambda x: '_'.join(x), axis=1))
         ###Process cleavage sites data###
-        ca_site = cleavage_site[['Chromosome','Strand','Position','Raw DRS read count']]
+        ca_site = cleavage_site[['Chromosome','Strand','Position','Raw DRS read count']].copy(deep=True)
         ca_site.loc[ca_site['Strand']=='fwd','Strand'] = '+'
         ca_site.loc[ca_site['Strand']=='rev','Strand'] = '-'
         ca_site.columns = ['chr','strand','evidence_3_end','read_count']

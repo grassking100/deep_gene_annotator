@@ -1,5 +1,4 @@
 import unittest
-import numpy as np
 from sequence_annotation.genome_handler.sequence import SeqInformation
 from sequence_annotation.genome_handler.seq_container import SeqInfoContainer
 from sequence_annotation.genome_handler.seq_info_generator import SeqInfoGenerator

@@ -1,17 +1,7 @@
 import warnings
 import sys
-from .region_extractor import RegionExtractor
-from .seq_container import AnnSeqContainer,SeqInfoContainer
-from .sequence import AnnSequence
+from .seq_container import AnnSeqContainer
 from . import ann_seq_processor
-
-def get_genome_region_info(ann_genome,focus_types=None):
-    """Get region information about genome"""
-    genome_region_info = SeqInfoContainer()
-    extractor = RegionExtractor()
-    for ann_seq in ann_genome:
-        genome_region_info.add(extractor.extract(ann_seq,focus_types))
-    return genome_region_info
 
 def get_backgrounded_genome(ann_genome,background_type,frontground_types=None):
     """Make genome with background annotation"""
@@ -35,6 +25,13 @@ def get_one_hot_genome(ann_genome,method='max',focus_types=None):
         one_hot_item = ann_seq_processor.get_one_hot(ann_seq,method=method,focus_types=focus_types)
         one_hot_genome.add(one_hot_item)
     return one_hot_genome
+
+def is_one_hot_genome(ann_genome,focus_types=None):
+    """Is genome one-hot encoded"""
+    for ann_seq in ann_genome:
+        if not ann_seq_processor.is_one_hot(ann_seq,focus_types):
+            return False
+    return True
 
 def get_mixed_genome(ann_genome,verbose=True):
     """Make genome into one-hot encoded"""
@@ -95,16 +92,6 @@ def genome2dict_vec(ann_genome,ann_types=None):
     for ann_seq in ann_genome:
         dict_[str(ann_seq.id)] = ann_seq_processor.seq2vecs(ann_seq,ann_types=ann_types)
     return dict_
-
-def vecs2genome(vecs,ids,strands,ann_types):
-    #vecs shape is channel,length
-    if vecs.shape[0] != len(ann_types):
-        raise Exception("The number of annotation type is not match with the channel number.")
-    ann_genome = AnnSeqContainer(ann_types)
-    for vecs_,id_,strand in zip(vecs,ids,strands):
-        ann_seq = ann_seq_processor.vecs2seq(vecs_,id_,strand,ann_types)
-    ann_genome.add(ann_seq)
-    return ann_genome
 
 def get_sub_ann_seqs(ann_seq_container,seq_info_container):
     result = AnnSeqContainer(ann_seq_container.ANN_TYPES)

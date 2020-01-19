@@ -5,8 +5,8 @@ import torch.nn as nn
 from torch import optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from .utils import get_seq_mask
-from .loss import CCELoss,bce_loss,mean_by_mask,SeqAnnLoss, FocalLoss, LabelLoss
-from .inference import basic_inference,seq_ann_inference
+from .loss import CCELoss, FocalLoss, LabelLoss, SeqAnnLoss
+from .inference import create_basic_inference,seq_ann_inference
 
 OPTIMIZER_CLASS = {'Adam':optim.Adam,'SGD':optim.SGD,'AdamW':optim.AdamW,'RMSprop':optim.RMSprop}
 
@@ -92,11 +92,12 @@ class IExecutor(metaclass=ABCMeta):
 class _Executor(IExecutor):
     def __init__(self):
         self.loss = CCELoss()
-        self.inference = basic_inference(3)
+        self.inference = create_basic_inference(3)
 
     def get_config(self,**kwargs):
         config = {}
-        config['loss_config'] = self.loss.get_config()
+        if self.loss is not None:
+            config['loss_config'] = self.loss.get_config()
         config['inference'] = self.inference.__name__ 
         return config
 
@@ -203,7 +204,7 @@ class ExecutorBuilder:
         self.use_native=use_native
         if self.use_native:
             self.output_label_num = self.predict_label_num = self.answer_label_num = label_num or 3
-            self.inference = basic_inference(self.output_label_num)
+            self.inference = create_basic_inference(self.output_label_num)
         else:
             self.predict_label_num = predict_label_num or 2
             self.answer_label_num = answer_label_num or 3
@@ -227,8 +228,8 @@ class ExecutorBuilder:
                               transcript_output_mask=transcript_output_mask,
                               mean_by_mask=mean_by_mask)
         label_loss = LabelLoss(loss)
-        label_loss.predict_inference = basic_inference(self.predict_label_num)
-        label_loss.answer_inference = basic_inference(self.answer_label_num)
+        label_loss.predict_inference = create_basic_inference(self.predict_label_num)
+        label_loss.answer_inference = create_basic_inference(self.answer_label_num)
         self.loss = label_loss
         
     def build(self,executor_weights_path=None):

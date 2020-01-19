@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 from matplotlib import pyplot as plt
 from matplotlib.ticker import AutoMinorLocator
 sys.path.append(os.path.dirname(__file__)+"/../..")
-from sequence_annotation.utils.utils import read_bed, read_fasta
+from sequence_annotation.utils.utils import read_fasta
 from sequence_annotation.utils.seq_converter import SeqConverter,DNA_CODES
 
 def fasta_composition(fasta_data,converter=None):

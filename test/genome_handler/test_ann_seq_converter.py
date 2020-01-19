@@ -1,5 +1,4 @@
-import unittest
-from . import AnnSeqTestCase
+from ..ann_seq_test_case import AnnSeqTestCase
 from sequence_annotation.genome_handler.ann_seq_converter import CodingBedSeqConverter
 from sequence_annotation.genome_handler.sequence import AnnSequence
 from sequence_annotation.genome_handler.exception import NotOneHotException, InvalidStrandType, NotSameSizeException
@@ -40,7 +39,7 @@ class TestAnnSeqConverter(AnnSeqTestCase):
                 'thick_end':160,
                }
         with self.assertRaises(NotOneHotException):
-            result = converter.convert(data)
+            converter.convert(data)
             
     def test_data_wrong_strand(self):
         converter = CodingBedSeqConverter()
@@ -52,7 +51,7 @@ class TestAnnSeqConverter(AnnSeqTestCase):
                 'thick_end':160,
                }
         with self.assertRaises(InvalidStrandType):
-            result = converter.convert(data)
+            converter.convert(data)
             
     def test_data_wrong_num(self):
         converter = CodingBedSeqConverter()
@@ -64,7 +63,7 @@ class TestAnnSeqConverter(AnnSeqTestCase):
                 'thick_end':160,
                }
         with self.assertRaises(NotSameSizeException):
-            result = converter.convert(data)
+            converter.convert(data)
             
     def test_data_wrong_thick(self):
         converter = CodingBedSeqConverter()
@@ -76,7 +75,7 @@ class TestAnnSeqConverter(AnnSeqTestCase):
                 'thick_end':160,
                }
         with self.assertRaises(NegativeNumberException):
-            result = converter.convert(data)
+            converter.convert(data)
 
     def test_data_out_range(self):
         converter = CodingBedSeqConverter()
@@ -88,4 +87,4 @@ class TestAnnSeqConverter(AnnSeqTestCase):
                 'thick_end':160,
                }
         with self.assertRaises(ValueOutOfRange):
-            result = converter.convert(data)
+            converter.convert(data)

@@ -62,7 +62,7 @@ class Gff2AnnSeqs:
             self._validate(chrom)
         return backgrounded
 
-def alt_anns_creator(gff,region_bed,souce_name):
+def creator_ann_genome(gff,region_bed,souce_name):
     gff = get_gff_with_attribute(gff)
     converter = Gff2AnnSeqs()
     genome = converter.convert(gff,region_bed,souce_name)   
@@ -71,8 +71,7 @@ def alt_anns_creator(gff,region_bed,souce_name):
 def main(gff_path,region_bed_path,souce_name,output_path):
     gff = read_gff(gff_path)
     region_bed = read_bed(region_bed_path)
-    converter = Gff2AnnSeqs()
-    genome = alt_anns_creator(gff,region_bed,souce_name)
+    genome = creator_ann_genome(gff,region_bed,souce_name)
     try:
         dd.io.save(output_path,genome.to_dict())
     except OverflowError:

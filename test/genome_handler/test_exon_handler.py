@@ -1,4 +1,4 @@
-from . import AnnSeqTestCase
+from ..ann_seq_test_case import AnnSeqTestCase
 from sequence_annotation.genome_handler.sequence import AnnSequence
 from sequence_annotation.genome_handler.exon_handler import ExonHandler
 

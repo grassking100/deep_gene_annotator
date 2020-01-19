@@ -1,7 +1,6 @@
 from abc import abstractmethod
 import torch
-from torch import randn
-from torch.nn import Hardtanh, Sigmoid,Tanh,ReLU
+from torch.nn import Hardtanh, ReLU
 from torch import nn
 
 hard_sigmoid = Hardtanh(min_val=0)

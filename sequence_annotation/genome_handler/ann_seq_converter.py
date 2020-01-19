@@ -1,9 +1,8 @@
-from abc import ABCMeta,abstractmethod,abstractproperty
+from abc import abstractmethod
 import numpy as np
 from .sequence import AnnSequence
 from .ann_seq_processor import is_one_hot
 from .exception import NotOneHotException, InvalidStrandType, NotSameSizeException
-from ..utils.exception import NotPositiveException
 
 class AnnSeqConverter:
     """Convert zero-based dicitonary data into AnnSequence"""

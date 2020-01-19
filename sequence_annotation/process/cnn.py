@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from sequence_annotation.process.utils import get_seq_mask
 import torch
 from torch import nn
-from torch.nn.init import zeros_,xavier_uniform_
+from torch.nn.init import zeros_
 from torch.nn import ReLU
 from .noisy_activation import NoisyReLU
 from .customized_layer import Concat, BasicModel, Add, generator_norm_class
@@ -89,7 +89,6 @@ class Conv1d(nn.Conv1d,BasicModel):
             
     def forward(self,x,lengths=None,weights=None,mask=None):
         #N,C,L
-        origin_shape = x.shape
         if lengths is None:
             lengths = [x.shape[2]]*x.shape[0]
         #if self.kernel_size[0] > 1:

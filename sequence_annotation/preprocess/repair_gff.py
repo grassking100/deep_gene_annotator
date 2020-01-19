@@ -1,15 +1,13 @@
 import sys,os
-from functools import cmp_to_key
-import pandas as pd
-pd.options.mode.chained_assignment = 'raise'
 import numpy as np
+import pandas as pd
 sys.path.append(os.path.dirname(__file__)+"/../..")
 from sequence_annotation.utils.utils import get_gff_with_attribute,read_gff
 from sequence_annotation.utils.utils import write_gff,GFF_COLUMNS, dupliacte_gff_by_parent
 from sequence_annotation.preprocess.utils import GENE_TYPES,RNA_TYPES,EXON_TYPES,SUBEXON_TYPES
 from argparse import ArgumentParser
 
-def get_coord_id(block):
+def _get_coord_id(block):
     id_ = None
     for column in GFF_COLUMNS[:5] + ['strand']:
         if id_ is None:
@@ -18,7 +16,7 @@ def get_coord_id(block):
             id_ = id_ + "_" + str(block[column])
     return id_
 
-def create_missing_UTRs(exons,subexons):
+def _create_missing_UTRs(exons,subexons):
     missing_UTRs = []
     orf_start = orf_end = None
     CDSs_ = [e for e in subexons if e['feature'] == 'CDS']
@@ -100,7 +98,7 @@ def create_missing_UTRs(exons,subexons):
 
     return missing_UTRs
 
-def create_blocks(subblock_group,feature):
+def _create_blocks(subblock_group,feature):
     """Create a list of block, if two blocks are neighbor, then they would be merged to one block"""
     starts = [item['start'] for item in subblock_group]
     ends = [item['end'] for item in subblock_group]
@@ -131,11 +129,11 @@ def create_blocks(subblock_group,feature):
         blocks_info.append(temp)
     return blocks_info
 
-def create_exons(subblock_group):
-    exons_info = create_blocks(subblock_group,'exon')
+def _create_exons(subblock_group):
+    exons_info = _create_blocks(subblock_group,'exon')
     return exons_info
 
-def repair_by_subgroup(data,subdata):
+def _repair_by_subgroup(data,subdata):
     data_ = dict(data)
     if len(subdata) != 0:
         start = min([item['start'] for item in subdata])
@@ -144,35 +142,63 @@ def repair_by_subgroup(data,subdata):
         data_['end'] = end
     return data_
 
-def repair_iterative(data,level,groups):
+def _get_keys(df_groups):
+    return list(df_groups.groups.keys())
+
+def _repair_iterative(data,level,groups):
     #repair subtype data if exist
     repaired_subnodes = []
     subnode_subitems = []
-    try:
-        if level == 0:
+    if level == 0:
+        if data['id'] in _get_keys(groups[0]):
             subitem_list = groups[0].get_group(data['id']).to_dict('record')
             repaired_subnodes = subitem_list
-        else:
-            selected = groups[level-1].get_group(data['id'])
-            for subnodes in selected.to_dict('record'):
-                repaired = repair_iterative(subnodes,level-1,groups)
-                repaired_subnodes.append(repaired)
-                subnode_subitems.append(repaired['node'])
-    except KeyError:
-        pass
+    elif data['id'] in _get_keys(groups[level-1]):
+        selected = groups[level-1].get_group(data['id'])
+        for subnodes in selected.to_dict('record'):
+            repaired = _repair_iterative(subnodes,level-1,groups)
+            repaired_subnodes.append(repaired)
+            subnode_subitems.append(repaired['node'])
     #repair data
-    repaired_data = repair_by_subgroup(data,subnode_subitems)
+    repaired_data = _repair_by_subgroup(data,subnode_subitems)
     return {'node':repaired_data,'children':repaired_subnodes}
 
-def add_iterative(data,returned):
+def _add_iterative(data,returned):
     if 'node' in data.keys():
         returned.append(data['node'])
         for child in data['children']:
-            add_iterative(child,returned)
+            _add_iterative(child,returned)
     else:
         returned.append(data)
 
-def gff_repair(gff):
+def _get_repaired_subexon_exon(rnas,exon_group,subexon_group,rna_id):
+    #If subexon exists, then try to use it to repair UTRs and exons and add reapired exons to list
+    #Otherwise, directly add exons to list
+    exon_list = []
+    subexons_list = []
+    rna = rnas[rnas['id']==rna_id].to_dict('record')[0]
+    if rna_id in _get_keys(exon_group):
+        exons = exon_group.get_group(rna_id).to_dict('record')
+        if rna_id in _get_keys(subexon_group):
+            subexons = subexon_group.get_group(rna_id).to_dict('record')
+            missing_UTRs_ = _create_missing_UTRs(exons,subexons)
+            subexons += missing_UTRs_
+            created_subexons = []
+            for type_ in SUBEXON_TYPES:
+                list_ = [subexon for subexon in subexons if subexon['feature'] == type_]
+                if len(list_) > 0:
+                    created_subexons += _create_blocks(list_,type_)
+            subexons_list += created_subexons
+            created_exons = _create_exons(created_subexons)
+            if len(exons) != len(created_exons):
+                raise Exception("Inonsist exon number at {}, got {} and {}".format(rna_id,len(exons),
+                                                                                   len(created_exons)))
+            exon_list += created_exons
+        else:
+            exon_list += exons
+    return subexons_list,exon_list
+
+def repair_gff(gff):
     strand = set(gff['strand'])
     if len(strand - set(['+','-']))!=0:
         raise Exception("Wrong strand",strand)
@@ -195,34 +221,9 @@ def gff_repair(gff):
         print("Processed {}%".format(int(100*index/len(rnas))),end='\r')
         index+=1
         sys.stdout.write('\033[K')
-        rna = rnas[rnas['id']==rna_id].to_dict('record')[0]
-        try:
-            exons_ = exon_group.get_group(rna_id).to_dict('record')
-        except KeyError:
-            continue
-        #If subexon exists, then try to use it to repair UTRs and exons and exons to list
-        #Otherwise, exons to list
-        try:
-            subexons_ = subexon_group.get_group(rna_id).to_dict('record')
-            missing_UTRs_ = create_missing_UTRs(exons_,subexons_)
-            subexons_ += missing_UTRs_
-            created_subexons = []
-            for type_ in SUBEXON_TYPES:
-                list_ = []
-                for subexon in subexons_:
-                    if subexon['feature'] == type_:
-                        list_.append(subexon)
-                if len(list_) > 0:
-                    created_subexons += create_blocks(list_,type_)
-            subexons_list += created_subexons
-            created_exons = create_exons(created_subexons)
-            if len(exons_) != len(created_exons):
-                raise Exception("Inonsist exon number at {}, got {} and {}".format(rna_id,len(exons_),
-                                                                                   len(created_exons)))
-            exon_list += created_exons
-            
-        except KeyError:
-            exon_list += exons_
+        subexons_list_,exon_list_ = _get_repaired_subexon_exon(rnas,exon_group,subexon_group,rna_id)
+        exon_list += exon_list_
+        subexons_list += subexons_list_
 
     all_exons = pd.DataFrame.from_dict(subexons_list + exon_list)
     all_exons.loc[:,'attribute'] = "ID=" + all_exons['id'] + ";Parent=" + all_exons['parent'] + ";Name=" + all_exons['name']
@@ -236,12 +237,12 @@ def gff_repair(gff):
         print("Processed {}%".format(int(100*index/len(genes))),end='\r')
         index+=1
         sys.stdout.write('\033[K')
-        node = repair_iterative(gene,len(groups),groups)
+        node = _repair_iterative(gene,len(groups),groups)
         gene_node.append(node)
 
     returned = []
     for gene in gene_node:
-        add_iterative(gene,returned)
+        _add_iterative(gene,returned)
         
     all_types = GENE_TYPES + RNA_TYPES + EXON_TYPES + SUBEXON_TYPES    
     others = gff[~gff['feature'].isin(all_types)].to_dict('record') 
@@ -249,6 +250,26 @@ def gff_repair(gff):
 
     returned = pd.DataFrame.from_dict(returned)
     return returned
+
+def main(input_path,output_path,saved_root):
+    gff = read_gff(input_path)
+    gff = get_gff_with_attribute(gff,['parent'])    
+    gff = dupliacte_gff_by_parent(gff)
+    origin_ids = [_get_coord_id(item) for item in gff.to_dict('record')]
+    gff.loc[:,'coord_id'] = origin_ids
+    
+    created_gff = repair_gff(gff)
+    write_gff(created_gff,output_path)
+    created_ids = [_get_coord_id(item) for item in created_gff.to_dict('record')]
+    created_gff.loc[:,'coord_id'] = created_ids
+    
+    broken_ids = set(origin_ids) - set(created_ids)
+    repaired_ids = set(created_ids) - set(origin_ids)
+    
+    broken_gff = gff[gff['coord_id'].isin(broken_ids)]
+    repaired_gff = created_gff[created_gff['coord_id'].isin(repaired_ids)]
+    write_gff(broken_gff,os.path.join(saved_root,'broken.gff'))
+    write_gff(repaired_gff,os.path.join(saved_root,'repaired.gff'))
 
 if __name__ =='__main__':
     parser = ArgumentParser(description="This program will use CDS and exon to "+
@@ -259,21 +280,6 @@ if __name__ =='__main__':
     parser.add_argument("-s", "--saved_root",help="Root to save broken and repaired item",required=True)
     args = parser.parse_args()
 
-    gff = read_gff(args.input_path)
-    gff = get_gff_with_attribute(gff,['parent'])    
-    gff = dupliacte_gff_by_parent(gff)
-
-    created_gff = gff_repair(gff)
-    write_gff(created_gff,args.output_path)
-
-    origin_ids = [get_coord_id(item) for item in gff.to_dict('record')]
-    created_ids = [get_coord_id(item) for item in created_gff.to_dict('record')]
-    gff.loc[:,'coord_id'] = origin_ids
-    created_gff.loc[:,'coord_id'] = created_ids
-    broken_ids = set(origin_ids) - set(created_ids)
-    repaired_ids = set(created_ids) - set(origin_ids)
+    kwargs = vars(args)
     
-    broken_gff = gff[gff['coord_id'].isin(broken_ids)]
-    repaired_gff = created_gff[created_gff['coord_id'].isin(repaired_ids)]
-    write_gff(broken_gff,os.path.join(args.saved_root,'broken.gff'))
-    write_gff(repaired_gff,os.path.join(args.saved_root,'repaired.gff'))
+    main(**kwargs)

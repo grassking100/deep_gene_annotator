@@ -1,3 +1,4 @@
+import pandas as pd
 import os, sys
 sys.path.append(os.path.dirname(__file__)+"/../..")
 from argparse import ArgumentParser
@@ -21,7 +22,6 @@ if __name__ == "__main__":
     is_id_discard = gff['id'].isin(discard_ids)
     is_parent_discard = gff['parent'].isin(discard_ids)
     gff = gff[(~is_id_discard) & (~is_parent_discard)]
-    #print(gff.head())
     gff.loc[:,'chr'] = gff['chr'].str.replace('Chr','')
     write_gff(gff,args.output_gff_path)
     

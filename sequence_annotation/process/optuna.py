@@ -1,6 +1,5 @@
 import os
 import pandas as pd
-import json
 import pickle
 
 def add_exist_trial(study,folder_path):

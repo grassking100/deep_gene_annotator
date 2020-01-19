@@ -2,16 +2,13 @@ import math
 import unittest
 import os
 from sequence_annotation.genome_handler.seq_info_parser import BedInfoParser
-from sequence_annotation.genome_handler.region_extractor import RegionExtractor
 from sequence_annotation.genome_handler.exon_handler import ExonHandler
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer,SeqInfoContainer
 from sequence_annotation.genome_handler.ann_seq_processor import get_background,get_seq_with_added_type,get_one_hot,simplify_seq
 from sequence_annotation.genome_handler.ann_seq_converter import CodingBedSeqConverter
-from sequence_annotation.genome_handler.ann_genome_creator import AnnGenomeCreator,AnnChromCreator
-from sequence_annotation.genome_handler.seq_info_generator import SeqInfoGenerator
+from sequence_annotation.genome_handler.ann_genome_creator import AnnGenomeCreator
 from sequence_annotation.genome_handler.ann_genome_processor import get_sub_ann_seqs
 from sequence_annotation.genome_handler.sequence import SeqInformation
-from sequence_annotation.utils.seq_converter import SeqConverter
 
 file_root = os.path.abspath(os.path.join(__file__,'..'))
 bed_file_prefix = os.path.join(file_root,'data/test_data')
@@ -73,6 +70,5 @@ class TestGenomeHandlePipeline(unittest.TestCase):
                 for type_ in ['intron','other','exon']:
                     data[type_] = item['data'][type_]
                 answer[item['id']]=data
-        except Exception as exp:
-            raise exp
+        except Exception:
             self.fail("There are some unexpected exception occur.")

@@ -1,8 +1,7 @@
 import torch
 from torch import nn
 from .customized_layer import BasicModel
-from .cnn import Conv1d
-from .rnn import GRU,ProjectedGRU
+from .rnn import ProjectedGRU
 
 class RNNAttention(BasicModel):
     def __init__(self,in_channels,hidden_size=None,
@@ -55,5 +54,3 @@ class RNNAttention(BasicModel):
         self.update_distribution(attention_gate,'{}attention_gate'.format(self.name))
         self.update_distribution(attention_result,'{}attention_result'.format(self.name))
         return attention_result
-
-ATTENTION_LAYER={'RNNAttention':RNNAttention}

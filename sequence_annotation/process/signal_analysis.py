@@ -1,7 +1,5 @@
-import sys
-import numpy as np
 import torch
-from sequence_annotation.process.utils import get_seq_mask
+import numpy as np
 
 def cnn_saliency_map(model,seq,length,channel_index):
     if len(seq.shape) != 3 or seq.shape[0] != 1:

@@ -1,12 +1,8 @@
 from abc import abstractmethod,ABCMeta
-import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn.functional import binary_cross_entropy as BCE
-import torch.nn.functional as F
-from torch.autograd import Variable
-from .inference import basic_inference,ann_vec2one_hot_vec
-from ..genome_handler.ann_seq_processor import get_start, get_end
+from .inference import create_basic_inference
 
 EPSILON=1e-32
 
@@ -153,8 +149,8 @@ class LabelLoss(nn.Module):
     def __init__(self,loss):
         super().__init__()
         self.loss = loss
-        self.predict_inference = basic_inference(3)
-        self.answer_inference = basic_inference(3)
+        self.predict_inference = create_basic_inference(3)
+        self.answer_inference = create_basic_inference(3)
         
     def get_config(self):
         config = {}

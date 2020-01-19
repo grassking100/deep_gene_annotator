@@ -1,5 +1,5 @@
 import unittest
-import numpy as np
+
 class SeqInfoTestCase(unittest.TestCase):
     def assert_seq_equal(self, real_seq, test_seq):
         self.assertEqual(real_seq.chromosome_id, test_seq.chromosome_id)

@@ -1,4 +1,4 @@
-from . import AnnSeqTestCase
+from ..ann_seq_test_case import AnnSeqTestCase
 import numpy as np
 from numpy.testing import assert_array_equal
 from sequence_annotation.genome_handler.exception import ProcessedStatusNotSatisfied
@@ -217,7 +217,7 @@ class TestAnnSeqProcessor(AnnSeqTestCase):
         ann.init_space()
         ann.set_ann('exon',1,0,2).set_ann('intron',1,3,5)
         with self.assertRaises(ProcessedStatusNotSatisfied):
-            certain_status = get_certain_status(ann)
+            get_certain_status(ann)
 
     def test_get_ann_vecs(self):
         genome = AnnSeqContainer()

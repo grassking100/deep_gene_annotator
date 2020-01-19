@@ -1,10 +1,9 @@
 from abc import abstractmethod
-import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.utils.rnn import pack_padded_sequence,pad_packed_sequence,PackedSequence
-from .customized_layer import BasicModel,Concat
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+from .customized_layer import BasicModel
 from .cnn import Conv1d
 from .utils import xavier_uniform_extend_
 from torch.nn.init import zeros_,constant_,orthogonal_
@@ -56,7 +55,6 @@ def bias_xav_gru_init(rnn,mode=None):
             ri_bias,zi_bias,ni_bias = getattr(rnn,'bias_ih_l{}{}'.format(index,suffix)).chunk(3, 0)
             rh_bias,zh_bias,nh_bias = getattr(rnn,'bias_hh_l{}{}'.format(index,suffix)).chunk(3, 0)
             w_ir = getattr(rnn,'weight_ih_l{}{}'.format(index,suffix)).chunk(3, 0)[0]
-            w_hr = getattr(rnn,'weight_hh_l{}{}'.format(index,suffix)).chunk(3, 0)[0]
             fan_in, fan_out = _calculate_fan_in_and_fan_out(w_ir)
             h_n = fan_out
             if mode == 'both':

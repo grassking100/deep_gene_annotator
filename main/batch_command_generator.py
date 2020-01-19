@@ -1,6 +1,9 @@
-import os,sys
+import os
 import pandas as pd
 from argparse import ArgumentParser
+
+def _get_name(path):
+    return path.split('/')[-1].split('.')[0]
 
 if __name__ == '__main__':    
     parser = ArgumentParser()
@@ -8,7 +11,8 @@ if __name__ == '__main__':
     parser.add_argument("-e","--executor_config_path",help="Path of Executor config",required=True)
     parser.add_argument("-m","--model_config_path",help="Path of Model config",required=True)
     parser.add_argument("-n","--save_result_name",required=True)
-    parser.add_argument("-s","--save_command_table_path",required=True)
+    parser.add_argument("-s","--saved_root",required=True)
+    parser.add_argument("-c","--save_command_table_path",required=True)
     parser.add_argument("--mode",default='w')
 
     args = parser.parse_args()
@@ -26,11 +30,14 @@ if __name__ == '__main__':
     val_paths = []
     data_usage = pd.read_csv(args.data_usage_table_path,comment='#').to_dict('record')
     for item in data_usage:
-        saved_roots.append(item['root'])
-        train_paths.append(os.path.join(item['root'],item['train_path']))
-        val_paths.append(os.path.join(item['root'],item['val_path']))
+        name = "{}_{}".format(_get_name(item['training_path']),
+                              _get_name(item['validation_path']))
+        saved_root = os.path.join(args.saved_root,name)
+        saved_roots.append(saved_root)
+        train_paths.append(item['training_path'])
+        val_paths.append(item['validation_path'])
         
-    for paths in zip(train_paths,val_paths,saved_roots):
+    for paths in zip(train_paths,val_paths):
         if not all([os.path.exists(p) for p in paths]):
             raise Exception("Some paths, {}, are not exists".format(paths))
         

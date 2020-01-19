@@ -2,7 +2,7 @@ import os,sys
 sys.path.append(os.path.dirname(__file__)+"/../..")
 import pandas as pd
 from argparse import ArgumentParser
-from sequence_annotation.utils.utils import read_bed,write_bed
+from sequence_annotation.utils.utils import read_bed,write_bed, read_region_table
 
 def rename_chrom(bed,renamed_table):
     belong_table = {}
@@ -21,7 +21,7 @@ def rename_chrom(bed,renamed_table):
 
 def main(bed_path,table_path,output_path):
     bed = read_bed(bed_path)
-    renamed_table = pd.read_csv(table_path,sep='\t',dtype={'chr':str,'start':int,'end':int})
+    renamed_table = read_region_table(table_path)
     redefined_bed = rename_chrom(bed,renamed_table)
     write_bed(redefined_bed,output_path)
 

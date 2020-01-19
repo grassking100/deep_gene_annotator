@@ -1,4 +1,3 @@
-import unittest
 import numpy as np
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
 from sequence_annotation.genome_handler.sequence import AnnSequence

@@ -1,10 +1,8 @@
 from abc import ABCMeta
 from abc import abstractmethod
-import ast
 import numpy as np
-import pandas as pd
 from ..utils.exception import NegativeNumberException,NotPositiveException
-from ..utils.utils import BED_COLUMNS, read_bed
+from ..utils.utils import read_bed
 from .exception import InvalidStrandType
 
 class SeqInfoParser(metaclass=ABCMeta):

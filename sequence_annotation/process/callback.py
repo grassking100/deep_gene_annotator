@@ -1,59 +1,51 @@
 import os
 import warnings
-from abc import abstractmethod, abstractproperty, ABCMeta
-import deepdish as dd
-import json
-import math
+import seqlogo
 import numpy as np
 import pandas as pd
-import torch
-import seqlogo
 from skimage.filters import threshold_otsu
-from ..utils.utils import create_folder,write_gff,gff_to_bed_command,gffcompare_command,save_as_gff_and_bed,write_json
+from abc import abstractmethod, abstractproperty, ABCMeta
+from ..utils.utils import create_folder
 from ..utils.seq_converter import DNA_CODES
-from ..genome_handler.seq_container import EmptyContainerException
 from .metric import calculate_metric,categorical_metric,contagion_matrix
 from .warning import WorkerProtectedWarning
-from .inference import ann_vec2one_hot_vec,basic_inference
-from .signal import get_signal_ppm, ppms2meme
+from .inference import ann_vec2one_hot_vec,create_basic_inference
+from .signal_analysis import get_signal_ppm, ppms2meme
 
 class ICallback(metaclass=ABCMeta):
     @abstractmethod
-    def get_config(self,**kwargs):
+    def get_config(self):
         pass
-    def on_work_begin(self,**kwargs):
+    def on_work_begin(self,worker):
         pass
     def on_work_end(self):
         pass
-    def on_epoch_begin(self,**kwargs):
+    def on_epoch_begin(self,counter):
         pass
-    def on_epoch_end(self,**kwargs):
+    def on_epoch_end(self,metric):
         pass
     def on_batch_begin(self):
         pass
-    def on_batch_end(self,**kwargs):
+    def on_batch_end(self,seq_data,masks,predicts,metric,outputs):
         pass
 
+def set_prefix(callback,prefix):
+    if prefix is not None and len(prefix)>0:
+        prefix+="_"
+    else:
+        prefix=""
+    setattr(callback,'_prefix',prefix)
+    if hasattr(callback,'_config'):
+        callback._config['prefix'] = prefix
+    else:
+        callback._config = {'prefix':prefix}
+
 class Callback(ICallback):
-    def __init__(self,prefix=None,*args,**kwargs):
-        self._prefix = ""
-        self.prefix = prefix
-
-    @property
-    def prefix(self):
-        return self._prefix
-
-    @prefix.setter
-    def prefix(self,prefix):
-        if prefix is not None and len(prefix)>0:
-            prefix+="_"
-        else:
-            prefix=""
-        self._prefix = prefix
-
     def get_config(self,**kwargs):
-        config = {}
-        config['prefix'] = self._prefix
+        if hasattr(self,'_config'):
+            config = self._config
+        else:
+            config = {}
         return config
 
 class Callbacks(ICallback):
@@ -106,9 +98,9 @@ class Callbacks(ICallback):
         for callback in self.callbacks:
             callback.on_epoch_end(**kwargs)
 
-    def on_batch_begin(self):
+    def on_batch_begin(self,**kwargs):
         for callback in self.callbacks:
-            callback.on_batch_begin()
+            callback.on_batch_begin(**kwargs)
 
     def on_batch_end(self,**kwargs):
         for callback in self.callbacks:
@@ -121,122 +113,10 @@ class Callbacks(ICallback):
                 for type_,value in callback.data.items():
                     record[type_]=value
         return record
-    
-class GFFCompare(Callback):
-    def __init__(self,ann_vec2info_converter,path,fix_boundary=False,prefix=None):
-        super().__init__(prefix)
-        if ann_vec2info_converter is None:
-            raise Exception("The ann_vec2info_converter should not be None")
-        if path is None:
-            raise Exception("The path should not be None")
-        self.converter = ann_vec2info_converter
-        self.fix_boundary = fix_boundary
-        self._path = path
-        self._counter = None
-        self._outputs = None
-        self._answers = None
-        self._model = None
-        
-    def on_work_begin(self,worker,**kwargs):
-        self._counter = 0
-        self._model = worker.model
 
-    def get_config(self,**kwargs):
-        config = super().get_config(**kwargs)
-        config['path'] = self._path
-        config['ann_vec2info_converter'] = self.converter.get_config()
-        config['fix_boundary'] = self.fix_boundary
-        return config
-
-    def on_epoch_begin(self,counter,**kwargs):
-        self._outputs = []
-        self._answers = []
-        self._counter = counter
-
-    def on_batch_end(self,predict_result,seq_data,masks,**kwargs):
-        chrom_ids,dna_seqs,answers,lengths = seq_data.ids,seq_data.seqs,seq_data.answers,seq_data.lengths
-        answers = answers.cpu().numpy()
-        predict_result = predict_result.cpu().numpy()
-        try:
-            if self.fix_boundary:
-                output_info = self.converter.vecs2fixed_info(chrom_ids,lengths,dna_seqs,predict_result)
-            else:
-                output_info = self.converter.vecs2info(chrom_ids,lengths,predict_result)
-            self._outputs.append(output_info)
-        except EmptyContainerException:
-            pass
-
-        if self._counter == 1:
-            try:
-                label_info = self.converter.vecs2info(chrom_ids,lengths,answers)
-                self._answers.append(label_info)
-            except EmptyContainerException:
-                pass
-
-    def on_epoch_end(self,**kwargs):
-        prefix = "{}gffcompare_{}".format(self.prefix,self._counter)
-        prefix_path = os.path.join(self._path,prefix)
-        answer_bed_path = os.path.join(self._path,"answers.bed")
-        answer_gff_path = os.path.join(self._path,"answers.gff3")
-        predict_bed_path = os.path.join(self._path,"{}.bed".format(prefix))
-        predict_gff_path = os.path.join(self._path,"{}.gff3".format(prefix))
-        if self._counter == 1:
-            answers = pd.concat(self._answers)
-            save_as_gff_and_bed(answers,answer_gff_path,answer_bed_path)
-
-        if len(self._outputs) > 0:
-            outputs = pd.concat(self._outputs)
-            save_as_gff_and_bed(outputs,predict_gff_path,predict_bed_path)
-            gffcompare_command(answer_gff_path,predict_gff_path,prefix_path)
-            
-class SignalSaver(Callback):
-    def __init__(self,path,prefix=None):
-        super().__init__(prefix)
-        if path is None:
-            raise Exception("The path should not be None")
-        self._path = path
-        self._raw_outputs = None
-        self._raw_answers = None
-        
-    def on_work_begin(self,worker,**kwargs):
-        self._counter = 0
-        self._model = worker.model
-
-    def get_config(self,**kwargs):
-        config = super().get_config(**kwargs)
-        config['path'] = self._path
-        return config
-
-    def on_epoch_begin(self,counter,**kwargs):
-        self._raw_outputs = []
-        self._raw_answers = []
-        self._counter = counter
-
-    def on_batch_end(self,outputs,seq_data,**kwargs):
-        chrom_ids,dna_seqs,answers,lengths = seq_data.ids,seq_data.seqs,seq_data.answers,seq_data.lengths
-        answers = answers.cpu().numpy()
-        self._raw_outputs.append({'outputs':outputs,
-                                  'chrom_ids':chrom_ids,
-                                  'dna_seqs':dna_seqs,
-                                  'lengths':lengths})
-
-        if self._counter == 1:
-            self._raw_answers.append({'answers':answers,
-                                      'chrom_ids':chrom_ids,
-                                      'dna_seqs':dna_seqs,
-                                      'lengths':lengths})
-
-    def on_epoch_end(self,**kwargs):
-        raw_output_path = os.path.join(self._path,'{}raw_output_{}.h5').format(self.prefix,self._counter)
-        raw_answer_path = os.path.join(self._path,'{}raw_answer.h5').format(self.prefix)
-        dd.io.save(raw_output_path , self._raw_outputs)
-
-        if self._counter == 1:
-            dd.io.save(raw_answer_path, self._raw_answers)
-        
 class TensorboardCallback(Callback):
     def __init__(self,tensorboard_writer,prefix=None):
-        super().__init__(prefix)
+        set_prefix(self,prefix)
         self.tensorboard_writer = tensorboard_writer
         self._model = None
         self._counter = None
@@ -261,21 +141,21 @@ class TensorboardCallback(Callback):
         if self.do_add_grad:
             self.tensorboard_writer.add_grad(counter=self._counter,
                                              named_parameters=self._model.named_parameters(),
-                                             prefix=self.prefix)
+                                             prefix=self._prefix)
         if self.do_add_weights:
             self.tensorboard_writer.add_weights(counter=self._counter,
                                                 named_parameters=self._model.named_parameters(),
-                                                prefix=self.prefix)
+                                                prefix=self._prefix)
         if self.do_add_scalar:
             self.tensorboard_writer.add_scalar(counter=self._counter,record=metric,
-                                               prefix=self.prefix)
+                                               prefix=self._prefix)
         
     def on_work_end(self):
         self.tensorboard_writer.close()
 
 class SeqFigCallback(Callback):
     def __init__(self,tensorboard_writer,data,answer,label_names=None,colors=None,prefix=None):
-        super().__init__(prefix)
+        set_prefix(self,prefix)
         self._writer = tensorboard_writer
         self._data = data
         self._answer = answer
@@ -330,7 +210,7 @@ class SeqFigCallback(Callback):
         
 class DataCallback(Callback):
     def __init__(self,prefix=None):
-        super().__init__(prefix)
+        set_prefix(self,prefix)
         self._data = None
 
     @abstractproperty
@@ -344,49 +224,10 @@ class DataCallback(Callback):
     def on_work_begin(self,**kwargs):
         self._reset()
 
-class Recorder(DataCallback):
-    def __init__(self,prefix=None,path=None,force_reset=False):
-        super().__init__(prefix)
-        self.path = path
-        self._force_reset = force_reset
-        self._worker = None
-
-    def get_config(self,**kwargs):
-        config = super().get_config(**kwargs)
-        config['path'] = self.path
-        config['force_reset'] = self._force_reset
-        return config
-
-    def _reset(self):
-        self._data = {}
-        if self.path is not None and os.path.exists(self.path) and not self._force_reset:
-            with open(self.path,'r') as fp:
-                self._data = json.load(fp)
-
-    def on_work_begin(self,epoch_start=None,**kwargs):
-        super().on_work_begin()
-        if epoch_start is not None:
-            for type_,value in self._data.items():
-                self._data[type_] = value[:epoch_start-1]
-
-    def on_epoch_end(self,metric,**kwargs):
-        for type_,value in metric.items():
-            if type_ not in self._data.keys():
-                self._data[type_] = []
-            self._data[type_].append(value)
-
-        if self.path is not None:
-            write_json(self.data,self.path)
-
-    @property
-    def data(self):
-        return self._data
-
 class Accumulator(DataCallback):
     def __init__(self,prefix=None):
         super().__init__(prefix)
         self._batch_count = None
-        self._epoch_count = None
         self.round_value = 3
         
     def get_config(self,**kwargs):
@@ -397,11 +238,6 @@ class Accumulator(DataCallback):
     def _reset(self):
         self._data = {}
         self._batch_count = 0
-        self._epoch_count = 0
-
-    def on_epoch_begin(self,**kwargs):
-        self._reset()
-        self._epoch_count += 1
 
     def on_batch_end(self,metric,**kwargs):
         if self._batch_count == 0:
@@ -426,7 +262,7 @@ class CategoricalMetric(DataCallback):
     def __init__(self,label_num,label_names=None,prefix=None):
         super().__init__(prefix)
         self.label_num = label_num or 3
-        self.answer_inference = basic_inference(self.label_num)
+        self.answer_inference = create_basic_inference(self.label_num)
         self.show_precision = False
         self.show_recall = False
         self.show_f1 = True
@@ -461,10 +297,10 @@ class CategoricalMetric(DataCallback):
     def on_epoch_begin(self,**kwargs):
         self._reset()
 
-    def on_batch_end(self,predict_result,seq_data,masks,**kwargs):
+    def on_batch_end(self,seq_data,masks,predicts,**kwargs):
         labels = self.answer_inference(seq_data.answers,masks)
         #N,C,L
-        data = categorical_metric(predict_result.cpu().numpy(),
+        data = categorical_metric(predicts.cpu().numpy(),
                                   labels.cpu().numpy(),
                                   masks.cpu().numpy())
         for type_ in ['TPs','FPs','TNs','FNs']:
@@ -472,7 +308,7 @@ class CategoricalMetric(DataCallback):
                 self._data[type_][index] += data[type_][index]
         self._data['T'] += data['T']
         self._data['F'] += data['F']
-        self._result = calculate_metric(self._data,prefix=self.prefix,
+        self._result = calculate_metric(self._data,prefix=self._prefix,
                                         label_names=self.label_names,
                                         calculate_precision=self.show_precision,
                                         calculate_recall=self.show_recall,
@@ -495,7 +331,7 @@ class ContagionMatrix(DataCallback):
     def __init__(self,label_num,label_names=None,prefix=None):
         super().__init__(prefix)
         self.label_num = label_num or 3
-        self.inference = basic_inference(self.label_num)
+        self.inference = create_basic_inference(self.label_num)
         self._label_names = None
         if label_names is not None:
             self.label_names = label_names
@@ -519,24 +355,23 @@ class ContagionMatrix(DataCallback):
     def on_epoch_begin(self,**kwargs):
         self._reset()
 
-    def on_batch_end(self,predict_result,seq_data,masks,**kwargs):
+    def on_batch_end(self,seq_data,masks,predicts,**kwargs):
         labels = self.inference(seq_data.answers,masks)
         #N,C,L
-        data = contagion_matrix(predict_result.cpu().numpy(),
+        data = contagion_matrix(predicts.cpu().numpy(),
                                 labels.cpu().numpy(),
                                 masks.cpu().numpy())
         self._data += np.array(data)
 
     @property
     def data(self):
-        return {self.prefix+'contagion_matrix':self._data.tolist()}
+        return {self._prefix+'contagion_matrix':self._data.tolist()}
 
     def _reset(self):
         self._data = np.array([[0]*self.label_num] * self.label_num)
         
 class SeqLogo(Callback):
-    def __init__(self,saved_distribution_name,saved_root,ratio=None,radius=None,prefix=None):
-        super().__init__(prefix)
+    def __init__(self,saved_distribution_name,saved_root,ratio=None,radius=None):
         self.saved_root = saved_root
         self.saved_distribution_name = saved_distribution_name
         self.ratio = ratio
@@ -611,7 +446,6 @@ class SeqLogo(Callback):
                 valid_loc = np.where(info_sum>=threshold)[0]
                 if len(valid_loc) > 0:
                     #Get valid location of ppm
-                    shape = ppm.shape
                     ppm = ppm[:,min(valid_loc):max(valid_loc)+1]
                     ppm_df = pd.DataFrame(ppm.T,columns = list(DNA_CODES))
                     seqlogo_ppm = seqlogo.Ppm(ppm_df,background=background_freq)
@@ -629,8 +463,7 @@ class SeqLogo(Callback):
         ppms2meme(ppm_dfs,names,self._meme_path,strands='+',background=background_freq_)
 
 class OptunaCallback(Callback):
-    def __init__(self,trial,target=None,prefix=None):
-        super().__init__(prefix)
+    def __init__(self,trial,target=None):
         self.trial = trial
         self.target = target or 'val_loss'
         self._counter = None

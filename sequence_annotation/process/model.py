@@ -1,11 +1,8 @@
 import torch
-from torch import nn
 from .customized_layer import BasicModel
-from .rnn import GRU, LSTM,GRU_INIT_MODE
-from .customized_rnn import RNN_TYPES, ConcatGRU
-from .attention import ATTENTION_LAYER
+from .customized_rnn import RNN_TYPES
 from .hier_atten_rnn import HierAttenGRU,AttenGRU,HierGRU
-from .cnn import STACK_CNN_CLASS,Conv1d
+from .cnn import STACK_CNN_CLASS
 
 RNN_TYPES = dict(RNN_TYPES)
 RNN_TYPES['HierAttenGRU'] = HierAttenGRU
@@ -153,9 +150,6 @@ class SeqAnnBuilder:
             relation_block = RelationBlock(feature_block.out_channels,
                                            out_channels=self.out_channels,
                                            **relation_block_config)
-            out_channels = relation_block.out_channels
-        else:    
-            out_channels = feature_block.out_channels
         
         model = SeqAnnModel(feature_block,relation_block,last_act=self.last_act)
         return model

@@ -3,7 +3,25 @@ import sys
 import deepdish as dd
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(os.path.abspath(__file__+"/..")))
-from main.utils import load_data
+from main.utils import select_data
+
+def main(saved_path,fasta_path,ann_seqs_path,id_path,min_len,max_len,ratio,select_each_type):
+    print("Load and parse data")
+    if os.path.exists(saved_path):
+        data = dd.io.load(saved_path)
+        if isinstance(data[1],dict):
+            print("Data is existed, the program will be skipped")
+        else:
+            data = data[0],data[1].to_dict()
+            dd.io.save(saved_path,data)
+            print("Save file to {}".format(saved_path))
+    else:
+        data = select_data(fasta_path,ann_seqs_path,[id_path],
+                           min_len=min_len,max_len=max_len,ratio=ratio,
+                           select_each_type=select_each_type)
+        print("Number of parsed data:{}".format(len(data[0])))
+        dd.io.save(saved_path,data)
+        print("Save file to {}".format(saved_path))
 
 if __name__ == '__main__':
     parser = ArgumentParser()
@@ -17,16 +35,7 @@ if __name__ == '__main__':
     parser.add_argument("--ratio",type=float,default=1,help="Ratio of number to be chosen to train" +\
                         " and validate, start chosen by increasing order)")
     parser.add_argument("--select_each_type",action='store_true')
+
     args = parser.parse_args()
-    
-    print("Load and parse data")
-    if os.path.exists(args.saved_path):
-        print("Data is existed, the program will be skipped")
-    else:
-        data = load_data(args.fasta_path,args.ann_seqs_path,
-                         [args.id_path],
-                         min_len=args.min_len,
-                         max_len=args.max_len,
-                         ratio=args.ratio,
-                         select_each_type=args.select_each_type)[0]
-        dd.io.save(args.saved_path,data)
+    setting = vars(args)
+    main(**setting)

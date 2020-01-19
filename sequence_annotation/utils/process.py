@@ -68,16 +68,14 @@ class Process:
             return False
         
 def process_schedule(processes,gpu_ids,mem_used_percent_threshold=None):
-    mem_used_percent_threshold = mem_used_percent_threshold or 0.1
+    mem_used_percent_threshold = mem_used_percent_threshold or 5
     processes = dict(zip(list(range(len(processes))),processes))
     gpu_ready = [None] * len(gpu_ids)
-    def filter_method(x,belong_id):
-        return d
     while True:
         for index,belong_id in enumerate(gpu_ready):
             if belong_id is None:
                 gpus = nvgpu.gpu_info()
-                gpu = list(filter(lambda x:x['index']==gpu_ids[index],gpus))
+                gpu = list(filter(lambda x:x['index']==str(gpu_ids[index]),gpus))
                 ready_ps = [p for p in processes.values() if not p.is_start]
                 if len(ready_ps)>0 and len(gpu)==1:
                     if gpu[0]['mem_used_percent']<=mem_used_percent_threshold:

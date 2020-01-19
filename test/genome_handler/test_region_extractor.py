@@ -1,5 +1,4 @@
-from . import SeqInfoTestCase
-import numpy as np
+from ..seq_info_test_case import SeqInfoTestCase
 from sequence_annotation.genome_handler.sequence import AnnSequence,SeqInformation
 from sequence_annotation.genome_handler.seq_container import SeqInfoContainer
 from sequence_annotation.genome_handler.region_extractor import RegionExtractor

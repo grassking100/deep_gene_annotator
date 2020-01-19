@@ -1,7 +1,6 @@
 import os
 import unittest
 import numpy as np
-import pandas as pd
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
 from sequence_annotation.genome_handler.seq_info_parser import BedInfoParser
 from sequence_annotation.genome_handler.ann_seq_converter import CodingBedSeqConverter

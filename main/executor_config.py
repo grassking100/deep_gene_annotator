@@ -1,5 +1,4 @@
 import sys,os
-import json
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(os.path.abspath(__file__+"/..")))
 from sequence_annotation.utils.utils import write_json

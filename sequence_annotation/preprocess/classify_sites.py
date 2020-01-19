@@ -6,16 +6,13 @@ from sequence_annotation.utils.utils import read_bed
 
 def simple_belong_by_boundary(exp_sites,boundarys,site_name,start_name,end_name,ref_name):
     data = []
-    boundarys.loc[:,start_name] = boundarys[start_name].astype(int)
-    boundarys.loc[:,end_name] = boundarys[end_name].astype(int)
-    exp_sites.loc[:,site_name] = exp_sites[site_name].astype(int)
     exp_sites = exp_sites.to_dict('record')
     boundarys = boundarys.to_dict('record')
     for boundary in boundarys:
-        start, end = boundary[start_name], boundary[end_name]        
+        start, end = int(boundary[start_name]), int(boundary[end_name])
         lb, ub = min(start,end), max(start,end)
         for exp_site in exp_sites:
-            site = exp_site[site_name]
+            site = int(exp_site[site_name])
             if lb <= site <= ub:
                 temp = dict(exp_site)
                 temp['ref_name'] = boundary[ref_name]
@@ -25,17 +22,15 @@ def simple_belong_by_boundary(exp_sites,boundarys,site_name,start_name,end_name,
 def simple_belong_by_distance(exp_sites,ref_sites,upstream_dist,downstream_dist,
                               exp_site_name,ref_site_name,ref_name):
     data = []
-    ref_sites.loc[:,ref_site_name] = ref_sites[ref_site_name].astype(int)
-    exp_sites.loc[:,exp_site_name] = exp_sites[exp_site_name].astype(int)
     exp_sites = exp_sites.to_dict('record')
     ref_sites = ref_sites.to_dict('record')
 
     for ref_site in ref_sites:
-        r_s = ref_site[ref_site_name]
+        r_s = int(ref_site[ref_site_name])
         ub = r_s + upstream_dist
         db = r_s + downstream_dist
         for exp_site in exp_sites:
-            e_s = exp_site[exp_site_name]
+            e_s = int(exp_site[exp_site_name])
             if ub <= e_s <= db:
                 temp = dict(exp_site)
                 temp['ref_name'] = ref_site[ref_name]

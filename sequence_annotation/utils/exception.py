@@ -32,12 +32,6 @@ class NotPositiveException(ValueError):
         msg =(value_name+","+str(value)+", must be positive")
         super().__init__(msg)
 
-class InvalidValueInDict(Exception):
-    def __init__(self, key, invalid_value):
-        msg = ("Passed dictionary has invilad value"
-               ","+str(invalid_value) + " , in " + str(key))
-        super().__init__(msg)
-
 class AttrIsNoneException(Exception):
     def __init__(self, attr_name, class_name=None):
         if class_name is None:
@@ -53,21 +47,6 @@ class LengthNotEqualException(Exception):
         msg = msg.format(first_length,second_length)
         if id_ is not None:
              msg += ', this error occurs in {}'.format(id_) 
-        super().__init__(msg)
-
-class DimensionNotSatisfy(Exception):
-    def __init__(self, dim, exception_dim):
-        msg = ("Dimension size should be"
-               " "+str(exception_dim)+","
-               "but get dimension with shape,"
-               ""+str(dim))
-        super().__init__(msg)
-
-class ReturnNoneException(Exception):
-    def __init__(self,attr_name,solution=None):
-        msg = "Try to return "+attr_name+" with None value"
-        if solution is not None:
-            msg +=(","+str(solution))
         super().__init__(msg)
 
 class UninitializedException(Exception):

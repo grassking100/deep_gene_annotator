@@ -4,7 +4,7 @@ import pandas as pd
 from ..utils.exception import IdNotFoundException,DuplicateIdException,AttrIsNoneException,ChangeConstValException
 from ..utils.utils import GFF_COLUMNS
 from .exception import InvalidAnnotation
-from .sequence import AnnSequence,SeqInformation,Sequence
+from .sequence import AnnSequence, SeqInformation
 
 class EmptyContainerException(Exception):
     def __init__(self):

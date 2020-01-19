@@ -1,10 +1,7 @@
-import os, sys
+import os
 import pandas as pd
 from argparse import ArgumentParser
-from utils import consist, coordinate_consist_filter, duplicated_filter
-
-def get_gene_names(df,name,convert_table):
-    return [convert_table[name] for name in df[name]]
+from utils import consist, duplicated_filter
 
 if __name__ == "__main__":
     #Reading arguments

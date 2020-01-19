@@ -1,6 +1,5 @@
 import os, sys
 import pandas as pd
-import warnings
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__)+"/../..")
 from sequence_annotation.utils.utils  import read_fasta, write_fasta

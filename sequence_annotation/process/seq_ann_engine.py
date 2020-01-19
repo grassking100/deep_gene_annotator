@@ -1,21 +1,18 @@
-import time
 import abc
-import json
 import numpy as np
 import torch
 import os
-from ..process.data_processor import AnnSeqProcessor
-from ..utils.utils import split,get_subdict,create_folder,write_json
-from ..genome_handler.utils import ann_count
+from ..utils.utils import create_folder, write_json
 from ..utils.seq_converter import SeqConverter
-from ..genome_handler import ann_seq_processor
+from ..genome_handler.ann_genome_processor import class_count
+from ..genome_handler.ann_seq_processor import seq2vecs
+from ..process.data_processor import AnnSeqProcessor
 from .worker import TrainWorker,TestWorker
 from .tensorboard_writer import TensorboardWriter
 from .callback import CategoricalMetric,TensorboardCallback
-from .callback import GFFCompare,SeqFigCallback, Callbacks,ContagionMatrix
-from .inference import basic_inference
+from .callback import SeqFigCallback, Callbacks,ContagionMatrix
+from .singal_handler import build_singal_handler
 from .data_generator import SeqGenerator
-from .checkpoint import use_checkpoint
 
 class SeqAnnEngine(metaclass=abc.ABCMeta):
     def __init__(self,channel_order):
@@ -46,7 +43,7 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         seq = SeqConverter().seq2vecs(seq)
         seq = np.transpose(np.array([seq]),[0,2,1])
         seq = torch.from_numpy(seq).type('torch.FloatTensor').cuda()
-        ann_seq = [ann_seq_processor.seq2vecs(ann_seq,self.ann_types)]
+        ann_seq = [seq2vecs(ann_seq,self.ann_types)]
         color_settings = color_settings or {'other':'blue','exon':'red','intron':'yellow'}
         colors=[color_settings[type_]for type_ in self.ann_types]
         seq_fig = SeqFigCallback(self._writer,seq,ann_seq,prefix=prefix,label_names=self.ann_types,colors=colors)
@@ -79,19 +76,23 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         if ann_seqs is not None:
             if ann_seqs.is_empty():
                 raise Exception("The {} has no data inside".format(name))
-            count = ann_count(ann_seqs)
+            count = class_count(ann_seqs)
             print(len(ann_seqs),count)
-            count_ = np.array([int(val) for val in count.values()])
-            if (count_==0).any():
-                raise Exception("There are some annotations missing is the dataset")
+            for key,value in count.items():
+                if int(value)==0:
+                    raise Exception("The {} is missing in the dataset".format(key))
             self.update_settings(name,count)
                 
-    def _add_gff_compare(self,ann_vec2info_converter,callbacks,prefix=None):
+    def _add_singal_handler(self,ann_vec2info_converter,region_table_path,answer_gff_path,callbacks,prefix=None):
         path = self._path
         if path is not None and prefix is not None:
             path = os.path.join(path,prefix)
-        gff_compare = GFFCompare(ann_vec2info_converter,path,prefix=prefix)
-        callbacks.add(gff_compare)
+            
+        if region_table_path is not None and answer_gff_path is not None:
+            singal_handler = build_singal_handler(path,region_table_path,answer_gff_path,
+                                                  ann_vec2info_converter,prefix=prefix)
+
+            callbacks.add(singal_handler)
 
     def _create_categorical_metric(self,prefix=None):
         metric = CategoricalMetric(len(self.ann_types),
@@ -151,7 +152,6 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
               epoch=None,batch_size=None,other_callbacks=None,
               augmentation_max=None,add_grad=True,checkpoint_kwargs=None):
         self._update_common_setting()
-        checkpoint_kwargs = checkpoint_kwargs or {}
         other_callbacks = other_callbacks or Callbacks()
         epoch = epoch or 100
         self.update_settings('train_setting',{'epoch':epoch,'batch_size':batch_size,
@@ -167,8 +167,6 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
             val_seqs = val_ann_seqs = None
         #Set callbacks and writer
         train_callbacks, val_callbacks = self._create_default_train_callbacks(with_val)
-        epoch_start,checkpoint = use_checkpoint(self._path,**checkpoint_kwargs)
-        other_callbacks.add(checkpoint)
         self._add_tensorboard_callback(self._train_writer,train_callbacks,add_grad=add_grad)
         self._add_tensorboard_callback(self._val_writer,val_callbacks,add_grad=add_grad)
 
@@ -188,7 +186,7 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
                              executor=executor,train_callbacks=train_callbacks,
                              val_callbacks=val_callbacks,other_callbacks=other_callbacks,
                              writer=self._writer,epoch=epoch,path=self._path,
-                             epoch_start=epoch_start)
+                             checkpoint_kwargs=checkpoint_kwargs)
         worker.is_verbose_visible = self.is_verbose_visible
         #Save setting
         if self._path is not None:
@@ -206,15 +204,17 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         worker.work()
         return worker
 
-    def test(self,model,executor,data,batch_size=None,ann_vec2info_converter=None,callbacks=None):
+    def test(self,model,executor,data,batch_size=None,ann_vec2info_converter=None,
+             region_table_path=None,answer_gff_path=None,callbacks=None):
         self._update_common_setting()
         self.update_settings('test_setting',{'batch_size':batch_size})
         callbacks = callbacks or Callbacks()
         test_callbacks = self._create_default_test_callbacks()
         callbacks.add(test_callbacks)
         self._add_tensorboard_callback(self._test_writer,callbacks)
-        if ann_vec2info_converter is not None:
-            self._add_gff_compare(ann_vec2info_converter,callbacks,prefix='test')
+        if ann_vec2info_converter is not None and region_table_path is not None:
+            self._add_singal_handler(ann_vec2info_converter,region_table_path,
+                                     answer_gff_path,callbacks,prefix='test')
         generator = SeqGenerator(batch_size=batch_size,shuffle=False)
         test_seqs,test_ann_seqs = data
         raw_data = {'testing':{'inputs':test_seqs,'answers':test_ann_seqs}}

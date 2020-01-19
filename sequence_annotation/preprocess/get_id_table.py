@@ -24,5 +24,5 @@ if __name__ == "__main__":
         temp['transcript_id'] = rna['id']
         new_df += [temp]
 
-    new_df = pd.DataFrame.from_dict(new_df)
+    new_df = pd.DataFrame.from_dict(new_df).drop_duplicates()
     new_df.to_csv(args.table_path,index=None,sep='\t')
