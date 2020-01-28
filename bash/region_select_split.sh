@@ -75,16 +75,18 @@ if [ "$fold_num" ]; then
     command="${command} -n $fold_num"
 fi
 
-on_single_strand_data_command="${command} -o $saved_root/split_without_strand/single_strand_data"
-on_double_strand_data_command="${command} -d  -o $saved_root/split_without_strand/double_strand_data"
+on_single_strand_data_command="${command} -o $saved_root/single_strand_data/split_without_strand"
+#on_double_strand_data_command="${command} -d  -o $saved_root/split_without_strand/double_strand_data"
 
 echo $on_single_strand_data_command
 bash $on_single_strand_data_command
-echo $on_double_strand_data_command
-bash $on_double_strand_data_command
+#echo $on_double_strand_data_command
+#bash $on_double_strand_data_command
 
 if $split_with_strand && [ ! "$fold_num" ]; then
-    split_with_strand_command="${command} -s  -o $saved_root/split_with_strand/single_strand_data"
-    echo $split_with_strand_command
-    bash $split_with_strand_command
+    on_single_strand_data_command="${command} -s  -o $saved_root/single_strand_data/split_with_strand"
+    echo $on_single_strand_data_command
+    bash $on_single_strand_data_command
+    
 fi
+

@@ -14,7 +14,7 @@ strand_convert = {'+':'plus','-':'minus'}
 
 class Gff2AnnSeqs:
     def __init__(self):
-        self._ANN_TYPES = ['alt_accept','alt_donor','exon_skipping',
+        self._ANN_TYPES = ['alt_acceptor','alt_donor','exon_skipping',
                            'intron_retetion','exon','intron','other']
     
     @property
@@ -33,7 +33,7 @@ class Gff2AnnSeqs:
         return ann_seq
 
     def _validate(self,ann_seq):
-        if not is_one_hot(ann_seq,['exon','intron','alt_donor','alt_accept','other']):
+        if not is_one_hot(ann_seq,['exon','intron','alt_donor','alt_acceptor','other']):
             raise NotOneHotException(ann_seq.id)
 
     def convert(self,gff,region_bed,source):
@@ -57,12 +57,12 @@ class Gff2AnnSeqs:
                 if block['feature'] in self.ANN_TYPES:
                     chrom = genome.get(gene['chr'])
                     chrom.set_ann(block['feature'],1,block['start']-1,block['end']-1)
-        backgrounded = get_backgrounded_genome(genome,'other',['exon','intron','alt_donor','alt_accept'])
+        backgrounded = get_backgrounded_genome(genome,'other',['exon','intron','alt_donor','alt_acceptor'])
         for chrom in backgrounded:
             self._validate(chrom)
         return backgrounded
 
-def creator_ann_genome(gff,region_bed,souce_name):
+def create_ann_genome(gff,region_bed,souce_name):
     gff = get_gff_with_attribute(gff)
     converter = Gff2AnnSeqs()
     genome = converter.convert(gff,region_bed,souce_name)   
@@ -71,7 +71,7 @@ def creator_ann_genome(gff,region_bed,souce_name):
 def main(gff_path,region_bed_path,souce_name,output_path):
     gff = read_gff(gff_path)
     region_bed = read_bed(region_bed_path)
-    genome = creator_ann_genome(gff,region_bed,souce_name)
+    genome = create_ann_genome(gff,region_bed,souce_name)
     try:
         dd.io.save(output_path,genome.to_dict())
     except OverflowError:

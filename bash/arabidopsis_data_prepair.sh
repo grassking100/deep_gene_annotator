@@ -9,7 +9,7 @@ usage(){
  echo "    -o  <string>  Directory of output folder"
  echo "    -s  <string>  Source name"
  echo "  Options:"
- echo "    -i  <bool>    Remove regions which inner singal                [default: false]"
+ echo "    -i  <bool>    Remove regions which inner signal                [default: false]"
  echo "    -h            Print help message and exit"
  echo "Example: bash arabidopsis_data_prepair.sh -u 10000 -d 10000 -r /home/io/Arabidopsis_thaliana -o ./data/2019_07_12 -s Arabidopsis_1"
  echo ""

@@ -91,7 +91,7 @@ def gff2bed(gff):
     
 if __name__ =='__main__':
     parser = ArgumentParser(description="This program will convert gff file to bed file. "+
-                                        "It will treat alt_accept and alt_donor regions as intron")
+                                        "It will treat alt_acceptor and alt_donor regions as intron")
     parser.add_argument("-i", "--gff_path", help="Path of input gff file",required=True)
     parser.add_argument("-o", "--bed_path", help="Path of output bed file",required=True)
     parser.add_argument("-m", "--simple_mode",action='store_true',

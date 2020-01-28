@@ -68,7 +68,7 @@ class Process:
             return False
         
 def process_schedule(processes,gpu_ids,mem_used_percent_threshold=None):
-    mem_used_percent_threshold = mem_used_percent_threshold or 5
+    mem_used_percent_threshold = mem_used_percent_threshold or 1
     processes = dict(zip(list(range(len(processes))),processes))
     gpu_ready = [None] * len(gpu_ids)
     while True:

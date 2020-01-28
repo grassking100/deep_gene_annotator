@@ -1,7 +1,6 @@
-import os,sys
-sys.path.append(os.path.dirname(__file__)+"/../..")
+#import os,sys
+#sys.path.append(os.path.dirname(__file__)+"/../..")
 import pandas as pd
-from argparse import ArgumentParser
 from sequence_annotation.utils.utils import read_bed,write_bed,write_gff,read_gff
 
 def _create_fai_by_region_table(region_table):
@@ -16,7 +15,7 @@ def flip_bed(bed,region_table):
     for item in bed.to_dict('record'):
         bed_item = dict(item)
         old_chrom = item['chr']
-        region = region_table[region_table['old_id'] ==old_chrom]
+        region = region_table[region_table['old_id']==old_chrom]
         if len(region) != 1:
             raise Exception("Cannot locate for {}".format(old_chrom))
         region = region.to_dict('record')[0]
@@ -70,29 +69,3 @@ def flip_gff(gff,region_table):
 
     redefined_gff = pd.DataFrame.from_dict(redefined_gff)
     return redefined_gff
-
-def main(input_path,region_path,output_path):
-    region_table = pd.read_csv(region_path,sep='\t',dtype={'chr':str,'start':int,'end':int})
-    if 'bed' in input_path.split('.')[-1]:
-        bed = read_bed(input_path)
-        redefined_bed = flip_bed(bed,region_table)
-        write_bed(redefined_bed,output_path)
-    else:
-        gff = read_gff(input_path)
-        redefined_gff = flip_gff(gff,region_table)
-        write_gff(redefined_gff,output_path)
-
-if __name__ == "__main__":
-    #Reading arguments
-    parser = ArgumentParser(description="This program will would used table information"
-                            "to check regions' original strand status, its strand would "
-                            "be set to original strand and it's id would be renamed, "
-                            "the coordinate data on plus strand but originally on minus "
-                            "strand would be flipped to minus strand")
-    parser.add_argument("-i", "--input_path",help="File to be redefined coordinate",required=True)
-    parser.add_argument("-t", "--region_path",help="Table about region table",required=True)
-    parser.add_argument("-o", "--output_path",help="Path to saved redefined file",required=True)
-    
-    args = parser.parse_args()
-    main(args.input_path,args.region_path,args.output_path)
-    

@@ -67,9 +67,9 @@ class IExecutor(metaclass=ABCMeta):
     @abstractmethod
     def predict(self,**kwargs):
         pass
-    @abstractmethod
-    def process(self,**kwargs):
-        pass
+    #@abstractmethod
+    #def process(self,**kwargs):
+    #    pass
     @abstractmethod
     def get_config(self,**kwargs):
         pass
@@ -182,9 +182,9 @@ class BasicExecutor(_Executor):
         self.optimizer.step()
         return {'loss':loss_.item()},predict_result,lengths,masks,outputs
 
-    def process(self,model):
-        if self.optimizer is None:
-            self.optimizer = torch.optim.Adam(model.parameters())
+    #def process(self,model):
+    #    if self.optimizer is None:
+    #        self.optimizer = torch.optim.Adam(model.parameters())
 
     def on_epoch_end(self,epoch,metric,**kwargs):
         for index,group in enumerate(self.optimizer.param_groups):
@@ -201,6 +201,8 @@ class ExecutorBuilder:
         self.grad_clip = grad_clip
         self.grad_norm = grad_norm
         self.loss = None
+        self.optimizer = None
+        self.lr_scheduler = None
         self.use_native=use_native
         if self.use_native:
             self.output_label_num = self.predict_label_num = self.answer_label_num = label_num or 3
@@ -238,6 +240,8 @@ class ExecutorBuilder:
         executor.grad_norm = self.grad_norm
         executor.loss = self.loss
         executor.inference = self.inference
+        executor.optimizer = self.optimizer
+        executor.lr_scheduler = self.lr_scheduler
         if executor_weights_path is not None:
             weights = torch.load(executor_weights_path)
             executor.load_state_dict(weights)

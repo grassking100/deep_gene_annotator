@@ -10,7 +10,7 @@ usage(){
  echo "  Options:"
  echo "    -t  <int>     Radius of Transcription start sites                [default: 100]"
  echo "    -d  <int>     Radius of Donor sites    [default: 100]"
- echo "    -a  <int>     Radius of Accept sites   [default: 100]"
+ echo "    -a  <int>     Radius of Acceptor sites   [default: 100]"
  echo "    -c  <int>     Radius of Cleavage sites                           [default: 100]"
  echo "    -p  <string>  Path of peptide fasta"
  echo "    -h            Print help message and exit"
@@ -30,7 +30,7 @@ while getopts i:f:p:o:s:t:c:d:a:h option
    t )tss_radius=$OPTARG;;
    c )cleavage_radius=$OPTARG;;
    d )donor_radius=$OPTARG;;
-   a )accept_radius=$OPTARG;;
+   a )acceptor_radius=$OPTARG;;
    h )usage; exit 1;;
    : )echo "Option $OPTARG requires an argument"
       usage; exit 1
@@ -71,8 +71,8 @@ fi
 if [ ! "$donor_radius" ]; then
     donor_radius="100"
 fi
-if [ ! "$accept_radius" ]; then
-    accept_radius="100"
+if [ ! "$acceptor_radius" ]; then
+    acceptor_radius="100"
 fi
 
 bash_root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
@@ -86,13 +86,13 @@ mkdir -p $stats_root
 tss_path=$output_root/tss_around_$tss_radius
 ca_path=$output_root/ca_around_$cleavage_radius
 splice_donor_path=$output_root/splice_donor_around_${donor_radius}
-splice_accept_path=$output_root/splice_accept_around_${accept_radius}
+splice_acceptor_path=$output_root/splice_acceptor_around_${acceptor_radius}
 start_codon_path=$output_root/start_codon
 stop_codon_path=$output_root/stop_codon
 
 CDS_path=$output_root/CDS
 donor_signal=$output_root/donor_signal
-accept_signal=$output_root/accept_signal
+acceptor_signal=$output_root/acceptor_signal
 tss_signal=$output_root/tss_signal
 ca_signal=$output_root/ca_signal
 
@@ -112,13 +112,13 @@ fi
 bash $bash_root/transcription_start_site.sh $bed_path $tss_radius > $tss_path.bed
 bash $bash_root/cleavage_site.sh $bed_path $cleavage_radius > $ca_path.bed
 bash $bash_root/splice_donor_site.sh $bed_path ${donor_radius} ${donor_radius} > $splice_donor_path.bed
-bash $bash_root/splice_accept_site.sh $bed_path ${accept_radius} ${accept_radius} > $splice_accept_path.bed
+bash $bash_root/splice_acceptor_site.sh $bed_path ${acceptor_radius} ${acceptor_radius} > $splice_acceptor_path.bed
 bash $bash_root/splice_donor_site.sh $bed_path 0 1 > $donor_signal.bed
-bash $bash_root/splice_accept_site.sh $bed_path 1 0 > $accept_signal.bed
+bash $bash_root/splice_acceptor_site.sh $bed_path 1 0 > $acceptor_signal.bed
 bash $bash_root/transcription_start_site.sh $bed_path 1 > $tss_signal.bed
 bash $bash_root/cleavage_site.sh $bed_path 1 > $ca_signal.bed
 
-for name in $tss_path $ca_path $splice_donor_path $splice_accept_path $donor_signal $accept_signal $tss_signal $ca_signal;
+for name in $tss_path $ca_path $splice_donor_path $splice_acceptor_path $donor_signal $acceptor_signal $tss_signal $ca_signal;
 do
     bedtools getfasta -s -name -fi $genome_path -bed $name.bed -fo $name.fasta
 done
@@ -148,7 +148,7 @@ seq_stats () {
 
 seq_stats $tss_signal.fasta $stats_root/tss_signal.stats
 seq_stats $ca_signal.fasta $stats_root/ca_signal.stats
-seq_stats $accept_signal.fasta $stats_root/accept_signal.stats
+seq_stats $acceptor_signal.fasta $stats_root/acceptor_signal.stats
 seq_stats $donor_signal.fasta  $stats_root/donor_signal.stats
 seq_stats $start_codon_path.fasta $stats_root/start_codon.stats
 seq_stats $stop_codon_path.fasta $stats_root/stop_codon.stats

@@ -284,7 +284,7 @@ def get_donor(seq):
     else:
         return get_end(signal)
 
-def get_accept(seq):
+def get_acceptor(seq):
     if not is_valid_strand(seq):
         raise InvalidStrandType(seq.strand)
     signal = ''.join(seq.get_ann('intron').astype(int).astype(str))
@@ -298,9 +298,9 @@ def get_seq_with_site_ann(seq,gene_map,set_non_site=False):
     TSSs = get_tss(simplified)
     CAs = get_ca(simplified)
     DSs = get_donor(seq)
-    ASs = get_accept(seq)
+    ASs = get_acceptor(seq)
     site_ann = {}
-    site_names = ['TSSs','ca_sites','donor_sites','accept_sites']
+    site_names = ['TSSs','ca_sites','donor_sites','acceptor_sites']
     multiple_sites = [TSSs,CAs,DSs,ASs]
     non_site_ann = np.ones(seq.length)
     for name,sites in zip(site_names,multiple_sites):

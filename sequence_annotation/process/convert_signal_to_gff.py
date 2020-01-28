@@ -14,12 +14,11 @@ from sequence_annotation.genome_handler.region_extractor import GeneInfoExtracto
 from sequence_annotation.genome_handler.sequence import AnnSequence
 from sequence_annotation.genome_handler.region_extractor import RegionExtractor
 from sequence_annotation.genome_handler.seq_container import SeqInfoContainer
-from sequence_annotation.genome_handler.ann_seq_processor import get_background
+from sequence_annotation.genome_handler.ann_seq_processor import get_background,vecs2seq
 from sequence_annotation.preprocess.flip_coordinate import flip_gff
 from sequence_annotation.preprocess.utils import RNA_TYPES
 from sequence_annotation.process.utils import get_seq_mask
-from sequence_annotation.process.inference import create_basic_inference,seq_ann_inference
-#from sequence_annotation.process.post_processor import GeneAnnProcessor
+from sequence_annotation.process.inference import create_basic_inference,seq_ann_inference,ann_vec2one_hot_vec
 from sequence_annotation.process.boundary_process import get_fixed_intron_boundary,get_exon_boundary
 from sequence_annotation.process.boundary_process import fix_splice_pairs,get_splice_pairs,find_substr
 basic_inference = create_basic_inference()
@@ -30,23 +29,24 @@ def _create_ann_seq(chrom,length,ann_types):
     ann_seq.strand = 'plus'
     return ann_seq
 
-class GeneAnnProcessor:
+class GffPostProcessor:
     def __init__(self,gene_info_extractor,
-                 donor_site_pattern=None,accept_site_pattern=None,
+                 donor_site_pattern=None,acceptor_site_pattern=None,
                  length_threshold=None,distance=None,
                  gene_length_threshold=None):
         """
+        The post-processor fixes annotatioin result in GFF format by its DNA sequence information
         distance : int
             Valid distance  
         donor_site_pattern : str (default : GT)
             Regular expression of donor site
-        accept_site_pattern : str (default : AG)
-            Regular expression of accept site
+        acceptor_site_pattern : str (default : AG)
+            Regular expression of acceptor site
         """
         self.gene_info_extractor = gene_info_extractor
         self.extractor = RegionExtractor()
         self.donor_site_pattern = donor_site_pattern or 'GT'
-        self.accept_site_pattern = accept_site_pattern or 'AG'
+        self.acceptor_site_pattern = acceptor_site_pattern or 'AG'
         self.length_threshold = length_threshold or 0
         self.distance = distance or 0
         self.gene_length_threshold = gene_length_threshold or 0
@@ -55,9 +55,9 @@ class GeneAnnProcessor:
     def get_config(self):
         config = {}
         config['class'] = self.__class__.__name__
-        config['gene_info_gene_info_extractor'] = self.gene_info_extractor.get_config()
+        config['gene_info_extractor'] = self.gene_info_extractor.get_config()
         config['donor_site_pattern'] = self.donor_site_pattern
-        config['accept_site_pattern'] = self.accept_site_pattern
+        config['acceptor_site_pattern'] = self.acceptor_site_pattern
         config['length_threshold'] = self.length_threshold
         config['gene_length_threshold'] = self.gene_length_threshold
         config['distance'] = self.distance
@@ -127,7 +127,8 @@ class GeneAnnProcessor:
                 ann_seq.add_ann('intron',1,boundary[0]-1,boundary[1]-1)
 
     def process(self,chrom,length,seq,gff):
-        """Get fixed AnnSequence
+        """
+        The method fixes annotatioin result in GFF format by its DNA sequence information
         Parameters:
         ----------
         chrom : str
@@ -151,8 +152,8 @@ class GeneAnnProcessor:
         gff = self.gene_info_extractor.extract_per_seq(ann_seq).to_gff()
         splice_pairs = get_splice_pairs(gff)
         ann_donor_sites = [site + 1 for site in find_substr(self.donor_site_pattern,seq)]
-        ann_accept_sites = [site + 1 for site in find_substr(self.accept_site_pattern,seq,False)]
-        intron_boundarys = fix_splice_pairs(splice_pairs,ann_donor_sites,ann_accept_sites,self.distance)
+        ann_acceptor_sites = [site + 1 for site in find_substr(self.acceptor_site_pattern,seq,False)]
+        intron_boundarys = fix_splice_pairs(splice_pairs,ann_donor_sites,ann_acceptor_sites,self.distance)
         fixed_ann_seq = _create_ann_seq(chrom,length,self._ann_types)
         transcripts = gff[gff['feature'].isin(RNA_TYPES)].to_dict('record')
         for transcript in transcripts:
@@ -163,33 +164,26 @@ class GeneAnnProcessor:
         gff = info.to_gff()
         return gff
 
-
-class AnnVec2InfoConverter:
-    def __init__(self,channel_order,gene_ann_processor):
+class AnnVecGffConverter:
+    def __init__(self,channel_order,gff_post_processor):
+        """
+        The converter fix annotation vectors by their DNA sequences' information and convert to GFF format
+        Parameters:
+        ----------
+        channel_order : list of str
+            Channel order of annotation vector
+        gff_post_processor : GffPostProcessor
+            The processor fix annotatioin result in GFF format 
+        """
         self.channel_order = channel_order
-        self.gene_ann_processor = gene_ann_processor
+        self.gff_post_processor = gff_post_processor
 
     def get_config(self):
         config = {}
         config['class'] = self.__class__.__name__
         config['channel_order'] = self.channel_order
-        config['alt_num'] = self.gene_ann_processor.get_config()
+        config['gff_post_processor'] = self.gff_post_processor.get_config()
         return config
-
-    def _info_dict2fixed_gff(self,chrom_ids,lengths,dna_seqs,seq_info_dict):
-        """Convert dictionay of SeqInformation to SeqInfoContainer about fixed region data"""
-        returned = []
-        for chrom_id,dna_seq, length in zip(chrom_ids,dna_seqs,lengths):
-            info = seq_info_dict[chrom_id]
-            if len(info) > 0:
-                gff = info.to_gff()
-                try:
-                    info = self.gene_ann_processor.process(chrom_id,length,dna_seq,gff)
-                    returned.append(info)
-                except EmptyContainerException:
-                    pass
-        returned = pd.concat(returned)
-        return returned
 
     def _vecs2info_dict(self,chrom_ids,lengths,ann_vecs):
         """Convert annotation vectors to dictionay of SeqInformation of region data"""
@@ -197,41 +191,56 @@ class AnnVec2InfoConverter:
         for chrom_id,ann_vec, length in zip(chrom_ids,ann_vecs,lengths):
             one_hot_vec = ann_vec2one_hot_vec(ann_vec,length)
             ann_seq = vecs2seq(one_hot_vec,chrom_id,'plus',self.channel_order)
-            info = self.gene_ann_processor.gene_info_extractor.extract_per_seq(ann_seq)
+            info = self.gff_post_processor.gene_info_extractor.extract_per_seq(ann_seq)
             seq_info_dict[chrom_id] = info
         return seq_info_dict
     
-    def vecs2raw_info(self,chrom_ids,lengths,ann_vecs):
+    def vecs2raw_gff(self,chrom_ids,lengths,ann_vecs):
         """Convert annotation vectors to GFF about region data without fixing"""
         returned = SeqInfoContainer()
         info_dict = self._vecs2info_dict(chrom_ids,lengths,ann_vecs)
         for seq in info_dict.values():
             returned.add(seq)
         return returned.to_gff()
+
+    def _info_dict2processed_gff(self,chrom_ids,lengths,dna_seqs,seq_info_dict):
+        """Convert dictionay of SeqInformation to SeqInfoContainer about processed region data"""
+        returned = []
+        for chrom_id,dna_seq, length in zip(chrom_ids,dna_seqs,lengths):
+            info = seq_info_dict[chrom_id]
+            if len(info) > 0:
+                gff = info.to_gff()
+                try:
+                    info = self.gff_post_processor.process(chrom_id,length,dna_seq,gff)
+                    returned.append(info)
+                except EmptyContainerException:
+                    pass
+        returned = pd.concat(returned)
+        return returned
     
-    def vecs2fixed_info(self,chrom_ids,lengths,dna_seqs,ann_vecs):
+    def vecs2processed_gff(self,chrom_ids,lengths,dna_seqs,ann_vecs):
         """Convert annotation vectors to GFF about fixed region data"""
         info_dict = self._vecs2info_dict(chrom_ids,lengths,ann_vecs)
-        fixed_gff = self._info_dict2fixed_gff(chrom_ids,lengths,dna_seqs,info_dict)
+        fixed_gff = self._info_dict2processed_gff(chrom_ids,lengths,dna_seqs,info_dict)
         return fixed_gff
     
-    def vecs2info(self,chrom_ids,lengths,ann_vecs):
+    def vecs2gff(self,chrom_ids,lengths,ann_vecs):
         """Convert annotation vectors to GFF about region data"""
-        p = self.gene_ann_processor
+        p = self.gff_post_processor
         if p.distance==0 and p.length_threshold==0 and p.gene_length_threshold == 0:
-            gff = self.vecs2raw_info(chrom_ids,lengths,ann_vecs)
+            gff = self.vecs2raw_gff(chrom_ids,lengths,ann_vecs)
         else:
-            gff = self.vecs2fixed_info(chrom_ids,lengths,ann_vecs)
+            gff = self.vecs2processed_gff(chrom_ids,lengths,ann_vecs)
         return gff
 
-def build_converter(channel_order,simply_map,**kwargs):
+def build_ann_vec_gff_converter(channel_order,simply_map,**kwargs):
     gene_info_extractor = GeneInfoExtractor(simply_map)
-    gene_ann_processor = GeneAnnProcessor(gene_info_extractor,**kwargs)
-    converter = AnnVec2InfoConverter(channel_order,gene_ann_processor)
-    return converter
+    gff_post_processor = GffPostProcessor(gene_info_extractor,**kwargs)
+    ann_vec_gff_converter = AnnVecGffConverter(channel_order,gff_post_processor)
+    return ann_vec_gff_converter
 
-def convert_raw_output_to_tensor(outputs):
-    """Convert raw output in dictionary format to torch's tensors for every attributes"""
+def _convert_raw_output_to_vectors(outputs):
+    """Convert vectors in dictionary to torch's tensors for each attributes"""
     data = {}
     columns = ['dna_seqs', 'lengths', 'outputs','chrom_ids']
     for key in columns:
@@ -248,8 +257,8 @@ def convert_raw_output_to_tensor(outputs):
     data['masks'] = get_seq_mask(data['lengths'],to_cuda=True)
     return data
 
-def convert_tensor_to_gff(chrom_ids,lengths,masks,dna_seqs,ann_vecs,
-                          ann_vec2info_converter,use_native=True,
+def _convert_vectors_to_gff(chrom_ids,lengths,masks,dna_seqs,ann_vecs,
+                          ann_vec_gff_converter,use_native=True,
                           transcript_threshold=None,intron_threshold=None):
     """Convert raw output's torch tensor to GFF dataframe"""
     if use_native:
@@ -259,35 +268,36 @@ def convert_tensor_to_gff(chrom_ids,lengths,masks,dna_seqs,ann_vecs,
                                      transcript_threshold=transcript_threshold,
                                      intron_threshold=intron_threshold)
     ann_vecs = ann_vecs.cpu().numpy()
-    info = ann_vec2info_converter.vecs2info(chrom_ids,lengths,ann_vecs)
+    info = ann_vec_gff_converter.vecs2gff(chrom_ids,lengths,ann_vecs)
     return info
 
 def convert_raw_output_to_gff(raw_outputs,region_table,config_path,gff_path,
-                              ann_vec2info_converter,**kwargs):
-    config = ann_vec2info_converter.get_config()
+                              ann_vec_gff_converter,**kwargs):
+    config = ann_vec_gff_converter.get_config()
     write_json(config,config_path)
-    outputs = convert_raw_output_to_tensor(raw_outputs)
-    gff = convert_tensor_to_gff(outputs['chrom_ids'],outputs['lengths'],outputs['masks'],
+    outputs = _convert_raw_output_to_vectors(raw_outputs)
+    gff = _convert_vectors_to_gff(outputs['chrom_ids'],outputs['lengths'],outputs['masks'],
                                 outputs['dna_seqs'],outputs['outputs'],
-                                ann_vec2info_converter=ann_vec2info_converter,**kwargs)
+                                ann_vec_gff_converter=ann_vec_gff_converter,**kwargs)
     redefined_gff = flip_gff(gff,region_table)
     write_gff(redefined_gff,gff_path)
 
-def convert_main(saved_root,raw_output_path,region_path,**kwargs):
-    raw_outputs = dd.io.load(raw_output_path)
+def convert_main(saved_root,raw_signal_path,region_path,distance=None,
+                 length_threshold=None,gene_length_threshold=None,**kwargs):
+    raw_outputs = dd.io.load(raw_signal_path)
     region_table = read_region_table(region_path)
-    config_path = os.path.join(saved_root,"ann_vec2info_converter_config.json")
+    config_path = os.path.join(saved_root,"ann_vec_gff_converter_config.json")
     gff_path = os.path.join(saved_root,'predicted.gff')
-    converter = build_converter(BASIC_GENE_ANN_TYPES,BASIC_GENE_MAP,
-                                distance=distance,length_threshold=length_threshold,
-                                gene_length_threshold=gene_length_threshold)
-    convert_raw_output_to_gff(saved_root,raw_outputs,region_table,
+    converter = build_ann_vec_gff_converter(BASIC_GENE_ANN_TYPES,BASIC_GENE_MAP,
+                                            distance=distance,length_threshold=length_threshold,
+                                            gene_length_threshold=gene_length_threshold)
+    convert_raw_output_to_gff(raw_outputs,region_table,
                               config_path,gff_path,converter,**kwargs)
 
 if __name__ == '__main__':    
-    parser = ArgumentParser(help='Convert raw output to GFF')
+    parser = ArgumentParser(description='Convert raw output to GFF')
     parser.add_argument("--saved_root",help="Root to save file",required=True)
-    parser.add_argument("--raw_output_path",help="The path of raw output file in h5 format",required=True)
+    parser.add_argument("--raw_signal_path",help="The path of raw signal file in h5 format",required=True)
     parser.add_argument("--region_path",help="The path of region data",required=True)
     parser.add_argument("-g","--gpu_id",type=int,default=0,help="GPU to used")
     parser.add_argument("--transcript_threshold",type=float,default=0.5)
@@ -304,9 +314,9 @@ if __name__ == '__main__':
     write_json(setting,setting_path)
     kwargs = dict(setting)
     del kwargs['saved_root']
-    del kwargs['raw_output_path']
+    del kwargs['raw_signal_path']
     del kwargs['gpu_id']
     del kwargs['region_path']
         
     with torch.cuda.device(args.gpu_id):
-        convert_main(args.saved_root,args.raw_output_path,args.region_path,**kwargs)
+        convert_main(args.saved_root,args.raw_signal_path,args.region_path,**kwargs)

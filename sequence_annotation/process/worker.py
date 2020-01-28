@@ -179,7 +179,7 @@ class TrainWorker(Worker):
         self._train_callbacks.add(accumulator)
         self._checkpoint = build_checkpoint(self.path,record_path=record_path,
                                             **self.checkpoint_kwargs)
-        self.executor.process(self.model)
+        #self.executor.process(self.model)
         self._is_running = True
         self._save_setting()
         start_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
@@ -198,7 +198,11 @@ class TrainWorker(Worker):
     def work(self):
         #Execute worker
         pre_time = time.time()
-        super().work()
+        try:
+            super().work()
+        except RuntimeError:
+            self._message_recorder.notify(["Something wrong happened"])
+            raise
         time_spend = time.time() - pre_time
         time_messgae = "Time spend: {} seconds\n".format(time_spend)
         if self._message_recorder is not None:
@@ -313,7 +317,7 @@ class TestWorker(Worker):
         self._checkpoint = build_checkpoint(self.path,record_path,
                                             only_recorder=True,force_reset=True)
         self._callbacks.add(accum)
-        self.executor.process(self.model)
+        #self.executor.process(self.model)
         self._save_setting()
 
     def _work(self):

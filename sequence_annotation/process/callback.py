@@ -239,6 +239,9 @@ class Accumulator(DataCallback):
         self._data = {}
         self._batch_count = 0
 
+    def on_epoch_begin(self,**kwargs):
+        self._reset()
+
     def on_batch_end(self,metric,**kwargs):
         if self._batch_count == 0:
             for key in metric.keys():

@@ -5,7 +5,8 @@ from argparse import ArgumentParser
 from sequence_annotation.utils.utils import read_bed,write_bed
 from utils import get_id_table
 
-def convert_bed_id(bed,id_convert_table,query):
+def convert_bed_id(bed,id_convert_table,query=None):
+    query = query or 'id'
     returned = []
     for item in bed.to_dict('record'):
         item = dict(item)
@@ -14,20 +15,22 @@ def convert_bed_id(bed,id_convert_table,query):
     returned = pd.DataFrame.from_dict(returned).sort_values(by=['id'])
     return returned
 
+def main(input_bed_path,output_bed_path,id_convert_path,query=None):
+    bed = read_bed(input_bed_path)
+    try:
+        id_convert_table = get_id_table(id_convert_path)
+    except:
+        raise Exception("Something wrong happened in {}".format(args.id_convert_path))
+    returned = convert_bed_id(bed,id_convert_table,query)
+    write_bed(returned,output_bed_path)
+
 if __name__ == "__main__":
     #Reading arguments
-    parser = ArgumentParser(description="This program will rename by table")
+    parser = ArgumentParser(description="This program will rename query data by table")
     parser.add_argument("-i", "--input_bed_path",help="Input BED file",required=True)
     parser.add_argument("-t", "--id_convert_path",help="Table about id conversion",required=True)
-    parser.add_argument("-o", "--output_bed_path",help="Onput BED file",required=True)
+    parser.add_argument("-o", "--output_bed_path",help="Output BED file",required=True)
     parser.add_argument("--query",help="Column name to query and replace",default='id')
     args = parser.parse_args()
-    
-    bed = read_bed(args.input_bed_path)
-    try:
-        id_convert_table = get_id_table(args.id_convert_path)
-    except:
-        print(args.id_convert_path)
-        raise
-    returned = convert_bed_id(bed,id_convert_table,args.query)
-    write_bed(returned,args.output_bed_path)
+    kwargs = vars(args)
+    main(**kwargs)

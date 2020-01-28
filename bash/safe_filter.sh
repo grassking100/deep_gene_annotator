@@ -72,7 +72,8 @@ if [ ! "$use_strand" ]; then
     use_strand=false
 fi
 
-script_root="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+script_root="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"/..
+preprocess_main_root=$script_root/sequence_annotation/preprocess
 expand_path=_region_up_${upstream_dist}_down_${downstream_dist}.bed
 saved_path=_region_up_${upstream_dist}_down_${downstream_dist}_safe_zone.bed
 
@@ -86,7 +87,7 @@ else
     bedtools intersect -a $expand_path -b $unwant_path -wa -v > $saved_path
 fi    
 echo Get id
-bash $script_root/get_ids.sh -i $saved_path > $output_path
+python3 $preprocess_main_root/get_id.py -i $saved_path -o $output_path
 
 rm $saved_path
 rm $expand_path

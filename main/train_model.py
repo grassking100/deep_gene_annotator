@@ -10,7 +10,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__+"/..")))
 from sequence_annotation.utils.utils import create_folder, write_fasta, write_json
 from sequence_annotation.utils.utils import BASIC_GENE_MAP,BASIC_GENE_ANN_TYPES
 from sequence_annotation.process.seq_ann_engine import SeqAnnEngine
-from sequence_annotation.process.convert_singal_to_gff import build_converter
+from sequence_annotation.process.convert_signal_to_gff import build_ann_vec_gff_converter
 from sequence_annotation.process.utils import param_num
 from sequence_annotation.process.callback import Callbacks
 from sequence_annotation.genome_handler.ann_seq_processor import class_count
@@ -28,19 +28,17 @@ def _get_max_target_seqs(seqs,ann_seqs,seq_fig_target=None):
     return seqs[selected_id],ann_seqs[selected_id]
 
 def train(saved_root,epoch,model,executor,train_data,val_data=None,
-          epoch_start=None,batch_size=None,augmentation_max=None,patient=None,
-          color_settings=None,add_seq_fig=True,
-          monitor_target=None,period=None,other_callbacks=None):
+          batch_size=None,augmentation_max=None,patient=None,
+          monitor_target=None,period=None):
     with open(os.path.join(saved_root,'param_num.txt'),"w") as fp:
         fp.write("Required-gradient parameters number:{}".format(param_num(model)))
     engine = SeqAnnEngine(BASIC_GENE_ANN_TYPES)
     engine.set_root(saved_root,with_test=False,with_train=True,
                     with_val=val_data is not None)
     other_callbacks = Callbacks()
-    if val_data is not None and add_seq_fig:
+    if val_data is not None:
         seq,ann_seq = _get_max_target_seqs(val_data[0],val_data[1])
-        color_settings = color_settings or BASIC_COLOR_SETTING
-        seq_fig = engine.get_seq_fig(seq,ann_seq,color_settings=color_settings)
+        seq_fig = engine.get_seq_fig(seq,ann_seq,color_settings=BASIC_COLOR_SETTING)
         other_callbacks.add(seq_fig)
 
     worker = engine.train(model,executor,train_data,val_data=val_data,
@@ -52,12 +50,14 @@ def train(saved_root,epoch,model,executor,train_data,val_data=None,
     return worker
 
 def main(saved_root,model_config_path,executor_config_path,
-         train_data_path,val_data_path=None,batch_size=None,
+         train_data_path,val_data_path=None,test_data_path=None,
+         batch_size=None,epoch=None,
          model_weights_path=None,executor_weights_path=None,
          frozen_names=None,save_distribution=False,
-         only_train=False,test_data_path=None,epoch=None,
-         train_answer_path=None,val_answer_path=None,
-         test_answer_path=None,
+         only_train=False,
+         train_answer_path=None,#train_region_path=None,
+         val_answer_path=None,#val_region_path=None,
+         test_answer_path=None,#test_region_path=None,
          region_table_path=None,**kwargs):
     
     #Load, parse and save data
@@ -77,8 +77,11 @@ def main(saved_root,model_config_path,executor_config_path,
     
     #Verify path exist
     paths = [train_answer_path,val_answer_path,
-             test_answer_path,region_table_path]
-    
+             test_answer_path,region_table_path,
+            # train_region_path,val_region_path,
+#             test_region_path
+            ]
+
     for path in paths:
         if path is not None:
             if not os.path.exists(path):
@@ -94,8 +97,6 @@ def main(saved_root,model_config_path,executor_config_path,
         executor_config = json.load(fp)
     
     executor = get_executor(model,executor_weights_path=executor_weights_path,**executor_config)
-    
-    ann_vec2info_converter = build_converter(BASIC_GENE_ANN_TYPES,BASIC_GENE_MAP)
 
     try:
         train(saved_root,epoch,model,executor,train_data,val_data,
@@ -105,28 +106,35 @@ def main(saved_root,model_config_path,executor_config_path,
         
     #Test
     if not only_train:
+        ann_vec_gff_converter = build_ann_vec_gff_converter(BASIC_GENE_ANN_TYPES,BASIC_GENE_MAP)
         executor = get_executor(model,set_loss=False,set_optimizer=False,**executor_config)
         test_paths = ['test_on_train']
         data_list = [train_data]
-        answer_gff_paths = [train_answer_path]
-
+        answer_paths = [train_answer_path]
+        #region_paths = [train_region_path]
+        
         if val_data_path is not None:
             test_paths.append('test_on_val')
             data_list.append(val_data)
-            answer_gff_paths.append(val_answer_path)
+            answer_paths.append(val_answer_path)
+            #region_paths.append(val_region_path)
 
         if test_data_path is not None:
             test_paths.append('test_on_test')
             data_list.append(test_data)
-            answer_gff_paths.append(test_answer_path)
+            answer_paths.append(test_answer_path)
+            #region_paths.append(test_region_path)
             
-        for path,data,answer_gff_path in zip(test_paths,data_list,answer_gff_paths):
+        for path,data,answer_path in zip(test_paths,data_list,answer_paths):
             path = os.path.join(saved_root,path)
             create_folder(path)
             test(path,model,executor,data,
                  batch_size=batch_size,use_gffcompare=True,
-                 ann_vec2info_converter=ann_vec2info_converter,
-                 region_table_path=region_table_path,answer_gff_path=answer_gff_path)
+                 ann_vec_gff_converter=ann_vec_gff_converter,
+                 region_table_path=region_table_path,
+                 answer_gff_path=answer_path,
+                # answer_region_path=region_path
+                )
 
 if __name__ == '__main__':
     parser = ArgumentParser()
@@ -155,6 +163,9 @@ if __name__ == '__main__':
     parser.add_argument("--train_answer_path",help='The training answer in gff fomrat')
     parser.add_argument("--val_answer_path",help='The validate answer in gff fomrat')
     parser.add_argument("--test_answer_path",help='The testing answer in gff fomrat')
+    #parser.add_argument("--train_region_path",help='The training region ids')
+    #parser.add_argument("--val_region_path",help='The validate answer region ids')
+    #parser.add_argument("--test_region_path",help='The testing answer region ids')
 
     args = parser.parse_args()
                 

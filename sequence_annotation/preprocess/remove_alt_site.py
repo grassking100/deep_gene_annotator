@@ -13,6 +13,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     gff = read_gff(args.input_gff_path)
     gff = get_gff_with_attribute(gff)
-    alt_site_gene_id = set(gff[gff['feature'].isin(['alt_donor','alt_accept'])]['parent'])
+    alt_site_gene_id = set(gff[gff['feature'].isin(['alt_donor','alt_acceptor'])]['parent'])
     cleaned_gff = gff[(~gff['parent'].isin(alt_site_gene_id))&(~gff['id'].isin(alt_site_gene_id))]
     write_gff(cleaned_gff,args.output_gff_path)

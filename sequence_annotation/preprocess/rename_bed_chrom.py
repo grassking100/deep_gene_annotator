@@ -28,9 +28,9 @@ def main(bed_path,table_path,output_path):
 if __name__ == "__main__":
     #Reading arguments
     parser = ArgumentParser(description="This program will rename chromosome")
-    parser.add_argument("-i", "--bed_path",help="Bed file to be redefined coordinate",required=True)
+    parser.add_argument("-i", "--bed_path",help="Path of bed file to renamed chromosome",required=True)
     parser.add_argument("-t", "--table_path",help="Table about renamed region",required=True)
-    parser.add_argument("-o", "--output_path",help="Path to saved redefined bed file",required=True)
+    parser.add_argument("-o", "--output_path",help="Path to saved renamed bed file",required=True)
                         
     args = parser.parse_args()
     main(args.bed_path,args.table_path,args.output_path)

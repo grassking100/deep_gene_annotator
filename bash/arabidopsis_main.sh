@@ -10,8 +10,8 @@ usage(){
  echo "    -s  <string>  Source name"
  echo "  Options:"
  echo "    -m  <bool>    Merge regions which are overlapped                 [default: false]"
- echo "    -c  <bool>    Remove gene with altenative donor site and accept site    [default: false]"
- echo "    -i  <bool>    Merge regions which inner singal                [default: false]"
+ echo "    -c  <bool>    Remove gene with altenative donor site and acceptor site    [default: false]"
+ echo "    -i  <bool>    Merge regions which inner signal                [default: false]"
  echo "    -x  <bool>    Remove gene with non-coding transcript    [default: false]"
  echo "    -h            Print help message and exit"
  echo "Example: bash arabidopsis_main.sh -u 10000 -d 10000 -r /home/io/Arabidopsis_thaliana -o ./data/2019_07_12 -s Arabidopsis_1"
@@ -91,6 +91,8 @@ fi
 genome_path=$root/raw_data/araport_11_Arabidopsis_thaliana_Col-0_rename.fasta
 preprocessed_root=$saved_root/preprocessed
 processed_root=$saved_root/processed
+result_root=$processed_root/result
+splitted_root=$saved_root/split
 id_convert_table_path=$preprocessed_root/id_convert.tsv
 processed_bed_path=$preprocessed_root/processed.bed
 bash_root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
@@ -127,4 +129,6 @@ else
     echo "The program process_data.sh is skipped"
 fi
 
-bash $bash_root/region_select_split.sh -g $genome_path -t $preprocessed_root/id_convert.tsv -p $processed_root -o $processed_root/split -s
+bash $bash_root/region_select_split.sh -g $genome_path -t $preprocessed_root/id_convert.tsv -p $processed_root -o $splitted_root -s
+
+#bash $script_root/batch_rename.sh -i $splitted_root/single_strand_data/split_without_strand -o $splitted_root/double_strand_data/split_without_strand -t $result_root/region_rename_table_both_strand.tsv -g 

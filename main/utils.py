@@ -14,8 +14,7 @@ from sequence_annotation.process.executor import ExecutorBuilder
 from sequence_annotation.process.model import SeqAnnBuilder
 from sequence_annotation.process.utils import get_name_parameter
 
-
-BEFORE_MIX_SIMPLIFY_MAP = {'exon':['exon'],'intron':['intron','alt_accept','alt_donor'],'other':['other']}
+BEFORE_MIX_SIMPLIFY_MAP = {'exon':['exon'],'intron':['intron','alt_acceptor','alt_donor'],'other':['other']}
 SIMPLIFY_MAP = {'exon':['exon'],'intron':['intron'],'other':['other']}
 BASIC_COLOR_SETTING={'other':'blue','exon':'red','intron':'yellow'}
 

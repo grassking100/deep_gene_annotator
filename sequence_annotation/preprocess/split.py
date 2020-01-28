@@ -21,18 +21,25 @@ def _get_subtable(table,chrom_ids):
 def _get_chrom_str(chrom_ids):
     if not isinstance(chrom_ids,list):
         chrom_ids = [chrom_ids]
+    chrom_ids = sorted(list(set(chrom_ids)))
     chroms_str = '_'.join([str(chrom) for chrom in sorted(chrom_ids)])
     return chroms_str
 
-def _get_chrom_path(saved_root,region_rename_table):
-    chrom_ids = sorted(set(region_rename_table['chr']))
-    chroms_str = _get_chrom_str(chrom_ids)
-    path = os.path.join(saved_root,'chrom_{}.tsv'.format(chroms_str))
+def _get_region_id_path(saved_root,name):
+    path = os.path.join(saved_root,'{}.txt'.format(name))
     return path
 
-def _write_id_table(region_rename_table,path):
-    data = region_rename_table['new_id'].drop_duplicates()
-    data.to_csv(path,header=False,index=None)
+#def _get_table_path(saved_root,name):
+#    path = os.path.join(saved_root,'{}.tsv'.format(name))
+#    return path
+
+def _export_region_data(region_rename_table,saved_root,name):
+    region_id_path = _get_region_id_path(saved_root,name)
+    #new_table_path = _get_table_path(saved_root,name)
+    region_ids = region_rename_table['new_id'].drop_duplicates()
+    region_ids.to_csv(region_id_path,header=False,index=None)
+    #region_rename_table.to_csv(new_table_path,index=None,sep='\t')
+    return region_id_path
 
 def _get_min_chrom(fai):
     min_chrom = None
@@ -66,12 +73,14 @@ def get_relative_paths(paths):
     
 def split_by_chr(region_rename_table,fai,saved_root,split_with_strand=False):
     test_chrom = _get_min_chrom(fai)
-    region_rename_table['length'] = region_rename_table['end'] - region_rename_table['start'] + 1
     train_val_chrom_ids = [str(chrom) for chrom in fai.keys() if chrom != test_chrom]
-
     #Write dataset table
     train_val_chrom_ids.sort()
     split_table = []
+    train_chrom_list = []
+    val_chrom_list = []
+    train_tables = []
+    val_tables = []
     if split_with_strand:
         for val_chrom_ in train_val_chrom_ids:
             train_chroms_ = list(train_val_chrom_ids)
@@ -87,13 +96,11 @@ def split_by_chr(region_rename_table,fai,saved_root,split_with_strand=False):
                 else:
                     train_chroms = train_chroms_ + ['{}_plus'.format(val_chrom_)]
                     val_chrom = '{}_minus'.format(val_chrom_)
-                train_chrom_str = _get_chrom_str(train_chroms)
-                val_chrom_str = _get_chrom_str(val_chrom)
-                train_path = os.path.join(saved_root,'chrom_{}.tsv'.format(train_chrom_str))
-                val_path = os.path.join(saved_root,'chrom_{}.tsv'.format(val_chrom_str))
-                split_table.append({'training_path':train_path,'validation_path':val_path})
-                _write_id_table(train_table,train_path)
-                _write_id_table(val_table,val_path)
+                    
+                train_chrom_list.append(train_chroms)
+                val_chrom_list.append(val_chrom)
+                train_tables.append(train_table)
+                val_tables.append(val_table)
 
     else:
         for val_chrom in train_val_chrom_ids:
@@ -101,16 +108,25 @@ def split_by_chr(region_rename_table,fai,saved_root,split_with_strand=False):
             train_chroms.remove(val_chrom)
             train_table = _get_subtable(region_rename_table,train_chroms)
             val_table = _get_subtable(region_rename_table,val_chrom)
-            train_path = _get_chrom_path(saved_root,train_table)
-            val_path = _get_chrom_path(saved_root,val_table)
-            split_table.append({'training_path':train_path,'validation_path':val_path})
-            _write_id_table(train_table,train_path)
-            _write_id_table(val_table,val_path)
+            
+            train_chrom_list.append(train_chroms)
+            val_chrom_list.append(val_chrom)
+            train_tables.append(train_table)
+            val_tables.append(val_table)
+
+    for train_table,val_table,train_chroms,val_chrom in zip(train_tables,val_tables,
+                                                            train_chrom_list,val_chrom_list):
+        
+        train_name = 'chrom_{}'.format(_get_chrom_str(train_chroms))
+        val_name = 'chrom_{}'.format(_get_chrom_str(val_chrom))
+        train_id_path = _export_region_data(train_table,saved_root,train_name)
+        val_id_path = _export_region_data(val_table,saved_root,val_name)
+        split_table.append({'training_path':train_id_path,'validation_path':val_id_path})
 
     #Write training and validation table
     train_val_table = _get_subtable(region_rename_table,train_val_chrom_ids)
-    train_val_path = _get_chrom_path(saved_root,train_val_table)
-    _write_id_table(train_val_table,train_val_path)
+    train_val_name = 'chrom_{}'.format(_get_chrom_str(train_val_chrom_ids))
+    _export_region_data(train_val_table,saved_root,train_val_name)
 
     #Write statistic result
     train_val_length = list(region_rename_table[region_rename_table['chr'].isin(train_val_chrom_ids)]['length'])
@@ -118,12 +134,12 @@ def split_by_chr(region_rename_table,fai,saved_root,split_with_strand=False):
     _write_stats_data(train_val_length,path)
 
     #Write test table
-    test_path = os.path.join(saved_root,'test_chrom_{}.tsv'.format(test_chrom))
     test_table = _get_subtable(region_rename_table,test_chrom)
-    _write_id_table(test_table,path=test_path)
+    test_name = 'test_chrom_{}'.format(_get_chrom_str(test_chrom))
+    test_id_path = _export_region_data(test_table,saved_root,test_name)
 
     for item in split_table:
-        item['testing_path'] = test_path
+        item['testing_path'] = test_id_path
         
     split_table = get_relative_paths(split_table)
     split_table = pd.DataFrame.from_dict(split_table)[['training_path','validation_path','testing_path']]
@@ -160,18 +176,17 @@ def split_by_num(region_rename_table,fai,saved_root,fold_num,split_with_strand=F
             train_chrom_list = train_val_chrom_list[i+1:] + train_val_chrom_list[:i]
             train_chroms = _flatten_chunck_list(train_chrom_list)
             val_chroms = train_val_chrom_list[i]
-            train_path = os.path.join(saved_root,'train_dataset_{}.tsv'.format(i+1))
-            val_path = os.path.join(saved_root,'val_dataset_{}.tsv'.format(i+1))
-            split_table.append({'training_path':train_path,'validation_path':val_path})
             train_table = _get_subtable(region_rename_table,train_chroms)
             val_table = _get_subtable(region_rename_table,val_chroms)
-            _write_id_table(train_table,train_path)
-            _write_id_table(val_table,val_path)
+            train_name = os.path.join(saved_root,'train_dataset_{}'.format(i+1))
+            val_name = os.path.join(saved_root,'val_dataset_{}'.format(i+1))
+            train_id_path = _export_region_data(train_table,saved_root,train_name)
+            val_id_path = _export_region_data(val_table,saved_root,val_name)
+            split_table.append({'training_path':train_id_path,'validation_path':val_id_path})
 
     #Write training and validation table
-    train_val_table_path = os.path.join(saved_root,'train_val_dataset.tsv')
     train_val_table = _get_subtable(region_rename_table,train_val_chrom_ids)
-    _write_id_table(train_val_table,train_val_table_path)
+    _export_region_data(train_val_table,saved_root,'train_val_dataset')
     
     #Write statistic result
     train_val_length = list(region_rename_table[region_rename_table['chr'].isin(train_val_chrom_ids)]['length'])
@@ -179,12 +194,11 @@ def split_by_num(region_rename_table,fai,saved_root,fold_num,split_with_strand=F
     _write_stats_data(train_val_length,path)
     
     #Write test table
-    test_path = os.path.join(saved_root,'test_dataset.tsv')
     test_table = _get_subtable(region_rename_table,test_chrom_list)
-    _write_id_table(test_table,test_path)
+    test_id_path = _export_region_data(test_path,saved_root,'test_dataset')
 
     for item in split_table:
-        item['testing_path'] = test_path
+        item['testing_path'] = test_id_path
         
     split_table = get_relative_paths(split_table)
     split_table = pd.DataFrame.from_dict(split_table)[['training_path','validation_path','testing_path']]

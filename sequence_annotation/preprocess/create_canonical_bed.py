@@ -91,7 +91,7 @@ def create_canonical_bed_without_orf(gff):
     genes = gff[gff['feature']=='gene']
     ids = set(genes['id'])
     genes = genes.groupby('id')
-    exons = gff[gff['feature'].isin(['exon','alt_alt_accept','alt_alt_donor'])]
+    exons = gff[gff['feature'].isin(['exon','alt_acceptor','alt_donor'])]
     exons = exons.groupby('parent')
     bed_info_list = []
     for id_ in ids:

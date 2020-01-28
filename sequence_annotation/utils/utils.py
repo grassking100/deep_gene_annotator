@@ -227,6 +227,11 @@ def read_json(path,mode=None):
     with open(path,mode) as fp:
         return json.load(fp)
 
-def read_region_table(path):
+def read_region_table(path,calculate_length=True):
+    """Get region table about regions"""
+    columns = ['new_id','old_id','chr','strand','start','end']
     df = pd.read_csv(path,sep='\t',dtype={'chr':str,'start':int,'end':int})
-    return df
+    if calculate_length:
+        df['length'] = df['end'] - df['start'] + 1
+        columns += ['length']
+    return df[columns]

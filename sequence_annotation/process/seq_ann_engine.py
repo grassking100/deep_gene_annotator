@@ -11,7 +11,7 @@ from .worker import TrainWorker,TestWorker
 from .tensorboard_writer import TensorboardWriter
 from .callback import CategoricalMetric,TensorboardCallback
 from .callback import SeqFigCallback, Callbacks,ContagionMatrix
-from .singal_handler import build_singal_handler
+from .signal_handler import build_signal_handler
 from .data_generator import SeqGenerator
 
 class SeqAnnEngine(metaclass=abc.ABCMeta):
@@ -83,16 +83,20 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
                     raise Exception("The {} is missing in the dataset".format(key))
             self.update_settings(name,count)
                 
-    def _add_singal_handler(self,ann_vec2info_converter,region_table_path,answer_gff_path,callbacks,prefix=None):
+    def _add_signal_handler(self,ann_vec_gff_converter,region_table_path,
+                            answer_gff_path,callbacks,prefix=None):
         path = self._path
         if path is not None and prefix is not None:
             path = os.path.join(path,prefix)
-            
-        if region_table_path is not None and answer_gff_path is not None:
-            singal_handler = build_singal_handler(path,region_table_path,answer_gff_path,
-                                                  ann_vec2info_converter,prefix=prefix)
+           
+        verified_paths = [region_table_path,answer_gff_path]
+        if all([verified_path is not None for verified_path in verified_paths]):
+            signal_handler = build_signal_handler(path,region_table_path,
+                                                  answer_gff_path,
+                                                  ann_vec_gff_converter,
+                                                  prefix=prefix)
 
-            callbacks.add(singal_handler)
+            callbacks.add(signal_handler)
 
     def _create_categorical_metric(self,prefix=None):
         metric = CategoricalMetric(len(self.ann_types),
@@ -204,16 +208,18 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         worker.work()
         return worker
 
-    def test(self,model,executor,data,batch_size=None,ann_vec2info_converter=None,
-             region_table_path=None,answer_gff_path=None,callbacks=None):
+    def test(self,model,executor,data,batch_size=None,
+             ann_vec_gff_converter=None,region_table_path=None,
+             answer_gff_path=None,callbacks=None):
+
         self._update_common_setting()
         self.update_settings('test_setting',{'batch_size':batch_size})
         callbacks = callbacks or Callbacks()
         test_callbacks = self._create_default_test_callbacks()
         callbacks.add(test_callbacks)
         self._add_tensorboard_callback(self._test_writer,callbacks)
-        if ann_vec2info_converter is not None and region_table_path is not None:
-            self._add_singal_handler(ann_vec2info_converter,region_table_path,
+        if ann_vec_gff_converter is not None and region_table_path is not None:
+            self._add_signal_handler(ann_vec_gff_converter,region_table_path,
                                      answer_gff_path,callbacks,prefix='test')
         generator = SeqGenerator(batch_size=batch_size,shuffle=False)
         test_seqs,test_ann_seqs = data

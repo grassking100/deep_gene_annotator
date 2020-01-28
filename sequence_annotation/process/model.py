@@ -136,7 +136,7 @@ class SeqAnnBuilder:
                                      'num_layers':4,"norm_mode":"after_activation"}
         self.relation_block_config = {'num_layers':4,'hidden_size':16,
                                       'batch_first':True,'bidirectional':True,
-                                      'rnn_type':'GRU'}
+                                      'rnn_type':'ProjectedGRU'}
         self.in_channels = 4
         self.out_channels = 3
         self.last_act = None

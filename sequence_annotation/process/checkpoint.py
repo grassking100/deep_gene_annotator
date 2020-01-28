@@ -152,6 +152,15 @@ class ModelCheckpoint(_Checkpoint):
             return (self._counter-self.best_epoch) >= self.patient
         else:
             return False
+
+    def _stop_worker(self):
+        print("{} stop worker because {}-{}>={}".format(self.__class__.__name__,
+                                                        self._counter,
+                                                        self.best_epoch,
+                                                        self.patient))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore",category=WorkerProtectedWarning)
+            self._worker.is_running = False
         
     def on_work_begin(self, worker,**kwargs):
         self._worker = worker
@@ -170,7 +179,6 @@ class ModelCheckpoint(_Checkpoint):
                 self._best_result = best_target
                 print("Load existed best model of epoch {} from {}".format(best_epoch,self.best_model_path))
                 print("Load best target, {}, of epoch {} from {}".format(best_target,best_epoch,self.best_status_path))
-
             else:
                 self._model_weights = get_copied_state_dict(worker.model)
 
@@ -185,14 +193,12 @@ class ModelCheckpoint(_Checkpoint):
                 biggest_epoch = biggest_epoch_
                 model_path = model_path_
         if model_path is not None:
-            print("Load epoch {}'s model from {}".format(biggest_epoch,model_path))
+            print("Load model of epoch {} from {}".format(biggest_epoch,model_path))
             self._worker.model.load_state_dict(torch.load(model_path),strict=True)
         self._counter = biggest_epoch
         
         if self.should_stop():
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore",category=WorkerProtectedWarning)
-                self._worker.is_running = False
+            self._stop_worker()
 
     def get_config(self,**kwargs):
         config = super().get_config(**kwargs)
@@ -243,9 +249,7 @@ class ModelCheckpoint(_Checkpoint):
                            self._model_weights,self.patient)
         
         if self.should_stop():
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore",category=WorkerProtectedWarning)
-                self._worker.is_running = False
+            self._stop_worker()
 
         if (self._counter%self.period) == 0:
             if self.explicit_period:
@@ -254,7 +258,7 @@ class ModelCheckpoint(_Checkpoint):
             else:
                 model_path = self.latest_model_path
 
-            print("Save model at "+model_path)
+            print("Save model of epoch {} at {}".format(self._counter,model_path))
             torch.save(self._worker.model.state_dict(),model_path)
             _write_status(self.latest_status_path,self._counter,model_path)
 
@@ -311,7 +315,7 @@ class ExecutorCheckpoint(_Checkpoint):
                 executor_path = executor_path_
             
         if executor_path is not None:
-            print("Load epoch {}'s executor from {}".format(biggest_epoch,executor_path))
+            print("Load executor of epoch {} from {}".format(biggest_epoch,executor_path))
             self._executor.load_state_dict(torch.load(executor_path))
         self._counter = biggest_epoch
 
@@ -332,19 +336,20 @@ class ExecutorCheckpoint(_Checkpoint):
             else:
                 executor_path = self.latest_executor_path
 
-            print("Save epoch {}'s executor at {}".format(self._counter,executor_path))
+            print("Save executor of epoch {} at {}".format(self._counter,executor_path))
             torch.save(self._executor_state_dict,executor_path)
             _write_status(self.latest_status_path,self._counter,executor_path)
 
     def on_work_end(self):
         torch.save(self._executor_state_dict,self.last_executor_path)
-        print("Save last epoch {}'s of executor at {}".format(self._counter,self.last_executor_path))
+        print("Save executor of last epoch {} at {}".format(self._counter,self.last_executor_path))
         _write_status(self.last_status_path,self._counter,self.last_executor_path)
 
 
 def copy_file(source_path,target_path):
     command = 'cp {} {}'.format(source_path,target_path)
-    os.system(command)
+    if os.path.exists(source_path):
+        os.system(command)
         
 def get_best_result(best_epoch,result):
     best_result = {}

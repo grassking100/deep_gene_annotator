@@ -5,7 +5,7 @@ import numpy as np
 from argparse import ArgumentParser
 from  matplotlib import pyplot as plt
 sys.path.append(os.path.dirname(os.path.abspath(__file__+"/../..")))
-from sequence_annotation.utils.utils import create_folder, write_gff, write_json, read_gff, read_fai,BASIC_GENE_ANN_TYPES
+from sequence_annotation.utils.utils import create_folder, write_gff, write_json, read_gff, read_region_table,BASIC_GENE_ANN_TYPES
 from sequence_annotation.utils.site_analysis import site_abs_diff
 from sequence_annotation.genome_handler.sequence import AnnSequence 
 from sequence_annotation.genome_handler.ann_seq_processor import get_background,seq2vecs
@@ -236,7 +236,7 @@ def _gene_gff2vec(gff,chrom_id,strand,length):
     vec = np.array([seq2vecs(ann_seq)]).transpose(0,2,1)
     return vec
 
-def gff_performance(predict,answer,chrom_lengths,round_value=None):
+def gff_performance(predict,answer,region_table,round_value=None):
     """
     The method would compare data between prediction and answer, and return the performance result
     
@@ -265,6 +265,22 @@ def gff_performance(predict,answer,chrom_lengths,round_value=None):
     site_a_p_status : dict
         A dictionary about median of absolute minimal difference of each answer site to predict site
     """
+    answer_list = answer.to_dict('record')
+    region_table_list = region_table.to_dict('record')
+    answer_regions = set()
+    table_regions = set()
+    for item in answer_list:
+        answer_regions.add("{}_{}".format(item['chr'],item['strand']))
+        
+    for item in region_table_list:
+        table_regions.add("{}_{}".format(item['new_id'],item['strand']))
+
+    for answer_region in answer_regions:
+        if answer_region not in table_regions:
+            raise Exception(answer_region,table_regions)
+
+    predict = get_gff_with_intron(predict)
+    answer = get_gff_with_intron(answer)
     label_num=len(BASIC_GENE_ANN_TYPES)
     metric = {}
     for type_ in ['TPs','FPs','TNs','FNs']:
@@ -275,19 +291,21 @@ def gff_performance(predict,answer,chrom_lengths,round_value=None):
         metric[type_] = [0]*label_num
     contagion = np.array([[0]*label_num]*label_num)
     chrom_ids = list(chrom_lengths.keys())
-    for chrom_id in chrom_ids:
-        length = chrom_lengths[chrom_id]
-        for strand in ['+','-']:
-            predict_vec = _gene_gff2vec(predict,chrom_id,strand,length)
-            answer_vec = _gene_gff2vec(answer,chrom_id,strand,length)
-            mask = np.ones((1,length))
-            metric_ = categorical_metric(predict_vec,answer_vec,mask)
-            contagion += np.array(contagion_matrix(predict_vec,answer_vec,mask))
-            for type_ in ['TPs','FPs','TNs','FNs']:
-                for index in range(label_num):
-                    metric[type_][index] += metric_[type_][index]
-            metric['T'] += metric_['T']
-            metric['F'] += metric_['F']
+    
+    for item in region_table.to_dict('record'):
+        chrom_id = item['new_id']
+        length = item['length']
+        strand = item['strand']
+        predict_vec = _gene_gff2vec(predict,chrom_id,strand,length)
+        answer_vec = _gene_gff2vec(answer,chrom_id,strand,length)
+        mask = np.ones((1,length))
+        metric_ = categorical_metric(predict_vec,answer_vec,mask)
+        contagion += np.array(contagion_matrix(predict_vec,answer_vec,mask))
+        for type_ in ['TPs','FPs','TNs','FNs']:
+            for index in range(label_num):
+                metric[type_][index] += metric_[type_][index]
+        metric['T'] += metric_['T']
+        metric['F'] += metric_['F']
     base_perform = calculate_metric(metric,label_names=BASIC_GENE_ANN_TYPES,round_value=round_value)
     block_perform,error_status = block_performance(predict,answer,round_value=round_value)
     site_p_a_status = site_abs_diff(answer,predict,round_value=round_value)
@@ -313,24 +331,6 @@ def draw_contagion_matrix(contagion_matrix,round_number=None):
         for c_index,cell in enumerate(row):
             plt.text(c_index,r_index, format_.format(cell), ha='center', va='center')
     plt.show()
-
-def gff_performance_main(predict_path,answer_path,fai_path,saved_root,round_value=None):
-    predict = get_gff_with_intron(read_gff(predict_path))
-    answer = get_gff_with_intron(read_gff(answer_path))
-    chrom_lengths = read_fai(fai_path)
-    for chr_ in set(answer['chr']):
-        if chr_ not in list(chrom_lengths.keys()):
-            raise Exception(chr_,chrom_lengths)
-    
-    result = gff_performance(predict,answer,chrom_lengths,round_value)
-    base_perform,contagion,block_perform,errors,site_p_a_diff,site_a_p_abs_diff = result
-    
-    write_json(base_perform,os.path.join(saved_root,'base_performance.json'))
-    write_json(contagion.tolist(),os.path.join(saved_root,'contagion_matrix.json'))
-    write_json(block_perform,os.path.join(saved_root,'block_performance.json'))
-    write_gff(errors, os.path.join(saved_root,'error_status.gff'))
-    write_json(site_p_a_diff,os.path.join(saved_root,'p_a_abs_diff.json'))
-    write_json(site_a_p_abs_diff,os.path.join(saved_root,'a_p_abs_diff.json'))
 
 def site_diff_table(roots,names):
     site_diff = []
@@ -385,11 +385,27 @@ def block_performance_table(roots,names):
     columns = ['name'] + columns
     return block_performance[columns],error_paths
 
+def compare_and_save(predict,answer,region_table,saved_root,round_value=None):
+    result = gff_performance(predict,answer,region_table,round_value)
+    base_perform,contagion,block_perform,errors,site_p_a_diff,site_a_p_abs_diff = result
+    write_json(base_perform,os.path.join(saved_root,'base_performance.json'))
+    write_json(contagion.tolist(),os.path.join(saved_root,'contagion_matrix.json'))
+    write_json(block_perform,os.path.join(saved_root,'block_performance.json'))
+    write_gff(errors, os.path.join(saved_root,'error_status.gff'))
+    write_json(site_p_a_diff,os.path.join(saved_root,'p_a_abs_diff.json'))
+    write_json(site_a_p_abs_diff,os.path.join(saved_root,'a_p_abs_diff.json'))
+
+def main(predict_path,answer_path,region_table_path,saved_root,**kwargs):
+    predict = read_gff(predict_path)
+    answer = read_gff(answer_path)
+    region_table = read_region_table(region_table_path)
+    compare_and_save(predict,answer,region_table,saved_root,**kwargs)
+
 if __name__ == '__main__':
-    parser = ArgumentParser(help='Compare predict GFF to answer GFF')
+    parser = ArgumentParser(description='Compare predict GFF to answer GFF')
     parser.add_argument("--predict_path",help='The path of prediction result in GFF format',required=True)
     parser.add_argument("--answer_path",help='The path of answer result in GFF format',required=True)
-    parser.add_argument("--fai_path",help='The path of chromosome length in fai format',required=True)
+    parser.add_argument("--region_table_path",help='The path of region table',required=True)
     parser.add_argument("--saved_root",help="Path to save result",required=True)
     
     args = parser.parse_args()
@@ -397,4 +413,4 @@ if __name__ == '__main__':
     config_path = os.path.join(args.saved_root,'performance_setting.json')
     config = vars(args)
     write_json(config,config_path)
-    gff_performance_main(args.predict_path,args.answer_path,args.fai_path,args.saved_root)
+    main(args.predict_path,args.answer_path,args.fai_path,args.saved_root)

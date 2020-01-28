@@ -9,11 +9,11 @@ from sequence_annotation.utils.utils import create_folder, write_json
 from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES, BASIC_GENE_MAP
 from sequence_annotation.process.seq_ann_engine import SeqAnnEngine
 from sequence_annotation.process.callback import SeqLogo,Callbacks
-from sequence_annotation.process.convert_singal_to_gff import build_converter
+from sequence_annotation.process.convert_signal_to_gff import build_ann_vec_gff_converter
 from main.utils import get_executor, get_model,load_data
 
 def test(saved_root,model,executor,data,batch_size=None,
-         use_gffcompare=False,ann_vec2info_converter=None,
+         use_gffcompare=False,ann_vec_gff_converter=None,
          use_seqlogo=False,**kwargs):
     
     if use_gffcompare and use_seqlogo:
@@ -29,7 +29,7 @@ def test(saved_root,model,executor,data,batch_size=None,
 
     worker = engine.test(model,executor,data,
                          batch_size=batch_size,
-                         ann_vec2info_converter=ann_vec2info_converter,
+                         ann_vec_gff_converter=ann_vec_gff_converter,
                          callbacks=callbacks,**kwargs)
     return worker
 
@@ -38,10 +38,10 @@ def main(saved_root,data_path,model_config_path,
     model = get_model(model_config_path,model_weights_path=model_weights_path)
     executor = get_executor(model,use_naive=use_naive,set_loss=False,set_optimizer=False)
     data = load_data(data_path)
-    converter = build_converter(BASIC_GENE_ANN_TYPES,BASIC_GENE_MAP)
+    converter = build_ann_vec_gff_converter(BASIC_GENE_ANN_TYPES,BASIC_GENE_MAP)
     
     worker = test(saved_root,model,executor,data,
-                  ann_vec2info_converter=converter,**kwargs)
+                  ann_vec_gff_converter=converter,**kwargs)
 
     return worker
 

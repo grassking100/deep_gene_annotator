@@ -63,7 +63,7 @@ def find_clocest_site(pred_site,ann_sites,dist):
     return fixed_pred_site,fixed_diff,in_dist
     
 def get_splice_pairs(gff):
-    """Get splice pairs in order of donor site and accept site
+    """Get splice pairs in order of donor site and acceptor site
     
     Parameters:
     ----------
@@ -73,7 +73,7 @@ def get_splice_pairs(gff):
     Returns:
     ----------
     list (tuple)
-        List of paired sites of donor site and accept site in one based
+        List of paired sites of donor site and acceptor site in one based
     """
     if (gff['strand'] != '+').any():
         raise Exception("Invalid strand")
@@ -82,16 +82,16 @@ def get_splice_pairs(gff):
     pairs = list(zip(list(introns['start']),list(introns['end'])))
     return pairs
     
-def fix_splice_pairs(splice_pairs,ann_donor_sites,ann_accept_sites,dist):
-    """Fix splice pairs by ann_donor_sites and ann_accept_sites
+def fix_splice_pairs(splice_pairs,ann_donor_sites,ann_acceptor_sites,dist):
+    """Fix splice pairs by ann_donor_sites and ann_acceptor_sites
         
     Parameters:
     ----------
     splice_pairs : list (tuple)
-        List of paired sites of donor site and accept site in one based
+        List of paired sites of donor site and acceptor site in one based
     ann_donor_sites : list (int)
         Location of donor sites in one based
-    ann_accept_sites : list (int)
+    ann_acceptor_sites : list (int)
         Location of acccept sites in one based
     dist : int
         Valid distance
@@ -99,16 +99,16 @@ def fix_splice_pairs(splice_pairs,ann_donor_sites,ann_accept_sites,dist):
     Returns:
     ----------
     list (tuple)
-        List of fixed paired sites of donor site and accept site in one based
+        List of fixed paired sites of donor site and acceptor site in one based
     """
     fix_splice_pairs_ = []
     for splice_pair in splice_pairs:
-        donor_site,accept_site = splice_pair
+        donor_site,acceptor_site = splice_pair
         fixed_donor_site,donor_diff,donor_in_dist = find_clocest_site(donor_site,ann_donor_sites,dist)
         if donor_in_dist:
-            fixed_accept_site,donor_accept,accept_in_dist = find_clocest_site(accept_site,ann_accept_sites,dist)
-            if accept_in_dist and fixed_donor_site < fixed_accept_site:
-                fix_splice_pairs_.append((fixed_donor_site,fixed_accept_site))
+            fixed_acceptor_site,_,acceptor_in_dist = find_clocest_site(acceptor_site,ann_acceptor_sites,dist)
+            if acceptor_in_dist and fixed_donor_site < fixed_acceptor_site:
+                fix_splice_pairs_.append((fixed_donor_site,fixed_acceptor_site))
     return fix_splice_pairs_
 
 def get_exon_boundary(rna_boundary,intron_boundarys):
@@ -184,8 +184,8 @@ def get_fixed_intron_boundary(rna_boundary,intron_boundarys):
     
     return valid_intron_boundarys
 
-def guess_boundarys(seq,donor_site_pattern=None,accept_site_pattern=None):
-    """Get list of guessed intron boundarys based on donor site pattern and accept site pattern
+def guess_boundarys(seq,donor_site_pattern=None,acceptor_site_pattern=None):
+    """Get list of guessed intron boundarys based on donor site pattern and acceptor site pattern
         
     Parameters:
     ----------
@@ -193,8 +193,8 @@ def guess_boundarys(seq,donor_site_pattern=None,accept_site_pattern=None):
         DNA sequence which its direction is 5' to 3'
     donor_site_pattern : str (default : GT)
         Regular expression of donor site
-    accept_site_pattern : str (default : AG)
-        Regular expression of accept site
+    acceptor_site_pattern : str (default : AG)
+        Regular expression of acceptor site
 
     Returns:
     ----------
@@ -202,15 +202,15 @@ def guess_boundarys(seq,donor_site_pattern=None,accept_site_pattern=None):
         List of guessed intron boundarys
     """
     donor_site_pattern = donor_site_pattern or 'GT'
-    accept_site_pattern = accept_site_pattern or 'AG'
+    acceptor_site_pattern = acceptor_site_pattern or 'AG'
     ann_donor_sites = [site + 1 for site in find_substr(donor_site_pattern,seq)]
-    ann_accept_sites = [site + 1 for site in find_substr(accept_site_pattern,seq,False)]
+    ann_acceptor_sites = [site + 1 for site in find_substr(acceptor_site_pattern,seq,False)]
     type_ =  {}
     for site in ann_donor_sites:
         type_[site]='D'
-    for site in ann_accept_sites:
+    for site in ann_acceptor_sites:
         type_[site]='A'
-    sites = sorted(ann_donor_sites + ann_accept_sites)
+    sites = sorted(ann_donor_sites + ann_acceptor_sites)
     boundarys = []
     previous_site = None
     for site in sites:
@@ -224,8 +224,8 @@ def guess_boundarys(seq,donor_site_pattern=None,accept_site_pattern=None):
                     previous_site = None
     return boundarys
 
-def guess_ann(chrom,strand,length,seq,gff,donor_site_pattern=None,accept_site_pattern=None):
-    """Get guessed AnnSequence based on donor site pattern and accept site pattern
+def guess_ann(chrom,strand,length,seq,gff,donor_site_pattern=None,acceptor_site_pattern=None):
+    """Get guessed AnnSequence based on donor site pattern and acceptor site pattern
         
     Parameters:
     ----------
@@ -241,13 +241,13 @@ def guess_ann(chrom,strand,length,seq,gff,donor_site_pattern=None,accept_site_pa
         DNA sequence which its direction is 5' to 3'
     donor_site_pattern : str (default : GT)
         Regular expression of donor site
-    accept_site_pattern : str (default : AG)
-        Regular expression of accept site
+    acceptor_site_pattern : str (default : AG)
+        Regular expression of acceptor site
 
     Returns:
     ----------
     AnnSequence
-        Guessed AnnSequence based on donor site pattern and accept site pattern
+        Guessed AnnSequence based on donor site pattern and acceptor site pattern
     """
     selected_gff = gff[gff['chr']==chrom]
     rnas = selected_gff[selected_gff['feature'].isin(RNA_TYPES)].to_dict('record')
@@ -261,7 +261,7 @@ def guess_ann(chrom,strand,length,seq,gff,donor_site_pattern=None,accept_site_pa
         end = rna['end']
         subseq = seq[start-1:end]
         intron_boundarys = guess_boundarys(subseq,donor_site_pattern=donor_site_pattern,
-                                           accept_site_pattern=accept_site_pattern)
+                                           acceptor_site_pattern=acceptor_site_pattern)
         intron_boundarys = [(start+site[0]-1,start+site[1]-1) for site in intron_boundarys]
         intron_boundarys = get_fixed_intron_boundary(rna_boundary,intron_boundarys)
         exon_boundarys = get_exon_boundary(rna_boundary,intron_boundarys)
