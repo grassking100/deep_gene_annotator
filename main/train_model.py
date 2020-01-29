@@ -135,6 +135,11 @@ def main(saved_root,model_config_path,executor_config_path,
                                                        frozen_names=frozen_names,
                                                        save_distribution=save_distribution)
     
+    print("Check memory")
+    check_max_memory_usgae(saved_root,copied_model,copied_executor,train_data,
+                           val_data,batch_size=batch_size)
+    print("Memory is available")
+    
     model,executor = _get_model_executor(model_config_path,executor_config_path,
                                          frozen_names=frozen_names,
                                          save_distribution=save_distribution)
