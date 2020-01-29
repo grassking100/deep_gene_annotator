@@ -1,4 +1,4 @@
-from .process import get_time_str
+from .utils import get_time_str
 import pandas as pd
 import subprocess
 import nvgpu
