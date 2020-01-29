@@ -1,7 +1,8 @@
-from .utils import get_time_str
+import time
 import pandas as pd
 import subprocess
 import nvgpu
+from .utils import get_time_str
 
 class Process:
     def __init__(self,cmd,name=None):

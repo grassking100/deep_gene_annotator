@@ -8,7 +8,7 @@ from sequence_annotation.utils.utils import create_folder
 
 if __name__ == '__main__':    
     parser = ArgumentParser()
-    parser.add_argument("--cmd_table_path",required=True)
+    parser.add_argument("-i","--cmd_table_path",required=True)
     parser.add_argument("-o","--output_path",required=True,
                         help="Root to save result table (in tsv format)")
     parser.add_argument("-g","--gpu_ids",type=lambda x: int(x).split(','),
