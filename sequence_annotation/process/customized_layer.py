@@ -125,7 +125,7 @@ NORM_CLASS = {
     'PaddedAllNorm1d':PaddedAllNorm1d
 }
 
-def generator_norm_class(norm_class,**kwargs):
+def generate_norm_class(norm_class,**kwargs):
     def create(channel_size):
         if isinstance(norm_class,str):
             return NORM_CLASS[norm_class](channel_size,**kwargs)

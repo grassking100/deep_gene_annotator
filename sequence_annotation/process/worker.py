@@ -93,9 +93,12 @@ class Worker(metaclass=ABCMeta):
         """Do something before worker work"""
         pass
  
-    def print_verbose(self,info):
+    def print_verbose(self,info,is_progress=False):
         if self.is_verbose_visible:
-            print_progress(info)
+            if is_progress:
+                print_progress(info)
+            else:
+                print(info)
             
     def handle_signal(self, signum, frame):
         pass
@@ -111,7 +114,7 @@ class TrainWorker(Worker):
         self._train_callbacks = train_callbacks
         self._val_callbacks = val_callbacks
         self._other_callbacks = other_callbacks
-        self.checkpoint_kwargs = checkpoint_kwargs
+        self.checkpoint_kwargs = checkpoint_kwargs or {}
         
         if train_generator is None:
             self._train_generator = SeqGenerator()
@@ -173,25 +176,24 @@ class TrainWorker(Worker):
         message_path = None
         if self.path is not None:    
             record_path = os.path.join(self.path,"train_record.json")
-            message_path = os.path.join(self.path,"message.txt")    
+            message_path = os.path.join(self.path,"message.txt")
+            self._checkpoint = build_checkpoint(self.path,record_path=record_path,
+                                                **self.checkpoint_kwargs)
         accumulator = Accumulator()
         self._message_recorder = MessageRecorder(path=message_path)
         self._train_callbacks.add(accumulator)
-        self._checkpoint = build_checkpoint(self.path,record_path=record_path,
-                                            **self.checkpoint_kwargs)
-        #self.executor.process(self.model)
         self._is_running = True
         self._save_setting()
         start_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
         time_messgae = "Start time at {}".format(start_time)
-        print(time_messgae)
+        self.print_verbose(time_messgae)
         if self._message_recorder is not None:
             self._message_recorder.notify([time_messgae])
 
     def handle_signal(self, signum, frame):
         self._is_running = False
         warning = "STOP worker at epoch {} by signal {}".format(self._current_epoch,signum)
-        print(warning)
+        self.print_verbose(warning)
         if self._message_recorder is not None:
             self._message_recorder.notify([warning])
             
@@ -210,15 +212,22 @@ class TrainWorker(Worker):
             
     def _work(self):
         """Train model"""
-        all_callbacks = Callbacks([self._train_callbacks,self._val_callbacks,
-                                   self._other_callbacks,self._checkpoint])
-        all_callbacks.on_work_begin(worker=self)
-        start = self._checkpoint.epoch_start+1
+        start = 1
         end = self._epoch + 1
+        all_callbacks = Callbacks([self._train_callbacks,self._val_callbacks,
+                                   self._other_callbacks])
+        if self._checkpoint is not None:
+            all_callbacks.add(self._checkpoint)
+            
+        all_callbacks.on_work_begin(worker=self)
+        
+        if self._checkpoint is not None:
+            start = self._checkpoint.epoch_start+1
+
         batch_info = "Epoch: ({}/{}), {} {:.1f}% of data"
         epoch_info = "Epoch: ({}/{}), Time cost of: {}, {}"
         gradient_warning = "Epoch {}: {} have gradients which are larger than one, the max value is {}"
-        print("Start from {} to {}".format(start,end-1))
+        self.print_verbose("Start from {} to {}".format(start,end-1))
         if not self.is_running:
             self.print_verbose("Stop at {}".format(start))
         else:
@@ -234,7 +243,7 @@ class TrainWorker(Worker):
                     seq_data = SeqDataset(item)
                     train_per_batch(self.model,seq_data,self.executor,self._train_callbacks)
                     status = 100*index/len(self._train_loader)
-                    self.print_verbose(batch_info.format(epoch,self._epoch,'training',status))
+                    self.print_verbose(batch_info.format(epoch,self._epoch,'training',status),True)
                     validate_gradient(self.model,message_recorder=self._message_recorder)
 
                 if self._val_loader is not None:
@@ -242,7 +251,7 @@ class TrainWorker(Worker):
                         seq_data = SeqDataset(item)
                         evaluate_per_batch(self.model,seq_data,self.executor,self._val_callbacks)
                         status = 100*index/len(self._val_loader)
-                        self.print_verbose(batch_info.format(epoch,self._epoch,'validating',status))
+                        self.print_verbose(batch_info.format(epoch,self._epoch,'validating',status),True)
 
                 self.model.save_distribution = save_distribution
                 train_record = self._train_callbacks.get_data()
@@ -262,10 +271,11 @@ class TrainWorker(Worker):
                 self._train_callbacks.on_epoch_end(metric=train_record)
                 self._val_callbacks.on_epoch_end(metric=val_record)
                 self._other_callbacks.on_epoch_end(metric=record)
-                self._checkpoint.on_epoch_end(metric=record)
+                if self._checkpoint is not None:
+                    self._checkpoint.on_epoch_end(metric=record)
 
                 time_cost = round(time.time()-pre_time,3)
-                self.print_verbose(epoch_info.format(epoch,self._epoch,time_cost,record))
+                self.print_verbose(epoch_info.format(epoch,self._epoch,time_cost,record),True)
 
                 if not self.is_running:
                     self.print_verbose("Stop at {}".format(epoch))
@@ -274,12 +284,13 @@ class TrainWorker(Worker):
         all_callbacks.on_work_end()
 
     def _after_work(self):
-        self.result = self._checkpoint.record
-        self._best_result =  self._checkpoint.best_result
-        self._best_epoch =  self._checkpoint.best_epoch
+        if self._checkpoint is not None:
+            self.result = self._checkpoint.record
+            self._best_result =  self._checkpoint.best_result
+            self._best_epoch =  self._checkpoint.best_epoch
         end_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
         time_messgae = "End time at {}".format(end_time)
-        print(time_messgae)
+        self.print_verbose(time_messgae)
         if self._message_recorder is not None:
             self._message_recorder.notify([time_messgae])
 
@@ -313,21 +324,23 @@ class TestWorker(Worker):
         record_path = None
         if self.path is not None:   
             record_path = os.path.join(self.path,"test_record.json")
-        accum = Accumulator(prefix='test')
-        self._checkpoint = build_checkpoint(self.path,record_path,
-                                            only_recorder=True,force_reset=True)
+            self._checkpoint = build_checkpoint(self.path,record_path,
+                                                only_recorder=True,
+                                                force_reset=True)
+        accum = Accumulator(prefix='test')          
         self._callbacks.add(accum)
-        #self.executor.process(self.model)
         self._save_setting()
 
     def _work(self):
         """Test model"""
         epoch_start=1
         callbacks = Callbacks(self._callbacks)
-        self._checkpoint.on_work_begin(worker=self)
+        if self._checkpoint is not None:
+            self._checkpoint.on_work_begin(worker=self)
         callbacks.on_work_begin(worker=self)
         record = {}
-        self._checkpoint.on_epoch_begin(counter=epoch_start)
+        if self._checkpoint is not None:
+            self._checkpoint.on_epoch_begin(counter=epoch_start)
         callbacks.on_epoch_begin(counter=epoch_start)
         batch_info = "Testing data: {0:.1f}%"
         save_distribution = self.model.save_distribution
@@ -337,17 +350,20 @@ class TestWorker(Worker):
             evaluate_per_batch(self.model,seq_data,
                                self.executor,self._callbacks)
             status = 100*index/len(self._loader)
-            self.print_verbose(batch_info.format(status))
+            self.print_verbose(batch_info.format(status),True)
 
         self.model.save_distribution = save_distribution
         record = callbacks.get_data()
-        self._checkpoint.on_epoch_end(metric=record)
+        if self._checkpoint is not None:
+            self._checkpoint.on_epoch_end(metric=record)
         callbacks.on_epoch_end(metric=record)
         callbacks.on_work_end()
-        self._checkpoint.on_work_end()
+        if self._checkpoint is not None:
+            self._checkpoint.on_work_end()
 
     def _after_work(self):
-        if hasattr(self._checkpoint,'record'):
-            self.result = self._checkpoint.record
-        else:
-            self.result = self._checkpoint.data
+        if self._checkpoint is not None:
+            if hasattr(self._checkpoint,'record'):
+                self.result = self._checkpoint.record
+            else:
+                self.result = self._checkpoint.data

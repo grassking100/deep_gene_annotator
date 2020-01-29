@@ -5,6 +5,7 @@ import math
 import json
 import numpy as np
 import pandas as pd
+from time import gmtime, strftime
 from Bio import SeqIO
 from pathlib import Path
 
@@ -235,3 +236,8 @@ def read_region_table(path,calculate_length=True):
         df['length'] = df['end'] - df['start'] + 1
         columns += ['length']
     return df[columns]
+
+def get_time_str(time_=None):
+    time_ = time_ or gmtime()
+    time_str = strftime("%Y-%m-%d %H:%M:%S", time_)
+    return time_str

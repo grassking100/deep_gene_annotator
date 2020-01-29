@@ -2,20 +2,24 @@ import os
 import sys
 import json
 import torch
+import numpy as np
+import random
 import deepdish as dd
 from argparse import ArgumentParser
-torch.backends.cudnn.enabled = True
-torch.backends.cudnn.benchmark = True
 sys.path.append(os.path.dirname(os.path.abspath(__file__+"/..")))
-from sequence_annotation.utils.utils import create_folder, write_fasta, write_json
-from sequence_annotation.utils.utils import BASIC_GENE_MAP,BASIC_GENE_ANN_TYPES
+from sequence_annotation.utils.utils import create_folder, write_fasta, write_json, read_json
+from sequence_annotation.utils.utils import BASIC_GENE_MAP,BASIC_GENE_ANN_TYPES,get_time_str
 from sequence_annotation.process.seq_ann_engine import SeqAnnEngine
 from sequence_annotation.process.convert_signal_to_gff import build_ann_vec_gff_converter
 from sequence_annotation.process.utils import param_num
 from sequence_annotation.process.callback import Callbacks
+from sequence_annotation.process.model import SeqAnnBuilder
 from sequence_annotation.genome_handler.ann_seq_processor import class_count
+from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
 from main.utils import get_model, get_executor,BASIC_COLOR_SETTING, copy_path,load_data
 from main.test_model import test
+
+DEFAULT_BATCH_SIZE = 32
 
 def _get_max_target_seqs(seqs,ann_seqs,seq_fig_target=None):
     max_count = 0
@@ -27,47 +31,88 @@ def _get_max_target_seqs(seqs,ann_seqs,seq_fig_target=None):
             selected_id = ann_seq.id
     return seqs[selected_id],ann_seqs[selected_id]
 
-def train(saved_root,epoch,model,executor,train_data,val_data=None,
+def _get_model_executor(model_config_path,executor_config_path,
+                        frozen_names=None,save_distribution=True):
+    #Create model
+    model = get_model(model_config_path,frozen_names=frozen_names)
+    model.save_distribution = save_distribution
+    #Create executor
+    executor_config = read_json(executor_config_path)
+    executor = get_executor(model,**executor_config)
+    return model,executor
+
+def _get_first_large_data(data,batch_size):
+    seqs,ann_container = data
+    lengths = {key:len(seq) for key,seq in seqs.items()}
+    sorted_length_keys = sorted(lengths,key=lengths.get,reverse=True)
+    part_keys = sorted_length_keys[:batch_size]
+    part_seqs = dict(zip(part_keys,[seqs[key] for key in part_keys]))
+    part_container = AnnSeqContainer()
+    part_container.ANN_TYPES = ann_container.ANN_TYPES
+    for key in part_keys:
+        part_container.add(ann_container.get(key))
+        
+    return part_seqs,part_container
+
+def check_max_memory_usgae(saved_root,model,executor,train_data,val_data,batch_size=None):
+    batch_size = batch_size or DEFAULT_BATCH_SIZE
+    
+    train_data = _get_first_large_data(train_data,batch_size)
+    val_data = _get_first_large_data(val_data,batch_size)
+    
+    engine = SeqAnnEngine(BASIC_GENE_ANN_TYPES,is_verbose_visible=False)
+    try:
+        engine.train(model,executor,train_data,val_data=val_data,batch_size=batch_size,epoch=1)
+    except RuntimeError:
+        path = os.path.join(saved_root,'error.txt')
+        with open(path,"w") as fp:
+            fp.write("{}\n".format(get_time_str()))
+        raise Exception("Memory is fulled")
+
+def train(saved_root,epoch,model,executor,train_data,val_data,
           batch_size=None,augmentation_max=None,patient=None,
-          monitor_target=None,period=None):
+          monitor_target=None,period=None,deterministic=False):
+
     with open(os.path.join(saved_root,'param_num.txt'),"w") as fp:
         fp.write("Required-gradient parameters number:{}".format(param_num(model)))
-    engine = SeqAnnEngine(BASIC_GENE_ANN_TYPES)
-    engine.set_root(saved_root,with_test=False,with_train=True,
-                    with_val=val_data is not None)
+    engine = SeqAnnEngine(BASIC_GENE_ANN_TYPES,shuffle_train_data=not deterministic)    
+    engine.set_root(saved_root,with_test=False,with_train=True,with_val=True)
     other_callbacks = Callbacks()
-    if val_data is not None:
-        seq,ann_seq = _get_max_target_seqs(val_data[0],val_data[1])
-        seq_fig = engine.get_seq_fig(seq,ann_seq,color_settings=BASIC_COLOR_SETTING)
-        other_callbacks.add(seq_fig)
-
-    worker = engine.train(model,executor,train_data,val_data=val_data,
-                          batch_size=batch_size,epoch=epoch,
-                          augmentation_max=augmentation_max,
-                          other_callbacks=other_callbacks,
-                          checkpoint_kwargs={'monitor_target':monitor_target,
-                                             'patient':patient,'period':period})
-    return worker
+    seq,ann_seq = _get_max_target_seqs(val_data[0],val_data[1])
+    seq_fig = engine.get_seq_fig(seq,ann_seq,color_settings=BASIC_COLOR_SETTING)
+    other_callbacks.add(seq_fig)
+    checkpoint_kwargs={'monitor_target':monitor_target,'patient':patient,'period':period}
+    engine.train(model,executor,train_data,val_data=val_data,
+                 batch_size=batch_size,epoch=epoch,
+                 augmentation_max=augmentation_max,
+                 other_callbacks=other_callbacks,
+                 checkpoint_kwargs=checkpoint_kwargs)
 
 def main(saved_root,model_config_path,executor_config_path,
-         train_data_path,val_data_path=None,test_data_path=None,
-         batch_size=None,epoch=None,
-         model_weights_path=None,executor_weights_path=None,
-         frozen_names=None,save_distribution=False,
-         only_train=False,
+         train_data_path,val_data_path,
+         test_data_path=None,batch_size=None,epoch=None,
+         frozen_names=None,save_distribution=False,only_train=False,
          train_answer_path=None,#train_region_path=None,
          val_answer_path=None,#val_region_path=None,
          test_answer_path=None,#test_region_path=None,
-         region_table_path=None,**kwargs):
+         region_table_path=None,deterministic=False,**kwargs):
+    
+    if deterministic:
+        torch.manual_seed(0)
+        torch.cuda.manual_seed(0)
+        np.random.seed(0)
+        random.seed(0)
+    
+    #torch.backends.cudnn.enabled = not deterministic
+    torch.backends.cudnn.benchmark = not deterministic
+    torch.backends.cudnn.deterministic = deterministic
     
     #Load, parse and save data
     train_data = load_data(train_data_path)
+    val_data = load_data(val_data_path)
     write_fasta(os.path.join(saved_root,'train.fasta'),train_data[0])
-    val_data = test_data = None
-    if val_data_path is not None:
-        val_data = load_data(val_data_path)
-        write_fasta(os.path.join(saved_root,'val.fasta'),val_data[0])
-        
+    write_fasta(os.path.join(saved_root,'val.fasta'),val_data[0])
+    test_data = None    
     if test_data_path is not None:
         test_data = load_data(test_data_path)
         write_fasta(os.path.join(saved_root,'test.fasta'),test_data[0])
@@ -83,24 +128,20 @@ def main(saved_root,model_config_path,executor_config_path,
             ]
 
     for path in paths:
-        if path is not None:
-            if not os.path.exists(path):
-                raise Exception("{} is not exist".format(path))
+        if path is not None and not os.path.exists(path):
+            raise Exception("{} is not exist".format(path))
     
-    #Create model
+    copied_model,copied_executor = _get_model_executor(model_config_path,executor_config_path,
+                                                       frozen_names=frozen_names,
+                                                       save_distribution=save_distribution)
     
-    model = get_model(model_config_path,model_weights_path,frozen_names)
-    model.save_distribution = save_distribution
-
-    #Create executor
-    with open(executor_config_path,"r") as fp:
-        executor_config = json.load(fp)
+    model,executor = _get_model_executor(model_config_path,executor_config_path,
+                                         frozen_names=frozen_names,
+                                         save_distribution=save_distribution)
     
-    executor = get_executor(model,executor_weights_path=executor_weights_path,**executor_config)
-
     try:
         train(saved_root,epoch,model,executor,train_data,val_data,
-              batch_size=batch_size,**kwargs)     
+              batch_size=batch_size,deterministic=deterministic,**kwargs)     
     except RuntimeError:
         raise Exception("Something wrong ocuurs in {}".format(saved_root))
         
@@ -108,16 +149,10 @@ def main(saved_root,model_config_path,executor_config_path,
     if not only_train:
         ann_vec_gff_converter = build_ann_vec_gff_converter(BASIC_GENE_ANN_TYPES,BASIC_GENE_MAP)
         executor = get_executor(model,set_loss=False,set_optimizer=False,**executor_config)
-        test_paths = ['test_on_train']
-        data_list = [train_data]
-        answer_paths = [train_answer_path]
-        #region_paths = [train_region_path]
-        
-        if val_data_path is not None:
-            test_paths.append('test_on_val')
-            data_list.append(val_data)
-            answer_paths.append(val_answer_path)
-            #region_paths.append(val_region_path)
+        test_paths = ['test_on_train','test_on_val']
+        data_list = [train_data,val_data]
+        answer_paths = [train_answer_path,val_answer_path]
+        #region_paths = [train_region_path,val_region_path]
 
         if test_data_path is not None:
             test_paths.append('test_on_test')
@@ -143,15 +178,13 @@ if __name__ == '__main__':
     parser.add_argument("-e","--executor_config_path",help="Path of Executor config",required=True)
     parser.add_argument("-s","--saved_root",help="Root to save file",required=True)
     parser.add_argument("-t","--train_data_path",help="Path of training data",required=True)
-    parser.add_argument("-v","--val_data_path",help="Path of validation data")
+    parser.add_argument("-v","--val_data_path",help="Path of validation data",required=True)
     parser.add_argument("-x","--test_data_path",help="Path of testing data")
     parser.add_argument("-g","--gpu_id",type=int,default=0,help="GPU to used")
     parser.add_argument("--augmentation_max",type=int,default=0)
     parser.add_argument("--epoch",type=int,default=100)
-    parser.add_argument("--batch_size",type=int,default=32)
+    parser.add_argument("--batch_size",type=int,default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--period",default=5,type=int)
-    parser.add_argument("--model_weights_path")
-    parser.add_argument("--executor_weights_path")
     parser.add_argument("--only_train",action='store_true')
     parser.add_argument("--save_distribution",action='store_true')
     parser.add_argument("--patient",help="Dafault value is 5. If lower(patient) "
@@ -163,6 +196,7 @@ if __name__ == '__main__':
     parser.add_argument("--train_answer_path",help='The training answer in gff fomrat')
     parser.add_argument("--val_answer_path",help='The validate answer in gff fomrat')
     parser.add_argument("--test_answer_path",help='The testing answer in gff fomrat')
+    parser.add_argument("--deterministic",action="store_true")
     #parser.add_argument("--train_region_path",help='The training region ids')
     #parser.add_argument("--val_region_path",help='The validate answer region ids')
     #parser.add_argument("--test_region_path",help='The testing answer region ids')

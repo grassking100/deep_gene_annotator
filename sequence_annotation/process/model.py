@@ -64,7 +64,7 @@ class RelationBlock(BasicModel):
         return x,lengths
     
 class SeqAnnModel(BasicModel):
-    def __init__(self,feature_block,relation_block,last_act=None):
+    def __init__(self,feature_block,relation_block=None,last_act=None):
         super().__init__()
         if last_act == 'none':
             self.last_act=None
@@ -142,14 +142,13 @@ class SeqAnnBuilder:
         self.last_act = None
         
     def build(self):
-        feature_block = FeatureBlock(self.in_channels,**self.feature_block_config)       
-        relation_block_config = dict(self.relation_block_config)
+        feature_block = FeatureBlock(self.in_channels,**self.feature_block_config)
         relation_block = None
         
-        if relation_block_config['num_layers'] > 0 :
+        if self.relation_block_config['num_layers'] > 0 :
             relation_block = RelationBlock(feature_block.out_channels,
                                            out_channels=self.out_channels,
-                                           **relation_block_config)
+                                           **self.relation_block_config)
         
         model = SeqAnnModel(feature_block,relation_block,last_act=self.last_act)
         return model

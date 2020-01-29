@@ -67,9 +67,6 @@ class IExecutor(metaclass=ABCMeta):
     @abstractmethod
     def predict(self,**kwargs):
         pass
-    #@abstractmethod
-    #def process(self,**kwargs):
-    #    pass
     @abstractmethod
     def get_config(self,**kwargs):
         pass
@@ -182,10 +179,6 @@ class BasicExecutor(_Executor):
         self.optimizer.step()
         return {'loss':loss_.item()},predict_result,lengths,masks,outputs
 
-    #def process(self,model):
-    #    if self.optimizer is None:
-    #        self.optimizer = torch.optim.Adam(model.parameters())
-
     def on_epoch_end(self,epoch,metric,**kwargs):
         for index,group in enumerate(self.optimizer.param_groups):
             if index not in self._lr_history:
@@ -204,6 +197,7 @@ class ExecutorBuilder:
         self.optimizer = None
         self.lr_scheduler = None
         self.use_native=use_native
+        self._create_optimizer = None
         if self.use_native:
             self.output_label_num = self.predict_label_num = self.answer_label_num = label_num or 3
             self.inference = create_basic_inference(self.output_label_num)
@@ -215,9 +209,13 @@ class ExecutorBuilder:
     def set_optimizer(self,parameters,optim_type,learning_rate=None,
                       reduce_lr_on_plateau=False,**kwargs):
         learning_rate = learning_rate or 1e-3
-        self.optimizer = optimizer_generator(optim_type,parameters,lr=learning_rate,**kwargs)
-        if reduce_lr_on_plateau:
-            self.lr_scheduler = ReduceLROnPlateau(self.optimizer,verbose=True,threshold=0.1)
+        def _create_optimizer():
+            lr_scheduler = None
+            optimizer = optimizer_generator(optim_type,parameters,lr=learning_rate,**kwargs)
+            if reduce_lr_on_plateau:
+                lr_scheduler = ReduceLROnPlateau(self.optimizer,verbose=True,threshold=0.1)
+            return optimizer,lr_scheduler
+        self._create_optimizer = _create_optimizer
    
     def set_loss(self,gamma=None,intron_coef=None,other_coef=None,nontranscript_coef=None,
                  transcript_answer_mask=True,transcript_output_mask=False,mean_by_mask=False):
@@ -235,14 +233,14 @@ class ExecutorBuilder:
         self.loss = label_loss
         
     def build(self,executor_weights_path=None):
-        executor = BasicExecutor()
-        executor.grad_clip = self.grad_clip
-        executor.grad_norm = self.grad_norm
-        executor.loss = self.loss
-        executor.inference = self.inference
-        executor.optimizer = self.optimizer
-        executor.lr_scheduler = self.lr_scheduler
+        exe = BasicExecutor()
+        exe.grad_clip = self.grad_clip
+        exe.grad_norm = self.grad_norm
+        exe.loss = self.loss
+        exe.inference = self.inference
+        if self._create_optimizer is not None:
+            exe.optimizer,exe.lr_scheduler = self._create_optimizer()
         if executor_weights_path is not None:
             weights = torch.load(executor_weights_path)
-            executor.load_state_dict(weights)
-        return executor
+            exe.load_state_dict(weights)
+        return exe

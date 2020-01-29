@@ -1,10 +1,7 @@
-import time
+from .process import get_time_str
 import pandas as pd
 import subprocess
 import nvgpu
-
-def time_str(time_):
-    return time.strftime("%Y-%m-%d %H:%M:%S",time_)
 
 class Process:
     def __init__(self,cmd,name=None):
@@ -45,8 +42,8 @@ class Process:
     def record(self):
         record = {'is start':self.is_start,
                   'is finish':self.is_finish,
-                  'start time':time_str(self.start_time),
-                  'end time':time_str(self.end_time),
+                  'start time':get_time_str(self.start_time),
+                  'end time':get_time_str(self.end_time),
                   'name':self.name,
                   'cmd':self.cmd,
                   'returned code':self.returned_code,

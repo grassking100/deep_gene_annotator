@@ -15,14 +15,15 @@ from .signal_handler import build_signal_handler
 from .data_generator import SeqGenerator
 
 class SeqAnnEngine(metaclass=abc.ABCMeta):
-    def __init__(self,channel_order):
+    def __init__(self,channel_order,shuffle_train_data=True,is_verbose_visible=True):
         self._settings = {}
         self._path = None
         self._writer = None
         self._train_writer = self._val_writer = self._test_writer = None
-        self.is_verbose_visible = True
+        self.is_verbose_visible = is_verbose_visible
         self._channel_order = channel_order
         self._ann_types = self._channel_order
+        self._shuffle_train_data = shuffle_train_data
 
     def update_settings(self,key,params):
         params = dict(params)
@@ -30,6 +31,10 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
             del params['self']
         self._settings[key] = params
 
+    def print_verbose(self,info,*args):
+        if self.is_verbose_visible:
+            print(info,*args)
+        
     @property
     def ann_types(self):
         if self._ann_types is not None:
@@ -77,7 +82,7 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
             if ann_seqs.is_empty():
                 raise Exception("The {} has no data inside".format(name))
             count = class_count(ann_seqs)
-            print(len(ann_seqs),count)
+            self.print_verbose(len(ann_seqs),count)
             for key,value in count.items():
                 if int(value)==0:
                     raise Exception("The {} is missing in the dataset".format(key))
@@ -152,6 +157,16 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
             self._record_ann_count('{}_ann_counut'.format(key),raw_data[key]['answers'])
         return data
     
+    def _create_train_data_gen(self,batch_size,augmentation_max):
+        train_gen = SeqGenerator(batch_size=batch_size,
+                                 augmentation_max=augmentation_max,
+                                 shuffle=self._shuffle_train_data)
+        return train_gen
+    
+    def _create_test_data_gen(self,batch_size):
+        test_gen = SeqGenerator(batch_size=batch_size,shuffle=False)
+        return test_gen
+    
     def train(self,model,executor,train_data,val_data=None,
               epoch=None,batch_size=None,other_callbacks=None,
               augmentation_max=None,add_grad=True,checkpoint_kwargs=None):
@@ -175,8 +190,8 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         self._add_tensorboard_callback(self._val_writer,val_callbacks,add_grad=add_grad)
 
         #Create worker    
-        train_gen = SeqGenerator(batch_size=batch_size,augmentation_max=augmentation_max)
-        val_gen = SeqGenerator(batch_size=batch_size,shuffle=False)
+        train_gen = self._create_train_data_gen(batch_size,augmentation_max)
+        val_gen = self._create_test_data_gen(batch_size)
             
         #Process data
         raw_data = {'training':{'inputs':train_seqs,'answers':train_ann_seqs}}
@@ -221,7 +236,7 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         if ann_vec_gff_converter is not None and region_table_path is not None:
             self._add_signal_handler(ann_vec_gff_converter,region_table_path,
                                      answer_gff_path,callbacks,prefix='test')
-        generator = SeqGenerator(batch_size=batch_size,shuffle=False)
+        generator = self._create_test_data_gen(batch_size)
         test_seqs,test_ann_seqs = data
         raw_data = {'testing':{'inputs':test_seqs,'answers':test_ann_seqs}}
         data = self._process_data(raw_data)

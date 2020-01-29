@@ -6,7 +6,7 @@ import deepdish as dd
 import pandas as pd
 from numpy import median
 sys.path.append(os.path.dirname(os.path.abspath(__file__+"/..")))
-from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES,BASIC_GENE_MAP
+from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES,BASIC_GENE_MAP,read_json
 from sequence_annotation.utils.seq_converter import DNA_CODES
 from sequence_annotation.genome_handler.select_data import select_data as _select_data
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
@@ -90,16 +90,12 @@ def get_executor(model,optim_type=None,use_native=True,
     executor = builder.build(executor_weights_path=executor_weights_path)
     return executor
 
-def get_model(path_or_json,model_weights_path=None,frozen_names=None):
+def get_model(config,model_weights_path=None,frozen_names=None):
     builder = SeqAnnBuilder()
-    if isinstance(path_or_json,str):
-        with open(path_or_json,"r") as fp:
-            config = json.load(fp)
-            builder.config = config
-    else:
-        builder.config = path_or_json
+    if isinstance(config,str):
+        config = read_json(config)
+    builder.config = config
     model = builder.build().cuda()
-    
     if model_weights_path is not None:
         weight = torch.load(model_weights_path)
         model.load_state_dict(weight,strict=True)
@@ -110,5 +106,4 @@ def get_model(path_or_json,model_weights_path=None,frozen_names=None):
         layer = getattr(model,name)
         for param in layer.named_parameters():
             param[1].requires_grad = False
-
     return model

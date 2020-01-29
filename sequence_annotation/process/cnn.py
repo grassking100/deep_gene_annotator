@@ -7,7 +7,7 @@ from torch import nn
 from torch.nn.init import zeros_
 from torch.nn import ReLU
 from .noisy_activation import NoisyReLU
-from .customized_layer import Concat, BasicModel, Add, generator_norm_class
+from .customized_layer import Concat, BasicModel, Add, generate_norm_class
 from .utils import xavier_uniform_extend_
 
 ACTIVATION_FUNC = {'NoisyReLU':NoisyReLU(),'ReLU':ReLU()}
@@ -148,11 +148,10 @@ class CANBlock(BasicModel):
                             "None, or \"after_activation\", but got {}".format(norm_mode))
         if activation_function is None:
             self.activation_function = NoisyReLU()
+        elif isinstance(activation_function,str):
+            self.activation_function = ACTIVATION_FUNC[activation_function]
         else:
-            if isinstance(activation_function,str):
-                self.activation_function = ACTIVATION_FUNC[activation_function]
-            else:
-                self.activation_function = activation_function
+            self.activation_function = activation_function
         use_bias = self.norm_mode != "after_cnn"
         self.cnn = Conv1d(in_channels=self.in_channels,bias=use_bias,**kwargs)
         self.kernel_size = self.cnn.kernel_size
@@ -205,8 +204,8 @@ class StackCNN(BasicModel):
         self.norm_affine = norm_affine
         self.norm_momentum = norm_momentum or 0.1
         self.norm_type = norm_type or 'PaddedBatchNorm1d'
-        self.norm_class = generator_norm_class(self.norm_type,affine=self.norm_affine,
-                                               momentum=self.norm_momentum)
+        self.norm_class = generate_norm_class(self.norm_type,affine=self.norm_affine,
+                                              momentum=self.norm_momentum)
         self.norm = None
         if self.norm_input:
             self.norm = self.norm_class(self.in_channels)

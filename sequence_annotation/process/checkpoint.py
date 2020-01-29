@@ -345,7 +345,6 @@ class ExecutorCheckpoint(_Checkpoint):
         print("Save executor of last epoch {} at {}".format(self._counter,self.last_executor_path))
         _write_status(self.last_status_path,self._counter,self.last_executor_path)
 
-
 def copy_file(source_path,target_path):
     command = 'cp {} {}'.format(source_path,target_path)
     if os.path.exists(source_path):
@@ -367,6 +366,7 @@ class Checkpoint(Callback):
         self.recorder = recorder
         self.checkpoint_root = checkpoint_root
         self.callbacks = Callbacks([self.model_checkpoint,self.executor_checkpoint,self.recorder])
+        self._epoch_start = 0
         self._best_record_path = best_record_path
         self._best_result = None
         self._best_epoch = None

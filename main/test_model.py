@@ -3,7 +3,6 @@ import sys
 import torch
 import deepdish as dd
 from argparse import ArgumentParser
-torch.backends.cudnn.benchmark = True
 sys.path.append(os.path.dirname(os.path.abspath(__file__+"/..")))
 from sequence_annotation.utils.utils import create_folder, write_json
 from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES, BASIC_GENE_MAP
@@ -31,19 +30,17 @@ def test(saved_root,model,executor,data,batch_size=None,
                          batch_size=batch_size,
                          ann_vec_gff_converter=ann_vec_gff_converter,
                          callbacks=callbacks,**kwargs)
-    return worker
 
 def main(saved_root,data_path,model_config_path,
-         model_weights_path=None,use_naive=True,**kwargs):
+         model_weights_path=None,use_naive=True,
+         deterministic=False,**kwargs):
+
+    torch.backends.cudnn.benchmark = not deterministic
     model = get_model(model_config_path,model_weights_path=model_weights_path)
     executor = get_executor(model,use_naive=use_naive,set_loss=False,set_optimizer=False)
     data = load_data(data_path)
     converter = build_ann_vec_gff_converter(BASIC_GENE_ANN_TYPES,BASIC_GENE_MAP)
-    
-    worker = test(saved_root,model,executor,data,
-                  ann_vec_gff_converter=converter,**kwargs)
-
-    return worker
+    test(saved_root,model,executor,data,ann_vec_gff_converter=converter,**kwargs)
 
 if __name__ == '__main__':    
     parser = ArgumentParser()
@@ -59,6 +56,7 @@ if __name__ == '__main__':
     parser.add_argument("--use_gffcompare",action="store_true")
     parser.add_argument("--use_seqlogo",action="store_true")
     parser.add_argument("--region_table_path")
+    parser.add_argument("--deterministic",action="store_true")
 
     args = parser.parse_args()
     

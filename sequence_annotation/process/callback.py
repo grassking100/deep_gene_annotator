@@ -257,6 +257,7 @@ class Accumulator(DataCallback):
             for key,value in self._data.items():
                 value = round(value/self._batch_count,self.round_value)
                 data[self._prefix+key] = value
+            data[self._prefix+'batch_size'] = self._batch_count
             return data
         else:
             return None
