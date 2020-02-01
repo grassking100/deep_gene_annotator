@@ -6,7 +6,10 @@ sys.path.append(os.path.dirname(__file__)+"/../..")
 from sequence_annotation.utils.utils import read_bed, write_bed, get_gff_with_attribute, read_gff
 from sequence_annotation.utils.utils  import read_fasta
 from sequence_annotation.preprocess.gff2bed import gff_info2bed_info
+from sequence_annotation.preprocess.utils import EXON_TYPES,RNA_TYPES
 from sequence_annotation.genome_handler.exception import InvalidStrandType
+
+ALT_SITE_REGIONS=['alt_acceptor','alt_donor']
 
 def create_canonical_bed_with_orf(bed,cDNAs,start_codons,stop_codons):
     returned_list = []
@@ -86,19 +89,25 @@ def create_canonical_bed_with_orf(bed,cDNAs,start_codons,stop_codons):
     returned_bed = pd.DataFrame.from_dict(returned_list) 
     return returned_bed
 
-def create_canonical_bed_without_orf(gff):
+def create_canonical_bed_without_orf(gff,alt_site_region_as_exon):
     gff = get_gff_with_attribute(gff)
-    genes = gff[gff['feature']=='gene']
-    ids = set(genes['id'])
-    genes = genes.groupby('id')
-    exons = gff[gff['feature'].isin(['exon','alt_acceptor','alt_donor'])]
+    transcripts = gff[gff['feature'].isin(RNA_TYPES)]
+    ids = set(transcripts['id'])
+    transcripts = transcripts.groupby('id')
+    exon_types = list(EXON_TYPES)
+    if alt_site_region_as_exon:
+        exon_types += ALT_SITE_REGIONS
+    elif gff['feature'].isin(ALT_SITE_REGIONS).any():
+        raise Exception("Invalid type, {}, in GFF".format(ALT_SITE_REGIONS))
+
+    exons = gff[gff['feature'].isin(exon_types)]
     exons = exons.groupby('parent')
     bed_info_list = []
     for id_ in ids:
-        gene = genes.get_group(id_).to_dict('record')[0]
+        transcript = transcripts.get_group(id_).to_dict('record')[0]
         exons_ = exons.get_group(id_).to_dict('list')
-        orf = {'id':id_,'thick_start':gene['start'],'thick_end':gene['start']-1}
-        bed_info_list.append(gff_info2bed_info(gene,exons_,orf))
+        orf = {'id':id_,'thick_start':transcript['start'],'thick_end':transcript['start']-1}
+        bed_info_list.append(gff_info2bed_info(transcript,exons_,orf))
     bed = pd.DataFrame.from_dict(bed_info_list)
     return bed
 
@@ -115,12 +124,13 @@ if __name__ == "__main__":
                         help="If it is not provided, then standard codon will be used")
     parser.add_argument("--valid_start_aa", help="Default start amino acid is M")
     parser.add_argument("--valid_stop_aa", help="Default stop amino acid is *")
+    parser.add_argument("--alt_site_region_as_exon",action='store_true')
     
     args = parser.parse_args()
     postfix = args.input_path.split('.')[-1]
     if postfix in ['gff','gff3']:
         gff = read_gff(args.input_path)
-        bed = create_canonical_bed_without_orf(gff)
+        bed = create_canonical_bed_without_orf(gff,args.alt_site_region_as_exon)
         write_bed(bed,args.output_canonical_bed_path)
         input_bed_path = args.output_canonical_bed_path
     else:

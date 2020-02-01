@@ -13,16 +13,14 @@ def _get_name(path,with_postfix=False):
     else:
         return rel_path.split('.')[0]
     
-def main(saved_root,usage_table_path=None,stats_path=None,max_len=None,**kwargs):
-    
+def main(saved_root,usage_table_path=None,stats_path=None,max_len=None,max_key=None,**kwargs):
     usage_table_root='/'.join(usage_table_path.split('/')[:-1])
-    
     usage_table = pd.read_csv(usage_table_path)
     usage_table = usage_table.to_dict('record')
 
     if stats_path is not None:
-        max_len = round(read_json(stats_path)['MAD derived threshold'])
-        print(max_len)
+        max_key = max_key or 'MAD derived threshold'
+        max_len = round(read_json(stats_path)[max_key])
 
     new_table=[]
     for item in usage_table:
@@ -53,6 +51,7 @@ if __name__ == '__main__':
     parser.add_argument("--ratio",type=float,default=1,help="Ratio of number to be chosen to train" +\
                         " and validate, start chosen by increasing order)")
     parser.add_argument("--select_each_type",action='store_true')
+    parser.add_argument("--max_key")
 
     args = parser.parse_args()
     setting = vars(args)

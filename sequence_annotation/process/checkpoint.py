@@ -2,7 +2,7 @@ import os
 import json
 import torch
 import warnings
-from ..utils.utils import write_json,create_folder,read_json
+from ..utils.utils import write_json,create_folder,read_json,get_time_str
 from .warning import WorkerProtectedWarning
 from .utils import get_copied_state_dict
 from .callback import Callback, Callbacks, DataCallback
@@ -31,7 +31,7 @@ class Recorder(DataCallback):
         return config
 
     def _reset(self):
-        self._data = {}
+        self._data = {'record_time':[]}
         if self.path is not None and os.path.exists(self.path) and not self._force_reset:
             print("Load record from {}".format(self.path))
             with open(self.path,'r') as fp:
@@ -50,7 +50,9 @@ class Recorder(DataCallback):
             self._data[type_].append(value)
 
         if self.path is not None:
-            write_json(self.data,self.path)
+            data = dict(self._data)
+            data['record_time'].append(get_time_str())
+            write_json(data,self.path)
 
     @property
     def data(self):
@@ -68,7 +70,7 @@ def _read_status(root,read_path):
       
 def _write_status(saved_path,epoch,weights_path):
     relative_path = weights_path.split('/')[-1]
-    status = {"epoch":epoch,"relative_path":relative_path,"path":weights_path}
+    status = {"epoch":epoch,"relative_path":relative_path,"path":weights_path,"record_time":get_time_str()}
     write_json(status,saved_path)
     
 def _write_best_status(saved_path,best_epoch,best_target,weights_path,patient):
@@ -78,7 +80,8 @@ def _write_best_status(saved_path,best_epoch,best_target,weights_path,patient):
                    "path":weights_path,
                    'best_target':best_target,
                    'patient':patient,
-                   'formula':'(self._counter-self.best_epoch) >= self.patient'}
+                   'formula':'(self._counter-self.best_epoch) >= self.patient',
+                   "record_time":get_time_str()}
     write_json(best_status,saved_path)
         
 def _save_best(model_path,status_path,best_epoch,best_target,model_weights,patient):
@@ -466,6 +469,7 @@ class Checkpoint(Callback):
                 if 'best_target' not in best_status:
                     best_target = best_record['best_result'][self.model_checkpoint.target]
                     best_status['best_target'] = best_target
+                    best_status['record_time'] = get_time_str()
                     print("Write best target, {}, to {}".format(best_target,self.model_checkpoint.best_status_path))
                     write_json(best_status,self.model_checkpoint.best_status_path)
         
@@ -499,7 +503,9 @@ class Checkpoint(Callback):
             if self.best_record_path is not None:
                 best_result = get_best_result(self.model_checkpoint.best_epoch,self.record)
                 best_result = {'best_epoch':self.model_checkpoint.best_epoch,
-                               'best_result':best_result}
+                               'best_result':best_result,
+                               'record_time':get_time_str()
+                              }
                 write_json(best_result,self.best_record_path)
 
     def on_epoch_begin(self,**kwargs):

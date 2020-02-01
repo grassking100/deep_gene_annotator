@@ -7,6 +7,7 @@ import pandas as pd
 from numpy import median
 sys.path.append(os.path.dirname(os.path.abspath(__file__+"/..")))
 from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES,BASIC_GENE_MAP,read_json
+from sequence_annotation.utils.utils import CONSTANT_LIST,CONSTANT_DICT
 from sequence_annotation.utils.seq_converter import DNA_CODES
 from sequence_annotation.genome_handler.select_data import select_data as _select_data
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
@@ -14,9 +15,8 @@ from sequence_annotation.process.executor import ExecutorBuilder
 from sequence_annotation.process.model import SeqAnnBuilder
 from sequence_annotation.process.utils import get_name_parameter
 
-BEFORE_MIX_SIMPLIFY_MAP = {'exon':['exon'],'intron':['intron','alt_acceptor','alt_donor'],'other':['other']}
-SIMPLIFY_MAP = {'exon':['exon'],'intron':['intron'],'other':['other']}
-BASIC_COLOR_SETTING={'other':'blue','exon':'red','intron':'yellow'}
+SIMPLIFY_MAP = CONSTANT_DICT({'exon':['exon'],'intron':['intron'],'other':['other']})
+BASIC_COLOR_SETTING = CONSTANT_DICT({'other':'blue','exon':'red','intron':'yellow'})
 
 def copy_path(root,path):
     command = 'cp -t {} {}'.format(root,path)
@@ -28,7 +28,6 @@ def select_data(fasta_path,ann_seqs_path,id_paths,**kwargs):
         id_list.append(list(pd.read_csv(id_path,header=None)[0]))
 
     data = _select_data(fasta_path,ann_seqs_path,id_list,
-                        before_mix_simplify_map=BEFORE_MIX_SIMPLIFY_MAP,
                         simplify_map=SIMPLIFY_MAP,gene_map=BASIC_GENE_MAP,
                         codes=DNA_CODES,**kwargs)
     
@@ -51,6 +50,9 @@ def get_executor(model,optim_type=None,use_native=True,
                  mean_by_mask=False,target_weight_decay=None,weight_decay_name=None,
                  executor_weights_path=None,**kwargs):
 
+    if 'use_naive' in kwargs:
+        use_native = kwargs['use_naive']
+        del kwargs['use_naive']
     builder = ExecutorBuilder(use_native=use_native,label_num=label_num,
                               predict_label_num=predict_label_num,
                               answer_label_num=answer_label_num,
@@ -107,3 +109,15 @@ def get_model(config,model_weights_path=None,frozen_names=None):
         for param in layer.named_parameters():
             param[1].requires_grad = False
     return model
+
+def get_model_executor(model_config_path,executor_config_path,
+                       model_weights_path=None,frozen_names=None,
+                       save_distribution=False):
+    #Create model
+    model = get_model(model_config_path,model_weights_path=model_weights_path,
+                      frozen_names=frozen_names)
+    model.save_distribution = save_distribution
+    #Create executor
+    executor_config = read_json(executor_config_path)
+    executor = get_executor(model,**executor_config)
+    return model,executor

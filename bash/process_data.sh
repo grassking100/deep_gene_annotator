@@ -154,12 +154,8 @@ python3 $preprocess_main_root/nonoverlap_filter.py -i $saved_root/input.bed -s $
 
 echo "Step 2 (Optional): Remove transcript which its gene has alternative donor or acceptor site"
 if $remove_alt_site ; then
-    python3 $preprocess_main_root/path_decode.py -i $cleaning_root/nonoverlap.bed -o $cleaning_root/temp.gff2 -t $id_convert_table_path
-    python3 $preprocess_main_root/remove_alt_site.py -i $cleaning_root/temp.gff2 -o $cleaning_root/temp.gff
-    python3 $preprocess_main_root/get_id.py -i $cleaning_root/temp.gff -o $cleaning_root/pass_filter_gene.id
-    python3 $preprocess_main_root/get_subbed.py -i $cleaning_root/nonoverlap.bed -d $cleaning_root/pass_filter_gene.id \
--o $cleaning_root/pass_filter_temp.bed -t $id_convert_table_path
-    #rm $cleaning_root/temp.gff
+    python3 $preprocess_main_root/remove_alt_site.py -i $cleaning_root/nonoverlap.bed \
+    -o $cleaning_root/pass_filter_temp.bed -t $id_convert_table_path
 else
     cp $cleaning_root/nonoverlap.bed $cleaning_root/pass_filter_temp.bed
 fi
@@ -239,14 +235,23 @@ python3 $preprocess_main_root/redefine_coordinate.py -i $rna_bed_path -t $region
 echo "Step 9: Canonical path decoding"
 python3 $preprocess_main_root/path_decode.py -i $rna_bed_path -o $result_root/alt_region.gff -t $id_convert_table_path
 
-python3 $preprocess_main_root/create_canonical_bed.py -i $result_root/alt_region.gff -o $result_canonical_bed_path \
--t $preprocess_main_root/standard_codon.tsv -f $result_root/selected_region.fasta
+if $remove_alt_site ; then
+    python3 $preprocess_main_root/create_canonical_bed.py -i $result_root/alt_region.gff -o $result_canonical_bed_path -t $preprocess_main_root/standard_codon.tsv -f $result_root/selected_region.fasta
+else
+    python3 $preprocess_main_root/create_canonical_bed.py -i $result_root/alt_region.gff -o $result_canonical_bed_path -t $preprocess_main_root/standard_codon.tsv -f $result_root/selected_region.fasta --alt_site_region_as_exon
+fi
 
 python3 $preprocess_main_root/bed2gff.py -i $result_canonical_bed_path -o $result_root/canonical.gff
 
-python3 $preprocess_main_root/create_ann_genome.py -i $result_root/alt_region.gff \
-    -r $region_bed_path -o $result_root/alt_region.h5 -s source_name
+if $remove_alt_site ; then
+    python3 $preprocess_main_root/create_ann_genome.py -i $result_root/canonical.gff -r $region_bed_path -o $result_root/canonical.h5 -s source_name --discard_alt_region --discard_UTR_CDS
+    
+else
+    python3 $preprocess_main_root/create_ann_genome.py -i $result_root/canonical.gff -r $region_bed_path -o $result_root/canonical.h5 -s source_name  --discard_UTR_CDS
+fi
 
+python3 $preprocess_main_root/create_ann_genome.py -i $result_root/alt_region.gff \
+    -r $region_bed_path -o $result_root/alt_region.h5 -s source_name --with_alt_region --with_alt_site_region
 
 echo "Step 10: Write statistic data"
 num_input_RNAs=$(wc -l < $bed_path )
@@ -285,8 +290,6 @@ python3 $preprocess_main_root/rename_bed_chrom.py -i $result_canonical_bed_path 
 
 echo "Step 12: Get fasta of region around TSSs, CAs, donor sites, acceptor sites and get fasta of peptide and cDNA"
 echo "       , and write statistic data"
-#bedtools getfasta -name -fi $genome_path -bed $region_bed_path -fo $result_root/temp.fasta
-#samtools faidx $result_root/selected_region_each_strand.fasta
 bash $bash_root/bed_analysis.sh -i $ds_rna_bed_path -f $ds_region_fasta_path \
 -o $fasta_root -s $stats_root -c 500 1> $stats_root/log.txt 2>&1
 

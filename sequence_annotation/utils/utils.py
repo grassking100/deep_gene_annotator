@@ -9,11 +9,34 @@ from time import gmtime, strftime
 from Bio import SeqIO
 from pathlib import Path
 
-BED_COLUMNS = ['chr','start','end','id','score','strand','thick_start','thick_end',
-               'rgb','count','block_size','block_related_start']
-GFF_COLUMNS = ['chr','source','feature','start','end','score','strand','frame','attribute']
-BASIC_GENE_MAP = {'gene':['exon','intron'],'other':['other']}
-BASIC_GENE_ANN_TYPES = ['exon','intron','other']
+class CONSTANT_LIST(list):
+    def __init__(self, list_):
+        super().__init__(list_)
+        
+    def __delitem__(self, index):
+        raise Exception("{} cannot delete element".format(self.__class__.__name__))
+
+    def insert(self, index, value):
+        raise Exception("{} cannot insert element".format(self.__class__.__name__))
+
+    def __setitem__(self, index, value):
+        raise Exception("{} cannot set element".format(self.__class__.__name__))
+
+class CONSTANT_DICT(dict):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def __setitem__(self, key, value):
+        raise Exception("{} cannot set element".format(self.__class__.__name__))
+
+    def __delitem__(self, key):
+        raise Exception("{} cannot delete element".format(self.__class__.__name__))
+    
+BED_COLUMNS = CONSTANT_LIST(['chr','start','end','id','score','strand','thick_start','thick_end',
+               'rgb','count','block_size','block_related_start'])
+GFF_COLUMNS = CONSTANT_LIST(['chr','source','feature','start','end','score','strand','frame','attribute'])
+BASIC_GENE_MAP = CONSTANT_DICT({'gene':['exon','intron'],'other':['other']})
+BASIC_GENE_ANN_TYPES = CONSTANT_LIST(['exon','intron','other'])
 
 def get_gff_with_feature_coord(gff):
     part_gff = gff[['feature','chr','strand','start','end']]

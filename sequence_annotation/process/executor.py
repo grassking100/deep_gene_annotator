@@ -134,7 +134,8 @@ class BasicExecutor(_Executor):
     def state_dict(self):
         state_dict = {}
         if self.optimizer is not None:
-            state_dict['optimizer'] = self.optimizer.state_dict()
+            optimizer_status = dict(self.optimizer.state_dict())
+            state_dict['optimizer'] = optimizer_status
         state_dict['lr_history'] = self._lr_history
         if self.lr_scheduler is not None:
             state_dict['lr_scheduler'] = self.lr_scheduler.state_dict()

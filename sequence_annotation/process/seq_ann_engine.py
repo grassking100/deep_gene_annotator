@@ -6,7 +6,8 @@ from ..utils.utils import create_folder, write_json
 from ..utils.seq_converter import SeqConverter
 from ..genome_handler.ann_genome_processor import class_count
 from ..genome_handler.ann_seq_processor import seq2vecs
-from ..process.data_processor import AnnSeqProcessor
+from .data_processor import AnnSeqProcessor
+from .utils import param_num
 from .worker import TrainWorker,TestWorker
 from .tensorboard_writer import TensorboardWriter
 from .callback import CategoricalMetric,TensorboardCallback
@@ -42,15 +43,14 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         else:
             raise Exception("Object has not set train_ann_seqs or test_ann_seqs yet.")
 
-    def get_seq_fig(self,seq,ann_seq,color_settings=None,prefix=None):
+    def get_seq_fig(self,seq,ann_seq,color_settings,prefix=None):
         if self._writer is None:
             raise Exception("Writer must be set first")
         seq = SeqConverter().seq2vecs(seq)
         seq = np.transpose(np.array([seq]),[0,2,1])
         seq = torch.from_numpy(seq).type('torch.FloatTensor').cuda()
         ann_seq = [seq2vecs(ann_seq,self.ann_types)]
-        color_settings = color_settings or {'other':'blue','exon':'red','intron':'yellow'}
-        colors=[color_settings[type_]for type_ in self.ann_types]
+        colors=[color_settings[type_] for type_ in self.ann_types]
         seq_fig = SeqFigCallback(self._writer,seq,ann_seq,prefix=prefix,label_names=self.ann_types,colors=colors)
         return seq_fig
 
@@ -170,6 +170,11 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
     def train(self,model,executor,train_data,val_data=None,
               epoch=None,batch_size=None,other_callbacks=None,
               augmentation_max=None,add_grad=True,checkpoint_kwargs=None):
+
+        if self._path is not None:
+            with open(os.path.join(self._path,'param_num.txt'),"w") as fp:
+                fp.write("Required-gradient parameters number:{}".format(param_num(model)))
+        
         self._update_common_setting()
         other_callbacks = other_callbacks or Callbacks()
         epoch = epoch or 100

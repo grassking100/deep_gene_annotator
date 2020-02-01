@@ -131,10 +131,10 @@ def _get_canonical_region_and_splice_site(seqs,start_sites,end_sites,select_site
         site_count[acceptor_site] += 1
             
     sites = sorted(list(sites))
-    #Linker to other altenative site
+    #Key: each site ,value: first altenative site
     alt_donor = {}
     alt_acceptor = {}
-    #Group of altenative sites
+    #Key: firsr altenative site, value: each site
     alt_donors = {}
     alt_acceptors = {}
     canonical_regions = {}
@@ -201,7 +201,6 @@ def _get_canonical_region_and_splice_site(seqs,start_sites,end_sites,select_site
                     id_ = _get_id(first_site,end)
                     canonical_regions[id_] = 'exon'
 
-    #print("Parsing for canonical region and non-canonical region")
     #Merge regions with same type
     for index in range(1,len(sites)-1):
         previous = sites[index-1]
@@ -217,9 +216,53 @@ def _get_canonical_region_and_splice_site(seqs,start_sites,end_sites,select_site
                 del canonical_regions[_get_id(previous,current)]
                 del canonical_regions[_get_id(current,next_)]
 
-    #return zero-site based site
-    #print(alt_donor,alt_acceptor)
-    return canonical_regions,alt_donor,alt_acceptor,alt_donors,alt_acceptors,donor_acceptor_site
+    alt_acceptor_sites = list()
+    alt_donor_sites = list()
+    for key,values in alt_acceptors.items():
+        alt_acceptor_sites += [key]
+        alt_acceptor_sites += list(values)
+
+    for key,values in alt_donors.items():
+        alt_donor_sites += [key]
+        alt_donor_sites += list(values)
+
+    alt_acceptor_sites = set(alt_acceptor_sites)
+    alt_donor_sites = set(alt_donor_sites)
+                
+    return canonical_regions,alt_donor_sites,alt_acceptor_sites,donor_acceptor_site
+
+def _get_most_start_end_with_transcripts(start_sites,end_sites,mRNAs):
+    strand = mRNAs[0]['strand']
+    start_count = _count_occurrence(start_sites)
+    max_start_count = max(start_count.values())
+    start_sites = []
+    for site,count in start_count.items():
+        if max_start_count == count:
+            start_sites.append(site)
+    if strand == 'plus':
+        start_sites = [min(start_sites)]
+    else:
+        start_sites = [max(start_sites)]
+    mRNAs_ = []
+    for mRNA in mRNAs:
+        if mRNA['start']==start_sites[0]:
+            mRNAs_.append(mRNA)
+    mRNAs = mRNAs_
+    end_count = _count_occurrence(end_sites)
+    max_end_count = max(end_count.values())
+    end_sites = []
+    for site,count in end_count.items():
+        if max_end_count == count:
+            end_sites.append(site)
+    if strand == 'plus':
+        end_sites = [max(end_sites)]
+    else:
+        end_sites = [min(end_sites)]
+    mRNAs_ = []
+    for mRNA in mRNAs:
+        if mRNA['start']==start_sites[0] and mRNA['end']==end_sites[0]:
+            mRNAs_.append(mRNA)
+    return start_sites,end_sites,mRNAs_
 
 def parse(bed_path,relation_path,select_site_by_election=False):
     """Return site-based data"""
@@ -237,63 +280,31 @@ def parse(bed_path,relation_path,select_site_by_election=False):
         genes[parent].append(mRNA)
 
     #Handle each cluster
-    SITE_NAMES = ['canonical_regions','noncanonical_regions','alt_donor','alt_acceptor',
-                  'alt_donors','alt_acceptors','donor_acceptor_site']
-    GLOBAL_NAMES = ['strand','chr','start','end','score']
     gene_info = []
-
-    for parent,mRNAs in genes.items():
-        #print(parent)
+    for gene_id,mRNAs in genes.items():
         try:
             parsed = None
             start_sites = list(int(mRNA['start']) for mRNA in mRNAs)
             end_sites = list(int(mRNA['end']) for mRNA in mRNAs)
             if select_site_by_election:
-                strand = mRNAs[0]['strand']
-                start_count = _count_occurrence(start_sites)
-                max_start_count = max(start_count.values())
-                start_sites = []
-                for site,count in start_count.items():
-                    if max_start_count == count:
-                        start_sites.append(site)
-                if strand == 'plus':
-                    start_sites = [min(start_sites)]
-                else:
-                    start_sites = [max(start_sites)]
-                mRNAs_ = []
-                for mRNA in mRNAs:
-                    if mRNA['start']==start_sites[0]:
-                        mRNAs_.append(mRNA)
-                mRNAs = mRNAs_
-                end_sites = list(int(mRNA['end']) for mRNA in mRNAs)
-                end_count = _count_occurrence(end_sites)
-                max_end_count = max(end_count.values())
-                end_sites = []
-                for site,count in end_count.items():
-                    if max_end_count == count:
-                        end_sites.append(site)
-                if strand == 'plus':
-                    end_sites = [max(end_sites)]
-                else:
-                    end_sites = [min(end_sites)]
-                mRNAs_ = []
-                for mRNA in mRNAs:
-                    if mRNA['start']==start_sites[0] and mRNA['end']==end_sites[0]:
-                        mRNAs_.append(mRNA)
-                mRNAs = mRNAs_
+                start_sites,end_sites,mRNAs_ = _get_most_start_end_with_transcripts(start_sites,end_sites,mRNAs)
             start_sites = list(set(start_sites))
             end_sites = list(set(end_sites))
             if len(mRNAs) > 0:
                 parsed = _get_canonical_region_and_splice_site(mRNAs,start_sites,end_sites)
-                canonical_regions,alt_d,alt_a,alt_ds,alt_as,donor_acceptor_site = parsed
+                canonical_regions,alt_ds,alt_as,donor_acceptor_site = parsed
                 length = end_sites[0] - start_sites[0] + 1
                 c_regions,nc_regions = _get_canonical_and_noncanonical_region_list(mRNAs,canonical_regions,length)
-                parsed = c_regions,nc_regions,alt_d,alt_a,alt_ds,alt_as,donor_acceptor_site
+                parsed = c_regions,nc_regions,alt_ds,alt_as,donor_acceptor_site
             else:
-                print("Cannot get {}'s canonical gene model".format(parent))
+                print("Cannot get {}'s canonical gene model".format(gene_id))
         except:
-            raise Exception(mRNAs)
+            raise Exception("The gene {} causes error".format(gene_id))
 
+        SITE_NAMES = ['canonical_regions','noncanonical_regions','alt_donor_site','alt_acceptor_site',
+                      'donor_acceptor_site']
+        GLOBAL_NAMES = ['strand','chr','start','end','score']
+            
         if parsed is not None:
             data = {}
             for index,name in enumerate(SITE_NAMES):
@@ -302,7 +313,7 @@ def parse(bed_path,relation_path,select_site_by_election=False):
             for name in GLOBAL_NAMES:
                 data[name] = mRNAs[0][name]
 
-            data['id'] = parent
+            data['id'] = gene_id
             gene_info.append(data)
 
     return gene_info
@@ -312,13 +323,22 @@ def _to_gff_item(item):
     strand = '+' if item['strand']=='plus' else '-'
     block = {'chr':item['chr'],'strand':strand,
              'source':'.','frame':'.','id':'.','score':item['score']}
-    gene = dict(block)
+    transcript = dict(block)
     #Convert zero-nt based to one-nt based
-    gene['start'] = item['start'] + 1
-    gene['end'] = item['end'] + 1
+    transcript['start'] = item['start'] + 1
+    transcript['end'] = item['end'] + 1
+    transcript['feature'] = 'mRNA'
+    transcript['id'] = item['id']
+    transcript['attribute'] = 'ID={}'.format(transcript['id'])
+    
+    gene = dict(transcript)
     gene['feature'] = 'gene'
-    gene['attribute'] = 'ID={}'.format(item['id'])
+    gene['id'] =  "{}_gene".format(gene['id'])
+    gene['attribute'] = 'ID={}'.format(gene['id'])
+
     regions.append(gene)
+    regions.append(transcript)
+    
     for info in item['canonical_regions']+item['noncanonical_regions']:
         region = dict(block)
         region['start'] = info['start'] + gene['start']
@@ -326,15 +346,8 @@ def _to_gff_item(item):
         region['feature'] = info['type']
         region['attribute'] = "Parent={}".format(item['id'])
         regions.append(region)
-
-    alt_acceptor_sites = list(item['alt_acceptor'].values())
-    alt_acceptor_sites += list(item['alt_acceptor'].keys())
-    alt_donor_sites = list(item['alt_donor'].values())
-    alt_donor_sites += list(item['alt_donor'].keys())
-    alt_acceptor_sites = set(alt_acceptor_sites)
-    alt_donor_sites = set(alt_donor_sites)
     
-    for site in alt_acceptor_sites:
+    for site in item['alt_acceptor_site']:
         alt_site = dict(block)
         alt_site['feature'] = 'alt_acceptor_site'
         alt_site['end'] = site + gene['start']
@@ -342,7 +355,7 @@ def _to_gff_item(item):
         alt_site['attribute'] = "Parent={}".format(item['id'])
         regions.append(alt_site)
         
-    for site in alt_donor_sites:
+    for site in item['alt_donor_site']:
         alt_site = dict(block)
         alt_site['feature'] = 'alt_donor_site'
         alt_site['end'] = site + gene['start']
@@ -358,24 +371,6 @@ def parsed_data_to_gff(data):
         regions += _to_gff_item(item)
     gff = pd.DataFrame.from_dict(regions)
     return gff
-
-def alt_event_count(paths):
-    count = {'alt_donor':0,'alt_acceptor':0,'donor_acceptor_site':0}
-    for path_data in paths:
-        noncanonical_regions = path_data['noncanonical_regions']
-        alt_donor = path_data['alt_donor']
-        alt_acceptor = path_data['alt_acceptor']
-        donor_acceptor_site = path_data['donor_acceptor_site']
-        for noncanonical_region in noncanonical_regions:
-            type_ = noncanonical_region['type']
-            if type_ not in count.keys():
-                count[type_] = 0
-            count[type_] += 1
-        count['alt_donor'] += len(alt_donor)
-        count['alt_acceptor'] += len(alt_acceptor)
-        count['donor_acceptor_site'] += len(donor_acceptor_site)
-        
-    return count
 
 if __name__ == "__main__":
     #Reading arguments

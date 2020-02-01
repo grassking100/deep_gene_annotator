@@ -4,9 +4,8 @@ import warnings
 import os
 import time
 import torch
-from time import gmtime, strftime
 from abc import ABCMeta, abstractmethod
-from ..utils.utils import create_folder,print_progress,write_json
+from ..utils.utils import create_folder,print_progress,write_json,get_time_str
 from .data_generator import SeqDataset,SeqGenerator
 from .executor import BasicExecutor
 from .callback import Accumulator, Callbacks
@@ -50,6 +49,8 @@ class MessageRecorder:
         self.path = path
     
     def notify(self,messages):
+        if not isinstance(messages,list):
+            messages = [messages]
         if self.path is not None:
             with open(self.path,'a+') as fp:
                 for message in messages:
@@ -162,7 +163,6 @@ class TrainWorker(Worker):
                 if hasattr(attr,'get_config'):
                     attr = attr.get_config()
                 self._settings[key] = attr
-
             path = os.path.join(self.path,"train_worker_setting.json")
             write_json(self._settings,path)
 
@@ -184,11 +184,6 @@ class TrainWorker(Worker):
         self._train_callbacks.add(accumulator)
         self._is_running = True
         self._save_setting()
-        start_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
-        time_messgae = "Start time at {}".format(start_time)
-        self.print_verbose(time_messgae)
-        if self._message_recorder is not None:
-            self._message_recorder.notify([time_messgae])
 
     def handle_signal(self, signum, frame):
         self._is_running = False
@@ -231,6 +226,10 @@ class TrainWorker(Worker):
         if not self.is_running:
             self.print_verbose("Stop at {}".format(start))
         else:
+            time_messgae = "Start trainging at {}".format(get_time_str())
+            self.print_verbose(time_messgae)
+            if self._message_recorder is not None:
+                self._message_recorder.notify(time_messgae)
             save_distribution = self.model.save_distribution
             for epoch in range(start,end):
                 self._current_epoch = epoch
@@ -278,8 +277,12 @@ class TrainWorker(Worker):
                 self.print_verbose(epoch_info.format(epoch,self._epoch,time_cost,record),True)
 
                 if not self.is_running:
-                    self.print_verbose("Stop at {}".format(epoch))
+                    self.print_verbose("Stop at {}".format(epoch))                    
                     break
+            time_messgae = "Stop training at {}".format(get_time_str())
+            self.print_verbose(time_messgae)
+            if self._message_recorder is not None:
+                self._message_recorder.notify(time_messgae)
 
         all_callbacks.on_work_end()
 
@@ -288,11 +291,7 @@ class TrainWorker(Worker):
             self.result = self._checkpoint.record
             self._best_result =  self._checkpoint.best_result
             self._best_epoch =  self._checkpoint.best_epoch
-        end_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
-        time_messgae = "End time at {}".format(end_time)
-        self.print_verbose(time_messgae)
-        if self._message_recorder is not None:
-            self._message_recorder.notify([time_messgae])
+
 
 class TestWorker(Worker):
     """a worker which will evaluate the model"""
@@ -316,6 +315,7 @@ class TestWorker(Worker):
                 self._settings[key] = attr
                 
             path = os.path.join(self.path,"test_worker_setting.json")
+            self._settings['executor']['optimizer'] = self._settings['executor']['optimizer']['param_groups']
             write_json(self._settings,path)
             
     def _before_work(self):

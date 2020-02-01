@@ -29,16 +29,10 @@ def _get_region_id_path(saved_root,name):
     path = os.path.join(saved_root,'{}.txt'.format(name))
     return path
 
-#def _get_table_path(saved_root,name):
-#    path = os.path.join(saved_root,'{}.tsv'.format(name))
-#    return path
-
 def _export_region_data(region_rename_table,saved_root,name):
     region_id_path = _get_region_id_path(saved_root,name)
-    #new_table_path = _get_table_path(saved_root,name)
     region_ids = region_rename_table['new_id'].drop_duplicates()
     region_ids.to_csv(region_id_path,header=False,index=None)
-    #region_rename_table.to_csv(new_table_path,index=None,sep='\t')
     return region_id_path
 
 def _get_min_chrom(fai):
@@ -117,15 +111,15 @@ def split_by_chr(region_rename_table,fai,saved_root,split_with_strand=False):
     for train_table,val_table,train_chroms,val_chrom in zip(train_tables,val_tables,
                                                             train_chrom_list,val_chrom_list):
         
-        train_name = 'chrom_{}'.format(_get_chrom_str(train_chroms))
-        val_name = 'chrom_{}'.format(_get_chrom_str(val_chrom))
+        train_name = 'train_{}'.format(_get_chrom_str(train_chroms))
+        val_name = 'val_{}'.format(_get_chrom_str(val_chrom))
         train_id_path = _export_region_data(train_table,saved_root,train_name)
         val_id_path = _export_region_data(val_table,saved_root,val_name)
         split_table.append({'training_path':train_id_path,'validation_path':val_id_path})
 
     #Write training and validation table
     train_val_table = _get_subtable(region_rename_table,train_val_chrom_ids)
-    train_val_name = 'chrom_{}'.format(_get_chrom_str(train_val_chrom_ids))
+    train_val_name = 'train_val_{}'.format(_get_chrom_str(train_val_chrom_ids))
     _export_region_data(train_val_table,saved_root,train_val_name)
 
     #Write statistic result
@@ -135,7 +129,7 @@ def split_by_chr(region_rename_table,fai,saved_root,split_with_strand=False):
 
     #Write test table
     test_table = _get_subtable(region_rename_table,test_chrom)
-    test_name = 'test_chrom_{}'.format(_get_chrom_str(test_chrom))
+    test_name = 'test_{}'.format(_get_chrom_str(test_chrom))
     test_id_path = _export_region_data(test_table,saved_root,test_name)
 
     for item in split_table:
