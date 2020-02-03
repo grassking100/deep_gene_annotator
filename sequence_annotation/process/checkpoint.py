@@ -35,7 +35,7 @@ class Recorder(DataCallback):
         if self.path is not None and os.path.exists(self.path) and not self._force_reset:
             print("Load record from {}".format(self.path))
             with open(self.path,'r') as fp:
-                self._data = json.load(fp)
+                self._data.update(json.load(fp))
 
     def on_work_begin(self,**kwargs):
         super().on_work_begin()

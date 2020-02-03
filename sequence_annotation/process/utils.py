@@ -61,4 +61,3 @@ def get_name_parameter(model,names):
                 parameters.append(parameter)
                 returned_names.append(name_)
     return returned_names,parameters
-

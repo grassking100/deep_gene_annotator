@@ -45,9 +45,8 @@ def get_executor(model,optim_type=None,use_native=True,
                  answer_label_num=None,output_label_num=None,
                  grad_clip=None,grad_norm=None,
                  learning_rate=None,reduce_lr_on_plateau=False,
-                 gamma=None,intron_coef=None,other_coef=None,nontranscript_coef=None,
-                 transcript_answer_mask=True,transcript_output_mask=False,
-                 mean_by_mask=False,target_weight_decay=None,weight_decay_name=None,
+                 gamma=None,intron_coef=None,other_coef=None,
+                 target_weight_decay=None,weight_decay_name=None,
                  executor_weights_path=None,**kwargs):
 
     if 'use_naive' in kwargs:
@@ -82,12 +81,7 @@ def get_executor(model,optim_type=None,use_native=True,
                               reduce_lr_on_plateau=reduce_lr_on_plateau,**kwargs)
 
     if set_loss:
-        builder.set_loss(gamma=gamma,intron_coef=intron_coef,
-                         other_coef=other_coef,
-                         nontranscript_coef=nontranscript_coef,
-                         transcript_answer_mask=transcript_answer_mask,
-                         transcript_output_mask=transcript_output_mask,
-                         mean_by_mask=mean_by_mask)
+        builder.set_loss(gamma=gamma,intron_coef=intron_coef,other_coef=other_coef)
         
     executor = builder.build(executor_weights_path=executor_weights_path)
     return executor

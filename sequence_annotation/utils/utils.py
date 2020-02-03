@@ -5,7 +5,7 @@ import math
 import json
 import numpy as np
 import pandas as pd
-from time import gmtime, strftime
+import datetime,pytz
 from Bio import SeqIO
 from pathlib import Path
 
@@ -260,7 +260,7 @@ def read_region_table(path,calculate_length=True):
         columns += ['length']
     return df[columns]
 
-def get_time_str(time_=None):
-    time_ = time_ or gmtime()
-    time_str = strftime("%Y-%m-%d %H:%M:%S", time_)
+def get_time_str(time_zone=None):
+    time_zone = time_zone or pytz.timezone('ROC')
+    time_str = datetime.datetime.now(time_zone).strftime("%Y-%m-%d %H:%M:%S %z")
     return time_str

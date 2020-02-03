@@ -224,11 +224,14 @@ class DataCallback(Callback):
     def on_work_begin(self,**kwargs):
         self._reset()
 
-class Accumulator(DataCallback):
+class MeanRecorder(DataCallback):
     def __init__(self,prefix=None):
         super().__init__(prefix)
         self._batch_count = None
-        self.round_value = 3
+        self.round_value = 5
+        
+    def on_epoch_begin(self,**kwargs):
+        self._reset()
         
     def get_config(self,**kwargs):
         config = super().get_config(**kwargs)
@@ -238,9 +241,6 @@ class Accumulator(DataCallback):
     def _reset(self):
         self._data = {}
         self._batch_count = 0
-
-    def on_epoch_begin(self,**kwargs):
-        self._reset()
 
     def on_batch_end(self,metric,**kwargs):
         if self._batch_count == 0:
@@ -252,15 +252,39 @@ class Accumulator(DataCallback):
 
     @property
     def data(self):
-        if self._batch_count > 0:
-            data = {}
-            for key,value in self._data.items():
-                value = round(value/self._batch_count,self.round_value)
-                data[self._prefix+key] = value
-            data[self._prefix+'batch_size'] = self._batch_count
-            return data
-        else:
-            return None
+        data = {}
+        for key,value in self._data.items():
+            value = round(value/self._batch_count,self.round_value)
+            data[self._prefix+key] = value
+        data[self._prefix+'batch_size'] = self._batch_count
+        return data
+
+class DataHolder(DataCallback):
+    def __init__(self,prefix=None):
+        super().__init__(prefix)
+        self.round_value = 5
+        
+    def on_epoch_begin(self,**kwargs):
+        self._reset()
+        
+    def get_config(self,**kwargs):
+        config = super().get_config(**kwargs)
+        config['round_value'] = self.round_value
+        return config
+
+    def _reset(self):
+        self._data = {}
+
+    def on_batch_end(self,metric,**kwargs):
+        self._data.update(metric)
+
+    @property
+    def data(self):
+        data = {}
+        for key,value in self._data.items():
+            value = round(value,self.round_value)
+            data[self._prefix+key] = value
+        return data
 
 class CategoricalMetric(DataCallback):
     def __init__(self,label_num,label_names=None,prefix=None):
@@ -275,8 +299,11 @@ class CategoricalMetric(DataCallback):
         if label_names is not None:
             self.label_names = label_names
         self._result = None
-        self.round_value = 3
+        self.round_value = 5
 
+    def on_epoch_begin(self,**kwargs):
+        self._reset()
+        
     def get_config(self,**kwargs):
         config = super().get_config(**kwargs)
         config['label_num'] = self.label_num
@@ -297,9 +324,6 @@ class CategoricalMetric(DataCallback):
         if len(names)!=self.label_num:
             raise Exception('The number of class\'s name is not the same with class\' number')
         self._label_names = names
-
-    def on_epoch_begin(self,**kwargs):
-        self._reset()
 
     def on_batch_end(self,seq_data,masks,predicts,**kwargs):
         labels = self.answer_inference(seq_data.answers,masks)
@@ -339,6 +363,9 @@ class ContagionMatrix(DataCallback):
         self._label_names = None
         if label_names is not None:
             self.label_names = label_names
+        
+    def on_epoch_begin(self,**kwargs):
+        self._reset()
 
     def get_config(self,**kwargs):
         config = super().get_config(**kwargs)
@@ -355,9 +382,6 @@ class ContagionMatrix(DataCallback):
         if len(names)!=self.label_num:
             raise Exception('The number of class\'s name is not the same with class\' number')
         self._label_names = names
-
-    def on_epoch_begin(self,**kwargs):
-        self._reset()
 
     def on_batch_end(self,seq_data,masks,predicts,**kwargs):
         labels = self.inference(seq_data.answers,masks)

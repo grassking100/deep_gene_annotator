@@ -1,4 +1,3 @@
-import time
 import pandas as pd
 import subprocess
 import nvgpu
@@ -33,7 +32,7 @@ class Process:
         
     def start(self,*args):
         if not self.is_start:
-            self._start_time = time.gmtime()
+            self._start_time = get_time_str()
             print(self.cmd.format(*args))
             self._process = subprocess.Popen(self.cmd.format(*args),shell=True)
             self._is_start = True
@@ -43,8 +42,8 @@ class Process:
     def record(self):
         record = {'is start':self.is_start,
                   'is finish':self.is_finish,
-                  'start time':get_time_str(self.start_time),
-                  'end time':get_time_str(self.end_time),
+                  'start time':self.start_time,
+                  'end time':self.end_time,
                   'name':self.name,
                   'cmd':self.cmd,
                   'returned code':self.returned_code,
@@ -60,7 +59,7 @@ class Process:
                 self._returned_code = self._process.poll()
                 is_finish = self._returned_code is not None
                 if is_finish:
-                    self._end_time = time.gmtime()
+                    self._end_time = get_time_str()
                 return is_finish
         else:
             return False

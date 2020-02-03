@@ -129,18 +129,9 @@ class SeqLoader(DataLoader):
                 raise Exception("The augmentation_max should be zero or None when the padding_first is True")
         if 'collate_fn' not in kwargs:
             kwargs['collate_fn'] = seq_collate_wrapper(augmentation_max,padding_first)
-        if 'shuffle' not in kwargs:
-            warnings.warn("Set the shuffle to True by default")
-            kwargs['shuffle'] = True
-
-        super().__init__(dataset,*args,**kwargs)
-
-        if 'batch_size' in kwargs:
-            batch_size = kwargs['batch_size']
-        else:    
-            batch_size = 32
-        
-        self._length = int(np.ceil(len(dataset) /batch_size))
+            
+        super().__init__(dataset,*args,**kwargs)        
+        self._length = int(np.ceil(len(dataset) /self.batch_size))
 
     def __len__(self):
         return self._length

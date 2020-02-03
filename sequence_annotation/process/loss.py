@@ -1,4 +1,4 @@
-from abc import abstractmethod,ABCMeta
+from abc import abstractmethod,ABCMeta,abstractproperty
 import torch
 import torch.nn as nn
 from torch.nn.functional import binary_cross_entropy as BCE
@@ -6,16 +6,37 @@ from .inference import create_basic_inference
 
 EPSILON=1e-32
 
-def mean_by_mask(value,mask):
-    return (value * mask).sum()/(mask.sum()+EPSILON)
+def sum_by_mask(value,mask):
+    return (value * mask).sum()
 
-def bce_loss(outputs,answers,mask=None):
-    loss = BCE(outputs,answers,reduction='none')
-    if mask is not None:
-        loss = mean_by_mask(loss,mask)
+def mean_by_mask(value,mask):
+    return sum_by_mask(value,mask)/(mask.sum()+EPSILON)
+
+def bce_loss(output,answer,mask=None,return_mean=True):
+    if len(output.shape) != 2 or len(answer.shape) != 2:
+        raise Exception("Wrong shape")
+
+    if output.shape[:2] != answer.shape[:2]:
+        raise Exception("Inconsist batch size or channel size",output.shape,answer.shape)
+        
+    if mask is not None and mask.shape != output.shape:
+        raise Exception("Wrong shape")
+
+    loss = BCE(output,answer,reduction='none')
+    if return_mean:
+        if mask is not None:
+            loss = mean_by_mask(loss,mask)
+        else:
+            loss = loss.sum() / loss.shape[1]
     return loss
 
 class ILoss(nn.Module,metaclass=ABCMeta):
+    @abstractproperty
+    def accumulated_data(self):
+        pass
+    @abstractmethod
+    def reset_accumulated_data(self):
+        pass  
     @abstractmethod
     def get_config(self):
         pass
@@ -24,20 +45,35 @@ class FocalLoss(ILoss):
     def __init__(self, gamma=None):
         super().__init__()
         self.gamma = gamma or 0
+        self._accumulated_loss_sum = None
+        self._accumulated_mask_sum = None
 
+    @property
+    def accumulated_data(self):
+        return self._accumulated_loss_sum,self._accumulated_mask_sum
+        
+    def reset_accumulated_data(self):
+        self._accumulated_loss_sum = None
+        self._accumulated_mask_sum = None
+        
     def get_config(self):
         config = {}
         config['name'] = self.__class__.__name__
         config['gamma'] = self.gamma
         return config
         
-    def forward(self, output, answer, mask, **kwargs):
+    def forward(self, output, answer, mask, accumulate=False, **kwargs):
         """data shape is N,C,L"""
         """data shape is N,C,L"""
         if len(output.shape) != 3 or len(answer.shape) != 3:
             raise Exception("Wrong input shape",output.shape,answer.shape)
-        if output.shape[0] != answer.shape[0] or output.shape[1] != answer.shape[1]:
+
+        if output.shape[:2] != answer.shape[:2]:
             raise Exception("Inconsist batch size or channel size",output.shape,answer.shape)
+            
+        if (output.shape[0],output.shape[2]) != mask.shape:
+            raise Exception("Inconsist batch size or channel size",output.shape,mask.shape)
+
         _,C,L = output.shape
         mask = mask[:,:L].contiguous().view(-1).float()
         answer = answer[:,:,:L].transpose(1,2).reshape(-1,C).float()
@@ -46,15 +82,36 @@ class FocalLoss(ILoss):
         if self.gamma != 0:
             loss = (1-output)**self.gamma * loss
         loss = (-loss * answer).sum(1)
-        loss = mean_by_mask(loss,mask)
+        loss = loss*mask
+        loss_sum = loss.sum()
+        mask_sum = mask.sum()
+
+        if not accumulate:
+            self._accumulated_loss_sum = loss_sum
+            self._accumulated_mask_sum = mask_sum
+        else:
+            #Initialized if it is None
+            self._accumulated_loss_sum = self._accumulated_loss_sum or 0
+            self._accumulated_mask_sum = self._accumulated_mask_sum or 0
+            self._accumulated_loss_sum = self._accumulated_loss_sum + loss_sum.detach()
+            self._accumulated_mask_sum = self._accumulated_mask_sum + mask_sum.detach()
+        
+        loss = self._accumulated_loss_sum/(self._accumulated_mask_sum+EPSILON)
         return loss
 
 class CCELoss(nn.Module):
-    #Categorical cross entropy
+    """Categorical cross entropy"""
     def __init__(self):
         super().__init__()
         self._loss = FocalLoss(0)
 
+    @property
+    def accumulated_data(self):
+        return self._loss.accumulated_data
+        
+    def reset_accumulated_data(self):
+        self._loss.reset_accumulated_data()
+        
     def get_config(self):
         config = {}
         config['name'] = self.__class__.__name__
@@ -66,29 +123,43 @@ class CCELoss(nn.Module):
         return loss
 
 class SeqAnnLoss(nn.Module):
-    def __init__(self,intron_coef=None,other_coef=None,nontranscript_coef=None,
-                 transcript_output_mask=False,transcript_answer_mask=True,
-                 mean_by_mask=False):
+    def __init__(self,intron_coef=None,other_coef=None):
         super().__init__()
         self.intron_coef = intron_coef or 1
         self.other_coef = other_coef or 1
-        self.nontranscript_coef = nontranscript_coef or 0
-        self.transcript_output_mask = transcript_output_mask
-        self.transcript_answer_mask = transcript_answer_mask
-        self.mean_by_mask = mean_by_mask
+        self._accumulated_intron_loss_sum = None
+        self._accumulated_other_loss_sum = None
+        self._accumulated_mask_sum = None
+        self._accumulated_transcript_mask_sum = None
+        
+    @property
+    def accumulated_data(self):
+        return (self._accumulated_intron_loss_sum,
+                self._accumulated_other_loss_sum,
+                self._accumulated_mask_sum,
+                self._accumulated_transcript_mask_sum)
+        
+    def reset_accumulated_data(self):
+        self._accumulated_intron_loss_sum = None
+        self._accumulated_other_loss_sum = None
+        self._accumulated_mask_sum = None
+        self._accumulated_transcript_mask_sum = None
         
     def get_config(self):
         config = {}
         config['name'] = self.__class__.__name__
         config['intron_coef'] = self.intron_coef
         config['other_coef'] = self.other_coef
-        config['nontranscript_coef'] = self.nontranscript_coef
-        config['transcript_output_mask'] = self.transcript_output_mask
-        config['transcript_answer_mask'] = self.transcript_answer_mask
-        config['mean_by_mask'] = self.mean_by_mask
         return config
         
-    def forward(self, output, answer, mask,**kwargs):
+    def _calculate_mean(self,other_loss_sum,intron_loss_sum,mask_sum,transcript_mask_sum):
+        other_loss = other_loss_sum/(mask_sum + EPSILON)
+        intron_loss = intron_loss_sum/(transcript_mask_sum + EPSILON)
+        loss = other_loss + intron_loss
+        loss = loss / (self.intron_coef+self.other_coef)
+        return loss
+        
+    def forward(self, output, answer, mask, accumulate=False,**kwargs):
         """
             Data shape is N,C,L.
             Output channel order: Transcription, Intron|Transcription
@@ -114,35 +185,34 @@ class SeqAnnLoss(nn.Module):
         transcript_answer = 1 - other_answer
         other_output = 1-transcript_output
         #Get mask
-        transcript_mask = mask
-        if self.transcript_output_mask:
-            transcript_output_mask = (transcript_output >= 0.5).cuda().float()
-            transcript_mask = transcript_mask*transcript_output_mask
-        if self.transcript_answer_mask:
-            transcript_mask = transcript_mask*transcript_answer
-        if self.nontranscript_coef > 0:
-            nontranscript_mask = (1-transcript_mask)*mask
+        transcript_mask = mask*transcript_answer
         #Calculate loss
-        other_loss = bce_loss(other_output,other_answer)*self.other_coef
-        intron_loss = bce_loss(intron_transcript_output,intron_answer)*self.intron_coef*transcript_mask
-
-        if self.nontranscript_coef > 0:
-            zero = torch.zeros_like(intron_transcript_output)
-            nontranscript_loss = bce_loss(intron_transcript_output,zero)*nontranscript_mask*self.nontranscript_coef
-        
-        other_loss = mean_by_mask(other_loss,mask)
-        if self.mean_by_mask:
-            intron_loss = mean_by_mask(intron_loss,mask)
+        other_loss = bce_loss(other_output,other_answer,return_mean=False)*self.other_coef
+        intron_loss = bce_loss(intron_transcript_output,intron_answer,return_mean=False)*self.intron_coef*transcript_mask
+        #Calculate sum
+        other_loss_sum = sum_by_mask(other_loss,mask)
+        intron_loss_sum = sum_by_mask(intron_loss,mask)
+        mask_sum = mask.sum()
+        transcript_mask_sum = transcript_mask.sum()
+        if not accumulate:
+            self._accumulated_intron_loss_sum = intron_loss_sum
+            self._accumulated_other_loss_sum = other_loss_sum
+            self._accumulated_mask_sum = mask_sum
+            self._accumulated_transcript_mask_sum = transcript_mask_sum
         else:
-            intron_loss = mean_by_mask(intron_loss,transcript_mask)
-        loss = other_loss + intron_loss
-        if self.nontranscript_coef > 0:
-            if self.mean_by_mask:
-                nontranscript_loss = mean_by_mask(nontranscript_loss,mask)
-            else:
-                nontranscript_loss = mean_by_mask(nontranscript_loss,nontranscript_mask)
-            loss = loss + nontranscript_loss
-        loss = loss / (self.intron_coef+self.nontranscript_coef+self.other_coef)
+            #Initialized if it is None
+            self._accumulated_intron_loss_sum = self._accumulated_intron_loss_sum or 0
+            self._accumulated_other_loss_sum = self._accumulated_other_loss_sum or 0
+            self._accumulated_mask_sum = self._accumulated_mask_sum or 0
+            self._accumulated_transcript_mask_sum = self._accumulated_transcript_mask_sum or 0
+            ##Add value
+            self._accumulated_intron_loss_sum = self._accumulated_intron_loss_sum + intron_loss_sum.detach()
+            self._accumulated_other_loss_sum = self._accumulated_other_loss_sum + other_loss_sum.detach()
+            self._accumulated_mask_sum = self._accumulated_mask_sum + mask_sum.detach()
+            self._accumulated_transcript_mask_sum = self._accumulated_transcript_mask_sum + transcript_mask_sum.detach()
+            
+        loss = self._calculate_mean(self._accumulated_other_loss_sum,self._accumulated_intron_loss_sum,
+                                    self._accumulated_mask_sum,self._accumulated_transcript_mask_sum)
         return loss
 
 class LabelLoss(nn.Module):
@@ -151,6 +221,13 @@ class LabelLoss(nn.Module):
         self.loss = loss
         self.predict_inference = create_basic_inference(3)
         self.answer_inference = create_basic_inference(3)
+        
+    @property
+    def accumulated_data(self):
+        return self.loss.accumulated_data
+        
+    def reset_accumulated_data(self):
+        self.loss.reset_accumulated_data()
         
     def get_config(self):
         config = {}
@@ -163,5 +240,5 @@ class LabelLoss(nn.Module):
     def forward(self, output, answer, mask ,**kwargs):
         label_predict = self.predict_inference(output,mask)
         label_answer = self.answer_inference(answer,mask)
-        loss = self.loss(label_predict,label_answer, mask)
+        loss = self.loss(label_predict,label_answer, mask,**kwargs)
         return loss

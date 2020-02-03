@@ -8,17 +8,17 @@ from abc import ABCMeta, abstractmethod
 from ..utils.utils import create_folder,print_progress,write_json,get_time_str
 from .data_generator import SeqDataset,SeqGenerator
 from .executor import BasicExecutor
-from .callback import Accumulator, Callbacks
+from .callback import MeanRecorder, Callbacks,DataHolder
 from .warning import WorkerProtectedWarning
 from .checkpoint import build_checkpoint
 
-def _batch_process(model,seq_data,process,callbacks):
+def _batch_process(model,seq_data,process,callbacks,**kwargs):
     torch.cuda.empty_cache()
     callbacks.on_batch_begin()
     ids,inputs,labels,lengths,seqs,strands = seq_data.data
     inputs = inputs.cuda()
     labels = labels.cuda()
-    returned = process(model,inputs,labels,lengths=lengths)
+    returned = process(model,inputs,labels,lengths=lengths,**kwargs)
     torch.cuda.empty_cache()
     metric,predict_result,lengths,masks,outputs = returned
     seq_data = SeqDataset([ids,inputs,labels,lengths,seqs,strands])
@@ -32,7 +32,7 @@ def train_per_batch(model,seq_data,executor,callbacks):
     _batch_process(model,seq_data,executor.fit,callbacks)
 
 def evaluate_per_batch(model,seq_data,executor,callbacks):
-    _batch_process(model,seq_data,executor.evaluate,callbacks)
+    _batch_process(model,seq_data,executor.evaluate,callbacks,accumulate=True)
 
 def validate_gradient(model,message_recorder=None):
     for name,param in model.named_parameters():
@@ -168,10 +168,7 @@ class TrainWorker(Worker):
 
     def _before_work(self):
         self._train_loader = self._train_generator(SeqDataset(self.data['training']))
-        if 'validation' in self.data.keys():
-            self._val_loader = self._val_generator(SeqDataset(self.data['validation']))
-            acc = Accumulator(prefix='val')
-            self._val_callbacks.add(acc)
+        self._val_loader = self._val_generator(SeqDataset(self.data['validation']))
         record_path = None
         message_path = None
         if self.path is not None:    
@@ -179,9 +176,9 @@ class TrainWorker(Worker):
             message_path = os.path.join(self.path,"message.txt")
             self._checkpoint = build_checkpoint(self.path,record_path=record_path,
                                                 **self.checkpoint_kwargs)
-        accumulator = Accumulator()
         self._message_recorder = MessageRecorder(path=message_path)
-        self._train_callbacks.add(accumulator)
+        self._train_callbacks.add(MeanRecorder())
+        self._val_callbacks.add(DataHolder(prefix='val'))
         self._is_running = True
         self._save_setting()
 
@@ -320,15 +317,13 @@ class TestWorker(Worker):
             
     def _before_work(self):
         self._loader = self._generator(SeqDataset(self.data['testing']))
-        
         record_path = None
         if self.path is not None:   
             record_path = os.path.join(self.path,"test_record.json")
             self._checkpoint = build_checkpoint(self.path,record_path,
                                                 only_recorder=True,
-                                                force_reset=True)
-        accum = Accumulator(prefix='test')          
-        self._callbacks.add(accum)
+                                                force_reset=True) 
+        self._callbacks.add(DataHolder(prefix='test'))
         self._save_setting()
 
     def _work(self):
@@ -347,8 +342,7 @@ class TestWorker(Worker):
         self.model.save_distribution=False
         for index,item in enumerate(self._loader):
             seq_data = SeqDataset(item)
-            evaluate_per_batch(self.model,seq_data,
-                               self.executor,self._callbacks)
+            evaluate_per_batch(self.model,seq_data,self.executor,self._callbacks)
             status = 100*index/len(self._loader)
             self.print_verbose(batch_info.format(status),True)
 
@@ -356,6 +350,7 @@ class TestWorker(Worker):
         record = callbacks.get_data()
         if self._checkpoint is not None:
             self._checkpoint.on_epoch_end(metric=record)
+        self.executor.on_epoch_end(epoch=epoch_start,metric=record)
         callbacks.on_epoch_end(metric=record)
         callbacks.on_work_end()
         if self._checkpoint is not None:

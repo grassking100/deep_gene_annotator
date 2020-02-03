@@ -38,14 +38,14 @@ def optimizer_generator(type_,parameters,momentum=None,nesterov=False,
         return optimizer(parameters,momentum=momentum,
                           nesterov=nesterov,**kwargs)
 
-def _evaluate(loss,model,inputs, labels,lengths,inference):
+def _evaluate(loss,model,inputs, labels,lengths,inference,**kwargs):
     model.train(False)
     with torch.no_grad():
         outputs,lengths = model(inputs,lengths=lengths)
         outputs = outputs.float()
         masks = get_seq_mask(lengths)
-        predict_result = inference(outputs, masks)
-        loss_ = loss(outputs, labels, masks,predict_result=predict_result).item()
+        loss_ = loss(outputs, labels, masks,**kwargs).item()
+        predict_result = inference(outputs,masks)
     return loss_,predict_result,lengths,masks,outputs.cpu().numpy()
 
 def _predict(model,inputs,lengths,inference):
@@ -59,16 +59,16 @@ def _predict(model,inputs,lengths,inference):
 
 class IExecutor(metaclass=ABCMeta):
     @abstractmethod
-    def fit(self,**kwargs):
+    def fit(self,model,inputs, labels, lengths, **kwargs):
         pass
     @abstractmethod
-    def evaluate(self,**kwargs):
+    def evaluate(self,model,inputs,labels,lengths,**kwargs):
         pass
     @abstractmethod
-    def predict(self,**kwargs):
+    def predict(self,model,inputs,lengths):
         pass
     @abstractmethod
-    def get_config(self,**kwargs):
+    def get_config(self):
         pass
     @abstractproperty
     def optimizer(self):
@@ -83,7 +83,7 @@ class IExecutor(metaclass=ABCMeta):
     def load_state_dict(self,state_dicts):
         pass
     @abstractmethod        
-    def on_epoch_end(self,**kwargs):
+    def on_epoch_end(self,epoch,metric):
         pass
 
 class _Executor(IExecutor):
@@ -91,25 +91,26 @@ class _Executor(IExecutor):
         self.loss = CCELoss()
         self.inference = create_basic_inference(3)
 
-    def get_config(self,**kwargs):
+    def get_config(self):
         config = {}
         if self.loss is not None:
             config['loss_config'] = self.loss.get_config()
         config['inference'] = self.inference.__name__ 
         return config
 
-    def predict(self,model,inputs,lengths,**kwargs):
-        returned = _predict(model,inputs,lengths,inference=self.inference,**kwargs)
+    def predict(self,model,inputs,lengths):
+        returned = _predict(model,inputs,lengths,inference=self.inference)
         return returned
     
     def evaluate(self,model,inputs,labels,lengths,**kwargs):
         if self.loss is not None:
             returned = _evaluate(self.loss,model,inputs,labels,lengths,
                                  inference=self.inference,**kwargs)
+
             loss_,predict_result,lengths,masks,outputs = returned
             return ({'loss':loss_}),predict_result,lengths,masks,outputs
         else:
-            returned = _predict(model,inputs,lengths,inference=self.inference,**kwargs)
+            returned = _predict(model,inputs,lengths,inference=self.inference)
             predict_result,lengths,masks,outputs = returned
             return {},predict_result,lengths,masks,outputs
 
@@ -148,8 +149,8 @@ class BasicExecutor(_Executor):
         if self.lr_scheduler is not None:
             self.lr_scheduler.load_state_dict(state_dicts['lr_scheduler'])
 
-    def get_config(self,**kwargs):
-        config = super().get_config(**kwargs)
+    def get_config(self):
+        config = super().get_config()
         config['grad_clip'] = self.grad_clip
         config['grad_norm'] = self.grad_norm
         if self.optimizer is not None:
@@ -180,7 +181,8 @@ class BasicExecutor(_Executor):
         self.optimizer.step()
         return {'loss':loss_.item()},predict_result,lengths,masks,outputs
 
-    def on_epoch_end(self,epoch,metric,**kwargs):
+    def on_epoch_end(self,epoch,metric):
+        self.loss.reset_accumulated_data()
         for index,group in enumerate(self.optimizer.param_groups):
             if index not in self._lr_history:
                 self._lr_history[index] = []
@@ -218,16 +220,11 @@ class ExecutorBuilder:
             return optimizer,lr_scheduler
         self._create_optimizer = _create_optimizer
    
-    def set_loss(self,gamma=None,intron_coef=None,other_coef=None,nontranscript_coef=None,
-                 transcript_answer_mask=True,transcript_output_mask=False,mean_by_mask=False):
+    def set_loss(self,gamma=None,intron_coef=None,other_coef=None):
         if self.use_native:
             loss = FocalLoss(gamma)
         else:    
-            loss = SeqAnnLoss(intron_coef=intron_coef,other_coef=other_coef,
-                              nontranscript_coef=nontranscript_coef,
-                              transcript_answer_mask=transcript_answer_mask,
-                              transcript_output_mask=transcript_output_mask,
-                              mean_by_mask=mean_by_mask)
+            loss = SeqAnnLoss(intron_coef=intron_coef,other_coef=other_coef)
         label_loss = LabelLoss(loss)
         label_loss.predict_inference = create_basic_inference(self.predict_label_num)
         label_loss.answer_inference = create_basic_inference(self.answer_label_num)
