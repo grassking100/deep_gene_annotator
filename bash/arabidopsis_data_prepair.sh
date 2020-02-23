@@ -87,28 +87,33 @@ peptide_path=$root/raw_data/Araport11_genes.201606.pep.fasta
 official_gff_path=$root/raw_data/Araport11_GFF3_genes_transposons.201606.gff
 ###
 id_convert_table_path=$saved_root/id_convert.tsv
-repaired_gff_path=$saved_root/repaired_official.gff
 processed_gff_path=$saved_root/processed.gff
 processed_bed_path=$saved_root/processed.bed
+consistent_gff_path=$saved_root/consistent_official.gff
+consistent_bed_path=$saved_root/consistent.bed
 echo "Step 2: Preprocess raw data"
 
 if [ ! -e "$id_convert_table_path" ]; then
     python3 $preprocess_main_root/get_id_table.py -i $official_gff_path -o $id_convert_table_path
 fi
 
-if [ ! -e "$repaired_gff_path" ]; then
-    python3 $preprocess_main_root/repair_gff.py -i $official_gff_path -o $repaired_gff_path -s $saved_root
-fi
-
 if [ ! -e "$processed_gff_path" ]; then
-    python3 $preprocess_main_root/preprocess_gff.py -i $repaired_gff_path -o $processed_gff_path
+    python3 $preprocess_main_root/preprocess_gff.py -i $official_gff_path -o $processed_gff_path
 fi
 
 if [ ! -e "$processed_bed_path" ]; then
     python3 $preprocess_main_root/gff2bed.py -i $processed_gff_path -o $processed_bed_path
 fi
+
+if [ ! -e "$consistent_gff_path" ]; then
+    python3 $preprocess_main_root/get_consistent_gff.py -i $processed_gff_path -s $saved_root -p 'official'
+fi
+
+if [ ! -e "$consistent_bed_path" ]; then
+    python3 $preprocess_main_root/gff2bed.py -i $consistent_gff_path -o $consistent_bed_path
+fi
     
-python3 $preprocess_main_root/preprocess_raw_data.py --output_root $saved_root --bed_path $processed_bed_path \
+python3 $preprocess_main_root/preprocess_raw_data.py --output_root $saved_root --bed_path $consistent_bed_path \
 --gro_1 $gro_1 --gro_2 $gro_2 --cs_path $DRS_path 
 
 python3 $preprocess_main_root/get_external_UTR.py -b $saved_root/valid_official.bed -s $saved_root

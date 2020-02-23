@@ -381,6 +381,6 @@ if __name__ == "__main__":
     parser.add_argument("--select_site_by_election",action='store_true')
     args = parser.parse_args()
     parsed = parse(args.bed_path,args.id_table_path,
-                  select_site_by_election=args.select_site_by_election)
+                   select_site_by_election=args.select_site_by_election)
     gff=parsed_data_to_gff(parsed)
     write_gff(gff,args.gff_path)

@@ -4,10 +4,25 @@ import numpy as np
 import torch
 from torch.nn.init import _calculate_fan_in_and_fan_out, _no_grad_uniform_
 
-def get_copied_state_dict(model):
+def deep_copy(data):
+    if isinstance(data,dict):
+        copied = {}
+        for key,value in data.items():
+            copied[key] = deep_copy(value)
+    elif isinstance(data,list):
+        copied = []
+        for item in data:
+            copied.append(deep_copy(item))
+    elif isinstance(data,torch.Tensor):
+        copied = data.cpu().clone()
+    else:
+        copied = data
+    return copied
+
+def get_copied_state_dict(container):
     weights = OrderedDict()
-    for key,tensor in dict(model.state_dict()).items():
-        weights[key] = tensor.clone()
+    for key,data in dict(container.state_dict()).items():
+        weights[key] = data.cpu().clone()
     return weights
 
 def get_seq_mask(lengths,max_length=None,to_tensor=True,to_cuda=True):
@@ -29,7 +44,7 @@ def param_num(model,requires_grad=True):
         model_parameters = model.parameters()
     return sum([p.numel() for p in model_parameters])
 
-def _get_std(tensor,mode=None,n=None):
+def _get_std_bound(tensor,mode=None,n=None):
     #Reference:https://pytorch.org/docs/stable/_modules/torch/nn/init.html
     mode = mode or 'both'
     VALID_MODES = ['fan_in','fan_out','both']
@@ -48,8 +63,8 @@ def _get_std(tensor,mode=None,n=None):
     
 def xavier_uniform_extend_(tensor, gain=1.,mode=None,n=None):
     #Reference:https://pytorch.org/docs/stable/_modules/torch/nn/init.html
-    std = _get_std(tensor,mode=mode,n=n)
-    bound = math.sqrt(3.0) * gain * std
+    std_bound = _get_std_bound(tensor,mode=mode,n=n)
+    bound = math.sqrt(3.0) * gain * std_bound
     return _no_grad_uniform_(tensor, -bound, bound)
 
 def get_name_parameter(model,names):

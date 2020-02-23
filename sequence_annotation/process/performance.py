@@ -40,7 +40,7 @@ def _get_group_dict(gff,group_types):
 
 def _set_gene_intron_status(gff):
     group = {}
-    gene_ids = gff[gff['feature'].isin(GENE_TYPES)]['id']
+    gene_ids = set(list(gff[gff['feature'].isin(GENE_TYPES)]['id']))
     for gene_id in gene_ids:
         transcript_ids = gff[gff['parent']==gene_id]['id']
         if len(transcript_ids) != 1:
@@ -236,7 +236,7 @@ def _gene_gff2vec(gff,chrom_id,strand,length):
     vec = np.array([seq2vecs(ann_seq)]).transpose(0,2,1)
     return vec
 
-def gff_performance(predict,answer,region_table,round_value=None):
+def gff_performance(predict,answer,region_table,chrom_target=None,round_value=None):
     """
     The method would compare data between prediction and answer, and return the performance result
     
@@ -246,8 +246,6 @@ def gff_performance(predict,answer,region_table,round_value=None):
         GFF dataframe of prediction
     answer : pandas.DataFrame
         GFF dataframe of answer
-    chrom_lengths : dict
-        The dictionary of chromosomes' lengths
     round_value : int, optional
         rounded at the specified number of digits, if it is None then the result wouldn't be rounded (default is None)
     Returns
@@ -273,11 +271,11 @@ def gff_performance(predict,answer,region_table,round_value=None):
         answer_regions.add("{}_{}".format(item['chr'],item['strand']))
         
     for item in region_table_list:
-        table_regions.add("{}_{}".format(item['new_id'],item['strand']))
+        table_regions.add("{}_{}".format(item[chrom_target],item['strand']))
 
     for answer_region in answer_regions:
         if answer_region not in table_regions:
-            raise Exception(answer_region,table_regions)
+            raise Exception(answer_region,sorted(list(table_regions)))
 
     predict = get_gff_with_intron(predict)
     answer = get_gff_with_intron(answer)
@@ -290,10 +288,8 @@ def gff_performance(predict,answer,region_table,round_value=None):
     for type_ in ['TPs','FPs','TNs','FNs']:
         metric[type_] = [0]*label_num
     contagion = np.array([[0]*label_num]*label_num)
-    chrom_ids = list(chrom_lengths.keys())
-    
     for item in region_table.to_dict('record'):
-        chrom_id = item['new_id']
+        chrom_id = item[chrom_target]
         length = item['length']
         strand = item['strand']
         predict_vec = _gene_gff2vec(predict,chrom_id,strand,length)
@@ -385,8 +381,8 @@ def block_performance_table(roots,names):
     columns = ['name'] + columns
     return block_performance[columns],error_paths
 
-def compare_and_save(predict,answer,region_table,saved_root,round_value=None):
-    result = gff_performance(predict,answer,region_table,round_value)
+def compare_and_save(predict,answer,region_table,saved_root,chrom_target=None,round_value=None):
+    result = gff_performance(predict,answer,region_table,chrom_target,round_value)
     base_perform,contagion,block_perform,errors,site_p_a_diff,site_a_p_abs_diff = result
     write_json(base_perform,os.path.join(saved_root,'base_performance.json'))
     write_json(contagion.tolist(),os.path.join(saved_root,'contagion_matrix.json'))
@@ -407,10 +403,10 @@ if __name__ == '__main__':
     parser.add_argument("--answer_path",help='The path of answer result in GFF format',required=True)
     parser.add_argument("--region_table_path",help='The path of region table',required=True)
     parser.add_argument("--saved_root",help="Path to save result",required=True)
-    
+    parser.add_argument("--chrom_target",help="Valid options are old_id and new_id")
     args = parser.parse_args()
     create_folder(args.saved_root)
     config_path = os.path.join(args.saved_root,'performance_setting.json')
     config = vars(args)
     write_json(config,config_path)
-    main(args.predict_path,args.answer_path,args.fai_path,args.saved_root)
+    main(**config)

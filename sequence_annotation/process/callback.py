@@ -256,7 +256,7 @@ class MeanRecorder(DataCallback):
         for key,value in self._data.items():
             value = round(value/self._batch_count,self.round_value)
             data[self._prefix+key] = value
-        data[self._prefix+'batch_size'] = self._batch_count
+        data[self._prefix+'batch_count'] = self._batch_count
         return data
 
 class DataHolder(DataCallback):
@@ -491,20 +491,34 @@ class SeqLogo(Callback):
         ppms2meme(ppm_dfs,names,self._meme_path,strands='+',background=background_freq_)
 
 class OptunaCallback(Callback):
-    def __init__(self,trial,target=None):
+    def __init__(self,study,trial,target=None):
         self.trial = trial
+        self.study = study
         self.target = target or 'val_loss'
         self._counter = None
         self._worker = None
-        self.is_prune = None
-        
-    def on_work_begin(self, worker,**kwargs):
-        self._counter = 0
-        self._worker = worker
-        if not hasattr(self._worker,'best_epoch') or not hasattr(self._worker,'best_result'):
-            raise Exception("The worker should has best_epoch and best_result to work with OptunaCallback")
-        self.is_prune = False
+        self._is_prune = None
+       
+    @property
+    def has_updated(self):
+        return self._counter is not None
+    
+    @property
+    def is_prune(self):
+        return self._is_prune
 
+    def _handle_prune(self):
+        self._is_prune = self.trial.should_prune()
+        if self.is_prune:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore",category=WorkerProtectedWarning)
+                self._worker.is_running = False
+
+    def on_work_begin(self, worker,**kwargs):
+        self._counter = None
+        self._worker = worker
+        self._handle_prune()
+                
     def get_config(self,**kwargs):
         config = super().get_config(**kwargs)
         config['target'] = self.target
@@ -519,8 +533,4 @@ class OptunaCallback(Callback):
             return
 
         self.trial.report(target,self._counter)
-        if self.trial.should_prune():
-            self.is_prune = True
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore",category=WorkerProtectedWarning)
-                self._worker.is_running = False
+        self._handle_prune()

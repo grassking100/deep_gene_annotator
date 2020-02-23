@@ -39,6 +39,7 @@ BASIC_GENE_MAP = CONSTANT_DICT({'gene':['exon','intron'],'other':['other']})
 BASIC_GENE_ANN_TYPES = CONSTANT_LIST(['exon','intron','other'])
 
 def get_gff_with_feature_coord(gff):
+    gff = gff.copy()
     part_gff = gff[['feature','chr','strand','start','end']]
     feature_coord = part_gff.apply(lambda x: '_'.join([str(item) for item in x]), axis=1)
     gff = gff.assign(feature_coord=feature_coord)
@@ -54,6 +55,10 @@ def create_folder(path):
     except OSError as erro:
         if erro.errno != errno.EEXIST:
             raise
+
+def copy_path(root,path):
+    command = 'cp -t {} {}'.format(root,path)
+    os.system(command)
 
 def get_protected_attrs_names(object_):
     class_name = object_.__class__.__name__
@@ -161,8 +166,26 @@ def get_gff_with_attribute(gff,split_attr=None):
         data += [get_gff_item_with_attribute(item,split_attr)]
     gff = pd.DataFrame.from_dict(data)
     return gff
+
+def get_gff_with_update_attribute(gff):
+    gff = gff.copy()
+    attribute = None
+    att_columns = [c for c in gff.columns if c not in GFF_COLUMNS]
+    for column in att_columns:
+        if attribute is None:
+            attribute = column.capitalize() + "=" + gff[column].astype(str)
+        else:
+            attribute += ";"+column.capitalize() + "=" + gff[column].astype(str)
+    gff['attribute'] = attribute
+    return gff
     
 def dupliacte_gff_by_parent(gff):
+    if 'parent' not in gff.columns:
+        raise Exception("GFF file lacks 'parent' column")
+
+    if not isinstance([p for p in gff['parent'] if p==p][0],list):
+        raise Exception("GFF's 'parent' data type should be list")
+
     preprocessed = []
     for item in gff.to_dict('record'):
         parents = item['parent']
@@ -260,7 +283,25 @@ def read_region_table(path,calculate_length=True):
         columns += ['length']
     return df[columns]
 
-def get_time_str(time_zone=None):
-    time_zone = time_zone or pytz.timezone('ROC')
-    time_str = datetime.datetime.now(time_zone).strftime("%Y-%m-%d %H:%M:%S %z")
+def replace_utc_to_local(timestamp,timezone_=None):
+    timezone_ = timezone_ or pytz.timezone('ROC')
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=pytz.timezone('UTC'))
+    return timestamp.astimezone(timezone_)
+
+def get_time(timezone_=None):
+    timezone_ = timezone_ or pytz.timezone('ROC')
+    time_data = datetime.datetime.now(timezone_)
+    return time_data
+
+def to_time_str(time_data):
+    time_str = time_data.strftime("%Y-%m-%d %H:%M:%S.%f %z")
+    return time_str
+
+def from_time_str(time_str):
+    time_data = datetime.datetime.strptime(time_str,"%Y-%m-%d %H:%M:%S.%f %z")
+    return time_data
+
+def get_time_str(timezone_=None):
+    time_str = to_time_str(get_time(timezone_))
     return time_str

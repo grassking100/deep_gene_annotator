@@ -1,4 +1,5 @@
 from abc import abstractmethod
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -9,128 +10,89 @@ from .utils import xavier_uniform_extend_
 from torch.nn.init import zeros_,constant_,orthogonal_
 from torch.nn.init import _calculate_fan_in_and_fan_out
 
-def xav_gru_init(rnn,mode=None):
+def separate_xav_rnn_init(rnn,mode=None,chunk_size=None):
+    chunk_size = chunk_size or 3
     mode = mode or 'fan_in'
     suffice = ['']
     if rnn.bidirectional:
         suffice.append('_reverse')
     for index in range(rnn.num_layers):
         for suffix in suffice:
-            w_ir, w_iz, w_in = getattr(rnn,'weight_ih_l{}{}'.format(index,suffix)).chunk(3, 0)
-            w_hr, w_hz, w_hn = getattr(rnn,'weight_hh_l{}{}'.format(index,suffix)).chunk(3, 0)
-            for var in [w_ir, w_iz, w_in, w_hz, w_hr,w_hn]:
-                xavier_uniform_extend_(var,mode=mode)
-
-def orth_xav_gru_init(rnn,mode=None):
-    mode = mode or 'fan_in'
-    suffice = ['']
-    if rnn.bidirectional:
-        suffice.append('_reverse')
-    for index in range(rnn.num_layers):
-        for suffix in suffice:
-            w_ir, w_iz, w_in = getattr(rnn,'weight_ih_l{}{}'.format(index,suffix)).chunk(3, 0)
-            w_hr, w_hz, w_hn = getattr(rnn,'weight_hh_l{}{}'.format(index,suffix)).chunk(3, 0)
-            orthogonal_(w_hn)
-            for var in [w_ir, w_iz, w_in, w_hz, w_hr]:
+            weights = []
+            weight_ih = getattr(rnn,'weight_ih_l{}{}'.format(index,suffix)).chunk(chunk_size, 0)
+            weight_hh = getattr(rnn,'weight_hh_l{}{}'.format(index,suffix)).chunk(chunk_size, 0)
+            weights += weight_ih
+            weights += weight_hh
+            for var in weights:
                 xavier_uniform_extend_(var,mode=mode)
                 
-def bias_zero_gru_init(rnn):
-    suffice = ['']
-    if rnn.bidirectional:
-        suffice.append('_reverse')
-    for index in range(rnn.num_layers):
-        for suffix in suffice:
-            ri_bias,zi_bias,ni_bias = getattr(rnn,'bias_ih_l{}{}'.format(index,suffix)).chunk(3, 0)
-            rh_bias,zh_bias,nh_bias = getattr(rnn,'bias_hh_l{}{}'.format(index,suffix)).chunk(3, 0)
-            for var in [ri_bias,zi_bias,ni_bias,rh_bias,zh_bias,nh_bias]:
-                zeros_(var)
-                
-def bias_xav_gru_init(rnn,mode=None):
+def xav_rnn_init(rnn,mode=None,chunk_size=None):
+    chunk_size = chunk_size or 3
     mode = mode or 'fan_in'
     suffice = ['']
     if rnn.bidirectional:
         suffice.append('_reverse')
     for index in range(rnn.num_layers):
         for suffix in suffice:
-            ri_bias,zi_bias,ni_bias = getattr(rnn,'bias_ih_l{}{}'.format(index,suffix)).chunk(3, 0)
-            rh_bias,zh_bias,nh_bias = getattr(rnn,'bias_hh_l{}{}'.format(index,suffix)).chunk(3, 0)
-            w_ir = getattr(rnn,'weight_ih_l{}{}'.format(index,suffix)).chunk(3, 0)[0]
-            fan_in, fan_out = _calculate_fan_in_and_fan_out(w_ir)
-            h_n = fan_out
-            if mode == 'both':
-                n = float(fan_in + fan_out)/2
-            elif mode == 'fan_in':
-                n = fan_in
+            weights = []
+            weight_ih = getattr(rnn,'weight_ih_l{}{}'.format(index,suffix)).chunk(chunk_size, 0)
+            weight_hh = getattr(rnn,'weight_hh_l{}{}'.format(index,suffix)).chunk(chunk_size, 0)
+            weights += weight_ih
+            weights += weight_hh
+            i_o,i_i = weight_ih[0].shape
+            h_o,h_i = weight_hh[0].shape
+            if i_o != h_o:
+                raise Exception()
+            if mode =='fan_in':
+                n = i_i + h_i
+            elif mode =='fan_out':
+                n = i_o
+            elif mode =='both':
+                n = (i_o+i_i + h_i)/2
             else:
-                n = fan_out
-
-            for var in [rh_bias,zh_bias,nh_bias]:
-                xavier_uniform_extend_(var,n=h_n)
-
-            for var in [ri_bias,zi_bias,ni_bias]:
+                raise Exception()
+            for var in weights:
                 xavier_uniform_extend_(var,n=n)
                 
-def xav_bias_zero_gru_init(rnn,mode=None):
-    xav_gru_init(rnn,mode)
-    bias_zero_gru_init(rnn)
-    
-def xav_bias_xav_gru_init(rnn,mode=None):
-    xav_gru_init(rnn,mode)
-    bias_xav_gru_init(rnn,mode)
-
-def orth_xav_bias_zero_gru_init(rnn,mode=None):
-    orth_xav_gru_init(rnn,mode=mode)
-    bias_zero_gru_init(rnn)
-
-def orth_both_xav_bias_zero_gru_init(rnn):
-    return orth_xav_bias_zero_gru_init(rnn,'both')
-
-def orth_in_xav_bias_zero_gru_init(rnn):
-    return orth_xav_bias_zero_gru_init(rnn,'fan_in')
-
-def orth_out_xav_bias_zero_gru_init(rnn):
-    return orth_xav_bias_zero_gru_init(rnn,'fan_out')
-
-def both_xav_bias_zero_gru_init(rnn):
-    return xav_bias_zero_gru_init(rnn,'both')
-
-def in_xav_bias_zero_gru_init(rnn):
-    return xav_bias_zero_gru_init(rnn,'fan_in')
-
-def out_xav_bias_zero_gru_init(rnn):
-    return xav_bias_zero_gru_init(rnn,'fan_out')
-
-def in_xav_bias_xav_gru_init(rnn):
-    return xav_bias_xav_gru_init(rnn,'fan_in')
-
-def customized_init_gru(rnn):
+def bias_zero_rnn_init(rnn,chunk_size=None):
+    chunk_size = chunk_size or 3
     suffice = ['']
     if rnn.bidirectional:
         suffice.append('_reverse')
     for index in range(rnn.num_layers):
         for suffix in suffice:
-            w_ir, w_iz, w_in = getattr(rnn,'weight_ih_l{}{}'.format(index,suffix)).chunk(3, 0)
-            w_hr, w_hz, w_hn = getattr(rnn,'weight_hh_l{}{}'.format(index,suffix)).chunk(3, 0)
-            ri_bias,zi_bias,ni_bias = getattr(rnn,'bias_ih_l{}{}'.format(index,suffix)).chunk(3, 0)
-            rh_bias,zh_bias,nh_bias = getattr(rnn,'bias_hh_l{}{}'.format(index,suffix)).chunk(3, 0)
-            constant_(ri_bias,-4)
-            constant_(rh_bias,-4)
-            constant_(zi_bias,4)
-            constant_(zh_bias,4)
-            constant_(ni_bias,0)
-            constant_(nh_bias,0)
+            weights = []
+            weights += getattr(rnn,'bias_ih_l{}{}'.format(index,suffix)).chunk(chunk_size, 0)
+            weights += getattr(rnn,'bias_hh_l{}{}'.format(index,suffix)).chunk(chunk_size, 0)
+            for var in weights:
+                zeros_(var)
+                
+def xav_bias_zero_rnn_init(rnn,mode=None,chunk_size=None):
+    xav_rnn_init(rnn,mode,chunk_size)
+    bias_zero_rnn_init(rnn,chunk_size)
+    
+def separate_xav_bias_zero_rnn_init(rnn,mode=None,chunk_size=None):
+    separate_xav_rnn_init(rnn,mode,chunk_size)
+    bias_zero_rnn_init(rnn,chunk_size)
 
-GRU_INIT_MODE = {
+def in_xav_bias_zero_gru_init(rnn):
+    return xav_bias_zero_rnn_init(rnn,'fan_in')
+
+def out_xav_bias_zero_gru_init(rnn):
+    return xav_bias_zero_rnn_init(rnn,'fan_out')
+
+def separate_in_xav_bias_zero_gru_init(rnn):
+    return separate_xav_bias_zero_rnn_init(rnn,'fan_in')
+
+def separate_out_xav_bias_zero_gru_init(rnn):
+    return separate_xav_bias_zero_rnn_init(rnn,'fan_out')
+
+RNN_INIT_MODE = {
     None:None,
-    'bias_shift':customized_init_gru,
-    'orth_xav_bias_zero_gru_init':orth_xav_bias_zero_gru_init,
-    'orth_both_xav_bias_zero_gru_init':orth_both_xav_bias_zero_gru_init,
-    'orth_in_xav_bias_zero_gru_init':orth_in_xav_bias_zero_gru_init,
-    'orth_out_xav_bias_zero_gru_init':orth_out_xav_bias_zero_gru_init,
-    'both_xav_bias_zero_gru_init':both_xav_bias_zero_gru_init,
     'in_xav_bias_zero_gru_init':in_xav_bias_zero_gru_init,
     'out_xav_bias_zero_gru_init':out_xav_bias_zero_gru_init,
-    'in_xav_bias_xav_gru_init':in_xav_bias_xav_gru_init
+    'separate_in_xav_bias_zero_gru_init':separate_in_xav_bias_zero_gru_init,
+    'separate_out_xav_bias_zero_gru_init':separate_out_xav_bias_zero_gru_init,
 }
             
 def _forward(rnn,x,lengths,state=None,batch_first=True):
@@ -147,40 +109,30 @@ def _forward(rnn,x,lengths,state=None,batch_first=True):
     return x
 
 class _RNN(BasicModel):
-    def __init__(self,in_channels,train_init_value=False,init_value=None,customized_init=None,**kwargs):
+    def __init__(self,in_channels,customized_init=None,**kwargs):
         super().__init__()
         if isinstance(customized_init,str):
-            customized_init = GRU_INIT_MODE[customized_init]
+            customized_init = RNN_INIT_MODE[customized_init]
         self.customized_init = customized_init
         self.rnn = self._create_rnn(in_channels,**kwargs)
         self.kwargs = kwargs
         self.in_channels = in_channels
         self.out_channels = self.rnn.hidden_size
-        self.train_init_value = train_init_value
-        self.init_value = init_value or 0
-        
-        if hasattr(self.rnn,'bidirectional') and self.rnn.bidirectional:
-            direction_num = 2
+        if self.rnn.bidirectional:
             self.out_channels *= 2
-        else:
-            direction_num = 1
-        val = [self.init_value]*self.rnn.hidden_size
-        num_layers = self.rnn.num_layers if hasattr(self.rnn,'num_layers') else 1
-        val = torch.Tensor(val)
-        val = val.unsqueeze(0)
-        val = val.repeat(num_layers*direction_num,1)
-        self.init_states = torch.nn.Parameter(val,requires_grad=train_init_value)
         self.batch_first = self.rnn.batch_first if hasattr(self.rnn,'batch_first') else True
         self.reset_parameters()
 
+    @property
+    def dropout(self):
+        return self.rnn.dropout
+        
     @abstractmethod
     def _create_rnn(self,in_channels,**kwargs):
         pass
     
     def get_config(self):
         config = super().get_config()
-        config['train_init_value'] = self.train_init_value
-        config['init_value'] = self.init_value
         config['setting'] = self.kwargs
         config['customized_init'] = str(self.customized_init)
         return config
@@ -194,11 +146,7 @@ class GRU(_RNN):
     def _create_rnn(self,in_channels,**kwargs):
         return nn.GRU(in_channels,**kwargs)
     
-    def forward(self,x,lengths=None,state=None,**kwargs):
-        if lengths is None:
-            lengths = [x.shape[2]]*len(x)
-        if state is None:
-            state = self.init_states.unsqueeze(1).repeat(1,len(x),1)
+    def forward(self,x,lengths,state=None,**kwargs):
         x = _forward(self.rnn,x,lengths,state,self.batch_first)
         return x
     
@@ -207,36 +155,28 @@ class LSTM(_RNN):
         return nn.LSTM(in_channels,**kwargs)
     
     def forward(self,x,lengths,state=None,**kwargs):
-        if state is None:
-            state = self.init_states.repeat(len(x),1).cuda()
         x = _forward(self.rnn,x,lengths,state,self.batch_first)
         return x
 
-class ProjectedGRU(BasicModel):
-    def __init__(self,in_channels,out_channels,hidden_size=None,
-                 num_layers=None,bias=True,batch_first=False,dropout=None,
-                 bidirectional=False,
-                 customized_cnn_init=None,customized_gru_init=None,
-                 norm_type=None,norm_mode=None,name=None,**kwargs):
+class ProjectedRNN(BasicModel):
+    def __init__(self,in_channels,out_channels,
+                 customized_cnn_init=None,customized_rnn_init=None,
+                 norm_type=None,norm_mode=None,
+                 name=None,output_act=None,is_gru=True,**kwargs):
         super().__init__()
-        self.hidden_size = hidden_size or 16
-        self.num_layers = num_layers or 1
-        self.bias = bias
-        self.batch_first = batch_first 
-        self.dropout = dropout or 0
-        self.bidirectional = bidirectional
+        self.output_act = output_act
         if name is None or name == '':
             self.name = 'rnn'
         else:
             self.name = "{}_rnn".format(name)
-        #print(kwargs)
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.rnn = GRU(in_channels=self.in_channels,hidden_size=self.hidden_size,
-                       num_layers=self.num_layers,bias=self.bias,
-                       batch_first=self.batch_first,dropout=self.dropout,
-                       bidirectional=self.bidirectional,
-                       customized_init=customized_gru_init)
+        if is_gru:
+            rnn_class = GRU
+        else:
+            rnn_class = LSTM
+        self.rnn = rnn_class(in_channels=self.in_channels,
+                             customized_init=customized_rnn_init,**kwargs)
         self.norm_type = norm_type
         if self.norm_type is not None:
             self.norm = self.norm_type(in_channel[self.norm_mode])
@@ -250,14 +190,8 @@ class ProjectedGRU(BasicModel):
         config['rnn'] = self.rnn.get_config()
         config['project'] = self.project.get_config()
         config['norm_type'] = self.norm_type
-        config['name'] = self.name        
-        config['hidden_size'] = self.hidden_size
-        config['num_layers'] = self.num_layers
-        config['bias'] = self.bias
-        config['batch_first'] = self.batch_first
-        config['dropout'] = self.dropout
-        config['bidirectional'] = self.bidirectional
-        
+        config['name'] = self.name
+        config['output_act'] = self.output_act
         return config
         
     def forward(self,x,lengths,return_intermediate=False,**kwargs):
@@ -265,12 +199,21 @@ class ProjectedGRU(BasicModel):
         self.update_distribution(post_rnn,key=self.name)
         if self.norm_type is not None:
             post_rnn = self.norm(post_rnn,lengths)
-        if self.dropout > 0 and self.training:
-            post_rnn = F.dropout(post_rnn,self.dropout,self.training)
+        if self.rnn.dropout > 0 and self.training:
+            post_rnn = F.dropout(post_rnn,self.rnn.dropout,self.training)
         result,lengths,_,_ = self.project(post_rnn,lengths=lengths)
+
+        if self.output_act is not None:
+            if self.output_act == 'softmax':
+                result = torch.softmax(result,1)
+            elif self.output_act == 'sigmoid':
+                result = torch.sigmoid(result)
+            else:
+                raise Exception("Wrong activation name, {}".format(self.output_act))
+        
         if return_intermediate:
             return result,post_rnn
         else:
             return result
 
-RNN_TYPES = {'GRU':GRU,'LSTM':LSTM,'ProjectedGRU':ProjectedGRU}
+RNN_TYPES = {'GRU':GRU,'LSTM':LSTM,'ProjectedRNN':ProjectedRNN}

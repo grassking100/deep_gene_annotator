@@ -2,26 +2,24 @@ import pandas as pd
 import os, sys
 sys.path.append(os.path.dirname(__file__)+"/../..")
 from argparse import ArgumentParser
-from sequence_annotation.utils.utils import read_gff, write_gff, get_gff_with_attribute, dupliacte_gff_by_parent
+from sequence_annotation.utils.utils import read_gff, write_gff, dupliacte_gff_by_parent
+from sequence_annotation.utils.utils import get_gff_with_attribute,get_gff_with_update_attribute
+from sequence_annotation.preprocess.utils import get_gff_with_belonging,UORF_TYPES,PROTEIN_TYPES,MIRNA_TPYES
 
 if __name__ == "__main__":
     #Reading arguments
-    parser = ArgumentParser(description='Remove miRNA, uORF, protein and miRNA_primary_transcript related data and rename chromomsome id')
+    parser = ArgumentParser(description='Remove miRNA, miRNA_primary_transcript, uORF and protein related data, rename chromomsome id and dupliacte gff item by their parent id')
     parser.add_argument("-i","--input_gff_path",required=True)
     parser.add_argument("-o","--output_gff_path",required=True)
     args = parser.parse_args()
 
     gff = read_gff(args.input_gff_path)
-    gff = dupliacte_gff_by_parent(get_gff_with_attribute(gff,['parent']))
-    discared_data = gff[gff['feature'].isin(['miRNA','uORF','protein','miRNA_primary_transcript'])]
-    discard_ids = list(discared_data['id'])
-    discard_ids += list(discared_data['parent'])
-    discard_ids = set(discard_ids)
-    if None in discard_ids:
-        discard_ids.remove(None)
-    is_id_discard = gff['id'].isin(discard_ids)
-    is_parent_discard = gff['parent'].isin(discard_ids)
-    gff = gff[(~is_id_discard) & (~is_parent_discard)]
     gff.loc[:,'chr'] = gff['chr'].str.replace('Chr','')
+    gff = get_gff_with_attribute(gff,['parent'])
+    gff = dupliacte_gff_by_parent(gff)
+    gff = get_gff_with_belonging(gff)
+    discarded_gene_ids = list(gff[gff['feature'].isin(['miRNA_primary_transcript'])]['parent'])
+    discarded_ids = list(gff[gff['feature'].isin(UORF_TYPES+PROTEIN_TYPES+MIRNA_TPYES)]['id'])
+    gff = gff[(~gff['belong_gene'].isin(discarded_gene_ids)) & (~gff['id'].isin(discarded_ids))]
+    gff = get_gff_with_update_attribute(gff)
     write_gff(gff,args.output_gff_path)
-    

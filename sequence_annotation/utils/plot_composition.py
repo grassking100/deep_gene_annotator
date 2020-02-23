@@ -20,11 +20,11 @@ def fasta_composition(fasta_data,converter=None):
     return sum_/sum_.sum(1)[0]
             
 def plot_composition(composition,output_path,
-                     title=None,x_shift=None,xlabel=None):
+                     title=None,shift=None,xlabel=None):
     title = title or ''
     xlabel = xlabel or "From 5' to 3'"
-    x_shift= x_shift or 0
-    range_ = list(range(x_shift,x_shift+composition.shape[0]))
+    shift= shift or 0
+    range_ = list(range(shift,shift+composition.shape[0]))
     fig, ax = plt.subplots()
     for seq,label in zip(composition.T,list(DNA_CODES)):
         ax.plot(range_,seq,label=label)
@@ -39,7 +39,7 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("-i", "--input_path",help='Fasta path',required=True)
     parser.add_argument("-o", "--output_path",required=True)
-    parser.add_argument("--x_shift",type=int)
+    parser.add_argument("--shift",type=int)
     parser.add_argument("--xlabel")
     parser.add_argument("--title")
 
@@ -48,6 +48,6 @@ if __name__ == "__main__":
     fasta = read_fasta(args.input_path)
     composition = fasta_composition(fasta)
     plot_composition(composition,args.output_path,
-                     title=args.title,x_shift=args.x_shift,
+                     title=args.title,shift=args.shift,
                      xlabel=args.xlabel)
     

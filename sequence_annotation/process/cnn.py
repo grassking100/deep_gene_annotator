@@ -34,7 +34,7 @@ def create_mask(x,lengths):
     mask = torch.zeros(x.shape[0],1,x.shape[2]).to(x.dtype)
     if x.is_cuda:
         mask = mask.cuda()
-    mask_ = get_seq_mask(lengths,to_cuda=x.is_cuda).to(x.dtype).unsqueeze(1)##.repeat(1,x.shape[1],1)
+    mask_ = get_seq_mask(lengths,to_cuda=x.is_cuda).to(x.dtype).unsqueeze(1)
     mask[:,:,:max(lengths)] += mask_
     return mask
 

@@ -12,7 +12,10 @@ RNA_TYPES = ['mRNA','pseudogenic_tRNA','pseudogenic_transcript','antisense_lncRN
              'tRNA','snRNA','ncRNA','snoRNA','rRNA','transcript']
 EXON_TYPES = ['exon','pseudogenic_exon']
 SUBEXON_TYPES = ['five_prime_UTR','three_prime_UTR','CDS','UTR']
-    
+PROTEIN_TYPES = ['protein']
+UORF_TYPES = ['uORF']
+MIRNA_TPYES = ['miRNA']
+
 def get_id_table(path):
     id_convert = pd.read_csv(path,sep='\t').to_dict('list')
     table = {}
@@ -129,7 +132,8 @@ def _get_feature_coord(gff_item):
     return feature_coord
 
 def get_gff_with_intron(gff):
-    gff = get_gff_with_attribute(gff)
+    if 'parent' not in gff.columns:
+        raise Exception("GFF file lacks 'parent' column")
     gff = get_gff_with_feature_coord(gff)
     ids = set(gff[gff['feature'].isin(RNA_TYPES)]['id'])
     exons = gff[gff['feature'].isin(EXON_TYPES)]
@@ -183,6 +187,36 @@ def get_gff_with_intergenic_region(gff,chrom_length):
                 if feature_coord not in set(gff['feature_coord']):
                     gff = gff.append(gff_item,ignore_index=True,verify_integrity=True)
     return gff[GFF_COLUMNS]
+
+def get_gff_with_belonging(gff):
+    if 'parent' not in gff.columns:
+        raise Exception("GFF file lacks 'parent' column")
+    gff['belong_gene'] = None
+    gff['belong_transcript'] = None
+    genes = gff[gff['feature'].isin(GENE_TYPES)].copy()
+    genes['belong_gene'] = genes['id']
+    transcripts = gff[gff['feature'].isin(RNA_TYPES)].copy()
+    transcripts['belong_gene'] = transcripts['parent']
+    transcripts['belong_transcript'] = transcripts['id']
+    transcript_list = transcripts.to_dict('record')    
+    gene_parent = {}
+    for transcript in transcript_list:
+        gene_parent[transcript['id']] = transcript['parent']
+
+    other_list = gff[~gff['feature'].isin(GENE_TYPES+RNA_TYPES)].to_dict('record')
+    for other in other_list:
+        #Set parent if parent is not np.nan
+        parent = other['parent']
+        if parent == parent:
+            other['belong_gene'] = gene_parent[parent]
+            other['belong_transcript'] = parent
+
+    data = []
+    data += genes.to_dict('record')
+    data += transcript_list
+    data += other_list
+    gff = pd.DataFrame.from_dict(data)
+    return gff
 
 def gff_to_bed_command(gff_path,bed_path):
     to_bed_command = 'python3 {}/gff2bed.py -i {} -o {}'

@@ -13,7 +13,7 @@ usage(){
  echo "    -m  <bool>    Merge regions which are overlapped                        [default: false]"
  echo "    -c  <bool>    Remove gene with altenative donor site and acceptor site    [default: false]"
  echo "    -t  <string>  Gene and mRNA id converted table path, it will be created if it doesn't be provided"
- echo "    -b  <string>  Path of background bed, it will be set to input path if it doesn't be provided"
+ echo "    -b  <string>  Path of background bed, it will be set by input path if it doesn't be provided"
  echo "    -h            Print help message and exit"
  echo "Example: bash process_data.sh -u 10000 -d 10000 -g /home/io/genome.fasta -i /home/io/example.bed -o ./data/2019_07_12 -s Arabidopsis_1"
  echo ""
@@ -233,7 +233,7 @@ cp $rna_bed_path $result_root/origin_rna.bed
 python3 $preprocess_main_root/redefine_coordinate.py -i $rna_bed_path -t $region_table_path -o $rna_bed_path
 
 echo "Step 9: Canonical path decoding"
-python3 $preprocess_main_root/path_decode.py -i $rna_bed_path -o $result_root/alt_region.gff -t $id_convert_table_path
+python3 $preprocess_main_root/convert_transcript_bed_to_gene_gff.py -i $rna_bed_path -o $result_root/alt_region.gff -t $id_convert_table_path
 
 if $remove_alt_site ; then
     python3 $preprocess_main_root/create_canonical_bed.py -i $result_root/alt_region.gff -o $result_canonical_bed_path -t $preprocess_main_root/standard_codon.tsv -f $result_root/selected_region.fasta
@@ -291,7 +291,7 @@ python3 $preprocess_main_root/rename_bed_chrom.py -i $result_canonical_bed_path 
 echo "Step 12: Get fasta of region around TSSs, CAs, donor sites, acceptor sites and get fasta of peptide and cDNA"
 echo "       , and write statistic data"
 bash $bash_root/bed_analysis.sh -i $ds_rna_bed_path -f $ds_region_fasta_path \
--o $fasta_root -s $stats_root -c 500 1> $stats_root/log.txt 2>&1
+-o $fasta_root -s $stats_root -c $downstream_dist 1> $stats_root/log.txt 2>&1
 
 echo "End process_main.sh"
 exit 0

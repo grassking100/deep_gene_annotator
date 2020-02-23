@@ -71,12 +71,6 @@ class IExecutor(metaclass=ABCMeta):
     def get_config(self):
         pass
     @abstractproperty
-    def optimizer(self):
-        pass
-    @abstractmethod
-    def optimizer(self,optimizer):
-        pass
-    @abstractproperty
     def state_dict(self):
         pass
     @abstractmethod        
@@ -84,6 +78,12 @@ class IExecutor(metaclass=ABCMeta):
         pass
     @abstractmethod        
     def on_epoch_end(self,epoch,metric):
+        pass
+    @abstractproperty
+    def optimizer(self):
+        pass
+    @abstractmethod
+    def optimizer(self,optimizer):
         pass
 
 class _Executor(IExecutor):
@@ -135,8 +135,7 @@ class BasicExecutor(_Executor):
     def state_dict(self):
         state_dict = {}
         if self.optimizer is not None:
-            optimizer_status = dict(self.optimizer.state_dict())
-            state_dict['optimizer'] = optimizer_status
+            state_dict['optimizer'] = self.optimizer.state_dict()
         state_dict['lr_history'] = self._lr_history
         if self.lr_scheduler is not None:
             state_dict['lr_scheduler'] = self.lr_scheduler.state_dict()
@@ -155,7 +154,12 @@ class BasicExecutor(_Executor):
         config['grad_norm'] = self.grad_norm
         if self.optimizer is not None:
             config['optimizer_name'] = self.optimizer.__class__.__name__
-            config['optimizer'] = self.optimizer.state_dict()
+            param_groups = []
+            for group in self.optimizer.state_dict()['param_groups']:
+                group = dict(group)
+                del group['params']
+                param_groups.append(group)
+            config['optimizer'] = param_groups
         if self.lr_scheduler is not None:
             config['lr_scheduler_name'] = self.lr_scheduler.__class__.__name__
             config['lr_scheduler'] = self.lr_scheduler.state_dict()
@@ -169,7 +173,6 @@ class BasicExecutor(_Executor):
         model.train()
         self.optimizer.zero_grad()
         outputs,lengths = model(inputs,lengths=lengths,answers=labels)
-        outputs = outputs.float()
         masks = get_seq_mask(lengths)
         predict_result = self.inference(outputs, masks)
         loss_ = self.loss(outputs, labels, masks,predict_result=predict_result, **kwargs)
@@ -192,52 +195,54 @@ class BasicExecutor(_Executor):
             self.lr_scheduler.step(metric[self.lr_scheduler_target],epoch=epoch)
         
 class ExecutorBuilder:
-    def __init__(self,use_native=True,label_num=None,grad_clip=None,grad_norm=None,
-                 predict_label_num=None,answer_label_num=None,output_label_num=None):
-        self.grad_clip = grad_clip
-        self.grad_norm = grad_norm
-        self.loss = None
-        self.optimizer = None
-        self.lr_scheduler = None
-        self.use_native=use_native
-        self._create_optimizer = None
-        if self.use_native:
-            self.output_label_num = self.predict_label_num = self.answer_label_num = label_num or 3
-            self.inference = create_basic_inference(self.output_label_num)
-        else:
-            self.predict_label_num = predict_label_num or 2
-            self.answer_label_num = answer_label_num or 3
-            self.inference = seq_ann_inference
-        
-    def set_optimizer(self,parameters,optim_type,learning_rate=None,
-                      reduce_lr_on_plateau=False,**kwargs):
-        learning_rate = learning_rate or 1e-3
-        def _create_optimizer():
-            lr_scheduler = None
-            optimizer = optimizer_generator(optim_type,parameters,lr=learning_rate,**kwargs)
-            if reduce_lr_on_plateau:
-                lr_scheduler = ReduceLROnPlateau(self.optimizer,verbose=True,threshold=0.1)
-            return optimizer,lr_scheduler
-        self._create_optimizer = _create_optimizer
+    def __init__(self,use_native=True):
+        self.use_native = use_native
+        self._grad_clip = None
+        self._grad_norm = None
+        self._gamma = None
+        self._intron_coef = None
+        self._other_coef = None
+        self._answer_label_num = 3
+        self._predict_label_num = None
+        self._learning_rate = 1e-3
+        self._optimizer_kwargs = None
+        self._reduce_lr_on_plateau = False
+        self._optim_type = 'Adam'
+
+    def set_optimizer(self,optim_type,learning_rate=None,reduce_lr_on_plateau=False,
+                      grad_clip=None,grad_norm=None,**kwargs):
+        self._optimizer_kwargs = kwargs
+        self._optim_type = optim_type or self._optim_type
+        self._learning_rate = learning_rate or self._learning_rate
+        self._grad_clip=grad_clip or self._grad_clip
+        self._grad_norm=grad_norm or self._grad_norm
    
     def set_loss(self,gamma=None,intron_coef=None,other_coef=None):
-        if self.use_native:
-            loss = FocalLoss(gamma)
-        else:    
-            loss = SeqAnnLoss(intron_coef=intron_coef,other_coef=other_coef)
-        label_loss = LabelLoss(loss)
-        label_loss.predict_inference = create_basic_inference(self.predict_label_num)
-        label_loss.answer_inference = create_basic_inference(self.answer_label_num)
-        self.loss = label_loss
+        self._gamma = gamma
+        self._intron_coef = intron_coef
+        self._other_coef = other_coef
         
-    def build(self,executor_weights_path=None):
-        exe = BasicExecutor()
-        exe.grad_clip = self.grad_clip
-        exe.grad_norm = self.grad_norm
-        exe.loss = self.loss
-        exe.inference = self.inference
-        if self._create_optimizer is not None:
-            exe.optimizer,exe.lr_scheduler = self._create_optimizer()
+    def build(self,parameters,executor_weights_path=None):
+        optimizer = optimizer_generator(self._optim_type,parameters,
+                                        lr=self._learning_rate,**self._optimizer_kwargs)
+        if self.use_native:
+            self._predict_label_num = 3
+            self._inference = create_basic_inference(self._predict_label_num)
+            loss = FocalLoss(self._gamma)
+        else:
+            self._predict_label_num = 2
+            self._inference = seq_ann_inference
+            loss = SeqAnnLoss(intron_coef=self._intron_coef,other_coef=self._other_coef)
+        exe = BasicExecutor()    
+        exe.loss = LabelLoss(loss)
+        exe.loss.predict_inference = create_basic_inference(self._predict_label_num)
+        exe.loss.answer_inference = create_basic_inference(self._answer_label_num)
+        exe.grad_clip = self._grad_clip
+        exe.grad_norm = self._grad_norm
+        exe.inference = self._inference
+        exe.optimizer = optimizer
+        if self._reduce_lr_on_plateau:
+            exe.lr_scheduler = ReduceLROnPlateau(optimizer,verbose=True,threshold=0.1)
         if executor_weights_path is not None:
             weights = torch.load(executor_weights_path)
             exe.load_state_dict(weights)

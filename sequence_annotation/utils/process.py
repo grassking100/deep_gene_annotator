@@ -6,7 +6,7 @@ from .utils import get_time_str
 class Process:
     def __init__(self,cmd,name=None):
         self.name=name
-        self.cmd=cmd
+        self._cmd=cmd +" -g {}"
         self._process = None
         self._returned_code = None
         self._is_start = False
@@ -33,8 +33,8 @@ class Process:
     def start(self,*args):
         if not self.is_start:
             self._start_time = get_time_str()
-            print(self.cmd.format(*args))
-            self._process = subprocess.Popen(self.cmd.format(*args),shell=True)
+            print(self._cmd.format(*args))
+            self._process = subprocess.Popen(self._cmd.format(*args),shell=True)
             self._is_start = True
             self._recorded_args = args
         
@@ -45,7 +45,7 @@ class Process:
                   'start time':self.start_time,
                   'end time':self.end_time,
                   'name':self.name,
-                  'cmd':self.cmd,
+                  'cmd':self._cmd,
                   'returned code':self.returned_code,
                   'args':self._recorded_args}
         return record
@@ -66,7 +66,11 @@ class Process:
         
 def process_schedule(processes,gpu_ids,mem_used_percent_threshold=None):
     mem_used_percent_threshold = mem_used_percent_threshold or 1
-    processes = dict(zip(list(range(len(processes))),processes))
+    processes_ = processes
+    processes = {}
+    for index,p in enumerate(processes_):
+        p.name = index
+        processes[index] = p
     gpu_ready = [None] * len(gpu_ids)
     while True:
         for index,belong_id in enumerate(gpu_ready):

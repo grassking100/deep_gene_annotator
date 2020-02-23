@@ -2,7 +2,7 @@ import os,sys
 import pandas as pd
 import torch
 from argparse import ArgumentParser
-sys.path.append(os.path.dirname(os.path.abspath(__file__+"/..")))
+sys.path.append(os.path.abspath(os.path.dirname(__file__)+"/.."))
 from sequence_annotation.utils.process import Process,process_schedule
 from sequence_annotation.utils.utils import create_folder
 

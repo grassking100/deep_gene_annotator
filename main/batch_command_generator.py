@@ -14,19 +14,19 @@ def main(data_root,saved_root,
          is_test_command=False,mode=None,
          model_config_path=None,executor_config_path=None):
 
-    PROJECT_PATH=os.path.dirname(os.path.abspath(__file__+"/.."))
+    ROOT=os.path.abspath(os.path.dirname(__file__))
     mode = mode or 'w'
     
     if is_test_command:
-        COMMAND = "python3 {} -d {} -s {} -t {}"
-        MAIN_PATH = '{}/main/test_model.py'.format(PROJECT_PATH)
+        COMMAND = "python3 {} -d {} -s {} -t {}\n"
+        MAIN_PATH = '{}/main/test_model.py'.format(ROOT)
         paths = [MAIN_PATH]
     else:
         if model_config_path is None or executor_config_path is None:
             raise Exception("The model_config_path and executor_config_path should not "+
                              "be None if test_command are True")
-        COMMAND = "python3 {} -m {} -e {} -t {} -v {} -s {} --batch_size 8 --patient 20 --epoch 100 --period 1"
-        MAIN_PATH = '{}/main/train_model.py'.format(PROJECT_PATH)
+        COMMAND = "python3 {} -m {} -e {} -t {} -v {} -s {} --batch_size 8 --patient 20 --epoch 100 --period 1\n"
+        MAIN_PATH = '{}/main/train_model.py'.format(ROOT)
         paths = [MAIN_PATH,model_config_path,executor_config_path]
 
     for path in paths:
@@ -65,15 +65,12 @@ def main(data_root,saved_root,
                 test_on_val_path = os.path.join(saved_path,'test_on_val')
                 test_on_train_command = COMMAND.format(MAIN_PATH,train_path,saved_path,test_on_train_path)
                 test_on_val_command = COMMAND.format(MAIN_PATH,val_path,saved_path,test_on_val_path)
-                test_on_train_command += " -g {} \n"
-                test_on_val_command += " -g {} \n"
                 fp.write(test_on_train_command)
                 fp.write(test_on_val_command)
             else:
                 saved_path = os.path.join(saved_root,save_result_name)
                 command = COMMAND.format(MAIN_PATH,model_config_path,executor_config_path,
                                          train_path,val_path,saved_path)
-                command += " -g {} \n"
                 fp.write(command)
 
 if __name__ == '__main__':    
