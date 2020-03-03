@@ -1,5 +1,4 @@
 import deepdish as dd
-from numpy import median
 from ..utils.utils import read_fasta,BASIC_GENE_ANN_TYPES
 from .seq_container import AnnSeqContainer
 from .ann_genome_processor import get_mixed_genome,simplify_genome,is_one_hot_genome
@@ -74,7 +73,7 @@ def _preprocess(ann_seqs,before_mix_simplify_map=None,simplify_map=None):
         raise Exception("Genome is not one-hot encoded")
     return ann_seqs
 
-def select_data(fasta_path,ann_seqs_path,chroms_list,before_mix_simplify_map=None,
+def select_data(fasta_path,ann_seqs_path,chroms,before_mix_simplify_map=None,
                 simplify_map=None,gene_map=None,select_func=None,
                 select_each_type=False,codes=None,**kwargs):
 
@@ -90,26 +89,23 @@ def select_data(fasta_path,ann_seqs_path,chroms_list,before_mix_simplify_map=Non
     h5=dd.io.load(ann_seqs_path)
     fasta = read_fasta(fasta_path)
     ann_seqs = AnnSeqContainer().from_dict(h5)
-    data = []
-    for chroms in chroms_list:
-        data_ = None
-        if len(chroms) > 0:
-            selected_anns = AnnSeqContainer(ann_seqs.ANN_TYPES)
-            selected_seqs = {}
-            for ann_seq in ann_seqs:
-                if ann_seq.chromosome_id in chroms:
-                    seq = fasta[ann_seq.id]
-                    add_seq=True
-                    if codes is not None:
-                        if len(set(list(seq.upper()))-codes) > 0:
-                            add_seq=False
-                            print("Discard sequence, {}, due to dirty codes in it".format(ann_seq.id))
-                    if add_seq:
-                        selected_anns.add(ann_seq)
-                        selected_seqs[ann_seq.id] = seq
-            selected_seqs,selected_anns = select_func(selected_seqs,selected_anns,**kwargs)
-            selected_anns = _preprocess(selected_anns,before_mix_simplify_map,simplify_map)
-            data_ = selected_seqs,selected_anns.to_dict()
-        data.append(data_)
+    data = None
+    if len(chroms) > 0:
+        selected_anns = AnnSeqContainer(ann_seqs.ANN_TYPES)
+        selected_seqs = {}
+        for ann_seq in ann_seqs:
+            if ann_seq.chromosome_id in chroms:
+                seq = fasta[ann_seq.id]
+                add_seq=True
+                if codes is not None:
+                    if len(set(list(seq.upper()))-codes) > 0:
+                        add_seq=False
+                        print("Discard sequence, {}, due to dirty codes in it".format(ann_seq.id))
+                if add_seq:
+                    selected_anns.add(ann_seq)
+                    selected_seqs[ann_seq.id] = seq
+        selected_seqs,selected_anns = select_func(selected_seqs,selected_anns,**kwargs)
+        selected_anns = _preprocess(selected_anns,before_mix_simplify_map,simplify_map)
+        data = selected_seqs,selected_anns.to_dict()
     return data
     

@@ -10,7 +10,7 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument("-i","--cmd_table_path",required=True)
     parser.add_argument("-o","--output_path",required=True,
-                        help="Root to save result table (in tsv format)")
+                        help="Path of saved result table (in tsv format)")
     parser.add_argument("-g","--gpu_ids",type=lambda x: int(x).split(','),
                         default=list(range(torch.cuda.device_count())),help="GPUs to used")
     

@@ -8,10 +8,12 @@ from sequence_annotation.process.optuna import IModelExecutorCreator,get_discret
 
 class ModelExecutorCreator(IModelExecutorCreator):
     """Creator to create model and executor by trial parameters"""
-    def __init__(self,is_grad_norm=False):
-        self._is_grad_norm = is_grad_norm
+    def __init__(self,clip_grad_norm=None,has_cnn=True,grad_norm_type=None):
+        self._grad_norm_type = grad_norm_type or 'inf'
+        self._clip_grad_norm = clip_grad_norm
+        self._has_cnn = has_cnn
         self._cnn_config_dict = {'cnn_num':'num_layers','cnn_out':'out_channels','kernel_size':'kernel_size'}
-        self._rnn_config_dict = {'rnn_hidden':'hidden_size','rnn_num':'num_layers','customized_rnn_init':'customized_rnn_init'}
+        self._rnn_config_dict = {'rnn_hidden':'hidden_size','rnn_num':'num_layers'}
         self._all_config_dict = dict(self._cnn_config_dict)
         self._all_config_dict.update(self._rnn_config_dict)
         self._each_space_sizes = self.get_each_space_size()
@@ -24,21 +26,26 @@ class ModelExecutorCreator(IModelExecutorCreator):
 
     def create_default_hyperparameters(self):
         config = {}
-        config['relation_type'] = {'value':'basic_hier','options':['basic','basic_hier','hier']}
-        config['learning_rate'] = {'value':1e-2,'lb':5e-3,'ub':1e-2,'step':5e-3}
-        config['kernel_size'] = {'lb':33,'ub':1057,'step':512,'value':1057}#225
-        config['cnn_out'] = {'lb':4,'ub':10,'step':3,'value':4}
-        config['cnn_num'] = {'lb':4,'ub':16,'step':4,'value':16}
-        config['rnn_num'] = {'lb':1,'ub':3,'value':2}
-        config['rnn_hidden'] = {'lb':16,'ub':48,'step':16,'value':16}
-        config['momentum'] = {'value':0.9,'options':[0.9,0.99]}
-        if self._is_grad_norm:
-            config['grad_norm'] = {'lb':1,'ub':11,'step':10,'value':None}
-        config['nesterov'] = {'value':True}
+        #CNN
+        if self._has_cnn:
+            config['kernel_size'] = {'lb':65,'ub':321,'step':128,'value':None}
+            config['cnn_out'] = {'lb':4,'ub':8,'step':2,'value':None}
+            config['cnn_num'] = {'lb':4,'ub':12,'step':4,'value':None}
+        else:
+            config['cnn_num'] = {'value':0}
+        #RNN
+        config['relation_type'] = {'options':['basic','basic_hier','hier'],'value':None}
+        config['rnn_num'] = {'lb':1,'ub':3,'value':None}
+        config['rnn_hidden'] = {'lb':32,'ub':96,'step':32,'value':None}
         config['is_rnn_filter'] = {'value':False}
         config['rnn_type'] = {'value':'GRU'}
-        config['customized_rnn_init'] = {'value':'in_xav_bias_zero_gru_init'}
-        
+        #Executor
+        config['optimizer_type'] = {'value':'Adam'}
+        config['learning_rate'] = {'value':1e-3}
+        if self._clip_grad_norm is not None:
+            config['clip_grad_norm'] = {'value':self._clip_grad_norm}
+            config['grad_norm_type'] = {'value':float(self._grad_norm_type)}
+
         ordered_config = OrderedDict()
         for key in sorted(list(config.keys())):
             ordered_config[key] = config[key]
@@ -46,10 +53,10 @@ class ModelExecutorCreator(IModelExecutorCreator):
 
     def _create_model_builder(self):
         model_builder = SeqAnnBuilder()
-        model_builder.update_feature_block(norm_input=True,norm_affine=False,
-                                           customized_init='kaiming_uniform_cnn_init',
-                                           padding_handle='same',dropout=0.5)
-        model_builder.update_relation_block(customized_cnn_init='xavier_uniform_cnn_init',dropout=0.5)
+        model_builder.update_feature_block(customized_init='kaiming_uniform_cnn_init',
+                                           padding_handle='same')
+        model_builder.update_relation_block(customized_cnn_init='xavier_uniform_cnn_init',
+                                            customized_rnn_init='in_xav_bias_zero_gru_init')
         return model_builder        
 
     def _create_executor_builder(self):
@@ -65,12 +72,14 @@ class ModelExecutorCreator(IModelExecutorCreator):
     
     def _update_builder(self,hyper,model_builder,executor_builder):
         for key,set_key in self._cnn_config_dict.items():
-            value = hyper[key]['value']
-            model_builder.update_feature_block(**{set_key:value})
+            if key in hyper:
+                value = hyper[key]['value']
+                model_builder.update_feature_block(**{set_key:value})
 
         for key,set_key in self._rnn_config_dict.items():
-            value = hyper[key]['value']
-            model_builder.update_relation_block(**{set_key:value})
+            if key in hyper:
+                value = hyper[key]['value']
+                model_builder.update_relation_block(**{set_key:value})
 
         is_filter = hyper['is_rnn_filter']['value']
         relation_type = hyper['relation_type']['value']
@@ -101,11 +110,12 @@ class ModelExecutorCreator(IModelExecutorCreator):
         else:
             raise Exception("Unknown relation block type {}".format(relation_type))
 
-        grad_norm = hyper['grad_norm']['value'] if 'grad_norm' in hyper else None
-        executor_builder.set_optimizer('SGD',learning_rate=hyper['learning_rate']['value'],
-                                       grad_norm=grad_norm,
-                                       momentum=hyper['momentum']['value'],
-                                       nesterov=hyper['nesterov']['value'])
+        clip_grad_norm = hyper['clip_grad_norm']['value'] if 'clip_grad_norm' in hyper else None
+        grad_norm_type = hyper['grad_norm_type']['value'] if 'grad_norm_type' in hyper else None
+        executor_builder.set_optimizer(hyper['optimizer_type']['value'],
+                                       learning_rate=hyper['learning_rate']['value'],
+                                       clip_grad_norm=clip_grad_norm,
+                                       grad_norm_type=grad_norm_type)
     
     def get_trial_config(self,trial,set_by_trial_config=False):
         self._index =trial.number
@@ -213,5 +223,4 @@ class ModelExecutorCreator(IModelExecutorCreator):
                 hyper[key]['value'] = config['ub']
                 
         hyper['relation_type']['value'] = 'hier'
-        hyper['momentum']['value'] = hyper['momentum']['options'][0]
         return self._create(hyper)

@@ -4,7 +4,7 @@ import torch
 import pandas as pd
 from argparse import ArgumentParser
 sys.path.append(os.path.abspath(os.path.dirname(__file__)+"/.."))
-from sequence_annotation.utils.utils import write_json,create_folder
+from sequence_annotation.utils.utils import write_json,read_json
 from sequence_annotation.utils.process import Process,process_schedule
 from sequence_annotation.process.optuna import create_study
    
@@ -17,8 +17,21 @@ def get_n_completed_trial(study):
     else:
         return sum(df['state'] == "COMPLETE")
     
-def main(saved_root,train_data_path,val_data_path,epoch,batch_size,n_initial_points,n_trials,
-         gpu_ids,is_maximize,by_grid_search,trial_start_number):
+def _append_command(command,appended_command=None,is_maximize=False,by_grid_search=False):
+    if by_grid_search:
+        command += ' --by_grid_search'
+    
+    if is_maximize:
+        command += ' --is_maximize'
+
+    if appended_command is not None:
+        command += ' ' + appended_command
+
+    return command
+    
+def main(saved_root,train_data_path,val_data_path,epoch,batch_size,
+         n_initial_points,n_trials,gpu_ids,
+         appended_command=None,is_maximize=False,by_grid_search=False):
 
     batch_status = None
     optimized_status = None
@@ -36,20 +49,20 @@ def main(saved_root,train_data_path,val_data_path,epoch,batch_size,n_initial_poi
         os.mkdir(saved_root)
     #Save setting
     setting_path = os.path.join(saved_root,"parallel_main_setting.json")
-    write_json(config,setting_path)
+    if os.path.exists(setting_path):
+        existed = read_json(setting_path)
+        if config != existed:
+            raise Exception("The {} is not same as previous one".format(setting_path))
+    else:
+        write_json(config,setting_path)
 
     command = COMMAND.format(saved_root,train_data_path,val_data_path,epoch,
                              batch_size,1,n_initial_points)
-    direction = 'minimize'
-    if is_maximize:
-        command += ' --is_maximize'
-        direction = 'maximize'
-        
-    if by_grid_search:
-        command += ' --by_grid_search'
-        
-    command += ' --trial_start_number {}'.format(trial_start_number) 
     
+    command = _append_command(command,appended_command=appended_command,
+                              by_grid_search=by_grid_search,is_maximize=is_maximize)
+    
+    direction = 'maximize' if is_maximize else 'minimize'
     study = create_study(saved_root,direction=direction,load_if_exists=True)
     n_completed = get_n_completed_trial(study)
     n_total = n_completed + n_trials
@@ -75,11 +88,10 @@ def main(saved_root,train_data_path,val_data_path,epoch,batch_size,n_initial_poi
     if n_optimized >0:
         command = COMMAND.format(saved_root,train_data_path,val_data_path,epoch,
                                  batch_size,n_optimized,n_initial_points)
-        if is_maximize:
-            command += ' --is_maximize'
-            
-        command += ' --trial_start_number {}'.format(trial_start_number) 
-            
+        
+        command = _append_command(command,appended_command=appended_command,
+                                  is_maximize=is_maximize)
+
         processes = [Process(command)]
         status = process_schedule(processes,gpu_ids)
         if optimized_status is None:
@@ -99,9 +111,9 @@ if __name__ == '__main__':
     parser.add_argument("-i","--n_initial_points",type=int,default=0)
     parser.add_argument("-g","--gpu_ids",type=lambda x: int(x).split(','),
                         default=list(range(torch.cuda.device_count())),help="GPUs to used")
+    parser.add_argument("--by_grid_search",action='store_true')    
     parser.add_argument("--is_maximize",action='store_true')
-    parser.add_argument("--by_grid_search",action='store_true')
-    parser.add_argument("--trial_start_number",type=int,default=0)
+    parser.add_argument("--appended_command",type=str,default=None)
 
     args = parser.parse_args()
     config = dict(vars(args))

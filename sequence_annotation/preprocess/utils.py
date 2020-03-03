@@ -2,7 +2,7 @@ import sys,os
 import pandas as pd
 sys.path.append(os.path.dirname(__file__)+"/../..")
 from sequence_annotation.utils.utils import BED_COLUMNS,GFF_COLUMNS
-from sequence_annotation.utils.utils import get_gff_with_attribute, get_gff_with_feature_coord
+from sequence_annotation.utils.utils import get_gff_with_feature_coord
 
 preprocess_src_root = os.path.dirname(os.path.abspath(__file__))
     

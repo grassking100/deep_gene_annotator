@@ -6,7 +6,7 @@ from sequence_annotation.genome_handler.sequence import AnnSequence
 class TestDataContainer(unittest.TestCase):
     def test_ann_seq_data(self):
         try:
-            CHANNEL_ORDER = ['Black','White']
+            CHANNEL_ORDER = ['exon','intron']
             ann_seqs = AnnSeqContainer()
             ann_seqs.ANN_TYPES=CHANNEL_ORDER
             ann_seq = AnnSequence()
@@ -15,8 +15,8 @@ class TestDataContainer(unittest.TestCase):
             ann_seq.strand = 'plus'
             ann_seq.ANN_TYPES = CHANNEL_ORDER
             ann_seq.init_space()
-            ann_seq.set_ann('Black',1,3,4)
-            ann_seq.set_ann('White',1,0,2)
+            ann_seq.set_ann('exon',1,3,4)
+            ann_seq.set_ann('intron',1,0,2)
             ann_seqs.add(ann_seq)
             ann_seq2 = AnnSequence()
             ann_seq2.length = 4
@@ -24,8 +24,8 @@ class TestDataContainer(unittest.TestCase):
             ann_seq2.strand = 'plus'
             ann_seq2.ANN_TYPES = CHANNEL_ORDER
             ann_seq2.init_space()
-            ann_seq2.set_ann('Black',1,3,3)
-            ann_seq2.set_ann('White',1,0,2)
+            ann_seq2.set_ann('exon',1,3,3)
+            ann_seq2.set_ann('intron',1,0,2)
             ann_seqs.add(ann_seq2)
             data = {'training':{'inputs':{'A':'AATCG','B':'TTTC'},'answers':ann_seqs}}
             data_processor = AnnSeqProcessor(CHANNEL_ORDER)

@@ -5,8 +5,7 @@ import pandas as pd
 import numpy as np
 import deepdish as dd
 from argparse import ArgumentParser
-torch.backends.cudnn.benchmark = True
-from keras.preprocessing.sequence import pad_sequences
+from torch.nn.utils.rnn import pad_sequence
 sys.path.append(os.path.dirname(os.path.abspath(__file__+"/../..")))
 from sequence_annotation.utils.utils import create_folder, print_progress, write_gff, write_json
 from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES,BASIC_GENE_MAP,read_region_table
@@ -249,52 +248,55 @@ def _convert_raw_output_to_vectors(outputs):
         print_progress("{}% of data have been processed".format(int(100*index/len(outputs))))
         for key in ['dna_seqs', 'lengths','chrom_ids']:
             data[key] += [item[key]]
-        data['outputs'] += list(np.transpose(item['outputs'],(0,2,1)))
+        item = torch.FloatTensor(item['outputs']).transpose(1,2)
+        data['outputs'] += item
     for key in ['dna_seqs', 'lengths','chrom_ids']:
         data[key] = np.concatenate(data[key])
-    data['outputs'] = pad_sequences(data['outputs'],padding='post',dtype='float32')
-    data['outputs'] = torch.Tensor(data['outputs'].transpose(0,2,1)).cuda()
+    data['outputs'] = pad_sequence(data['outputs'],batch_first=True)
+    data['outputs'] = data['outputs'].transpose(2,1).cuda()
     data['masks'] = get_seq_mask(data['lengths'],to_cuda=True)
     return data
 
 def _convert_vectors_to_gff(chrom_ids,lengths,masks,dna_seqs,ann_vecs,
-                          ann_vec_gff_converter,use_native=True,
-                          transcript_threshold=None,intron_threshold=None):
+                            inference,ann_vec_gff_converter,
+                            transcript_threshold=None,intron_threshold=None):
     """Convert raw output's torch tensor to GFF dataframe"""
-    if use_native:
-        ann_vecs = basic_inference(ann_vecs,masks)
-    else:
-        ann_vecs = seq_ann_inference(ann_vecs,masks,
-                                     transcript_threshold=transcript_threshold,
-                                     intron_threshold=intron_threshold)
+    ann_vecs = inference(ann_vecs,masks,
+                         transcript_threshold=transcript_threshold,
+                         intron_threshold=intron_threshold)
     ann_vecs = ann_vecs.cpu().numpy()
     info = ann_vec_gff_converter.vecs2gff(chrom_ids,lengths,ann_vecs)
     return info
 
-def convert_raw_output_to_gff(raw_outputs,region_table,config_path,gff_path,ann_vec_gff_converter,
+def convert_raw_output_to_gff(raw_outputs,region_table,config_path,gff_path,
+                              inference,ann_vec_gff_converter,
                               chrom_source=None,chrom_target=None,**kwargs):
     config = ann_vec_gff_converter.get_config()
     write_json(config,config_path)
     outputs = _convert_raw_output_to_vectors(raw_outputs)
     gff = _convert_vectors_to_gff(outputs['chrom_ids'],outputs['lengths'],outputs['masks'],
-                                outputs['dna_seqs'],outputs['outputs'],
-                                ann_vec_gff_converter=ann_vec_gff_converter,**kwargs)
+                                  outputs['dna_seqs'],outputs['outputs'],inference,
+                                  ann_vec_gff_converter=ann_vec_gff_converter,**kwargs)
     redefined_gff = flip_and_rename_gff(gff,region_table,
                                         chrom_source=chrom_source,
                                         chrom_target=chrom_target)
     write_gff(redefined_gff,gff_path)
 
 def convert_main(saved_root,raw_signal_path,region_table_path,distance=None,
-                 length_threshold=None,gene_length_threshold=None,**kwargs):
+                 length_threshold=None,gene_length_threshold=None,use_native=True,**kwargs):
     raw_outputs = dd.io.load(raw_signal_path)
     region_table = read_region_table(region_table_path)
     config_path = os.path.join(saved_root,"ann_vec_gff_converter_config.json")
-    gff_path = os.path.join(saved_root,'predicted.gff')
+    gff_path = os.path.join(saved_root,'converted.gff')
     converter = build_ann_vec_gff_converter(BASIC_GENE_ANN_TYPES,BASIC_GENE_MAP,
                                             distance=distance,length_threshold=length_threshold,
                                             gene_length_threshold=gene_length_threshold)
-    convert_raw_output_to_gff(raw_outputs,region_table,
-                              config_path,gff_path,converter,**kwargs)
+    if use_native:
+        inference_ = basic_inference
+    else:
+        inference_ = seq_ann_inference
+    convert_raw_output_to_gff(raw_outputs,region_table,config_path,gff_path,
+                              inference_,converter,**kwargs)
 
 if __name__ == '__main__':    
     parser = ArgumentParser(description='Convert raw output to GFF')

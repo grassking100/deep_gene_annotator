@@ -129,6 +129,5 @@ else
     echo "The program process_data.sh is skipped"
 fi
 
+bash $bash_root/region_select_split.sh -g $genome_path -t $preprocessed_root/id_convert.tsv -p $processed_root -o $splitted_root -d
 bash $bash_root/region_select_split.sh -g $genome_path -t $preprocessed_root/id_convert.tsv -p $processed_root -o $splitted_root -s
-
-#bash $script_root/batch_rename.sh -i $splitted_root/single_strand_data/split_without_strand -o $splitted_root/double_strand_data/split_without_strand -t $result_root/region_rename_table_both_strand.tsv -g 

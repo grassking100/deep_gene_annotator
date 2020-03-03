@@ -57,26 +57,29 @@ fi
 
 script_root="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-bedtools sort -i $region_path > _region_sorted.temp
-bedtools sort -i $data_path > _data_sorted.temp
+region_file="${region_path%.*}"
+data_file="${data_path%.*}"
+
+bedtools sort -i $region_path > ${region_file}_sorted.bed
+bedtools sort -i $data_path > ${data_file}_sorted.bed
 
 awk -F '\t' -v OFS='\t' '{
     print($1,$2,$3,$4,$5,$6)
-}' _region_sorted.temp > _region_sorted.simple
+}' ${region_file}_sorted.bed > ${region_file}_sorted_simple.bed
 
 if $strand; then
-    bedtools map -a _region_sorted.simple -b _data_sorted.temp -c 4,4 -o count_distinct,distinct -s > _temp.bed
+    bedtools map -a ${region_file}_sorted_simple.bed -b ${data_file}_sorted.bed -c 4,4 -o count_distinct,distinct -s > ${region_file}_mapped.bed
 else
-    bedtools map -a _region_sorted.simple -b _data_sorted.temp -c 4,4 -o count_distinct,distinct > _temp.bed
+    bedtools map -a ${region_file}_sorted_simple.bed -b ${data_file}_sorted.bed -c 4,4 -o count_distinct,distinct > ${region_file}_mapped.bed
 fi
     
 if [  "$single_count_path" ]; then
-    awk -F '\t' -v OFS='\t' '{print($1,$2,$3,$8,$5,$6,$7)}' _temp.bed > $single_count_path
+    awk -F '\t' -v OFS='\t' '{print($1,$2,$3,$8,$5,$6,$7)}' ${region_file}_mapped.bed > $single_count_path
 fi
 
-awk -F '\t' -v OFS='\t' '{print($1,$2,$3,$8,$5,$6)}' _temp.bed > $output_path
+awk -F '\t' -v OFS='\t' '{print($1,$2,$3,$8,$5,$6)}' ${region_file}_mapped.bed > $output_path
 
-rm _temp.bed
-rm _region_sorted.simple
-rm _region_sorted.temp
-rm _data_sorted.temp
+rm ${region_file}_mapped.bed
+rm ${region_file}_sorted_simple.bed
+rm ${region_file}_sorted.bed
+rm ${data_file}_sorted.bed

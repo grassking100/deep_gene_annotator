@@ -1,5 +1,4 @@
 from abc import ABCMeta
-import numpy as np
 import torch
 from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence,pad_packed_sequence
@@ -75,64 +74,6 @@ class PaddedNorm1d(nn.Module):
             x = pad_func(x)
         return x
 
-class PaddedBatchNorm1d(nn.Module):
-    def __init__(self,channel_size,**kwrags):
-        super().__init__()
-        self.channel_size = channel_size
-        self.norm = PaddedNorm1d(nn.BatchNorm1d(channel_size,**kwrags))
-
-    def forward(self,x,lengths):
-        """N,C,L"""
-        N,C,L = x.shape
-        if self.channel_size != C:
-            raise Exception("Wrong channel size")
-        x = self.norm(x,lengths)
-        return x
-    
-class PaddedLayerNorm1d(nn.Module):
-    def __init__(self,channel_size,**kwrags):
-        super().__init__()
-        self.channel_size = channel_size
-        self.norm = PaddedNorm1d(nn.LayerNorm(channel_size,**kwrags))
-
-    def forward(self,x,lengths):
-        """N,C,L"""
-        N,C,L = x.shape
-        if self.channel_size != C:
-            raise Exception("Wrong channel size")
-        x = self.norm(x,lengths)
-        return x
-
-class PaddedAllNorm1d(nn.Module):
-    def __init__(self,channel_size,**kwrags):
-        super().__init__()
-        self.channel_size = channel_size
-        self.norm = PaddedNorm1d(nn.BatchNorm1d(1,**kwrags))
-
-    def forward(self,x,lengths):
-        """N,C,L"""
-        N,C,L = x.shape
-        if self.channel_size != C:
-            raise Exception("Wrong channel size")
-        x = x.reshape(N*C,1,L)
-        x = self.norm(x,np.repeat(lengths,C))
-        x = x.reshape(N,C,L)
-        return x
-    
-NORM_CLASS = {
-    'PaddedBatchNorm1d':PaddedBatchNorm1d,
-    'PaddedLayerNorm1d':PaddedLayerNorm1d,
-    'PaddedAllNorm1d':PaddedAllNorm1d
-}
-
-def generate_norm_class(norm_class,**kwargs):
-    def create(channel_size):
-        if isinstance(norm_class,str):
-            return NORM_CLASS[norm_class](channel_size,**kwargs)
-        else:
-            return norm_class(channel_size,**kwargs)
-    return create
-
 class BasicModel(nn.Module,metaclass=ABCMeta):
     def __init__(self):
         super().__init__()
@@ -172,9 +113,42 @@ class BasicModel(nn.Module,metaclass=ABCMeta):
         config['type'] = self.__class__.__name__
         config['in_channels'] = self.in_channels
         config['out_channels'] = self.out_channels
+        config['save_distribution'] = self.save_distribution
         return config
 
     def reset_parameters(self):
         for layer in self.children():
             if hasattr(layer,'reset_parameters'):
                 layer.reset_parameters()
+
+class PaddedBatchNorm1d(BasicModel):
+    def __init__(self,in_channels,**kwrags):
+        super().__init__()
+        self.in_channels = self.out_channels = in_channels
+        self.norm = PaddedNorm1d(nn.BatchNorm1d(self.in_channels,**kwrags))
+        self._kwargs = kwrags
+
+    def get_config(self):
+        config = super().get_config()
+        config['kwrags'] = self._kwargs
+        return config
+        
+    def forward(self,x,lengths):
+        """N,C,L"""
+        N,C,L = x.shape
+        if self.in_channels != C:
+            raise Exception("Wrong channel size")
+        x = self.norm(x,lengths)
+        return x
+    
+NORM_CLASS = {
+    'PaddedBatchNorm1d':PaddedBatchNorm1d
+}
+
+def generate_norm_class(norm_class,**kwargs):
+    def create(channel_size):
+        if isinstance(norm_class,str):
+            return NORM_CLASS[norm_class](channel_size,**kwargs)
+        else:
+            return norm_class(channel_size,**kwargs)
+    return create

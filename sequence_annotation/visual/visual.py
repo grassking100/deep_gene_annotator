@@ -1,7 +1,6 @@
 """This submodule provides library about visualize"""
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 
 VALID_STRAND = ['plus','minus']
 
@@ -81,3 +80,33 @@ def visual_error(predict, answer,check_length=True):
         error = error_status[type_]
         plt.plot(error, label=type_)
     plt.legend(loc='upper right')
+    
+def partial_dependence_plot(df,column_name,round_value=None,only_show_completed=True):
+    if only_show_completed:
+        df=df[df['state']=='COMPLETE']
+    round_value = round_value or 1
+    group = df.groupby(column_name)['value']
+    value = dict(group.mean())
+    std = dict(group.std())
+    max_ = dict(group.max())
+    min_ = dict(group.min())
+    sorted_values = []
+    sorted_stds = []
+    sorted_maxs = []
+    sorted_mins = []
+    sorted_keys = sorted(list(value.keys()))
+    
+    for column_name in sorted_keys:
+        sorted_values.append(round(100*value[column_name],round_value))
+        sorted_stds.append(round(100*std[column_name],round_value))
+        sorted_maxs.append(round(100*max_[column_name],round_value))
+        sorted_mins.append(round(100*min_[column_name],round_value))
+
+    sorted_values = np.array(sorted_values)
+    sorted_stds = np.array(sorted_stds)
+    sorted_maxs = np.array(sorted_maxs)
+    sorted_mins = np.array(sorted_mins)
+
+    plt.plot(sorted_keys,sorted_values)
+    plt.fill_between(sorted_keys,sorted_values-sorted_stds,sorted_values+sorted_stds,alpha=.3)
+    plt.fill_between(sorted_keys,sorted_mins,sorted_maxs,alpha=.1)

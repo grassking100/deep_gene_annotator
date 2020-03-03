@@ -80,6 +80,7 @@ mkdir -p $saved_root
 
 #Set parameter
 genome_path=$root/raw_data/araport_11_Arabidopsis_thaliana_Col-0_rename.fasta
+fai_path=$genome_path.fai
 gro_1=$root/raw_data/tss_peak_SRR3647033_background_SRR3647034_2018_11_04.tsv 
 gro_2=$root/raw_data/tss_peak_SRR3647033_background_SRR3647035_2018_11_04.tsv
 DRS_path=$root/raw_data/NIHMS48846-supplement-2_S10_DRS_peaks_in_coding_genes_private.csv
@@ -91,18 +92,23 @@ processed_gff_path=$saved_root/processed.gff
 processed_bed_path=$saved_root/processed.bed
 consistent_gff_path=$saved_root/consistent_official.gff
 consistent_bed_path=$saved_root/consistent.bed
+intergenic_length_stats_path=$saved_root/intergenic_length_stats.txt
 echo "Step 2: Preprocess raw data"
 
-if [ ! -e "$id_convert_table_path" ]; then
-    python3 $preprocess_main_root/get_id_table.py -i $official_gff_path -o $id_convert_table_path
+if [ ! -e "$processed_gff_path" ]; then
+    python3 $preprocess_main_root/preprocess_gff.py -i $official_gff_path -o $processed_gff_path -v '1,2,3,4,5'
 fi
 
-if [ ! -e "$processed_gff_path" ]; then
-    python3 $preprocess_main_root/preprocess_gff.py -i $official_gff_path -o $processed_gff_path
+if [ ! -e "$id_convert_table_path" ]; then
+    python3 $preprocess_main_root/get_id_table.py -i $processed_gff_path -o $id_convert_table_path
 fi
 
 if [ ! -e "$processed_bed_path" ]; then
     python3 $preprocess_main_root/gff2bed.py -i $processed_gff_path -o $processed_bed_path
+fi
+
+if [ ! -e "$intergenic_length_stats_path" ]; then
+    bash $bash_root/complement_length_stats.sh -i $processed_bed_path -f $fai_path -o $intergenic_length_stats_path
 fi
 
 if [ ! -e "$consistent_gff_path" ]; then

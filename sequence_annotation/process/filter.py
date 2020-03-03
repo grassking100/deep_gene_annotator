@@ -1,5 +1,3 @@
-import torch
-from torch import nn
 from .customized_layer import BasicModel
 from .rnn import ProjectedRNN
 

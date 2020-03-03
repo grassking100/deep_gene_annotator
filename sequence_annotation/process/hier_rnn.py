@@ -30,17 +30,17 @@ class HierRNN(BasicModel):
             x = self.preprocess(x,lengths)
             self.update_distribution(x,key='preprocessed_value')
 
-        gated_result_0 = self.rnn_0(x,lengths)
+        result_0 = self.rnn_0(x,lengths)
         if self.hier_option == 'independent':
             result_1 = self.rnn_1(x,lengths)
         else:
-            gated_x = x*gated_result_0
+            gated_x = x*result_0
             self.update_distribution(gated_x,key='gated_x')
             if self.hier_option == 'before_filter':
-                gated_result_1 = self.rnn_1(gated_x,lengths)
+                result_1 = self.rnn_1(gated_x,lengths)
             else:
-                gated_result_1 = self.rnn_1(x,lengths,target_feature=gated_x)
-        result = torch.cat([gated_result_0,gated_result_1],1)
+                result_1 = self.rnn_1(x,lengths,target_feature=gated_x)
+        result = torch.cat([result_0,result_1],1)
         self.update_distribution(self.rnn_0.saved_distribution)
         self.update_distribution(self.rnn_1.saved_distribution)
         self.update_distribution(result,key='gated_stack_result')

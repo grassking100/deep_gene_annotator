@@ -3,7 +3,7 @@ import sys
 import torch
 from argparse import ArgumentParser
 sys.path.append(os.path.abspath(os.path.dirname(__file__)+"/.."))
-from sequence_annotation.utils.utils import create_folder, write_json,read_json,copy_path
+from sequence_annotation.utils.utils import create_folder, write_json,read_json
 from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES, BASIC_GENE_MAP
 from sequence_annotation.process.seq_ann_engine import SeqAnnEngine
 from sequence_annotation.process.convert_signal_to_gff import build_ann_vec_gff_converter
@@ -46,7 +46,6 @@ if __name__ == '__main__':
     parser.add_argument("-t","--test_root",help='The path that test result would be saved',
                         required=True)
     parser.add_argument("-g","--gpu_id",type=int,default=0,help="GPU to used")
-    parser.add_argument("--region_table_path")
     parser.add_argument("--deterministic",action="store_true")
 
     args = parser.parse_args()
@@ -54,8 +53,17 @@ if __name__ == '__main__':
     create_folder(args.saved_root)
     setting = vars(args)
     setting_path = os.path.join(args.saved_root,"test_setting.json")
-    write_json(setting,setting_path)
 
+    if os.path.exists(setting_path):
+        existed = read_json(setting_path)
+        setting_ = dict(setting)
+        del existed['gpu_id']
+        del setting_['gpu_id']
+        if setting_ != existed:
+            raise Exception("The {} is not same as previous one".format(setting_path))
+    else:
+        write_json(setting,setting_path)
+    
     kwargs = dict(setting)
     del kwargs['data_path']
     del kwargs['gpu_id']

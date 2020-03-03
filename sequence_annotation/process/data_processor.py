@@ -49,12 +49,13 @@ class AnnSeqProcessor:
         return returned
 
     def _to_dict(self,item):
-        data = {'inputs':[],'answers':[],'lengths':[],'ids':[],'seqs':[],'strands':[]}
+        data = {'inputs':[],'answers':[],'lengths':[],'ids':[],'seqs':[],'strands':[],'has_gene_statuses':[]}
         seqs = self._seq_converter.seqs2dict_vec(item['inputs'],self._discard_invalid_seq)
         ann_seq_dict = ann_genome_processor.genome2dict_vec(item['answers'],self._channel_order)
-        strand = {}
-        for seq in item['answers']:
-            strand[seq.id] = seq.strand
+        has_gene_list = {}
+        for ann_seq in item['answers']:
+            has_gene_list[ann_seq.id] = (sum(ann_seq.get_ann('intron'))+sum(ann_seq.get_ann('exon'))) > 0
+
         for name in seqs.keys():
             seq = seqs[name]
             answer = ann_seq_dict[name]
@@ -63,7 +64,8 @@ class AnnSeqProcessor:
             data['inputs'].append(seq)
             data['answers'].append(answer)
             data['lengths'].append(len(seq))
-            data['strands'].append(strand)
+            data['strands'].append(item['answers'][name].strand)
+            data['has_gene_statuses'].append(has_gene_list[name])
         return data
 
     def process(self,data):

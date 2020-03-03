@@ -243,14 +243,13 @@ def main(input_path,saved_root,postfix):
     
     broken_ids = origin_coord_ids - created_coord_ids
     unseen_ids = created_coord_ids - origin_coord_ids
-    consistent_ids = created_coord_ids.intersection(origin_coord_ids)
-    
+
     broken_block_gff = gff[gff['coord_id'].isin(broken_ids)]
     unseen_block_gff = repaired_gff[repaired_gff['coord_id'].isin(unseen_ids)]
     
 
-    broken_gene_ids = set(broken_gff['belong_gene'])
-    unseen_gene_ids = set(unseen_gff['belong_gene'])
+    broken_gene_ids = set(broken_block_gff['belong_gene'])
+    unseen_gene_ids = set(unseen_block_gff['belong_gene'])
     inconsistent_gene_id = unseen_gene_ids.union(broken_gene_ids)
     inconsistent_gff = repaired_gff[repaired_gff['belong_gene'].isin(inconsistent_gene_id)]
     consistent_gff = repaired_gff[~repaired_gff['belong_gene'].isin(inconsistent_gene_id)]

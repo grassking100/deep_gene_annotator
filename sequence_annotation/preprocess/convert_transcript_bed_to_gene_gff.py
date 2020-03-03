@@ -8,7 +8,6 @@ from sequence_annotation.genome_handler.seq_info_parser import BedInfoParser
 from sequence_annotation.genome_handler.ann_seq_converter import GeneticBedSeqConverter
 from sequence_annotation.genome_handler.region_extractor import RegionExtractor
 from sequence_annotation.genome_handler.ann_seq_processor import get_mixed_seq
-from sequence_annotation.genome_handler.seq_container import SeqInfoContainer
 
 class SingleSiteException(Exception):
     pass
@@ -32,7 +31,6 @@ def _get_id(start,end):
 def _get_noncanonical_region(seqs,canonical_regions):
     converter = GeneticBedSeqConverter()
     region_extractor = RegionExtractor()
-    regions = SeqInfoContainer()
     ann_seqs = [converter.convert(item) for item in seqs]
     mixed_ann_seq = ann_seqs[0].copy()
     for seq in ann_seqs[1:]:
@@ -95,7 +93,7 @@ def _get_canonical_and_noncanonical_region_list(seqs,canonical_regions,length):
     #return zero-site based site
     return canonical_region_list,noncanonical_region_list
     
-def _get_canonical_region_and_splice_site(seqs,start_sites,end_sites,select_site_by_election=False):
+def get_canonical_region_and_splice_site(seqs,start_sites,end_sites,select_site_by_election=False):
     if len(start_sites) != 1:
         raise SingleSiteException("Start sites should be same in each cluster, but get {}".format(start_sites))
 
@@ -231,7 +229,7 @@ def _get_canonical_region_and_splice_site(seqs,start_sites,end_sites,select_site
                 
     return canonical_regions,alt_donor_sites,alt_acceptor_sites,donor_acceptor_site
 
-def _get_most_start_end_with_transcripts(start_sites,end_sites,mRNAs):
+def get_most_start_end_with_transcripts(start_sites,end_sites,mRNAs):
     strand = mRNAs[0]['strand']
     start_count = _count_occurrence(start_sites)
     max_start_count = max(start_count.values())
@@ -287,11 +285,11 @@ def parse(bed_path,relation_path,select_site_by_election=False):
             start_sites = list(int(mRNA['start']) for mRNA in mRNAs)
             end_sites = list(int(mRNA['end']) for mRNA in mRNAs)
             if select_site_by_election:
-                start_sites,end_sites,mRNAs_ = _get_most_start_end_with_transcripts(start_sites,end_sites,mRNAs)
+                start_sites,end_sites,mRNAs_ = get_most_start_end_with_transcripts(start_sites,end_sites,mRNAs)
             start_sites = list(set(start_sites))
             end_sites = list(set(end_sites))
             if len(mRNAs) > 0:
-                parsed = _get_canonical_region_and_splice_site(mRNAs,start_sites,end_sites)
+                parsed = get_canonical_region_and_splice_site(mRNAs,start_sites,end_sites)
                 canonical_regions,alt_ds,alt_as,donor_acceptor_site = parsed
                 length = end_sites[0] - start_sites[0] + 1
                 c_regions,nc_regions = _get_canonical_and_noncanonical_region_list(mRNAs,canonical_regions,length)

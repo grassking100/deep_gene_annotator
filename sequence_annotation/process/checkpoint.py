@@ -102,6 +102,7 @@ class _Checkpoint(Callback):
         self._counter = None
         self._worker = None
         self.period = period or 1
+        self._has_updated = False
         
     @property
     def counter(self):
@@ -171,6 +172,7 @@ class ModelCheckpoint(_Checkpoint):
             self._worker.is_running = False
         
     def on_work_begin(self, worker,**kwargs):
+        self._has_updated = False
         self._worker = worker
         self._best_result = None
         self._best_epoch = 0
@@ -228,6 +230,7 @@ class ModelCheckpoint(_Checkpoint):
     
     def on_epoch_begin(self,counter,**kwargs):
         self._counter = counter
+        self._has_updated = True
 
     def on_epoch_end(self,metric,**kwargs):
         target = metric[self.target]
@@ -272,18 +275,19 @@ class ModelCheckpoint(_Checkpoint):
             _write_status(self.latest_status_path,self._counter,model_path)
 
     def on_work_end(self):
-        torch.save(self._worker.model.state_dict(),self.last_model_path)
-        print("Save last model of epoch {} at {}".format(self._counter,self.last_model_path))
-        _write_status(self.last_status_path,self._counter,self.last_model_path)
+        if self._has_updated:
+            torch.save(self._worker.model.state_dict(),self.last_model_path)
+            print("Save last model of epoch {} at {}".format(self._counter,self.last_model_path))
+            _write_status(self.last_status_path,self._counter,self.last_model_path)
 
-        print("Best "+str(self.target)+": "+str(self._best_result))
-        if self.save_best_weights:
-            if self.restore_best_weights:
-                print("Restore best weight of epoch {}".format(self._best_epoch))
-                self._worker.model.load_state_dict(self._model_weights)
-            _save_best(self.best_model_path,self.best_status_path,
-                       self.best_epoch,self._best_result,
-                       self._model_weights,self.patient)
+            print("Best "+str(self.target)+": "+str(self._best_result))
+            if self.save_best_weights:
+                if self.restore_best_weights:
+                    print("Restore best weight of epoch {}".format(self._best_epoch))
+                    self._worker.model.load_state_dict(self._model_weights)
+                _save_best(self.best_model_path,self.best_status_path,
+                           self.best_epoch,self._best_result,
+                           self._model_weights,self.patient)
             
 class ExecutorCheckpoint(_Checkpoint):
     def __init__(self,root,period=None,explicit_period=False):
@@ -309,6 +313,7 @@ class ExecutorCheckpoint(_Checkpoint):
         return paths
         
     def on_work_begin(self, worker,**kwargs):
+        self._has_updated = False
         self._executor = worker.executor
         self._executor_state_dict = deep_copy(self._executor.state_dict())
 
@@ -335,6 +340,7 @@ class ExecutorCheckpoint(_Checkpoint):
 
     def on_epoch_begin(self,counter,**kwargs):
         self._counter = counter
+        self._has_updated = True
 
     def on_epoch_end(self,metric,**kwargs):
         self._executor_state_dict = deep_copy(self._executor.state_dict())
@@ -350,9 +356,10 @@ class ExecutorCheckpoint(_Checkpoint):
             _write_status(self.latest_status_path,self._counter,executor_path)
 
     def on_work_end(self):
-        torch.save(self._executor_state_dict,self.last_executor_path)
-        print("Save executor of last epoch {} at {}".format(self._counter,self.last_executor_path))
-        _write_status(self.last_status_path,self._counter,self.last_executor_path)
+        if self._has_updated:
+            torch.save(self._executor_state_dict,self.last_executor_path)
+            print("Save executor of last epoch {} at {}".format(self._counter,self.last_executor_path))
+            _write_status(self.last_status_path,self._counter,self.last_executor_path)
 
 def copy_file(source_path,target_path):
     command = 'cp {} {}'.format(source_path,target_path)
@@ -382,6 +389,7 @@ class Checkpoint(Callback):
         self._best_result = None
         self._best_epoch = None
         self._record = None
+        self._has_updated = False
  
     @property
     def record(self):
@@ -415,8 +423,8 @@ class Checkpoint(Callback):
         return config
 
     def _save_checkpoint(self):
-        create_folder(self.checkpoint_root)
-        
+        if not self._has_updated:
+            return
         name = _get_name(self.recorder.path)
         new_record_path = '{}_epoch_{}.json'.format(name,self.recorder.epoch_start)
         new_record_path = os.path.join(self.checkpoint_root,new_record_path)
@@ -459,6 +467,8 @@ class Checkpoint(Callback):
         return self._epoch_start
         
     def on_work_begin(self, worker,**kwargs):
+        create_folder(self.checkpoint_root)
+        self._has_updated = False
         self._worker = worker
         self._best_result = None
         self._best_epoch = 0
@@ -492,7 +502,7 @@ class Checkpoint(Callback):
         self.callbacks.on_work_end(**kwargs)
         self._save_checkpoint()
         self._record = self.recorder.data
-        if self.model_checkpoint.best_epoch is not None:
+        if self.model_checkpoint.best_epoch is not None and self._has_updated:
             best_result = get_best_result(self.model_checkpoint.best_epoch,self.record)
             best_target_at_result = best_result[self.model_checkpoint.target]
             if best_target_at_result != self.model_checkpoint.best_result:
@@ -511,6 +521,7 @@ class Checkpoint(Callback):
                 write_json(best_result,self.best_record_path)
 
     def on_epoch_begin(self,**kwargs):
+        self._has_updated = True
         self.callbacks.on_epoch_begin(**kwargs)
 
     def on_epoch_end(self,**kwargs):

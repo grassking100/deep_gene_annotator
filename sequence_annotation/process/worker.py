@@ -20,17 +20,15 @@ L2_VERBOSE = "Epoch {}'s gradient L2 norm is {}"
 def _batch_process(model,seq_data,process,callbacks,**kwargs):
     torch.cuda.empty_cache()
     callbacks.on_batch_begin()
-    ids,inputs,labels,lengths,seqs,strands = seq_data.data
-    inputs = inputs.cuda()
-    labels = labels.cuda()
-    returned = process(model,inputs,labels,lengths=lengths,**kwargs)
+    returned = process(model,seq_data.inputs,seq_data.answers,
+                       lengths=seq_data.lengths,**kwargs)
     torch.cuda.empty_cache()
-    metric,predict_result,lengths,masks,outputs = returned
-    seq_data = SeqDataset([ids,inputs,labels,lengths,seqs,strands])
     with torch.no_grad():
-        callbacks.on_batch_end(predicts=predict_result,
-                               outputs=outputs,seq_data=seq_data,
-                               metric=metric,masks=masks)
+        callbacks.on_batch_end(predicts=returned['predicts'],
+                               outputs=returned['outputs'],
+                               seq_data=seq_data,
+                               metric=returned['metric'],
+                               masks=returned['masks'])
     torch.cuda.empty_cache()
 
 def train_per_batch(model,seq_data,executor,callbacks):
@@ -210,11 +208,12 @@ class TrainWorker(Worker):
         pre_time = time.time()
         try:
             super().work()
-        except RuntimeError:
-            self._message_recorder.notify(["Something wrong happened"])
+        except Exception as e:
+            if self._message_recorder is not None:
+                self._message_recorder.notify([str(e)])
             raise
         time_spend = time.time() - pre_time
-        time_messgae = "Time spend: {} seconds\n".format(time_spend)
+        time_messgae = "Time spend: {} seconds".format(time_spend)
         if self._message_recorder is not None:
             self._message_recorder.notify([time_messgae])
             
@@ -233,7 +232,7 @@ class TrainWorker(Worker):
             start = self._checkpoint.epoch_start+1
 
         batch_info = "Epoch: ({}/{}), {} {:.1f}% of data"
-        epoch_info = "Epoch: ({}/{}), Time cost of: {}, {}"
+        epoch_info = "Epoch: ({}/{}), Time cost of: {}, {}\n"
         self.print_verbose("Start from {} to {}".format(start,end-1))
         if not self.is_running:
             self.print_verbose("Stop at {}".format(start))
@@ -332,7 +331,6 @@ class TestWorker(Worker):
             
     def _before_work(self):
         self._loader = self._generator(SeqDataset(self.data['testing']))
-        record_path = None
         if self.root is not None:
             self._checkpoint = build_checkpoint(self.root,only_recorder=True,force_reset=True) 
         self._callbacks.add(DataHolder(prefix='test'))

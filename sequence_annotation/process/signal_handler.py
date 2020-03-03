@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import deepdish as dd
-from ..utils.utils import gffcompare_command,read_region_table,read_gff
+from ..utils.utils import read_region_table,read_gff
 from .callback import Callback,Callbacks,set_prefix
 from .convert_signal_to_gff import convert_raw_output_to_gff
 from .performance import compare_and_save
@@ -48,18 +48,17 @@ class _SignalSaver(Callback):
 
     def on_batch_end(self,outputs,seq_data,**kwargs):
         if not self._has_finish:
-            chrom_ids,dna_seqs,answers,lengths = seq_data.ids,seq_data.seqs,seq_data.answers,seq_data.lengths
-            answers = answers.cpu().numpy()
+            answers = seq_data.answers.cpu().numpy()
             self._raw_outputs.append({'outputs':outputs,
-                                      'chrom_ids':chrom_ids,
-                                      'dna_seqs':dna_seqs,
-                                      'lengths':lengths})
+                                      'chrom_ids':seq_data.ids,
+                                      'dna_seqs':seq_data.seqs,
+                                      'lengths':seq_data.lengths})
 
             self._raw_answers.append({'outputs':answers,
-                                      'chrom_ids':chrom_ids,
-                                      'dna_seqs':dna_seqs,
-                                      'lengths':lengths})
-            self._region_ids += chrom_ids.tolist()
+                                      'chrom_ids':seq_data.ids,
+                                      'dna_seqs':seq_data.seqs,
+                                      'lengths':seq_data.lengths})
+            self._region_ids += seq_data.ids
 
     def on_epoch_end(self,**kwargs):
         self._has_finish = True
@@ -72,7 +71,7 @@ class _SignalSaver(Callback):
 
 class _SignalGffConverter(Callback):
     def __init__(self,saved_root,region_table_path,raw_output_path,
-                 ann_vec_gff_converter,prefix=None,**kwargs):
+                 inference,ann_vec_gff_converter,prefix=None,**kwargs):
         """
         Parameters:
         ----------
@@ -94,6 +93,7 @@ class _SignalGffConverter(Callback):
             if variable is None:
                 raise Exception("The {} should not be None".format(name))
     
+        self._inference = inference
         self._saved_root = saved_root
         self._region_table_path = region_table_path
         self._raw_output_path = raw_output_path
@@ -116,9 +116,8 @@ class _SignalGffConverter(Callback):
         
     def on_work_end(self,**kwargs):
         raw_predicts = dd.io.load(self._raw_output_path)
-        convert_raw_output_to_gff(raw_predicts,self._region_table,
-                                  self._config_path,self.predict_gff_path,
-                                  self._ann_vec_gff_converter,**self._kwargs)
+        convert_raw_output_to_gff(raw_predicts,self._region_table,self._config_path,self.predict_gff_path,
+                                  self._inference,self._ann_vec_gff_converter,**self._kwargs)
 
 class _GFFCompare(Callback):
     def __init__(self,saved_root,region_table_path,predict_path,answer_path,region_id_path,
@@ -152,7 +151,6 @@ class _GFFCompare(Callback):
     def on_work_end(self,**kwargs):
         predict = read_gff(self._predict_path)
         answer = read_gff(self._answer_path)
-        chrom_lengths = {}
         region_ids = set(pd.read_csv(self._region_id_path)['region_id'])
         part_region_table = self._region_table[self._region_table[self._chrom_source].isin(region_ids)]
         compare_and_save(predict,answer,part_region_table,self._saved_root,self._chrom_target)
@@ -184,8 +182,8 @@ class SignalHandler(Callback):
     def on_batch_end(self,**kwargs):
         self._callbacks.on_batch_end(**kwargs)
         
-def build_signal_handler(saved_root,region_table_path,answer_gff_path,ann_vec_gff_converter,
-                         prefix=None,is_answer_double_strand=False):
+def build_signal_handler(saved_root,region_table_path,answer_gff_path,inference,ann_vec_gff_converter,
+                         prefix=None,is_answer_double_strand=False,use_native=True):
 
     signal_saver = _SignalSaver(saved_root,prefix=prefix)
     chrom_source = 'old_id'
@@ -194,9 +192,12 @@ def build_signal_handler(saved_root,region_table_path,answer_gff_path,ann_vec_gf
     else:
         chrom_target = 'old_id'
 
-    converter = _SignalGffConverter(saved_root,region_table_path,signal_saver.raw_output_path,
-                                    ann_vec_gff_converter,prefix=prefix,
-                                    chrom_source=chrom_source,chrom_target=chrom_target)
+    converter = _SignalGffConverter(saved_root,region_table_path,
+                                    signal_saver.raw_output_path,
+                                    inference,ann_vec_gff_converter,
+                                    prefix=prefix,
+                                    chrom_source=chrom_source,
+                                    chrom_target=chrom_target)
 
     gff_compare = _GFFCompare(saved_root,region_table_path,converter.predict_gff_path,
                               answer_gff_path,signal_saver.region_id_path,

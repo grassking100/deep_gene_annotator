@@ -1,5 +1,4 @@
 from abc import abstractmethod,ABCMeta,abstractproperty
-import torch
 import torch.nn as nn
 from torch.nn.functional import binary_cross_entropy as BCE
 from .inference import create_basic_inference
@@ -13,11 +12,12 @@ def mean_by_mask(value,mask):
     return sum_by_mask(value,mask)/(mask.sum()+EPSILON)
 
 def bce_loss(output,answer,mask=None,return_mean=True):
+    #N,L
     if len(output.shape) != 2 or len(answer.shape) != 2:
         raise Exception("Wrong shape")
 
-    if output.shape[:2] != answer.shape[:2]:
-        raise Exception("Inconsist batch size or channel size",output.shape,answer.shape)
+    if output.shape != answer.shape:
+        raise Exception("Inconsist batch size or length size",output.shape,answer.shape)
         
     if mask is not None and mask.shape != output.shape:
         raise Exception("Wrong shape")
@@ -174,7 +174,7 @@ class SeqAnnLoss(nn.Module):
         if answer.shape[1] != 3:
             raise Exception("Wrong answer channel size, except 3 but got {}".format(answer.shape[1]))
 
-        _,_,L = output.shape
+        N,_,L = output.shape
         answer = answer[:,:,:L].float()
         mask = mask[:,:L].float()
         #Get data

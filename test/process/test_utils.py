@@ -1,4 +1,3 @@
-import torch
 import unittest
 from sequence_annotation.process.utils import get_seq_mask
 

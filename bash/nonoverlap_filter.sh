@@ -41,10 +41,12 @@ fi
 
 script_root="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+bed_file="${input_path%.*}"
+
 if $use_strand ; then
-    bash $script_root/sort_merge.sh -i $input_path -o _temp.bed -s
+    bash $script_root/sort_merge.sh -i $input_path -o ${bed_file}_sorted.bed -s
 else    
-    bash $script_root/sort_merge.sh -i $input_path -o _temp.bed
+    bash $script_root/sort_merge.sh -i $input_path -o ${bed_file}_sorted.bed
 fi
 
 awk -F '\t' -v OFS='\t' '{
@@ -53,7 +55,7 @@ awk -F '\t' -v OFS='\t' '{
     {
         print(ids[1])
     }
-}' _temp.bed
+}' ${bed_file}_sorted.bed
 
 if [ "$error_id_path" ]; then
     awk -F '\t' -v OFS='\t' '{
@@ -62,6 +64,6 @@ if [ "$error_id_path" ]; then
         {
             print(ids[1])
         }
-    }' _temp.bed > $error_id_path
+    }' ${bed_file}_sorted.bed > $error_id_path
 fi
-rm _temp.bed
+rm ${bed_file}_sorted.bed

@@ -7,7 +7,7 @@ from torch import nn
 from torch.nn.init import zeros_
 from torch.nn import ReLU
 from .noisy_activation import NoisyReLU
-from .customized_layer import Concat, BasicModel, Add, generate_norm_class
+from .customized_layer import Concat, BasicModel, Add
 from .utils import xavier_uniform_extend_
 
 ACTIVATION_FUNC = {'NoisyReLU':NoisyReLU(),'ReLU':ReLU()}
@@ -28,7 +28,8 @@ def xavier_uniform_cnn_init(cnn,mode=None):
     if cnn.bias is not None:
         zeros_(cnn.bias)
 
-CNN_INIT_MODE = {None:None,'kaiming_uniform_cnn_init':kaiming_uniform_cnn_init,'xavier_uniform_cnn_init':xavier_uniform_cnn_init}
+CNN_INIT_MODE = {None:None,'kaiming_uniform_cnn_init':kaiming_uniform_cnn_init,
+                 'xavier_uniform_cnn_init':xavier_uniform_cnn_init}
 
 def create_mask(x,lengths):
     mask = torch.zeros(x.shape[0],1,x.shape[2]).to(x.dtype)
@@ -58,7 +59,8 @@ class Conv1d(nn.Conv1d,BasicModel):
             raise Exception("Invalid mode {} to handle padding".format(padding_handle))
         if self._padding_handle != 'valid':
             if self.padding != (0,) or self.dilation != (1,) or self.stride != (1,):
-                raise Exception("The padding_handle sholud be valid to set padding, dilation and stride at the same time")
+                raise Exception("The padding_handle sholud be valid to set padding, "\
+                                "dilation and stride at the same time")
             
         if kernek_size>1:
             if self._padding_handle == 'partial' and self.padding_value != 0:
@@ -114,8 +116,8 @@ class Conv1d(nn.Conv1d,BasicModel):
         elif self._padding_handle == 'partial':
             new_lengths = lengths
             if weights is None:
-                warnings.warn("Caution: weights can be reused ONLY if kernel sizes of previous layer "+
-                              "and current layer is the same, please check this by yourself")
+                warnings.warn("Caution: weights can be reused ONLY if kernel sizes of previous "\
+                              "layer and current layer is the same, please check this by yourself")
                 padded_mask = self._pad_func(mask)
                 if x.is_cuda:
                     padded_mask = padded_mask.cuda()
@@ -134,12 +136,12 @@ class Conv1d(nn.Conv1d,BasicModel):
         return x, new_lengths, weights, mask
 
 class CANBlock(BasicModel):
-    def __init__(self,in_channels,norm_mode=None,norm_type=None,
+    def __init__(self,in_channels,norm_mode=None,norm_class=None,
                  activation_function=None,dropout=None,**kwargs):
         super().__init__()
         self.name = ""
         self.in_channels = in_channels
-        self.norm_type = norm_type
+        self.norm_class = norm_class
         self.kwargs = kwargs
         if norm_mode in ["before_cnn","after_cnn","after_activation",None]:
             self.norm_mode = norm_mode
@@ -156,10 +158,11 @@ class CANBlock(BasicModel):
         self.cnn = Conv1d(in_channels=self.in_channels,bias=use_bias,**kwargs)
         self.kernel_size = self.cnn.kernel_size
         self.out_channels = self.cnn.out_channels
+        self.norm = None
         if self.norm_mode is not None:
             in_channel = {"before_cnn":self.in_channels,"after_cnn":self.out_channels,
                           "after_activation":self.out_channels}
-            self.norm = self.norm_type(in_channel[self.norm_mode])
+            self.norm = self.norm_class(in_channel[self.norm_mode])
         self.dropout = dropout or 0
         self.reset_parameters()
 
@@ -188,67 +191,53 @@ class CANBlock(BasicModel):
         config = super().get_config()
         config.update(self.cnn.get_config())
         config['name'] = self.name
-        config['norm_type'] = str(self.norm_type)
         config['norm_mode'] = self.norm_mode
+        if self.norm is not None:
+            config['norm_config'] = self.norm.get_config()
         config['activation_function'] = str(self.activation_function)
         config['dropout'] = self.dropout
         return config
 
 class StackCNN(BasicModel):
-    def __init__(self,in_channels,num_layers,norm_type=None,norm_input=False,
-                 norm_momentum=None,norm_affine=True,**kwargs):
+    def __init__(self,in_channels,num_layers,norm_class=None,padding_handle=None,**kwargs):
         super().__init__()
         self.in_channels = in_channels
         self.num_layers = num_layers
-        self.norm_input = norm_input
-        self.norm_affine = norm_affine
-        self.norm_momentum = norm_momentum or 0.1
-        self.norm_type = norm_type or 'PaddedBatchNorm1d'
-        self.norm_class = generate_norm_class(self.norm_type,affine=self.norm_affine,
-                                              momentum=self.norm_momentum)
-        self.norm = None
-        if self.norm_input:
-            self.norm = self.norm_class(self.in_channels)
+        self.norm_class = norm_class
+        self.padding_handle = padding_handle
         self.kwargs = kwargs
-    
-    def handle_input(self, x, lengths):
-        if self.norm_input:
-            return self.norm(x,lengths)
-        else:
-            return x
     
     def get_config(self):
         config = super().get_config()
         config.update(self.kwargs)
+        config['padding_handle'] = self.padding_handle
         config['num_layers'] = self.num_layers
-        config['norm_type'] = self.norm_type
-        config['norm_input'] = self.norm_input
-        config['norm_momentum'] = self.norm_momentum
-        config['norm_affine'] = self.norm_affine
-        
+        if self.norm_class is not None:
+            norm_config = self.norm_class(self.in_channels).get_config()
+            config['norm_class_config'] = {'kwrags':norm_config['kwrags'],'type':norm_config['type']}
         return config
     
 class ConcatCNN(StackCNN):
-    def __init__(self,in_channels,num_layers,bottleneck_factor=None,norm_type=None,
-                 norm_input=False,norm_momentum=None,norm_affine=True,**kwargs):
-        super().__init__(in_channels,num_layers,norm_type=norm_type,norm_input=norm_input,
-                         norm_momentum=norm_momentum,norm_affine=norm_affine,**kwargs)
+    def __init__(self,in_channels,num_layers,bottleneck_factor=None,norm_class=None,
+                 padding_handle=None,**kwargs):
+        super().__init__(in_channels,num_layers,norm_class=norm_class,
+                         padding_handle=padding_handle,**kwargs)
         self.bottleneck_factor = bottleneck_factor or 0
         in_num = in_channels
         self.cnns = []
         self.bottlenecks = []
         self.length_change = True
-        if 'padding_handle' in self.kwargs:
-            if self.kwargs['padding_handle'] in ['partial','same']:
-                self.length_change = False
+        if self.padding_handle in ['partial','same']:
+            self.length_change = False
+
         for index in range(self.num_layers):
             in_num_ = in_num
             if self.bottleneck_factor > 0:
                 out_num = int(in_num*self.bottleneck_factor)
                 out_num = 1 if out_num == 0 else out_num
-                bottleneck = CANBlock(in_channels=in_num,kernel_size=1,
-                                       out_channels=out_num,
-                                       norm_type=self.norm_class,**kwargs)
+                bottleneck = CANBlock(in_channels=in_num,kernel_size=1,out_channels=out_num,
+                                       norm_class=self.norm_class,padding_handle=padding_handle,
+                                      **kwargs)
                 self.bottlenecks.append(bottleneck)
                 setattr(self, 'bottleneck_'+str(index), bottleneck)
                 in_num = out_num
@@ -258,7 +247,8 @@ class ConcatCNN(StackCNN):
                     setting[key] = value[index]
                 else:
                     setting[key] = value
-            cnn = CANBlock(in_num,norm_type=self.norm_class,**setting)
+            cnn = CANBlock(in_num,norm_class=self.norm_class,
+                           padding_handle=padding_handle,**setting)
             cnn.name=str(index)
             self.cnns.append(cnn)
             setattr(self, 'cnn_'+str(index), cnn)
@@ -269,7 +259,6 @@ class ConcatCNN(StackCNN):
 
     def forward(self, x, lengths,weights=None,mask=None):
         #X shape : N,C,L
-        x = self.handle_input(x,lengths)
         for index in range(self.num_layers):
             pre_x = x
             cnn = self.cnns[index]
@@ -288,17 +277,17 @@ class ConcatCNN(StackCNN):
         return config
     
 class ResCNN(StackCNN):
-    def __init__(self,in_channels,num_layers,norm_type=None,norm_affine=True,
-                 norm_input=False,norm_momentum=None,bottleneck_factor=None,**kwargs):
-        super().__init__(in_channels,num_layers,norm_type=norm_type,norm_affine=norm_affine,
-                         norm_input=norm_input,norm_momentum=norm_momentum,**kwargs)
+    def __init__(self,in_channels,num_layers,norm_class=None,
+                 bottleneck_factor=None,padding_handle=None,**kwargs):
+        super().__init__(in_channels,num_layers,norm_class=norm_class,
+                         padding_handle=padding_handle,**kwargs)
         if bottleneck_factor is not None:
-            raise Exception("The bottleneck has not be implemented in ResCNN".format(bottleneck_factor))
+            raise Exception("The bottleneck has not be implemented "\
+                            "in ResCNN".format(bottleneck_factor))
         in_num = in_channels
         self.length_change = True
-        if 'padding_handle' in self.kwargs:
-            if self.kwargs['padding_handle'] in ['partial','same']:
-                self.length_change = False
+        if self.padding_handle in ['partial','same']:
+            self.length_change = False
                 
         self.cnns = []
         for index in range(self.num_layers):
@@ -308,7 +297,8 @@ class ResCNN(StackCNN):
                     setting[key] = value[index]
                 else:
                     setting[key] = value
-            cnn = CANBlock(in_num,norm_type=self.norm_class,**setting)
+            cnn = CANBlock(in_num,norm_class=self.norm_class,
+                           padding_handle=padding_handle,**setting)
             cnn.name=str(index)
             self.cnns.append(cnn)
             setattr(self, 'cnn_'+str(index), cnn)
@@ -319,7 +309,6 @@ class ResCNN(StackCNN):
 
     def forward(self, x, lengths,weights=None,mask=None):
         #X shape : N,C,L
-        x = self.handle_input(x,lengths)
         for index in range(self.num_layers):
             pre_x = x
             cnn = self.cnns[index]

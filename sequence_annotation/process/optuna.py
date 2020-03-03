@@ -9,10 +9,9 @@ from optuna.structs import TrialPruned,FrozenTrial,TrialState
 from optuna.trial import Trial
 from optuna.pruners import NopPruner
 from optuna.integration import SkoptSampler
-from optuna.distributions import DiscreteUniformDistribution,CategoricalDistribution
 from optuna.storages.rdb import models
 from .callback import OptunaCallback,Callbacks
-from ..utils.utils import BASIC_GENE_MAP,read_json,write_json,create_folder
+from ..utils.utils import read_json,write_json,create_folder
 from ..utils.utils import from_time_str,replace_utc_to_local,to_time_str
 from .seq_ann_engine import check_max_memory_usgae
 
@@ -83,12 +82,13 @@ def add_exist_trial(study,folder_path,trial_start_number=None):
 
 def add_exist_trials(study,trial_list_path,trial_start_number=None):
     trial_start_number = trial_start_number or 0
-    trials_root = (trial_list_path.split('/')[:-1]).join('/')
+    trials_root = '/'.join(trial_list_path.split('/')[:-1])
+    print(trials_root)
     df = pd.read_csv(trial_list_path,sep='\t',index_col=False,dtype={'trial_number':int})
     df = df.drop_duplicates()
     df = df.sort_values(by=['trial_number'])['path']
     for path in list(df):
-        add_exist_trial(study,ps.path.join(path,trials_root),trial_start_number)
+        add_exist_trial(study,os.path.join(trials_root,path),trial_start_number)
 
 def get_discrete_uniform(trial,key,lb=None,ub=None,step=None,value=None):
     step = step or 1
@@ -145,11 +145,12 @@ class OptunaTrainer:
                  train_data,val_data,epoch,batch_size,
                  is_minimize=True,monitor_target=None,
                  by_grid_search=False,trial_start_number=None,
-                 **train_kwargs):
+                 save_distribution = False,**train_kwargs):
         if is_minimize:
             self._direction = 'minimize'
         else:
             self._direction = 'maximize'
+        self._save_distribution = save_distribution
         self._trial_start_number = trial_start_number or 0
         self._monitor_target = monitor_target
         self._saved_root = saved_root
@@ -212,12 +213,14 @@ class OptunaTrainer:
         #Start training
         model,executor = self._creator.create_by_trial(trial,set_by_trial_config=set_by_trial_config,
                                                        set_by_grid_search=self._by_grid_search)
+        model.save_distribution = self._save_distribution
         #save settings
         create_folder(trial_root)
         self._record_trial_path(trial)
         config = _config_to_json(get_trial_config(trial))
         config = _shift_config_number(config,self._trial_start_number)
-        write_json(config,trial_config_path)
+        if not os.path.exists(trial_config_path):
+            write_json(config,trial_config_path)
         #Train
         optuna_callback = OptunaCallback(self._study,trial,target=self._monitor_target)
         callbacks = Callbacks([optuna_callback])
@@ -284,7 +287,13 @@ class OptunaTrainer:
         n_trials = n_trials or creator.space_size
         create_folder(self._saved_root)
         space_config_path = os.path.join(self._saved_root,'space_config.json')
-        write_json(self._creator.create_default_hyperparameters(),space_config_path)
+        default_hyperparameters = self._creator.create_default_hyperparameters()
+        if os.path.exists(space_config_path):
+            existed = read_json(space_config_path)
+            if default_hyperparameters != existed:
+                raise Exception("The {} is not same as previous one".format(space_config_path))
+        else:
+            write_json(default_hyperparameters,space_config_path)
         
         print("Check max memory")
         max_model,max_exec = self._creator.create_max()

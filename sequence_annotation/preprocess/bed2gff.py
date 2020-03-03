@@ -127,7 +127,7 @@ if __name__ =='__main__':
     parser = ArgumentParser()
     parser.add_argument("-i", "--bed_path",required=True)
     parser.add_argument("-o", "--gff_output",required=True)
-    parser.add_argument("-t", "--id_table_path")
+    parser.add_argument("-t", "--id_table_path",help="Id table about transcript and gene conversion")
     args = parser.parse_args()
     parser = BedInfoParser()
     bed = parser.parse(args.bed_path)

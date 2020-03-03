@@ -1,4 +1,3 @@
-import torch
 import unittest
 from sequence_annotation.process.callback import DataCallback,MeanRecorder,DataHolder
 

@@ -188,7 +188,7 @@ class SeqFigCallback(Callback):
 
     def on_epoch_end(self,**kwargs):
         #Value's shape should be (1,C,L)
-        predict_result = self._executor.predict(self._model,self._data,[self._data.shape[2]])[0]
+        predict_result = self._executor.predict(self._model,self._data,[self._data.shape[2]])['predicts']
         if self.do_add_distribution and hasattr(self._model,'saved_distribution'):
             for name,value in self._model.saved_distribution.items():
                 self._writer.add_distribution(name,value,prefix=self._prefix,
@@ -326,7 +326,7 @@ class CategoricalMetric(DataCallback):
         self._label_names = names
 
     def on_batch_end(self,seq_data,masks,predicts,**kwargs):
-        labels = self.answer_inference(seq_data.answers,masks)
+        labels = self.answer_inference(seq_data.answers.cuda(),masks)
         #N,C,L
         data = categorical_metric(predicts.cpu().numpy(),
                                   labels.cpu().numpy(),
@@ -384,7 +384,7 @@ class ContagionMatrix(DataCallback):
         self._label_names = names
 
     def on_batch_end(self,seq_data,masks,predicts,**kwargs):
-        labels = self.inference(seq_data.answers,masks)
+        labels = self.inference(seq_data.answers.cuda(),masks)
         #N,C,L
         data = contagion_matrix(predicts.cpu().numpy(),
                                 labels.cpu().numpy(),

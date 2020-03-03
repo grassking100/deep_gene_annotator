@@ -28,9 +28,6 @@ class TestMetric(unittest.TestCase):
         self.assertEqual([2/3,0.0,0.0],result)
 
     def test_calculate_metric(self):
-        predict=torch.FloatTensor([[[1,0,0,1,0],[0,0,1,0,1],[0,1,0,0,0]]])
-        answer= torch.FloatTensor([[[1,0,1,0,0],[0,1,0,0,0],[0,0,0,0,0]]])
-        mask=torch.FloatTensor([[1,1,1,0,0]])
         data = {'T':1,'F':2,
                 'TPs':[1.0,0.0,0.0],
                 'FPs':[0.0,1.0,1.0],

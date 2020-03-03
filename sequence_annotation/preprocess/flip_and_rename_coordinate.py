@@ -1,5 +1,4 @@
 import pandas as pd
-from sequence_annotation.utils.utils import read_bed,write_bed,write_gff,read_gff
 
 def _create_fai_by_region_table(region_table,chrom_key=None):
     chrom_key = chrom_key or 'old_id'

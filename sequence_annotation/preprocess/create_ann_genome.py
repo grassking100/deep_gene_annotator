@@ -8,7 +8,7 @@ from sequence_annotation.genome_handler.ann_seq_processor import is_one_hot
 from sequence_annotation.genome_handler.sequence import AnnSequence
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
 from sequence_annotation.genome_handler.ann_genome_processor import get_backgrounded_genome
-from sequence_annotation.preprocess.utils import RNA_TYPES,get_gff_with_intron
+from sequence_annotation.preprocess.utils import RNA_TYPES
 
 STRAND_CONVERT = {'+':'plus','-':'minus'}
 

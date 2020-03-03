@@ -5,12 +5,13 @@ import numpy as np
 from argparse import ArgumentParser
 from  matplotlib import pyplot as plt
 sys.path.append(os.path.dirname(os.path.abspath(__file__+"/../..")))
-from sequence_annotation.utils.utils import create_folder, write_gff, write_json, read_gff, read_region_table,BASIC_GENE_ANN_TYPES
+from sequence_annotation.utils.utils import create_folder, write_gff, write_json, read_gff
+from sequence_annotation.utils.utils import read_region_table,BASIC_GENE_ANN_TYPES,get_gff_with_attribute
 from sequence_annotation.utils.site_analysis import site_abs_diff
 from sequence_annotation.genome_handler.sequence import AnnSequence 
 from sequence_annotation.genome_handler.ann_seq_processor import get_background,seq2vecs
 from sequence_annotation.preprocess.utils import EXON_TYPES, GENE_TYPES
-from sequence_annotation.preprocess.utils import get_gff_with_attribute,get_gff_with_feature_coord,get_gff_with_intron
+from sequence_annotation.preprocess.utils import get_gff_with_feature_coord,get_gff_with_intron
 from sequence_annotation.process.metric import calculate_metric,contagion_matrix,categorical_metric
 
 def _normalize_matrix(matrix):
@@ -277,8 +278,8 @@ def gff_performance(predict,answer,region_table,chrom_target=None,round_value=No
         if answer_region not in table_regions:
             raise Exception(answer_region,sorted(list(table_regions)))
 
-    predict = get_gff_with_intron(predict)
-    answer = get_gff_with_intron(answer)
+    predict = get_gff_with_intron(get_gff_with_attribute(predict))
+    answer = get_gff_with_intron(get_gff_with_attribute(answer))
     label_num=len(BASIC_GENE_ANN_TYPES)
     metric = {}
     for type_ in ['TPs','FPs','TNs','FNs']:

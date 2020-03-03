@@ -14,7 +14,7 @@ from .tensorboard_writer import TensorboardWriter
 from .callback import CategoricalMetric,TensorboardCallback
 from .callback import SeqFigCallback, Callbacks,ContagionMatrix
 from .signal_handler import build_signal_handler
-from .data_generator import SeqGenerator
+from .data_generator import SeqGenerator,seq_collate_wrapper
 
 class SeqAnnEngine(metaclass=abc.ABCMeta):
     def __init__(self,channel_order,shuffle_train_data=True,is_verbose_visible=True):
@@ -28,9 +28,10 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         self._shuffle_train_data = shuffle_train_data
 
     def update_settings(self,key,params):
-        params = dict(params)
-        if 'self' in params.keys():
-            del params['self']
+        if isinstance(params,dict):
+            params = dict(params)
+            if 'self' in params.keys():
+                del params['self']
         self._settings[key] = params
 
     def print_verbose(self,info,*args):
@@ -89,19 +90,19 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
                     raise Exception("The {} is missing in the dataset".format(key))
             self.update_settings(name,count)
                 
-    def _add_signal_handler(self,ann_vec_gff_converter,region_table_path,
+    def _add_signal_handler(self,inference,ann_vec_gff_converter,region_table_path,
                             answer_gff_path,callbacks,prefix=None,
                             is_answer_double_strand=False):
         root = self._root
         if root is not None and prefix is not None:
             root = os.path.join(root,prefix)
-           
-        verified_paths = [region_table_path,answer_gff_path]
+
         if answer_gff_path is not None:
             if region_table_path is None:
                 raise Exception("Please provided region table path of single strand data")
             signal_handler = build_signal_handler(root,region_table_path,answer_gff_path,
-                                                  ann_vec_gff_converter,prefix=prefix,
+                                                  inference,ann_vec_gff_converter,
+                                                  prefix=prefix,
                                                   is_answer_double_strand=is_answer_double_strand)
 
             callbacks.add(signal_handler)
@@ -156,27 +157,31 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         for key in keys:
             self._update_ann_seqs_count(key,len(raw_data[key]['answers'].ids),len(data[key]['ids']))
             self._record_ann_count('{}_ann_counut'.format(key),raw_data[key]['answers'])
+            has_gene_statuses_count = int(sum(data[key]['has_gene_statuses']))
+            self.update_settings('{}_has_gene_count'.format(key),has_gene_statuses_count)
         return data
     
-    def _create_train_data_gen(self,batch_size,augmentation_max):
+    def _create_train_data_gen(self,batch_size,seq_collate_fn):
         train_gen = SeqGenerator(batch_size=batch_size,
-                                 augmentation_max=augmentation_max,
-                                 shuffle=self._shuffle_train_data)
+                                 shuffle=self._shuffle_train_data,
+                                 collate_fn=seq_collate_fn)
         return train_gen
     
     def _create_test_data_gen(self,batch_size):
-        test_gen = SeqGenerator(batch_size=batch_size,shuffle=False)
+        seq_collate_fn = seq_collate_wrapper()
+        test_gen = SeqGenerator(batch_size=batch_size,shuffle=False,collate_fn=seq_collate_fn)
         return test_gen
     
     def train(self,model,executor,train_data,val_data,
-              epoch=None,batch_size=None,other_callbacks=None,
-              augmentation_max=None,add_grad=True,checkpoint_kwargs=None):
-        
+              epoch=None,batch_size=None,other_callbacks=None,add_grad=True,
+              seq_collate_fn_kwargs=None,
+              checkpoint_kwargs=None):
+        seq_collate_fn_kwargs = seq_collate_fn_kwargs or {}
         self._update_common_setting()
         other_callbacks = other_callbacks or Callbacks()
         epoch = epoch or 100
         self.update_settings('train_setting',{'epoch':epoch,'batch_size':batch_size,
-                                              'augmentation_max':augmentation_max,
+                                              'seq_collate_fn_kwargs':seq_collate_fn_kwargs,
                                               'add_grad':add_grad,
                                               'checkpoint_kwargs':checkpoint_kwargs})
         #Set data
@@ -187,8 +192,9 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         self._add_tensorboard_callback(self._train_writer,train_callbacks,add_grad=add_grad)
         self._add_tensorboard_callback(self._val_writer,val_callbacks,add_grad=add_grad)
 
-        #Create worker    
-        train_gen = self._create_train_data_gen(batch_size,augmentation_max)
+        #Create worker
+        collate_fn = seq_collate_wrapper(**seq_collate_fn_kwargs)
+        train_gen = self._create_train_data_gen(batch_size,collate_fn)
         val_gen = self._create_test_data_gen(batch_size)
             
         #Process data
@@ -208,19 +214,24 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         if self._root is not None:
             root = os.path.join(self._root,'settings')
             create_folder(root)
-            with open(os.path.join(root,'model_param_num.txt'),"w") as fp:
-                fp.write("Required-gradient parameters number:{}".format(param_num(model)))
+            param_num_path = os.path.join(root,'model_param_num.txt')
+            if not os.path.exists(param_num_path):
+                with open(param_num_path,"w") as fp:
+                    fp.write("Required-gradient parameters number:{}".format(param_num(model)))
                 
             setting_path = os.path.join(root,"train_setting.json")
             model_config_path = os.path.join(root,"model_config.json")
             model_component_path = os.path.join(root,"model_component.txt")
             exec_config_path = os.path.join(root,"executor_config.json")
-            
-            write_json(self._settings,setting_path)
-            write_json(model.get_config(),model_config_path)
-            write_json(executor.get_config(),exec_config_path)
-            with open(model_component_path,"w") as fp:
-                fp.write(str(model))
+            if not os.path.exists(setting_path):
+                write_json(self._settings,setting_path)
+            if not os.path.exists(model_config_path):
+                write_json(model.get_config(),model_config_path)
+            if not os.path.exists(exec_config_path):
+                write_json(executor.get_config(),exec_config_path)
+            if not os.path.exists(model_component_path):
+                with open(model_component_path,"w") as fp:
+                    fp.write(str(model))
             
         #Execute worker
         worker.work()
@@ -238,9 +249,9 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         callbacks.add(test_callbacks)
         self._add_tensorboard_callback(self._test_writer,callbacks)
         if ann_vec_gff_converter is not None and region_table_path is not None:
-            self._add_signal_handler(ann_vec_gff_converter,region_table_path,
-                                     answer_gff_path,callbacks,prefix='test',
-                                     is_answer_double_strand=is_answer_double_strand)
+            self._add_signal_handler(executor.inference,ann_vec_gff_converter,
+                                     region_table_path,answer_gff_path,callbacks,
+                                     prefix='test',is_answer_double_strand=is_answer_double_strand)
 
         generator = self._create_test_data_gen(batch_size)
         test_seqs,test_ann_seqs = data
@@ -257,7 +268,8 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
             root = os.path.join(self._root,'settings')
             create_folder(root)
             path = os.path.join(root,"test_setting.json")
-            write_json(self._settings,path)
+            if not os.path.exists(path):
+                write_json(self._settings,path)
 
         worker.work()
         return worker
@@ -276,12 +288,19 @@ def _get_first_large_data(data,batch_size):
     return part_seqs,part_container
 
 def check_max_memory_usgae(saved_root,model,executor,train_data,val_data,batch_size):
+    create_folder(saved_root)
     train_data = _get_first_large_data(train_data,batch_size)
     val_data = _get_first_large_data(val_data,batch_size)
-    
     engine = SeqAnnEngine(BASIC_GENE_ANN_TYPES,is_verbose_visible=False)
     try:
+        torch.cuda.reset_max_memory_cached()
         engine.train(model,executor,train_data,val_data=val_data,batch_size=batch_size,epoch=1)
+        max_memory = torch.cuda.max_memory_reserved()
+        messenge = "Max memory allocated is {}\n".format(max_memory)
+        print(messenge)
+        path = os.path.join(saved_root,'max_memory.txt')
+        with open(path,"w") as fp:
+            fp.write(messenge)
     except RuntimeError:
         path = os.path.join(saved_root,'error.txt')
         with open(path,"a") as fp:

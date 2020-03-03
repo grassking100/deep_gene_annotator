@@ -1,27 +1,27 @@
-import warnings
 import numpy as np
 import torch
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
-with warnings.catch_warnings():
-    warnings.simplefilter("ignore")
-    from keras.preprocessing.sequence import pad_sequences
+from torch.nn.utils.rnn import pad_sequence
 
 class SeqDataset(Dataset):
-    def __init__(self,data=None):
-        self._ids = None
-        self._inputs = None
-        self._answers = None
-        self._lengths = None
-        self._length = None
-        self._seqs = None
-        self._strands = None
-        if data is not None:
-            self.data = data
- 
+    def __init__(self,data):
+        self._ids = data['ids']
+        self._inputs = data['inputs']
+        self._answers = data['answers']
+        self._lengths = data['lengths']
+        self._seqs = data['seqs']  
+        self._strands = data['strands']  
+        self._has_gene_statuses = data['has_gene_statuses']
+        self._num = len(self._ids)
+
     @property    
-    def strands(self):
-        return self._strands
+    def data(self):
+        data = {}
+        keys = ['ids','inputs','answers','lengths','seqs','strands','has_gene_statuses']
+        for key in keys:
+            data[key] = getattr(self,"_"+key)
+        return data
 
     @property    
     def ids(self):
@@ -42,99 +42,102 @@ class SeqDataset(Dataset):
     @property    
     def seqs(self):
         return self._seqs
-        
-    @property    
-    def data(self):
-        return self._data
     
-    @data.setter    
-    def data(self,data):
-        if isinstance(data,dict):
-            self._ids = data['ids']
-            self._inputs = data['inputs']
-            self._answers = data['answers']
-            self._lengths = data['lengths']
-            self._seqs = data['seqs']  
-            self._strands = data['strands']  
-        elif isinstance(data,list) or isinstance(data,tuple):
-            self._ids = data[0]
-            self._inputs = data[1]
-            self._answers = data[2]
-            self._lengths = data[3]
-            self._seqs = data[4]
-            self._strands = data[5]  
-        else:
-            raise Exception("Data should be dictionary or list")
-        self._length = len(self._ids)
-        self._data = data
+    @property    
+    def strands(self):
+        return self._strands
+
+    @property    
+    def has_gene_statuses(self):
+        return self._has_gene_statuses
 
     def __len__(self):
-        return self._length
+        return self._num
 
-    def __getitem__(self, idx):
-        id_,input_ = self._ids[idx],self._inputs[idx]
-        answer_,length = self._answers[idx],self._lengths[idx]
-        strands = self._strands[idx]
-        seqs_ = self._seqs[idx]
-        return id_, input_,answer_, length, seqs_, strands
+    def __getitem__(self, index):
+        returned = {}
+        for key,list_ in self.data.items():
+            returned[key] = list_[index]
+        return returned
 
-def augmentation_seqs(inputs,answers,lengths,augmentation_max):
+def augment_seqs(inputs,answers,lengths,has_gene_statuses,
+                 discard_ratio_min,discard_ratio_max,
+                 augment_up_max,augment_down_max):
     inputs_ = []
     answers_ = []
-    lengths_ = []
-    for input_,answer,length in zip(inputs,answers,lengths):
-        start_diff = np.random.randint(0,augmentation_max+1)
-        end_diff = np.random.randint(0,augmentation_max+1)
-        length = length - start_diff - end_diff
-        if length <= 0:
-            raise Exception("Got non-positive length")
-        input_ = input_[start_diff:length+start_diff]
-        answer = answer[start_diff:length+start_diff]
+    num = len(lengths)
+    start_diff_list = np.random.randint(0,augment_up_max+1,size=num)
+    end_diff_list = np.random.randint(0,augment_down_max+1,size=num)
+    discard_diff = discard_ratio_max-discard_ratio_min
+    discard_left_ratio_list = np.random.random_sample(size=num)*discard_diff+discard_ratio_min
+    discard_right_ratio_list = np.random.random_sample(size=num)*discard_diff+discard_ratio_min
+    new_lengths = []
+    for index,(input_,answer,length,has_gene_status) in enumerate(zip(inputs,answers,lengths,has_gene_statuses)):
+        if has_gene_status:
+            new_start_index = start_diff_list[index]
+            end_diff = end_diff_list[index]
+            new_end_index = length - end_diff
+        else:
+            discard_left_ratio = discard_left_ratio_list[index]
+            discard_right_ratio = discard_right_ratio_list[index]
+            new_start_index = int(np.round(length*discard_left_ratio))
+            new_length = length - new_start_index
+            new_end_index = int(np.round(new_length*(1-discard_right_ratio))) + new_start_index
+        input_ = input_[new_start_index:new_end_index]
+        answer = answer[new_start_index:new_end_index]
+        length = input_.shape[0]
         inputs_.append(input_)
         answers_.append(answer)
-        lengths_.append(length)
-    return inputs_,answers_,lengths_
+        new_lengths.append(length)
+    return inputs_,answers_,new_lengths
     
 def order(data,indice):
-    return np.array([data[index] for index in indice])
+    return [data[index] for index in indice]
     
-def seq_collate_wrapper(augmentation_max=None,padding_first=False):
-    augmentation_max = augmentation_max or 0
-    def seq_collate_fn(data):
-        transposed_data  = list(zip(*data))
-        ids, inputs, answers, lengths, seqs,strands = transposed_data
-        if not padding_first:
-            if augmentation_max > 0:
-                inputs,answers,lengths = augmentation_seqs(inputs,answers,lengths,augmentation_max)
-            inputs = pad_sequences(inputs,padding='post')
-            answers = pad_sequences(answers,padding='post')
-        length_order = np.flip(np.argsort(lengths),axis=0)
-        ids = order(ids,length_order)
-        inputs = order(inputs,length_order)
-        answers = order(answers,length_order)
-        lengths = order(lengths,length_order)
-        seqs = order(seqs,length_order)
-        inputs = torch.FloatTensor(inputs).transpose(1,2)
-        answers = torch.LongTensor(answers).transpose(1,2)
-        return ids, inputs, answers, lengths, seqs,strands
-    return seq_collate_fn
+def seq_collate_wrapper(discard_ratio_min=None,discard_ratio_max=None,augment_up_max=None,augment_down_max=None):
+    discard_ratio_min = discard_ratio_min or 0
+    discard_ratio_max = discard_ratio_max or 0
+    augment_up_max = augment_up_max or 0
+    augment_down_max = augment_down_max or 0
     
-class SeqLoader(DataLoader):
-    def __init__(self,dataset,augmentation_max=None,padding_first=False,*args,**kwargs):
-        if padding_first:
-            if augmentation_max is None or augmentation_max == 0:
-                dataset._inputs = pad_sequences(dataset._inputs,padding='post')
-                dataset._answers = pad_sequences(dataset._answers,padding='post')
-            else:
-                raise Exception("The augmentation_max should be zero or None when the padding_first is True")
-        if 'collate_fn' not in kwargs:
-            kwargs['collate_fn'] = seq_collate_wrapper(augmentation_max,padding_first)
-            
-        super().__init__(dataset,*args,**kwargs)        
-        self._length = int(np.ceil(len(dataset) /self.batch_size))
+    if discard_ratio_min < 0 or discard_ratio_min > 1:
+        raise Exception("Invalid discard_ratio_min value")
+    if discard_ratio_max < 0 or discard_ratio_max > 1:
+        raise Exception("Invalid discard_ratio_max value")
 
-    def __len__(self):
-        return self._length
+    def seq_collate_fn(data):
+        ids = [item['ids'] for item in data]
+        inputs = [item['inputs'] for item in data]
+        answers = [item['answers'] for item in data]
+        lengths = [item['lengths'] for item in data]
+        seqs = [item['seqs'] for item in data]
+        strands = [item['strands'] for item in data]
+        has_gene_statuses = [item['has_gene_statuses'] for item in data]
+        if (augment_up_max+augment_down_max+discard_ratio_min+discard_ratio_max) > 0:
+            result = augment_seqs(inputs,answers,lengths,has_gene_statuses,
+                                  discard_ratio_min,discard_ratio_max,
+                                  augment_up_max,augment_down_max)
+            inputs,answers,lengths = result
+        inputs = pad_sequence(inputs,batch_first=True)
+        answers = pad_sequence(answers,batch_first=True)
+        length_order = np.flip(np.argsort(lengths),axis=0).copy()
+        reordered_ids = order(ids,length_order)
+        reordered_inputs = inputs[length_order].transpose(1,2)
+        reordered_answers = answers[length_order].transpose(1,2)
+        reordered_lengths = order(lengths,length_order)
+        reordered_seqs = order(seqs,length_order)
+        reordered_strands = order(strands,length_order)
+        reordered_has_gene_statuses = order(has_gene_statuses,length_order)
+        data = {'ids':reordered_ids,
+                'inputs':reordered_inputs,
+                'answers':reordered_answers,
+                'lengths':reordered_lengths,
+                'seqs':reordered_seqs,
+                'strands':reordered_strands,
+                'has_gene_statuses':reordered_has_gene_statuses
+        }
+        return data
+    return seq_collate_fn
 
 class SeqGenerator:
     def __init__(self,*args,**kwargs):
@@ -142,5 +145,6 @@ class SeqGenerator:
         self.kwargs=kwargs
 
     def __call__(self,dataset):
-        return SeqLoader(dataset,*self.args,**self.kwargs) 
-    
+        dataset._inputs = [torch.FloatTensor(i) for i in dataset.inputs]
+        dataset._answers = [torch.LongTensor(a) for a in dataset.answers]
+        return DataLoader(dataset,*self.args,**self.kwargs) 

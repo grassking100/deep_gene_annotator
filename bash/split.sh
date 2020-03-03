@@ -8,14 +8,15 @@ usage(){
  echo "    -p  <string>  Path of processed folder"
  echo "    -o  <string>  Path of output folder"
  echo "  Options:"
- echo "    -s  <bool>    Split training and validation dataset with strand"
+ echo "    -d  <bool>    Split on double-strand data"
+ echo "    -s  <bool>    Each strand on training and validation dataset would be treat independently, if data be split is double-strand data then it would be ignore"
  echo "    -n  <int>     Fold number (exclude testing dataset), if it is not provided then it would decided by chromosome number"
  echo "    -h            Print help message and exit"
  echo "Example: bash split.sh -p /home/io/process -t /home/io/preprocess/id_convert.tsv -o ./data/2019_07_12 -g genome.fasta"
  echo ""
 }
 
-while getopts g:t:p:o:n:sh option
+while getopts g:t:p:o:n:sdh option
  do
   case "${option}"
   in
@@ -24,7 +25,8 @@ while getopts g:t:p:o:n:sh option
    p )processed_root=$OPTARG;;
    o )saved_root=$OPTARG;;
    n )fold_num=$OPTARG;;
-   s )split_with_strand=true;;
+   d )on_double_strand_data=true;;
+   s )treat_strand_independent=true;;
    h )usage; exit 1;;
    : )echo "Option $OPTARG requires an argument"
       usage; exit 1
@@ -59,10 +61,13 @@ if [ ! "$saved_root" ]; then
     exit 1
 fi
 
-if [ ! "$split_with_strand" ]; then
-    split_with_strand=false
+if [ ! "$treat_strand_independent" ]; then
+    treat_strand_independent=false
 fi
 
+if [ ! "$on_double_strand_data" ]; then
+    on_double_strand_data=false
+fi
 
 #Set parameter
 bash_root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
@@ -74,19 +79,22 @@ result_num=$(wc -l < $processed_root/result/selected_region.bed )
 
 if  (( $result_num > 0 )) ; then
 
-    output_region_fasta_path=$processed_root/result/selected_region.fasta
-    region_rename_table_path=$processed_root/result/region_rename_table.tsv
-    rna_bed_path=$processed_root/result/rna.bed
-    canonical_bed_path=$processed_root/result/canonical.bed
+    region_path=$processed_root/result/region_rename_table_both_strand.tsv
 
-    command="$preprocess_main_root/split.py --region_rename_table_path $region_rename_table_path --fai_path $genome_path.fai --saved_root $saved_root"
+    command="$preprocess_main_root/split.py --region_path $region_path --fai_path $genome_path.fai --saved_root $saved_root"
 
     if [ "$fold_num" ]; then
         command="${command} --fold_num $fold_num"
     fi
 
-    if $split_with_strand; then
-        command="${command} --split_with_strand"
+    if $treat_strand_independent && ! $on_double_strand_data ; then
+        command="${command} --treat_strand_independent"
+    fi
+
+    if $on_double_strand_data ; then
+        command="${command} --id_source new_id"
+    else
+        command="${command} --id_source old_id"
     fi
 
     echo $command
@@ -94,24 +102,46 @@ if  (( $result_num > 0 )) ; then
     
     echo "Name,Region number" > $saved_root/count.csv
     
+    if $on_double_strand_data ; then
+        output_region_fasta_path=$processed_root/result/selected_region_both_strand.fasta
+        rna_bed_path=$processed_root/result/rna_both_strand.bed
+        canonical_bed_path=$processed_root/result/canonical_both_strand.bed
+    else
+        output_region_fasta_path=$processed_root/result/selected_region.fasta
+        rna_bed_path=$processed_root/result/rna.bed
+        canonical_bed_path=$processed_root/result/canonical.bed
+    fi
+    
+    bed_path=$saved_root/bed
+    fasta_path=$saved_root/fasta
+    gff_path=$saved_root/gff
+    stats_path=$saved_root/stats
+    
+    mkdir -p $bed_path
+    mkdir -p $fasta_path
+    mkdir -p $gff_path
+    mkdir -p $stats_path
+    
     for path in $(find $saved_root/* -name '*.txt');
     do
         file_name=$(basename $path)
         file_name="${file_name%.*}"
-        python3 $preprocess_main_root/get_subbed.py -i $rna_bed_path -d $saved_root/$file_name.txt -o $saved_root/$file_name.bed --query_column chr
-
-        python3 $preprocess_main_root/get_subbed.py -i $canonical_bed_path -d $saved_root/$file_name.txt -o $saved_root/${file_name}_canonical.bed --query_column chr
-
-        python3 $preprocess_main_root/get_subfasta.py -i $output_region_fasta_path -d $saved_root/$file_name.txt -o $saved_root/$file_name.fasta
-
-        python3 $preprocess_main_root/bed2gff.py -i $saved_root/$file_name.bed -o $saved_root/$file_name.gff -t $id_convert_table_path
-
-        python3 $preprocess_main_root/bed2gff.py -i $saved_root/${file_name}_canonical.bed -o $saved_root/${file_name}_canonical.gff
-
-        samtools faidx $saved_root/$file_name.fasta
+        source_id_path=$saved_root/$file_name.txt
         
-        gene_num=$(wc -l < $saved_root/$file_name.txt ) 
-        echo "$file_name,$gene_num" >> $saved_root/count.csv
+        python3 $preprocess_main_root/get_subbed.py -i $rna_bed_path -d $source_id_path -o $bed_path/$file_name.bed --query_column chr
+
+        python3 $preprocess_main_root/get_subbed.py -i $canonical_bed_path -d $source_id_path -o $bed_path/${file_name}_canonical.bed --query_column chr
+
+        python3 $preprocess_main_root/get_subfasta.py -i $output_region_fasta_path -d $source_id_path -o $fasta_path/$file_name.fasta
+
+        python3 $preprocess_main_root/bed2gff.py -i $bed_path/$file_name.bed -o $gff_path/$file_name.gff -t $id_convert_table_path
+
+        python3 $preprocess_main_root/bed2gff.py -i $bed_path/${file_name}_canonical.bed -o $gff_path/${file_name}_canonical.gff
+
+        samtools faidx $fasta_path/$file_name.fasta
+        
+        gene_num=$(wc -l < $source_id_path ) 
+        echo "$file_name,$gene_num" >> $stats_path/count.csv
         
     done
 fi

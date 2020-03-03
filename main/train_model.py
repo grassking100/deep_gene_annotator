@@ -1,12 +1,10 @@
 import os
 import sys
 import torch
-import numpy as np
-import random
 from argparse import ArgumentParser
 sys.path.append(os.path.abspath(os.path.dirname(__file__)+"/.."))
-from sequence_annotation.utils.utils import create_folder, write_json,copy_path
-from sequence_annotation.utils.utils import BASIC_GENE_MAP,BASIC_GENE_ANN_TYPES,get_time_str
+from sequence_annotation.utils.utils import create_folder, write_json,copy_path,read_json
+from sequence_annotation.utils.utils import BASIC_GENE_MAP,BASIC_GENE_ANN_TYPES
 from sequence_annotation.process.seq_ann_engine import SeqAnnEngine,check_max_memory_usgae
 from sequence_annotation.process.convert_signal_to_gff import build_ann_vec_gff_converter
 from sequence_annotation.process.callback import Callbacks
@@ -15,6 +13,8 @@ from main.utils import BASIC_COLOR_SETTING,load_data,get_model_executor,backend_
 from main.test_model import test
 
 DEFAULT_BATCH_SIZE = 32
+DEFAULT_EPOCH = 100
+DEFAULT_PERIOD = 1
 
 def _get_max_target_seqs(seqs,ann_seqs,seq_fig_target=None):
     max_count = 0
@@ -27,8 +27,10 @@ def _get_max_target_seqs(seqs,ann_seqs,seq_fig_target=None):
     return seqs[selected_id],ann_seqs[selected_id]
 
 def train(saved_root,epoch,model,executor,train_data,val_data,
-          batch_size=None,augmentation_max=None,patient=None,
-          monitor_target=None,period=None,deterministic=False,other_callbacks=None):
+          batch_size=None,patient=None,monitor_target=None,period=None,
+          discard_ratio_min=None,discard_ratio_max=None,
+          augment_up_max=None,augment_down_max=None,
+          deterministic=False,other_callbacks=None):
     engine = SeqAnnEngine(BASIC_GENE_ANN_TYPES,shuffle_train_data=not deterministic)    
     engine.set_root(saved_root,with_test=False,with_train=True,with_val=True)
     other_callbacks = other_callbacks or Callbacks()
@@ -36,10 +38,14 @@ def train(saved_root,epoch,model,executor,train_data,val_data,
     seq_fig = engine.get_seq_fig(seq,ann_seq,color_settings=BASIC_COLOR_SETTING)
     other_callbacks.add(seq_fig)
     checkpoint_kwargs={'monitor_target':monitor_target,'patient':patient,'period':period}
+    seq_collate_fn_kwargs={'discard_ratio_min':discard_ratio_min,
+                           'discard_ratio_max':discard_ratio_max,
+                           'augment_up_max':augment_up_max,
+                           'augment_down_max':augment_down_max}
     worker = engine.train(model,executor,train_data,val_data=val_data,
                           batch_size=batch_size,epoch=epoch,
-                          augmentation_max=augmentation_max,
                           other_callbacks=other_callbacks,
+                          seq_collate_fn_kwargs=seq_collate_fn_kwargs,
                           checkpoint_kwargs=checkpoint_kwargs)
     return worker
 
@@ -78,8 +84,8 @@ def main(saved_root,model_config_path,executor_config_path,
             raise Exception("{} is not exist".format(path))
     
     temp_model,temp_executor = get_model_executor(model_config_path,executor_config_path,
-                                                       frozen_names=frozen_names,
-                                                       save_distribution=save_distribution)
+                                                  frozen_names=frozen_names,
+                                                  save_distribution=save_distribution)
     
     print("Check memory")
     check_max_memory_usgae(saved_root,temp_model,temp_executor,train_data,
@@ -90,8 +96,8 @@ def main(saved_root,model_config_path,executor_config_path,
     print("Memory is available")
     
     model,executor = get_model_executor(model_config_path,executor_config_path,
-                                         frozen_names=frozen_names,
-                                         save_distribution=save_distribution)
+                                        frozen_names=frozen_names,
+                                        save_distribution=save_distribution)
     
     try:
         train(saved_root,epoch,model,executor,train_data,val_data,
@@ -124,13 +130,16 @@ if __name__ == '__main__':
                         "build by SeqAnnBuilder",required=True)
     parser.add_argument("-e","--executor_config_path",help="Path of Executor config",required=True)
     parser.add_argument("-s","--saved_root",help="Root to save file",required=True)
-    parser.add_argument("--augmentation_max",type=int,default=0)
-    parser.add_argument("--epoch",type=int,default=100)
     parser.add_argument("-b","--batch_size",type=int,default=DEFAULT_BATCH_SIZE)
-    parser.add_argument("--period",default=5,type=int)
-    parser.add_argument("--patient",help="Dafault value is 5. If lower(patient) "
-                        "is 'none', then model won't be stopped",
-                        type=lambda x: int(x) if x.lower() != 'none' else None,default=5)
+    parser.add_argument("--augment_up_max",type=int,default=0)
+    parser.add_argument("--augment_down_max",type=int,default=0)
+    parser.add_argument("--discard_ratio_min",type=float,default=0)
+    parser.add_argument("--discard_ratio_max",type=float,default=0)
+    parser.add_argument("-n","--epoch",type=int,default=DEFAULT_EPOCH)
+    parser.add_argument("-p","--period",default=DEFAULT_PERIOD,type=int)
+    parser.add_argument("--patient",help="The epoch to stop traininig when monitor_target is not improving."\
+                        "Dafault value is None, the model won't be stopped by early stopping",
+                        type=int,default=None)
     parser.add_argument("-t","--train_data_path",help="Path of training data",required=True)
     parser.add_argument("-v","--val_data_path",help="Path of validation data",required=True)
     parser.add_argument("-x","--test_data_path",help="Path of testing data")
@@ -151,11 +160,19 @@ if __name__ == '__main__':
                 
     #Create folder
     create_folder(args.saved_root)
-    copy_path(args.saved_root,sys.argv[0])
     #Save setting
     setting_path = os.path.join(args.saved_root,"main_setting.json")
+    
     setting = vars(args)
-    write_json(setting,setting_path)
+    if os.path.exists(setting_path):
+        existed = read_json(setting_path)
+        setting_ = dict(setting)
+        del existed['gpu_id']
+        del setting_['gpu_id']
+        if setting_ != existed:
+            raise Exception("The {} is not same as previous one".format(setting_path))
+    else:
+        write_json(setting,setting_path)
 
     kwargs = dict(setting)
     del kwargs['saved_root']

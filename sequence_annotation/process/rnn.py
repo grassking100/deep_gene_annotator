@@ -1,5 +1,4 @@
 from abc import abstractmethod
-import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -7,8 +6,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from .customized_layer import BasicModel
 from .cnn import Conv1d
 from .utils import xavier_uniform_extend_
-from torch.nn.init import zeros_,constant_,orthogonal_
-from torch.nn.init import _calculate_fan_in_and_fan_out
+from torch.nn.init import zeros_
 
 def separate_xav_rnn_init(rnn,mode=None,chunk_size=None):
     chunk_size = chunk_size or 3
@@ -161,7 +159,6 @@ class LSTM(_RNN):
 class ProjectedRNN(BasicModel):
     def __init__(self,in_channels,out_channels,
                  customized_cnn_init=None,customized_rnn_init=None,
-                 norm_type=None,norm_mode=None,
                  name=None,output_act=None,is_gru=True,**kwargs):
         super().__init__()
         self.output_act = output_act
@@ -177,9 +174,6 @@ class ProjectedRNN(BasicModel):
             rnn_class = LSTM
         self.rnn = rnn_class(in_channels=self.in_channels,
                              customized_init=customized_rnn_init,**kwargs)
-        self.norm_type = norm_type
-        if self.norm_type is not None:
-            self.norm = self.norm_type(in_channel[self.norm_mode])
         self.project = Conv1d(in_channels=self.rnn.out_channels,
                               out_channels=self.out_channels,kernel_size=1,
                               customized_init=customized_cnn_init)
@@ -189,7 +183,6 @@ class ProjectedRNN(BasicModel):
         config = super().get_config()
         config['rnn'] = self.rnn.get_config()
         config['project'] = self.project.get_config()
-        config['norm_type'] = self.norm_type
         config['name'] = self.name
         config['output_act'] = self.output_act
         return config
@@ -197,8 +190,6 @@ class ProjectedRNN(BasicModel):
     def forward(self,x,lengths,return_intermediate=False,**kwargs):
         post_rnn = self.rnn(x,lengths)
         self.update_distribution(post_rnn,key=self.name)
-        if self.norm_type is not None:
-            post_rnn = self.norm(post_rnn,lengths)
         if self.rnn.dropout > 0 and self.training:
             post_rnn = F.dropout(post_rnn,self.rnn.dropout,self.training)
         result,lengths,_,_ = self.project(post_rnn,lengths=lengths)

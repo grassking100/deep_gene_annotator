@@ -57,8 +57,10 @@ def create_folder(path):
             raise
 
 def copy_path(root,path):
-    command = 'cp -t {} {}'.format(root,path)
-    os.system(command)
+    target_path = os.path.join(root,path.split('/')[-1])
+    if not os.path.exists(target_path):
+        command = 'cp -t {} {}'.format(root,path)
+        os.system(command)
 
 def get_protected_attrs_names(object_):
     class_name = object_.__class__.__name__
