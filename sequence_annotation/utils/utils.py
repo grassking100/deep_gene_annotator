@@ -5,6 +5,7 @@ import math
 import json
 import numpy as np
 import pandas as pd
+pd.set_option('mode.chained_assignment', 'raise')
 import datetime,pytz
 from Bio import SeqIO
 from pathlib import Path
@@ -90,7 +91,10 @@ def get_subdict(ids,data):
     return dict(zip(ids,[data[id_] for id_ in ids]))
 
 def read_bed(path,convert_to_one_base=True):
-    #Read bed data into one-based DataFrame format
+    """
+    Read bed data and convert from interbase coordinate system（ICS）to base coordinate system(BCS)
+    For more information, please visit https://tidyomics.com/blog/2018/12/09/2018-12-09-the-devil-0-and-1-coordinate-system-in-genomics
+    """
     try:
         bed = pd.read_csv(path,sep='\t',header=None,dtype={0:str})
     except:
@@ -121,6 +125,10 @@ def read_bed(path,convert_to_one_base=True):
     return df
 
 def write_bed(bed,path,from_one_base=True):
+    """
+    Convert bed data from base coordinate system(BCS) to interbase coordinate system（ICS) and write to file
+    For more information, please visit https://tidyomics.com/blog/2018/12/09/2018-12-09-the-devil-0-and-1-coordinate-system-in-genomics
+    """
     columns = []
     for name in BED_COLUMNS:
         if name in bed.columns:
@@ -153,7 +161,7 @@ def get_gff_item_with_attribute(item,split_attr=None):
     attribute_dict = {}
     for attribute in attributes:
         lhs,rhs = attribute.split('=')
-        lhs = lhs.lower()
+        lhs = lhs.lower().replace('-','_')
         if lhs in split_attr:
             rhs = rhs.split(',')
         attribute_dict[lhs] = rhs
@@ -167,32 +175,41 @@ def get_gff_with_attribute(gff,split_attr=None):
     for item in df_dict:
         data += [get_gff_item_with_attribute(item,split_attr)]
     gff = pd.DataFrame.from_dict(data)
+    gff = gff.where(pd.notnull(gff), None)
     return gff
 
-def get_gff_with_update_attribute(gff):
+def get_gff_with_updated_attribute(gff):
     gff = gff.copy()
-    attribute = None
-    att_columns = [c for c in gff.columns if c not in GFF_COLUMNS]
-    for column in att_columns:
-        if attribute is None:
-            attribute = column.capitalize() + "=" + gff[column].astype(str)
+    columns = [c for c in gff.columns if c not in GFF_COLUMNS]
+    attributes = []
+    for column in columns:
+        if column.lower()=='id':
+            key='ID'
         else:
-            attribute += ";"+column.capitalize() + "=" + gff[column].astype(str)
-    gff['attribute'] = attribute
+            key = column.capitalize()
+        values = gff[column]
+        attribute = values.apply(lambda value: "{}={}".format(key,value))
+        attributes += [attribute]
+    if len(attributes)>0:
+        attribute=attributes[0]
+        for attr in attributes[1:]:
+            attribute = attribute+";"+attr
+        gff['attribute'] = attribute.replace("(;\w*=(None|\.))|(^\w*=(None|\.);)|(^\w*=(None|\.)$)",'',regex=True)
     return gff
     
 def dupliacte_gff_by_parent(gff):
     if 'parent' not in gff.columns:
         raise Exception("GFF file lacks 'parent' column")
 
-    if not isinstance([p for p in gff['parent'] if p==p][0],list):
-        raise Exception("GFF's 'parent' data type should be list")
+    valid_parents = [p for p in gff['parent'] if p is not None]
+    if len(valid_parents)>0:
+        if not isinstance(valid_parents[0],list):
+            raise Exception("GFF's 'parent' data type should be list")
 
     preprocessed = []
     for item in gff.to_dict('record'):
         parents = item['parent']
-        #If parent is not NaN
-        if parents == parents:
+        if parents is not None:
             for parent in parents:
                 item_ = dict(item)
                 item_['parent'] = str(parent)

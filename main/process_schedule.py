@@ -11,14 +11,14 @@ if __name__ == '__main__':
     parser.add_argument("-i","--cmd_table_path",required=True)
     parser.add_argument("-o","--output_path",required=True,
                         help="Path of saved result table (in tsv format)")
-    parser.add_argument("-g","--gpu_ids",type=lambda x: int(x).split(','),
+    parser.add_argument("-g","--gpu_ids",type=lambda x: [int(item) for item in x.split(',')],
                         default=list(range(torch.cuda.device_count())),help="GPUs to used")
     
     args = parser.parse_args()
     
     device_count = torch.cuda.device_count()
-    if device_count != len(args.gpu_ids):
-        raise Exception("Inconsist GPU number between {} and {}".format(device_count,len(args.gpu_ids)))
+    if device_count < len(args.gpu_ids):
+        raise Exception("Inconsist between max device number {} and required number {}".format(device_count,len(args.gpu_ids)))
     
     if os.path.exists(args.output_path):
         raise Exception("The output path, {}, is already exist".format(args.output_path))

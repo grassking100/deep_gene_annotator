@@ -50,7 +50,8 @@ def main(bed_path,use_strand,coord_id_as_old_id,id_prefix,saved_table_path,renam
     id_convert_table = get_coordinate_id_table(bed,query_columns,id_prefix)
     renamed_table = get_rename_table(bed,id_convert_table,query_columns,coord_id_as_old_id)
     bed['id'] = bed[query_columns].apply(lambda x: '_'.join([str(item) for item in x]), axis=1)
-    renamed_bed = convert_bed_id(bed,id_convert_table,'id')
+    bed = bed[query_columns+['score','id']]
+    renamed_bed = convert_bed_id(bed,id_convert_table,'id').drop_duplicates()
     renamed_table.to_csv(saved_table_path,index=None,sep='\t')
     write_bed(renamed_bed,renamed_bed_path)
 

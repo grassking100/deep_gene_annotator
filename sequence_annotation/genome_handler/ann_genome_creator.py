@@ -1,6 +1,6 @@
 import warnings
 from .seq_container import AnnSeqContainer
-from .sequence import AnnSequence
+from .sequence import AnnSequence,STRANDS
 
 class AnnChromCreator:
     """Mapping annotated sequences belong to specific chromosome on the chromosome"""
@@ -23,7 +23,7 @@ class AnnChromCreator:
         """Get initialized chromosome"""
         chrom = AnnSeqContainer()
         chrom.ANN_TYPES = ann_types
-        for strand in ['plus','minus']:
+        for strand in STRANDS:
             ann_seq = AnnSequence()
             ann_seq.length = length
             ann_seq.chromosome_id = str(chrom_id)

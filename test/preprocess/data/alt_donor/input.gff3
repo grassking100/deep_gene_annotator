@@ -1,0 +1,13 @@
+##gff-version 3
+region_0333	.	gene	501	1200	4	+	.	ID=AT2G26870
+region_0333	.	mRNA	501	1200	4	+	.	ID=AT2G26870.1;Parent=AT2G26870
+region_0333	.	exon	501	600	4	+	.	Parent=AT2G26870.1
+region_0333	.	exon	701	800	4	+	.	Parent=AT2G26870.1
+region_0333	.	exon	901	1000	4	+	.	Parent=AT2G26870.1
+region_0333	.	exon	1101	1200	4	+	.	Parent=AT2G26870.1
+###
+region_0333	.	mRNA	501	1200	4	+	.	ID=AT2G26870.2;Parent=AT2G26870
+region_0333	.	exon	501	650	4	+	.	Parent=AT2G26870.2
+region_0333	.	exon	701	800	4	+	.	Parent=AT2G26870.2
+region_0333	.	exon	901	1000	4	+	.	Parent=AT2G26870.2
+region_0333	.	exon	1101	1200	4	+	.	Parent=AT2G26870.2

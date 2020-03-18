@@ -1,3 +1,3 @@
-fasta_file=$1
-fasta_file=${fasta_file%.*}
-sed  '/>/ s/^>Chr/>/g' "${fasta_file}.fasta" > "${fasta_file}_rename.fasta"
+input_file=$1
+input_file=${input_file%.*}
+sed  '/>/ s/^>Chr/>/g' "${input_file}.fasta"

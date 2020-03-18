@@ -4,15 +4,20 @@ import pandas as pd
 import numpy as np
 from argparse import ArgumentParser
 from  matplotlib import pyplot as plt
-sys.path.append(os.path.dirname(os.path.abspath(__file__+"/../..")))
-from sequence_annotation.utils.utils import create_folder, write_gff, write_json, read_gff
-from sequence_annotation.utils.utils import read_region_table,BASIC_GENE_ANN_TYPES,get_gff_with_attribute
+sys.path.append(os.path.abspath(__file__+"/../.."))
+from sequence_annotation.utils.utils import create_folder, write_gff, write_json, read_gff,get_gff_with_updated_attribute
+from sequence_annotation.utils.utils import read_region_table,BASIC_GENE_ANN_TYPES,get_gff_with_attribute,get_gff_with_feature_coord
 from sequence_annotation.utils.site_analysis import site_abs_diff
-from sequence_annotation.genome_handler.sequence import AnnSequence 
+from sequence_annotation.genome_handler.sequence import AnnSequence, PLUS, MINUS
 from sequence_annotation.genome_handler.ann_seq_processor import get_background,seq2vecs
-from sequence_annotation.preprocess.utils import EXON_TYPES, GENE_TYPES
-from sequence_annotation.preprocess.utils import get_gff_with_feature_coord,get_gff_with_intron
+from sequence_annotation.preprocess.utils import EXON_TYPES, RNA_TYPES,INTRON_TYPES,GENE_TYPES
+from sequence_annotation.preprocess.utils import get_gff_with_intron
+from sequence_annotation.preprocess.get_id_table import get_id_table,convert_id_table_to_dict
 from sequence_annotation.process.metric import calculate_metric,contagion_matrix,categorical_metric
+
+pd.set_option('mode.chained_assignment', 'raise')
+
+STRAND_CONVERT = {'+':PLUS,'-':MINUS}
 
 def _normalize_matrix(matrix):
     normed_matrix = []
@@ -20,55 +25,53 @@ def _normalize_matrix(matrix):
         normed_matrix.append([item/sum(row) for item in row])
     return normed_matrix
 
-def _create_ann_seq(chrom,length,strand):
-    ann_seq = AnnSequence(['gene']+BASIC_GENE_ANN_TYPES,length)
-    ann_seq.chromosome_id = chrom
-    ann_seq.strand = strand
-    ann_seq.id = '{}_{}'.format(chrom,strand)
-    return ann_seq
+def _get_group_dict_by_transcript(gff,group_types):
+    group = {}
+    transcript_ids = gff[gff['feature'].isin(RNA_TYPES)]['id']
+    for transcript_id in transcript_ids:
+        group_ = gff[(gff['feature'].isin(group_types)) & (gff['parent']==transcript_id)]
+        group[transcript_id] = group_
+    return group
 
-def _get_group_dict(gff,group_types):
+def _get_transcript_group_dict_by_gene(gff):
     group = {}
     gene_ids = gff[gff['feature'].isin(GENE_TYPES)]['id']
     for gene_id in gene_ids:
-        transcript_ids = list(gff[gff['parent']==gene_id]['id'])
-        if len(transcript_ids) != 1:
-            raise Exception("{} has multiple transcripts {}".format(gene_id,transcript_ids))
-        transcript_id = transcript_ids[0]
-        group_ = gff[(gff['feature'].isin(group_types)) & (gff['parent']==transcript_id)].sort_values('start')
+        group_ = gff[(gff['feature'].isin(RNA_TYPES)) & (gff['parent']==gene_id)]
         group[gene_id] = group_
     return group
 
-def _set_gene_intron_status(gff):
-    group = {}
-    gene_ids = set(list(gff[gff['feature'].isin(GENE_TYPES)]['id']))
-    for gene_id in gene_ids:
-        transcript_ids = gff[gff['parent']==gene_id]['id']
-        if len(transcript_ids) != 1:
-            raise Exception()
-        transcript_id = list(transcript_ids)[0]
-        group_ = gff[(gff['feature']=='intron') & (gff['parent']==transcript_id)].sort_values('start')
-        gff.loc[gff['id']==gene_id,'has_intron'] = len(group_)>0
-    return group
-    
-def _set_gene_internal_exon_status(gff):
-    exon_group_dict = _get_group_dict(gff,EXON_TYPES)
-    for gene_id,group in exon_group_dict.items():
-        if len(group)>=3:
-            ids = list(group.sort_values('start')['feature_coord'][1:-1])
-            gff.loc[gff['feature_coord'].isin(ids),'is_internal_exon'] = True
+def _set_has_intron_status(gff):
+    transcript_ids = set(gff[gff['feature'].isin(RNA_TYPES)]['id'])
+    for transcript_id in transcript_ids:
+        group_ = gff[(gff['feature'].isin(INTRON_TYPES)) & (gff['parent']==transcript_id)]
+        gff.loc[gff['id']==transcript_id,'has_intron'] = len(group_)>0
 
-def _compare_block(predict,answer,types):
-    predict_feature_coord = set(predict[predict['feature'].isin(types)]['feature_coord'])
-    answer_feature_coord = set(answer[answer['feature'].isin(types)]['feature_coord'])
-    TP_ids = answer_feature_coord.intersection(predict_feature_coord)
+def _set_is_internal_exon_status(gff):
+    exon_group_dict = _get_group_dict_by_transcript(gff,EXON_TYPES)
+    for transcript_id,exon_group in exon_group_dict.items():
+        transcript = gff[gff['id']==transcript_id].to_dict('record')[0]
+        index = exon_group[(exon_group['start']!=transcript['start']) & (exon_group['end']!=transcript['end'])].index
+        gff.loc[index,'is_internal_exon'] = True
+
+def _compare_exon_intron_block(predict,answer,predict_id_convert,answer_id_convert):
+    types = EXON_TYPES+INTRON_TYPES
+    predict_exons = predict[predict['feature'].isin(types)]
+    answer_exons = answer[answer['feature'].isin(types)]
+    predict_feature_coord = set(predict_exons['feature_coord'])
+    answer_feature_coord = set(answer_exons['feature_coord'])
+    TP_ids = list(answer_feature_coord.intersection(predict_feature_coord))
+    predict_groups = predict_exons.groupby('feature_coord')
+    answer_groups = answer_exons.groupby('feature_coord')
     for id_ in TP_ids:
-        predict_gene = list(predict[predict['feature_coord']==id_]['belong_gene'])[0]
-        answer_gene = list(answer[answer['feature_coord']==id_]['belong_gene'])[0]
-        predict.loc[predict['feature_coord']==id_,'match'] = True
-        answer.loc[answer['feature_coord']==id_,'match'] = True
-        predict.loc[predict['feature_coord']==id_,'partner_gene'] = answer_gene
-        answer.loc[answer['feature_coord']==id_,'partner_gene'] = predict_gene
+        predict_group = predict_groups.get_group(id_)
+        answer_group = answer_groups.get_group(id_)
+        answer_partner_transcript = list(predict.loc[predict_group.index,'parent'])[0]
+        predict_partner_transcript = list(answer.loc[answer_group.index,'parent'])[0]
+        predict.loc[predict_group.index,'match'] = True
+        answer.loc[answer_group.index,'match'] = True
+        answer.loc[answer_group.index,'partner_gene'] = predict_id_convert[answer_partner_transcript]
+        predict.loc[predict_group.index,'partner_gene'] = answer_id_convert[predict_partner_transcript]
 
 def _compare_internal_exon(predict,answer):
     predict_feature_coord = set(predict[predict['is_internal_exon']]['feature_coord'])
@@ -77,30 +80,71 @@ def _compare_internal_exon(predict,answer):
     predict.loc[predict['feature_coord'].isin(TP_ids),'internal_exon_match'] = True
     answer.loc[answer['feature_coord'].isin(TP_ids),'internal_exon_match'] = True
     
-def _match_chain_block(subject,partner,types,set_match_key):
-    subject_group_dict = _get_group_dict(subject,types)
-    partner_group_dict = _get_group_dict(partner,types)
-    for gene_id,subject_group in subject_group_dict.items():
-        if len(subject_group)>0:
-            partner_genes = list(subject_group['partner_gene'])
-            partner_gene = partner_genes[0]
-            if len(set(partner_genes)) == 1 and str(partner_gene)!='nan':
-                partner_group = partner_group_dict[partner_gene]
-                if set(partner_group['feature_coord'])==set(subject_group['feature_coord']):
-                    subject.loc[subject['id']==gene_id,set_match_key] = True
-    
-def _compare_chain_block(predict,answer,types,set_match_key):
-    _match_chain_block(predict,answer,types,set_match_key)
-    _match_chain_block(answer,predict,types,set_match_key)
+def _compare_gene(predict,answer):
+    predict_transcript_group_dict = _get_transcript_group_dict_by_gene(predict)
+    answer_transcript_group_dict = _get_transcript_group_dict_by_gene(answer)
+    for predict_gene_id,predict_transcript_group in predict_transcript_group_dict.items():
+        answer_gene_ids = set(predict_transcript_group['partner_gene'])
+        answer_gene_ids = set(filter(lambda x:x!=None,answer_gene_ids))
+        if len(answer_gene_ids)==1:
+            answer_gene_id = list(answer_gene_ids)[0]
+            answer_transcript_group = answer_transcript_group_dict[answer_gene_id]
+            if predict_transcript_group['match'].all() and answer_transcript_group['match'].all():
+                predict.loc[predict['id']==predict_gene_id,'match'] = True
+                answer.loc[answer['id']==answer_gene_id,'match'] = True
 
-def _performance_calculate(TP,FP,FN,answer_num,predict_num,type_name,round_value=None):
+def _compare_chain_block(predict,answer,types,set_matched_key,predict_id_convert,answer_id_convert):
+    predict_group_dict = _get_group_dict_by_transcript(predict,types)
+    answer_group_dict = _get_group_dict_by_transcript(answer,types)
+    for predict_transcript_id,predict_group in predict_group_dict.items():
+        if len(predict_group)>0:
+            answer_gene_ids = set(predict_group['partner_gene'])
+            answer_gene_ids = set(filter(lambda x:x!=None,answer_gene_ids))
+            if len(answer_gene_ids)==1:
+                answer_gene_id = list(answer_gene_ids)[0]
+                predict_index = predict[predict['id']==predict_transcript_id].index
+                answer_transcript_ids = answer[answer['parent'] == answer_gene_id]['id']
+                for answer_transcript_id in answer_transcript_ids:
+                    answer_group = answer_group_dict[answer_transcript_id]
+                    #If all of its block is same, then it is matched
+                    if set(predict_group['feature_coord'])==set(answer_group['feature_coord']):
+                        answer_index = answer[answer['id']==answer_transcript_id].index
+                        predict.loc[predict_index,set_matched_key] = True
+                        answer.loc[answer_index,set_matched_key] = True
+                        predict.loc[predict_index,'partner_gene'] = answer_id_convert[answer_transcript_id]
+                        answer.loc[answer_index,'partner_gene'] = predict_id_convert[predict_transcript_id]
+
+def _get_error(id_name,type_name,predict,answer,FP_ids,FN_ids):
+    FP_data = predict[predict[id_name].isin(FP_ids)].copy()
+    FN_data = answer[answer[id_name].isin(FN_ids)].copy()
+    FP_data['feature']='wrong_{}'.format(type_name)
+    FN_data['feature']='missing_{}'.format(type_name)
+    error_df = pd.concat([FP_data,FN_data],sort=True)
+    return error_df
+
+def _get_status(predict,answer,id_name,query_key=None):
+    query_key = query_key or 'match'
+    predict_ids = set(predict[id_name])
+    answer_ids = set(answer[id_name])
+    TP_predict_ids = set(predict[predict[query_key]][id_name])
+    TP_answer_ids = set(answer[answer[query_key]][id_name])
+    FP_ids = predict_ids-TP_predict_ids
+    FN_ids = answer_ids-TP_answer_ids
+    ids = {'predict_ids':predict_ids,
+           'answer_ids':answer_ids,
+           'TP_predict_ids':TP_predict_ids,
+           'TP_answer_ids':TP_answer_ids,
+           'FP_ids':FP_ids,
+           'FN_ids':FN_ids}
+    return ids
+
+def _calculate(TP,FP,FN,answer_num,predict_num,type_name,round_value=None):
     if (TP+FN)!=answer_num or (TP+FP)!=predict_num:
-        print(type_name,TP,FN,FP,answer_num,predict_num)
         raise Exception("Wrong number in {}".format(type_name))
         
-    recall = 0
-    precision = 0
-    F1=0
+    recall = float('nan')
+    precision = float('nan')
+    F1=float('nan')
     if answer_num > 0:
         recall = TP/(TP+FN)
     if predict_num>0:
@@ -122,109 +166,100 @@ def _performance_calculate(TP,FP,FN,answer_num,predict_num,type_name,round_value
                 status[key] = round(value,round_value)
     return status
 
-def _block_performance(predict,answer,type_name,types,match_key=None,round_value=None):
-    id_name = 'feature_coord'
-    match_key = match_key or 'match'
-    predict_data = predict[predict['feature'].isin(types)]
-    answer_data = answer[answer['feature'].isin(types)]
-    predict_ids = set(predict_data[id_name])
-    answer_ids = set(answer_data[id_name])
-    TP_predeict_ids = set(predict_data[predict_data[match_key]][id_name])
-    TP_answer_ids = set(answer_data[answer_data[match_key]][id_name])
-    if len(TP_predeict_ids) != len(TP_answer_ids):
-        pc = set(predict_data[predict_data[match_key]]['chr'])
-        ac = set(answer_data[answer_data[match_key]]['chr'])
-        print(pc-ac,ac-pc)
-        raise Exception("Inconsist number between {} and {} at {}".format(len(TP_predeict_ids),
-                                                                          len(TP_answer_ids),
-                                                                          type_name))
-    FP_ids = predict_ids-TP_predeict_ids
-    FN_ids = answer_ids-TP_answer_ids
-    FP_data = predict_data[predict_data[id_name].isin(FP_ids)]
-    FN_data = answer_data[answer_data[id_name].isin(FN_ids)]
+def _get_performance(type_name,predict_ids,answer_ids,TP_predict_ids,TP_answer_ids,
+                     FP_ids,FN_ids,round_value=None):
+
+    if len(TP_predict_ids) != len(TP_answer_ids):
+        raise Exception("Inconsist number at {}, got {} and {}".format(type_name,
+                                                                       TP_predict_ids,
+                                                                       TP_answer_ids))
     predict_num = len(predict_ids)
     answer_num = len(answer_ids)
-    TP = len(TP_predeict_ids)
+    TP = len(TP_predict_ids)
     FP = len(FP_ids)
     FN = len(FN_ids)
-    FP_data = FP_data.assign(error_status= 'wrong {}'.format(type_name))
-    FN_data = FN_data.assign(error_status= 'missing {}'.format(type_name))
-    error_df = pd.concat([FP_data,FN_data],sort=True)
-    if len(error_df) > 0:
-        attributes = error_df[['attribute','error_status']].apply(lambda x: "{};Error={}".format(*x),
-                                                                  axis=1)
-        error_df['attribute'] = attributes
-    status = _performance_calculate(TP,FP,FN,answer_num,predict_num,
-                                    type_name,round_value=round_value)
-    return status,error_df
+    status = _calculate(TP,FP,FN,answer_num,predict_num,type_name,round_value=round_value)
+    return status
 
 def block_performance(predict,answer,round_value=None):
-    predict = get_gff_with_attribute(predict)
-    answer = get_gff_with_attribute(answer)
-    predict = get_gff_with_feature_coord(predict)
-    answer = get_gff_with_feature_coord(answer)
-    predict = predict[~predict['feature_coord'].duplicated(keep='first')]    
-    answer = answer[~answer['feature_coord'].duplicated(keep='first')]
-    
+    if 'feature_coord' not in predict.columns:
+        raise Exception("the predict file lacks 'feature_coord' column")
+    if 'feature_coord' not in answer.columns:
+        raise Exception("the answer file lacks 'feature_coord' column")
+
     for gff in [answer,predict]:
-        gff['belong_gene']=None
+        gff['partner_gene']=None
         gff['match']=False
         gff['has_intron']=False
         gff['intron_chain_match']=False
         gff['is_internal_exon']=False
         gff['internal_exon_match']=False
-        _set_gene_internal_exon_status(gff)
-        _set_gene_intron_status(gff)
-
-        parent_dict = dict(zip(gff['id'],gff['parent']))
-        parents = []
-        is_exon_intron = gff['feature'].isin(EXON_TYPES+['intron'])
-        for parent in gff[is_exon_intron]['parent']:
-            parents.append(parent_dict[parent])
-        gff.loc[is_exon_intron,'belong_gene'] = parents
+        _set_is_internal_exon_status(gff)
+        _set_has_intron_status(gff)
         
-    _compare_block(predict,answer,EXON_TYPES+['intron'])
+    predict_id_convert = convert_id_table_to_dict(get_id_table(predict))
+    answer_id_convert = convert_id_table_to_dict(get_id_table(answer))
+        
+    _compare_exon_intron_block(predict,answer,predict_id_convert,answer_id_convert)
     _compare_internal_exon(predict,answer)
-    _compare_chain_block(predict,answer,EXON_TYPES,'match')
-    _compare_chain_block(predict,answer,['intron'],'intron_chain_match')
+    _compare_chain_block(predict,answer,EXON_TYPES,'match',predict_id_convert,answer_id_convert)
+    _compare_chain_block(predict,answer,INTRON_TYPES,'intron_chain_match',predict_id_convert,answer_id_convert)
+    #Get introns
+    predict_introns = predict[predict['feature'].isin(INTRON_TYPES)]
+    answer_introns = answer[answer['feature'].isin(INTRON_TYPES)]
+    #Get exons
+    predict_exons = predict[predict['feature'].isin(EXON_TYPES)]
+    answer_exons = answer[answer['feature'].isin(EXON_TYPES)]
+    #Get transcripts
+    predict_transcripts = predict[predict['feature'].isin(RNA_TYPES)]
 
-    intron_status,intron_error_df = _block_performance(predict,answer,'intron',
-                                                       ['intron'],round_value=round_value)
-
-    exon_status,exon_error_df = _block_performance(predict,answer,'exon',EXON_TYPES,
-                                                   round_value=round_value)
-
-    gene_status,gene_error_df = _block_performance(predict,answer,'gene',GENE_TYPES,
-                                                   round_value=round_value)
-
-    intron_chain_performance = _block_performance(predict[predict['has_intron']],
-                                                  answer[answer['has_intron']],
-                                                  'intron_chain',GENE_TYPES,
-                                                  match_key='intron_chain_match',
-                                                  round_value=round_value)
+    answer_transcripts = answer[answer['feature'].isin(RNA_TYPES)]
+    #Get intron chains
+    predict_intron_chains = predict[predict['feature'].isin(RNA_TYPES) & (predict['has_intron'])]
+    answer_intron_chains = answer[answer['feature'].isin(RNA_TYPES) & (answer['has_intron'])]
+    #Get internal exons
+    predict_internal_exons = predict[predict['feature'].isin(EXON_TYPES) & (predict['is_internal_exon'])]
+    answer_internal_exons = answer[answer['feature'].isin(EXON_TYPES) & (answer['is_internal_exon'])]
     
-    internal_exon_performance = _block_performance(predict[predict['is_internal_exon']],
-                                                   answer[answer['is_internal_exon']],
-                                                   'internal_exon',EXON_TYPES,
-                                                   match_key='internal_exon_match',
-                                                   round_value=round_value)
-    
-    intron_chain_status,intron_chain_error_df = intron_chain_performance
-    internal_exon_status,internal_exon_error_df = internal_exon_performance
-    status_list = [intron_status,exon_status,gene_status,intron_chain_status,internal_exon_status]
-    
-    status = {}
-    for status_ in status_list:
-        status.update(status_)
-        
-    error_df = [intron_error_df,exon_error_df,gene_error_df,
-                intron_chain_error_df,internal_exon_error_df]
-    error_df = pd.concat(error_df)
-    return status,error_df
+    #Get classification id status
+    intron_status = _get_status(predict_introns,answer_introns,'feature_coord')
+    exon_status = _get_status(predict_exons,answer_exons,'feature_coord')
+    transcript_status = _get_status(predict_transcripts,answer_transcripts,'id')
+    intron_chain_status = _get_status(predict_intron_chains,answer_intron_chains,'id',query_key='intron_chain_match')
+    internal_exon_status = _get_status(predict_internal_exons,answer_internal_exons,'feature_coord',query_key='internal_exon_match')
+
+    #Compare gene and get status
+    _compare_gene(predict,answer)
+    predict_genes = predict[predict['feature'].isin(GENE_TYPES)]
+    answer_genes = answer[answer['feature'].isin(GENE_TYPES)]
+    gene_status = _get_status(predict_genes,answer_genes,'id')
+    status_list = [intron_status,exon_status,transcript_status,
+                   intron_chain_status,internal_exon_status,gene_status]
+    #Set type name and id names
+    type_names = ['intron','exon','transcript','intron_chain','internal_exon','gene']
+    id_names = ['feature_coord','feature_coord','id','id','feature_coord','id']
+    #Get error df and performance
+    error_list = []
+    performances = {}
+    for id_name,type_name,status in zip(id_names,type_names,status_list):
+        df = _get_error(id_name,type_name,predict,answer,status['FP_ids'],status['FN_ids'])
+        performance = _get_performance(type_name,**status,round_value=round_value)
+        error_list.append(df)
+        performances.update(performance)
+    error_df = pd.concat(error_list,ignore_index=True)
+    error_df = get_gff_with_updated_attribute(error_df)
+    return performances,error_df
+
+def _create_ann_seq(chrom,length,strand):
+    ann_seq = AnnSequence(['gene']+BASIC_GENE_ANN_TYPES,length)
+    ann_seq.chromosome_id = chrom
+    ann_seq.strand = strand
+    ann_seq.id = '{}_{}'.format(chrom,strand)
+    return ann_seq
 
 def _gene_gff2vec(gff,chrom_id,strand,length):
     subgff = gff[(gff['chr']==chrom_id) & (gff['strand']==strand)]
-    strand = 'plus' if strand == '+' else 'minus'
+    strand = STRAND_CONVERT[strand]
     ann_seq = _create_ann_seq(chrom_id,length,strand)
     for block in subgff[subgff['feature']=='gene'].to_dict('record'):
         ann_seq.add_ann('gene',1,block['start']-1,block['end']-1)
@@ -237,7 +272,7 @@ def _gene_gff2vec(gff,chrom_id,strand,length):
     vec = np.array([seq2vecs(ann_seq)]).transpose(0,2,1)
     return vec
 
-def gff_performance(predict,answer,region_table,chrom_target=None,round_value=None):
+def gff_performance(predict,answer,region_table,chrom_target,round_value=None):
     """
     The method would compare data between prediction and answer, and return the performance result
     
@@ -247,6 +282,8 @@ def gff_performance(predict,answer,region_table,chrom_target=None,round_value=No
         GFF dataframe of prediction
     answer : pandas.DataFrame
         GFF dataframe of answer
+    chrom_target : str
+        Chromosome target in region_table
     round_value : int, optional
         rounded at the specified number of digits, if it is None then the result wouldn't be rounded (default is None)
     Returns
@@ -278,8 +315,13 @@ def gff_performance(predict,answer,region_table,chrom_target=None,round_value=No
         if answer_region not in table_regions:
             raise Exception(answer_region,sorted(list(table_regions)))
 
-    predict = get_gff_with_intron(get_gff_with_attribute(predict))
-    answer = get_gff_with_intron(get_gff_with_attribute(answer))
+    predict = predict[~predict['feature'].isin(INTRON_TYPES)]
+    answer = answer[~answer['feature'].isin(INTRON_TYPES)]
+    predict = get_gff_with_feature_coord(get_gff_with_intron(get_gff_with_attribute(predict)))
+    answer = get_gff_with_feature_coord(get_gff_with_intron(get_gff_with_attribute(answer)))
+    block_perform,error_status = block_performance(predict,answer,round_value=round_value)
+    site_p_a_status = site_abs_diff(answer,predict,round_value=round_value)
+    site_a_p_status = site_abs_diff(answer,predict,answer_as_ref=False,round_value=round_value)
     label_num=len(BASIC_GENE_ANN_TYPES)
     metric = {}
     for type_ in ['TPs','FPs','TNs','FNs']:
@@ -304,9 +346,6 @@ def gff_performance(predict,answer,region_table,chrom_target=None,round_value=No
         metric['T'] += metric_['T']
         metric['F'] += metric_['F']
     base_perform = calculate_metric(metric,label_names=BASIC_GENE_ANN_TYPES,round_value=round_value)
-    block_perform,error_status = block_performance(predict,answer,round_value=round_value)
-    site_p_a_status = site_abs_diff(answer,predict,round_value=round_value)
-    site_a_p_status = site_abs_diff(answer,predict,answer_as_ref=False,round_value=round_value)
     return base_perform,contagion,block_perform,error_status,site_p_a_status,site_a_p_status
 
 def draw_contagion_matrix(contagion_matrix,round_number=None):
@@ -382,13 +421,16 @@ def block_performance_table(roots,names):
     columns = ['name'] + columns
     return block_performance[columns],error_paths
 
-def compare_and_save(predict,answer,region_table,saved_root,chrom_target=None,round_value=None):
+def compare_and_save(predict,answer,region_table,saved_root,chrom_target,round_value=None):
+    create_folder(saved_root)
     result = gff_performance(predict,answer,region_table,chrom_target,round_value)
     base_perform,contagion,block_perform,errors,site_p_a_diff,site_a_p_abs_diff = result
     write_json(base_perform,os.path.join(saved_root,'base_performance.json'))
     write_json(contagion.tolist(),os.path.join(saved_root,'contagion_matrix.json'))
     write_json(block_perform,os.path.join(saved_root,'block_performance.json'))
-    write_gff(errors, os.path.join(saved_root,'error_status.gff'))
+    if not errors.empty:
+        write_gff(errors, os.path.join(saved_root,'error_status.gff'))
+
     write_json(site_p_a_diff,os.path.join(saved_root,'p_a_abs_diff.json'))
     write_json(site_a_p_abs_diff,os.path.join(saved_root,'a_p_abs_diff.json'))
 
@@ -400,14 +442,15 @@ def main(predict_path,answer_path,region_table_path,saved_root,**kwargs):
 
 if __name__ == '__main__':
     parser = ArgumentParser(description='Compare predict GFF to answer GFF')
-    parser.add_argument("--predict_path",help='The path of prediction result in GFF format',required=True)
-    parser.add_argument("--answer_path",help='The path of answer result in GFF format',required=True)
-    parser.add_argument("--region_table_path",help='The path of region table',required=True)
-    parser.add_argument("--saved_root",help="Path to save result",required=True)
-    parser.add_argument("--chrom_target",help="Valid options are old_id and new_id")
+    parser.add_argument("-p","--predict_path",help='The path of prediction result in GFF format',required=True)
+    parser.add_argument("-a","--answer_path",help='The path of answer result in GFF format',required=True)
+    parser.add_argument("-r","--region_table_path",help='The path of region table',required=True)
+    parser.add_argument("-s","--saved_root",help="Path to save result",required=True)
+    parser.add_argument("-t","--chrom_target",help="Valid options are old_id and new_id",required=True)
     args = parser.parse_args()
-    create_folder(args.saved_root)
+
     config_path = os.path.join(args.saved_root,'performance_setting.json')
     config = vars(args)
+    create_folder(args.saved_root)
     write_json(config,config_path)
     main(**config)

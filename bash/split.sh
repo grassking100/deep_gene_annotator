@@ -111,7 +111,7 @@ if  (( $result_num > 0 )) ; then
         rna_bed_path=$processed_root/result/rna.bed
         canonical_bed_path=$processed_root/result/canonical.bed
     fi
-    
+    alt_region_id_table_path=$processed_root/result/alt_region_id_table.tsv
     bed_path=$saved_root/bed
     fasta_path=$saved_root/fasta
     gff_path=$saved_root/gff
@@ -136,7 +136,7 @@ if  (( $result_num > 0 )) ; then
 
         python3 $preprocess_main_root/bed2gff.py -i $bed_path/$file_name.bed -o $gff_path/$file_name.gff -t $id_convert_table_path
 
-        python3 $preprocess_main_root/bed2gff.py -i $bed_path/${file_name}_canonical.bed -o $gff_path/${file_name}_canonical.gff
+        python3 $preprocess_main_root/bed2gff.py -i $bed_path/${file_name}_canonical.bed -o $gff_path/${file_name}_canonical.gff  -t $alt_region_id_table_path
 
         samtools faidx $fasta_path/$file_name.fasta
         

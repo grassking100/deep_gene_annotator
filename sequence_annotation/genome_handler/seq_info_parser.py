@@ -3,19 +3,20 @@ from abc import abstractmethod
 import numpy as np
 from ..utils.exception import NegativeNumberException,NotPositiveException
 from ..utils.utils import read_bed
+from .sequence import PLUS,MINUS
 from .exception import InvalidStrandType
 
 class SeqInfoParser(metaclass=ABCMeta):
-    """Parse file from list and get data which stored infomration(zero-based)"""
-    def parse(self,path):
-        data_list = self._load_data(path)
+    """Parse file from list and get data which stored infomration(zero-nt based)"""
+    def parse(self,path_or_df):
+        data_list = self._load_data(path_or_df)
         returned_list = []
         for data in data_list:
             returned_list.append(self._parse(data))
         return returned_list
 
     @abstractmethod
-    def _load_data(self,path):
+    def _load_data(self,path_or_df):
         pass
     
     @abstractmethod
@@ -27,12 +28,17 @@ class SeqInfoParser(metaclass=ABCMeta):
         pass
 
 class BedInfoParser(SeqInfoParser):
-    """Parse file from BED file and get data which stored infomration(zero-based)
+    """Parse file from BED file and get data which stored infomration(zero-base based)
        See format:https://genome.ucsc.edu/FAQ/FAQformat.html#format1
     """
 
-    def _load_data(self,path):
-        bed = read_bed(path)
+    def _load_data(self,path_or_df):
+        if isinstance(path_or_df,str):
+            bed = read_bed(path_or_df)
+        else:
+            #If it is bed data which is read by read_bed
+            bed = path_or_df
+        #Convert one-base based data to zero-base based
         bed['start'] = bed['start'] - 1
         bed['end'] = bed['end'] - 1
         bed['thick_start'] = bed['thick_start'] - 1
@@ -43,9 +49,9 @@ class BedInfoParser(SeqInfoParser):
         parsed_data = dict(data)
         strand = parsed_data['strand']
         if strand == '+':
-            parsed_data['strand'] = "plus"
+            parsed_data['strand'] = PLUS
         elif strand == '-':
-            parsed_data['strand'] = "minus"
+            parsed_data['strand'] = MINUS
         else:
             raise InvalidStrandType(strand)
         for key in ['block_related_start','block_size']:

@@ -7,11 +7,14 @@ sys.path.append(os.path.dirname(__file__)+"/../..")
 from sequence_annotation.utils.utils import read_fasta
 from sequence_annotation.utils.seq_converter import SeqConverter,DNA_CODES
 
-def fasta_composition(fasta_data,converter=None):
+def fasta_composition(fasta_data,converter=None,truncated=None):
+    truncated = truncated or 0
     if converter is None:
         converter = SeqConverter()
     sum_ = None
     for seq in fasta_data.values():
+        if truncated !=0:
+            seq = seq[truncated:-truncated]
         vecs = np.array(converter.seq2vecs(seq))
         if sum_ is None:
             sum_ = vecs
@@ -20,7 +23,8 @@ def fasta_composition(fasta_data,converter=None):
     return sum_/sum_.sum(1)[0]
             
 def plot_composition(composition,output_path,
-                     title=None,shift=None,xlabel=None):
+                     title=None,shift=None,xlabel=None,truncated=None):
+    truncated = truncated or 0
     title = title or ''
     xlabel = xlabel or "From 5' to 3'"
     shift= shift or 0
@@ -39,14 +43,15 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("-i", "--input_path",help='Fasta path',required=True)
     parser.add_argument("-o", "--output_path",required=True)
-    parser.add_argument("--shift",type=int)
+    parser.add_argument("-s","--shift",type=int)
     parser.add_argument("--xlabel")
     parser.add_argument("--title")
+    parser.add_argument("-t","--truncated",type=int,default=0)
 
     args = parser.parse_args()
     
     fasta = read_fasta(args.input_path)
-    composition = fasta_composition(fasta)
+    composition = fasta_composition(fasta,truncated=args.truncated)
     plot_composition(composition,args.output_path,
                      title=args.title,shift=args.shift,
                      xlabel=args.xlabel)

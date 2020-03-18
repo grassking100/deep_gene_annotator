@@ -5,7 +5,7 @@ usage(){
  echo "  Arguments:"
  echo "    -i  <string>  Path of bed"
  echo "    -f  <string>  Path of genome fasta"
- echo "    -o  <string>  Directory of output"
+ echo "    -o  <string>  Directory to output bed and fasta"
  echo "    -s  <string>  Directory of statistic data"
  echo "  Options:"
  echo "    -t  <int>     Radius of Transcription start sites                [default: 100]"
@@ -18,7 +18,7 @@ usage(){
  echo ""
 }
 
-while getopts i:f:p:o:s:t:c:d:a:h option
+while getopts i:f:p:o:s:t:c:d:a:v:h option
  do
   case "${option}"
   in
@@ -31,6 +31,7 @@ while getopts i:f:p:o:s:t:c:d:a:h option
    c )cleavage_radius=$OPTARG;;
    d )donor_radius=$OPTARG;;
    a )acceptor_radius=$OPTARG;;
+   v )id_convert_table_path=$OPTARG;;
    h )usage; exit 1;;
    : )echo "Option $OPTARG requires an argument"
       usage; exit 1
@@ -40,6 +41,12 @@ while getopts i:f:p:o:s:t:c:d:a:h option
       ;;
  esac
 done
+
+if [ ! "$id_convert_table_path" ]; then
+    echo "Missing option -v"
+    usage
+    exit 1
+fi
 
 if [ ! "$bed_path" ]; then
     echo "Missing option -i"
@@ -78,6 +85,7 @@ fi
 bash_root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 sa_root=$bash_root/..
 src_root=$sa_root/sequence_annotation/preprocess
+utils_root=$sa_root/sequence_annotation/utils
 
 #Create folder
 mkdir -p $output_root
@@ -115,18 +123,23 @@ bash $bash_root/splice_donor_site.sh $bed_path ${donor_radius} ${donor_radius} >
 bash $bash_root/splice_acceptor_site.sh $bed_path ${acceptor_radius} ${acceptor_radius} > $splice_acceptor_path.bed
 bash $bash_root/splice_donor_site.sh $bed_path 0 1 > $donor_signal.bed
 bash $bash_root/splice_acceptor_site.sh $bed_path 1 0 > $acceptor_signal.bed
-bash $bash_root/transcription_start_site.sh $bed_path 1 > $tss_signal.bed
-bash $bash_root/cleavage_site.sh $bed_path 1 > $ca_signal.bed
+bash $bash_root/transcription_start_site.sh $bed_path 3 > $tss_signal.bed
+bash $bash_root/cleavage_site.sh $bed_path 3 > $ca_signal.bed
 
 for name in $tss_path $ca_path $splice_donor_path $splice_acceptor_path $donor_signal $acceptor_signal $tss_signal $ca_signal;
 do
     bedtools getfasta -s -name -fi $genome_path -bed $name.bed -fo $name.fasta
 done
 
+python3 $utils_root/plot_composition.py -i $tss_path.fasta -s "-$tss_radius" --title "Nucleotide composition around TSS" -o $tss_path.png
+python3 $utils_root/plot_composition.py -i $ca_path.fasta -s "-$cleavage_radius" --title "Nucleotide composition around cleavage site" -o $ca_path.png
+python3 $utils_root/plot_composition.py -i $splice_donor_path.fasta -s "-$donor_radius" --title "Nucleotide composition around splicing donor site" -o $splice_donor_path.png
+python3 $utils_root/plot_composition.py -i $splice_acceptor_path.fasta -s "-$acceptor_radius" --title "Nucleotide composition around splicing acceptor site" -o $splice_acceptor_path.png
+
 bedtools getfasta -s -name -fi $genome_path -bed $bed_path -fo $output_root/bed.fasta
 
 
-python3 $src_root/get_CDS_bed.py -i $bed_path -o $CDS_path.bed
+python3 $src_root/get_CDS_bed.py -i $bed_path -o $CDS_path.bed -e $output_root/no_cds.id -t $id_convert_table_path
 
 bedtools getfasta -s -fi $genome_path -name -split -bed $CDS_path.bed  -fo $CDS_path.fasta
 
@@ -172,7 +185,7 @@ if [ -e "$subpeptide" ]; then
     printf "Shortest length: %s\n" $(cat $stats_root/peptide.length | sort | head -n 1) >> $stats_root/peptide_length.stats
 fi
 
-python3 $src_root/bed2gff.py -i $bed_path -o $result_root/canonical.gff.temp
+python3 $src_root/bed2gff.py -i $bed_path -o $result_root/canonical.gff.temp -t $id_convert_table_path
 
 awk -F'\t' -v OFS="\t"  '{if($3=="exon"){print($5-$4+1)}}' $result_root/canonical.gff.temp > $stats_root/exon.length
 awk -F'\t' -v OFS="\t"  '{if($3=="intron"){print($5-$4+1)}}' $result_root/canonical.gff.temp > $stats_root/intron.length

@@ -3,22 +3,19 @@ import os
 sys.path.append(os.path.dirname(__file__)+"/../..")
 import pandas as pd
 from argparse import ArgumentParser
-from sequence_annotation.utils.utils import write_gff
-from sequence_annotation.preprocess.utils import get_id_table
+from sequence_annotation.preprocess.get_id_table import get_id_convert_dict
+from sequence_annotation.utils.utils import write_gff,read_bed,get_gff_with_updated_attribute
 from sequence_annotation.genome_handler.seq_info_parser import BedInfoParser
 
 strand_convert = {'plus':'+','minus':'-','+':'+','-':'-'}
 
-def bed_item2gff_item(item,id_convert=None):
+def bed_item2gff_item(item,id_convert_dict):
     #input zero based data, return one based data
     gff_items = []
     thick_start = item['thick_start'] + 1
     thick_end = item['thick_end'] + 1
     mRNA_id = item['id']
-    if id_convert is not None:
-        gene_id = id_convert[mRNA_id]
-    else:    
-        gene_id = "{}_gene".format(mRNA_id)
+    gene_id = id_convert_dict[mRNA_id]
     strand = strand_convert[item['strand']]
     basic_block = {'chr':item['chr'],'strand':strand,'source':'.',
                    'score':item['score'],'frame':'.'}
@@ -26,11 +23,10 @@ def bed_item2gff_item(item,id_convert=None):
     gene['start'], gene['end'] = item['start'] + 1, item['end'] + 1
     gene['feature'] = 'gene'
     gene['id'] = gene_id
-    gene['attribute'] = 'ID={}'.format(gene_id)
     mRNA = dict(gene)
     mRNA['feature'] = 'mRNA'
-    gene['id'] = mRNA_id
-    mRNA['attribute'] = "ID={};Parent={}".format(mRNA_id,gene_id)
+    mRNA['id'] = mRNA_id
+    mRNA['parent'] = gene_id
     gff_items.append(gene)
     gff_items.append(mRNA)
     exons = []
@@ -40,7 +36,7 @@ def bed_item2gff_item(item,id_convert=None):
         exon['start'] = abs_start
         exon['end'] = abs_start+item['block_size'][index]-1
         exon['feature'] = 'exon'
-        exon['attribute'] = 'Parent={}'.format(mRNA_id)
+        exon['parent'] = mRNA_id
         exons.append(exon)
 
     for index,exon in enumerate(exons):
@@ -107,11 +103,13 @@ def bed_item2gff_item(item,id_convert=None):
 
     return gff_items
     
-def bed2gff(bed,id_convert):
+def bed2gff(bed,id_convert_dict):
+    parser = BedInfoParser()
+    bed = parser.parse(bed)
     gff_items = {}
     basic_items = []
     for item in bed:
-        basic_items.append(bed_item2gff_item(item,id_convert))
+        basic_items.append(bed_item2gff_item(item,id_convert_dict))
     for basic_item in basic_items:
         gene_id = basic_item[0]['id']
         if gene_id not in gff_items.keys():
@@ -121,19 +119,17 @@ def bed2gff(bed,id_convert):
     for list_ in gff_items.values():
         gff_list += list_
     gff = pd.DataFrame.from_dict(gff_list)
+    gff = get_gff_with_updated_attribute(gff)
     return gff
 
 if __name__ =='__main__':
     parser = ArgumentParser()
     parser.add_argument("-i", "--bed_path",required=True)
     parser.add_argument("-o", "--gff_output",required=True)
-    parser.add_argument("-t", "--id_table_path",help="Id table about transcript and gene conversion")
+    parser.add_argument("-t", "--id_table_path",help="Id table about transcript and gene conversion",required=True)
     args = parser.parse_args()
-    parser = BedInfoParser()
-    bed = parser.parse(args.bed_path)
-    if args.id_table_path is not None:
-        id_convert = get_id_table(args.id_table_path)
-    else:
-        id_convert = None
-    gff = bed2gff(bed,id_convert)
+
+    id_convert_dict = get_id_convert_dict(args.id_table_path)
+    bed = read_bed(args.bed_path)
+    gff = bed2gff(bed,id_convert_dict)
     write_gff(gff,args.gff_output)

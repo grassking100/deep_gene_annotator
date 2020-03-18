@@ -1,10 +1,14 @@
 from abc import ABCMeta,abstractproperty
 from copy import deepcopy
 import numpy as np
-from ..utils.utils import get_protected_attrs_names,logical_not
+from ..utils.utils import get_protected_attrs_names,logical_not,CONSTANT_LIST
 from ..utils.exception import UninitializedException,NegativeNumberException
 from ..utils.exception import ChangeConstValException,ValueOutOfRange
 from .exception import InvalidAnnotation,InvalidStrandType
+
+PLUS = 'plus'
+MINUS = 'minus'
+STRANDS = CONSTANT_LIST([PLUS,MINUS])
 
 class Sequence(metaclass=ABCMeta):
     def __init__(self):
@@ -50,7 +54,7 @@ class Sequence(metaclass=ABCMeta):
 
     @property
     def valid_strand(self):
-        return ['plus','minus']
+        return STRANDS
 
     @strand.setter
     def strand(self, value):

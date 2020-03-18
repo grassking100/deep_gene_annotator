@@ -53,8 +53,9 @@ def main(saved_root,model_config_path,executor_config_path,
          train_data_path,val_data_path,
          test_data_path=None,batch_size=None,epoch=None,
          frozen_names=None,save_distribution=False,only_train=False,
-         train_answer_path=None,val_answer_path=None,test_answer_path=None,
-         region_table_path=None,is_answer_double_strand=False,
+         train_answer_path=None,val_answer_path=None,test_answer_path=None,region_table_path=None,
+         is_train_answer_double_strand=False,is_val_answer_double_strand=False,is_test_answer_double_strand=False,
+         ann_vec_gff_converter_args_path=None,
          deterministic=False,**kwargs):
     
     copied_paths = [model_config_path,executor_config_path,train_data_path,val_data_path]
@@ -107,17 +108,34 @@ def main(saved_root,model_config_path,executor_config_path,
         
     #Test
     if not only_train:
-        ann_vec_gff_converter = build_ann_vec_gff_converter(BASIC_GENE_ANN_TYPES,BASIC_GENE_MAP)
-        test_paths = ['test_on_train','test_on_val']
-        data_list = [train_data,val_data]
-        answer_paths = [train_answer_path,val_answer_path]
+        ann_vec_gff_converter_kwargs = {}
+        if ann_vec_gff_converter_args_path is not None:
+            ann_vec_gff_converter_kwargs = read_json(ann_vec_gff_converter_args_path)
+        ann_vec_gff_converter = build_ann_vec_gff_converter(BASIC_GENE_ANN_TYPES,BASIC_GENE_MAP,**ann_vec_gff_converter_kwargs)
+        test_paths = []
+        data_list = []
+        answer_paths = []
+        is_answer_double_strands = []
+        
+        if train_data_path is not None:
+            test_paths.append('test_on_train')
+            data_list.append(train_data)
+            answer_paths.append(train_answer_path)
+            is_answer_double_strands.append(is_train_answer_double_strand)
+            
+        if val_data_path is not None:
+            test_paths.append('test_on_val')
+            data_list.append(val_data)
+            answer_paths.append(val_answer_path)
+            is_answer_double_strands.append(is_val_answer_double_strand)
 
         if test_data_path is not None:
             test_paths.append('test_on_test')
             data_list.append(test_data)
             answer_paths.append(test_answer_path)
+            is_answer_double_strands.append(is_test_answer_double_strand)
             
-        for path,data,answer_path in zip(test_paths,data_list,answer_paths):
+        for path,data,answer_path,is_answer_double_strand in zip(test_paths,data_list,answer_paths,is_answer_double_strands):
             path = os.path.join(saved_root,path)
             create_folder(path)
             test(path,model,executor,data,batch_size=batch_size,ann_vec_gff_converter=ann_vec_gff_converter,
@@ -149,13 +167,18 @@ if __name__ == '__main__':
     parser.add_argument("--frozen_names",type=lambda x:x.split(','),default=None)
     parser.add_argument("--monitor_target")
     parser.add_argument("--train_answer_path",help='The training answer in gff format')
-    parser.add_argument("--val_answer_path",help='The validate answer in gff format')
+    parser.add_argument("--val_answer_path",help='The validation answer in gff format')
     parser.add_argument("--test_answer_path",help='The testing answer in gff format')
     parser.add_argument("--deterministic",action="store_true")
     parser.add_argument("--region_table_path",help="The path of region data table which its old_id is single-strand data's "\
                         "chromosome and new_id is double-strand data's chromosome")
-    parser.add_argument("--is_answer_double_strand",action="store_true")
+    parser.add_argument("--is_train_answer_double_strand",action="store_true")
+    parser.add_argument("--is_val_answer_double_strand",action="store_true")
+    parser.add_argument("--is_test_answer_double_strand",action="store_true")
+    parser.add_argument("--ann_vec_gff_converter_args_path",type=str)
     
+    
+    build_ann_vec_gff_converter
     args = parser.parse_args()
                 
     #Create folder
@@ -167,10 +190,16 @@ if __name__ == '__main__':
     if os.path.exists(setting_path):
         existed = read_json(setting_path)
         setting_ = dict(setting)
-        del existed['gpu_id']
-        del setting_['gpu_id']
+        #del existed['gpu_id']
+        #del setting_['gpu_id']
+        #del setting_['test_data_path']
+        #del setting_['test_answer_path']
         if setting_ != existed:
-            raise Exception("The {} is not same as previous one".format(setting_path))
+            previous_setting_path = os.path.join(args.saved_root,"previous_main_setting")
+            create_folder(previous_setting_path)
+            copy_path(previous_setting_path,setting_path)
+            write_json(setting,setting_path)
+            #raise Exception("The {} is not same as previous one".format(setting_path))
     else:
         write_json(setting,setting_path)
 

@@ -2,7 +2,7 @@ import warnings
 import numpy as np
 import re
 from .exception import ProcessedStatusNotSatisfied,InvalidStrandType
-from .sequence import AnnSequence
+from .sequence import AnnSequence, PLUS, STRANDS
 
 def get_certain_status(seq, focus_types=None):
     if not seq.processed_status == 'normalized':
@@ -178,12 +178,12 @@ def seq2vecs(ann_seq,ann_types=None):
     ann = []
     for type_ in ann_types:
         value = ann_seq.get_ann(type_)
-        if ann_seq.strand == 'plus':
-            ann.append(value)
-        elif ann_seq.strand == 'minus':
-            ann.append(np.flip(value,0))
-        else:
+        if ann_seq.strand not in STRANDS:
             raise InvalidStrandType(ann_seq.strand)
+        if ann_seq.strand == PLUS:
+            ann.append(value)
+        else:
+            ann.append(np.flip(value,0))
     return np.transpose(ann)
 
 def vecs2seq(vecs,id_,strand,ann_types,length=None):
@@ -254,41 +254,38 @@ def get_start(signal):
 def get_end(signal):
     return [m.start()+1 for m in re.finditer('10', signal)]
 
-def is_valid_strand(seq):
-    return seq.strand in ['plus','minus']
-
 def get_tss(seq):
-    if not is_valid_strand(seq):
+    if seq.strand not in STRANDS:
         raise InvalidStrandType(seq.strand)
     signal = ''.join(seq.get_ann('gene').astype(int).astype(str))
-    if seq.strand == 'plus':
+    if seq.strand == PLUS:
         return get_start(signal)
     else:
         return get_end(signal)
 
 def get_ca(seq):
-    if not is_valid_strand(seq):
+    if seq.strand not in STRANDS:
         raise InvalidStrandType(seq.strand)
     signal = ''.join(seq.get_ann('gene').astype(int).astype(str))
-    if seq.strand == 'plus':
+    if seq.strand == PLUS:
         return get_end(signal)
     else:
         return get_start(signal)
 
 def get_donor(seq):
-    if not is_valid_strand(seq):
+    if seq.strand not in STRANDS:
         raise InvalidStrandType(seq.strand)
     signal = ''.join(seq.get_ann('intron').astype(int).astype(str))
-    if seq.strand == 'plus':
+    if seq.strand == PLUS:
         return get_start(signal)
     else:
         return get_end(signal)
 
 def get_acceptor(seq):
-    if not is_valid_strand(seq):
+    if seq.strand not in STRANDS:
         raise InvalidStrandType(seq.strand)
     signal = ''.join(seq.get_ann('intron').astype(int).astype(str))
-    if seq.strand == 'plus':
+    if seq.strand == PLUS:
         return get_end(signal)
     else:
         return get_start(signal)

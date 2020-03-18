@@ -95,6 +95,9 @@ class IExecutor(metaclass=ABCMeta):
     @abstractmethod
     def optimizer(self,optimizer):
         pass
+    @abstractmethod        
+    def on_work_begin(self):
+        pass
 
 class _Executor(IExecutor):
     def __init__(self):
@@ -133,9 +136,13 @@ class BasicExecutor(_Executor):
         self.grad_norm_type = 2
         self._optimizer = None
         self.lr_scheduler = None
-        self.lr_scheduler_target = 'loss'
+        self.lr_scheduler_target = 'val_loss'
+        self._has_fit = False
         self._lr_history = {}
-
+   
+    def on_work_begin(self):
+        self._has_fit = False
+        
     @property
     def optimizer(self):
         return self._optimizer
@@ -180,6 +187,7 @@ class BasicExecutor(_Executor):
         return config
 
     def fit(self,model,inputs, labels, lengths, **kwargs):
+        self._has_fit = True
         if self.optimizer is None:
             raise Exception("Exectutor must set optimizer for fitting")
         inputs = inputs.cuda()
@@ -206,13 +214,14 @@ class BasicExecutor(_Executor):
 
     def on_epoch_end(self,epoch,metric):
         self.loss.reset_accumulated_data()
-        for index,group in enumerate(self.optimizer.param_groups):
-            if index not in self._lr_history:
-                self._lr_history[index] = []
-            self._lr_history[index].append(group['lr'])
+        if self._has_fit:
+            for index,group in enumerate(self.optimizer.param_groups):
+                if index not in self._lr_history:
+                    self._lr_history[index] = []
+                self._lr_history[index].append(group['lr'])
 
-        if self.lr_scheduler is not None:
-            self.lr_scheduler.step(metric[self.lr_scheduler_target],epoch=epoch)
+            if self.lr_scheduler is not None:
+                self.lr_scheduler.step(metric[self.lr_scheduler_target],epoch=epoch)
         
 class ExecutorBuilder:
     def __init__(self,use_native=True):
@@ -227,10 +236,13 @@ class ExecutorBuilder:
         self._predict_label_num = None
         self._learning_rate = 1e-3
         self._optimizer_kwargs = None
-        self._reduce_lr_on_plateau = False
+        self._use_lr_scheduler = False
+        self._threshold = 0.1
+        self._patience = 10
+        self._factor = 0
         self._optim_type = 'Adam'
 
-    def set_optimizer(self,optim_type,learning_rate=None,reduce_lr_on_plateau=False,
+    def set_optimizer(self,optim_type,learning_rate=None,
                       clip_grad_value=None,clip_grad_norm=None,grad_norm_type=None,**kwargs):
         self._optimizer_kwargs = kwargs
         self._optim_type = optim_type or self._optim_type
@@ -243,6 +255,13 @@ class ExecutorBuilder:
         self._gamma = gamma
         self._intron_coef = intron_coef
         self._other_coef = other_coef
+        
+    def set_lr_scheduler(self,patience=None,factor=None,threshold=None,use_lr_scheduler=None):
+        if use_lr_scheduler is not None:
+            self._use_lr_scheduler = use_lr_scheduler
+        self._threshold = threshold or self._threshold
+        self._patience = patience or self._patience
+        self._factor = factor or self._factor
         
     def build(self,parameters,executor_weights_path=None):
         optimizer = optimizer_generator(self._optim_type,parameters,
@@ -264,8 +283,11 @@ class ExecutorBuilder:
         exe.grad_norm_type = self._grad_norm_type
         exe.inference = self._inference
         exe.optimizer = optimizer
-        if self._reduce_lr_on_plateau:
-            exe.lr_scheduler = ReduceLROnPlateau(optimizer,verbose=True,threshold=0.1)
+        if self._use_lr_scheduler:
+            exe.lr_scheduler = ReduceLROnPlateau(optimizer,verbose=True,
+                                                 threshold=self._threshold,
+                                                 factor=self._factor,
+                                                 patience=self._patience-1)
         if executor_weights_path is not None:
             weights = torch.load(executor_weights_path)
             exe.load_state_dict(weights)
@@ -297,6 +319,7 @@ def get_executor(model,config,executor_weights_path=None):
     builder = ExecutorBuilder(config['use_native'])
     builder.set_optimizer(**config['optim_config'])
     builder.set_loss(**config['loss_config'])
+    builder.set_lr_scheduler(**config['lr_scheduler_config'])
     params = get_params(model,**config['weight_decay_config'])
     executor = builder.build(params,executor_weights_path=executor_weights_path)
     return executor

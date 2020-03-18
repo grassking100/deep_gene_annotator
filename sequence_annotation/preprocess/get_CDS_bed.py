@@ -5,8 +5,9 @@ import numpy as np
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__)+"/../..")
 from sequence_annotation.genome_handler.seq_info_parser import BedInfoParser
-from sequence_annotation.utils.utils import get_gff_item_with_attribute, write_bed
+from sequence_annotation.utils.utils import write_bed
 from sequence_annotation.preprocess.bed2gff import bed_item2gff_item
+from sequence_annotation.preprocess.get_id_table import get_id_convert_dict
 
 def get_CDS_item(CDSs):
     #input one based data, return one based data
@@ -31,12 +32,11 @@ def get_CDS_item(CDSs):
     info['thick_end'] = max_end
     return info
     
-def get_CDS_bed(bed):
+def get_CDS_bed(bed,id_convert_dict):
     bed_info_list = []
     error_ids = []
     for bed_item in bed:
-        gff_items = bed_item2gff_item(bed_item)
-        gff_items = [get_gff_item_with_attribute(gff_item) for gff_item in gff_items]
+        gff_items = bed_item2gff_item(bed_item,id_convert_dict)
         CDSs = [item for item in gff_items if item['feature']=='CDS']
         if len(CDSs)>0:
             bed_info = get_CDS_item(CDSs)
@@ -51,11 +51,13 @@ if __name__ =='__main__':
     parser = ArgumentParser(description="This program will get CDS in bed format")
     parser.add_argument("-i", "--input_path", help="Path of input bed file",required=True)
     parser.add_argument("-o", "--output_path", help="Path of output bed file",required=True)
+    parser.add_argument("-t", "--id_table_path",help="Id table about transcript and gene conversion",required=True)
     parser.add_argument("-e", "--error_id_path", help="Path to write discarded id")
 
     args = parser.parse_args()
+    id_convert_dict = get_id_convert_dict(args.id_table_path)
     bed = BedInfoParser().parse(args.input_path)
-    CDS_bed,error_ids = get_CDS_bed(bed)
+    CDS_bed,error_ids = get_CDS_bed(bed,id_convert_dict)
     write_bed(CDS_bed,args.output_path)
     if args.error_id_path is not None:
         with open(args.error_id_path,'w') as fp:

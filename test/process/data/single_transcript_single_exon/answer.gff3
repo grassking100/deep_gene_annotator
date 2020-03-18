@@ -1,0 +1,4 @@
+##gff-version 3
+region_0385	.	gene	501	1000	.	+	.	ID=region_0769_gene_1
+region_0385	.	mRNA	501	1000	.	+	.	ID=region_0769_gene_1_mRNA;Parent=region_0769_gene_1
+region_0385	.	exon	501	1000	.	+	.	ID=region_0769_gene_1_mRNA_exon_1;Parent=region_0769_gene_1_mRNA

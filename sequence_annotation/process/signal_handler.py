@@ -153,6 +153,7 @@ class _GFFCompare(Callback):
         answer = read_gff(self._answer_path)
         region_ids = set(pd.read_csv(self._region_id_path)['region_id'])
         part_region_table = self._region_table[self._region_table[self._chrom_source].isin(region_ids)]
+        print("Compare prediction with answer at {}".format(self._saved_root))
         compare_and_save(predict,answer,part_region_table,self._saved_root,self._chrom_target)
 
 class SignalHandler(Callback):

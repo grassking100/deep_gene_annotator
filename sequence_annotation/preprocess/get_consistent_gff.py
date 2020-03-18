@@ -2,7 +2,7 @@ import sys,os
 import numpy as np
 import pandas as pd
 sys.path.append(os.path.dirname(__file__)+"/../..")
-from sequence_annotation.utils.utils import read_gff,write_gff,GFF_COLUMNS,get_gff_with_attribute,get_gff_with_update_attribute
+from sequence_annotation.utils.utils import read_gff,write_gff,GFF_COLUMNS,get_gff_with_attribute,get_gff_with_updated_attribute
 from sequence_annotation.preprocess.utils import GENE_TYPES,RNA_TYPES,EXON_TYPES,SUBEXON_TYPES
 from argparse import ArgumentParser
 
@@ -227,7 +227,7 @@ def repair_gff(gff):
     repaired += others
     repaired = pd.DataFrame.from_dict(repaired)
     repaired.loc[:,'coord_id'] = _get_coord_ids(repaired)
-    repaired = get_gff_with_update_attribute(repaired)
+    repaired = get_gff_with_updated_attribute(repaired)
     return repaired
 
 def main(input_path,saved_root,postfix):
@@ -236,7 +236,7 @@ def main(input_path,saved_root,postfix):
     gff.loc[:,'coord_id'] = _get_coord_ids(gff)
 
     repaired_gff = repair_gff(gff)
-    write_gff(repaired_gff,os.path.join(saved_root,'repaired_{}.gff').format(postfix))
+    write_gff(repaired_gff,os.path.join(saved_root,'repaired_{}.gff3').format(postfix))
 
     origin_coord_ids = set(gff['coord_id'])
     created_coord_ids = set(repaired_gff['coord_id'])
@@ -254,10 +254,10 @@ def main(input_path,saved_root,postfix):
     inconsistent_gff = repaired_gff[repaired_gff['belong_gene'].isin(inconsistent_gene_id)]
     consistent_gff = repaired_gff[~repaired_gff['belong_gene'].isin(inconsistent_gene_id)]
 
-    write_gff(inconsistent_gff,os.path.join(saved_root,'inconsistent_{}.gff').format(postfix))
-    write_gff(consistent_gff,os.path.join(saved_root,'consistent_{}.gff').format(postfix))
-    write_gff(broken_block_gff,os.path.join(saved_root,'broken_block_{}.gff').format(postfix))
-    write_gff(unseen_block_gff,os.path.join(saved_root,'unseen_block_{}.gff').format(postfix))
+    write_gff(inconsistent_gff,os.path.join(saved_root,'inconsistent_{}.gff3').format(postfix))
+    write_gff(consistent_gff,os.path.join(saved_root,'consistent_{}.gff3').format(postfix))
+    write_gff(broken_block_gff,os.path.join(saved_root,'broken_block_{}.gff3').format(postfix))
+    write_gff(unseen_block_gff,os.path.join(saved_root,'unseen_block_{}.gff3').format(postfix))
 
 if __name__ =='__main__':
     parser = ArgumentParser(description="This program would use CDS and exon to "+

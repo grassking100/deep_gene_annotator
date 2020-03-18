@@ -1,6 +1,6 @@
 from abc import abstractmethod
 import numpy as np
-from .sequence import AnnSequence
+from .sequence import AnnSequence, PLUS,STRANDS
 from .ann_seq_processor import is_one_hot
 from .exception import NotOneHotException, InvalidStrandType, NotSameSizeException
 
@@ -48,7 +48,7 @@ class _GeneticSeqConverter(AnnSeqConverter):
     def _create_template_ann_seq(self,length):
         ann_seq = AnnSequence()
         ann_seq.length = length
-        ann_seq.strand = 'plus'
+        ann_seq.strand = PLUS
         ann_seq.ANN_TYPES = set(self.ANN_TYPES + ['gene'])
         ann_seq.init_space()
         return ann_seq
@@ -66,7 +66,7 @@ class _CodingSeqConverter(AnnSeqConverter):
     def _create_template_ann_seq(self,length):
         ann_seq = AnnSequence()
         ann_seq.length = length
-        ann_seq.strand = 'plus'
+        ann_seq.strand = PLUS
         extra_type = ['exon','ORF','utr','utr_5_potential','utr_3_potential','gene']
         ann_seq.ANN_TYPES = set(self.ANN_TYPES + extra_type)
         ann_seq.init_space()
@@ -126,18 +126,20 @@ class CodingBedSeqConverter(_CodingSeqConverter):
         template_ann_seq.op_not_ann('utr','exon','ORF')
         utr = template_ann_seq.get_ann('utr')
         if cds_start <= cds_end:
-            if  gene.strand == 'plus':
+            if gene.strand not in STRANDS:
+                raise InvalidStrandType(gene.strand)
+
+            if gene.strand == PLUS:
                 if cds_start-1 >= 0:
                     template_ann_seq.set_ann('utr_5_potential',1,0,cds_start-1)
                 if cds_end+1 <= length-1:
                     template_ann_seq.set_ann('utr_3_potential',1,cds_end+1,length-1)
-            elif gene.strand == 'minus':
+            else:
                 if cds_start-1 >= 0:
                     template_ann_seq.set_ann('utr_3_potential',1,0,cds_start-1)
                 if cds_end+1 <= length-1:
                     template_ann_seq.set_ann('utr_5_potential',1,cds_end+1,length-1)
-            else:
-                raise InvalidStrandType(gene.strand)
+
             template_ann_seq.op_and_ann('utr_5','utr_5_potential','utr')
             template_ann_seq.op_and_ann('utr_3','utr_3_potential','utr')
         else:

@@ -52,6 +52,7 @@ predict_canonical_bed_path=$saved_root/predict_canonical.bed
 predict_canonical_gff_path=$saved_root/predict_canonical.gff
 predict_gene_gff_path=$saved_root/predict_gene.gff
 id_convert_table_path=$saved_root/id_convert_table.tsv
+region_table_path=$data_root/processed/result/region_rename_table_both_strand.tsv
 
 mkdir -p $saved_root
 python3 $preprocess_root/gff2bed.py -i $predict_gff_path -o $predict_bed_path
@@ -60,4 +61,8 @@ python3 $preprocess_root/path_decode.py -i $predict_bed_path -o $predict_canonic
 python3 $preprocess_root/gff2bed.py -i $predict_canonical_gff_path -o $predict_canonical_bed_path
 python3 $preprocess_root/bed2gff.py -i $predict_canonical_bed_path -o $predict_gene_gff_path
 cd $saved_root
+
+python3 sequence_annotation/main/evaluate_augustus_performance.py -p $predict_gene_gff_path -a $answer_gff_path -r $region_table_path --is_answer_double_strand
+
+
 gffcompare --strict-match --debug --no-merge -T -e 0 -d 0 -r $answer_gff_path $predict_gene_gff_path 

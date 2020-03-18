@@ -21,9 +21,7 @@ def main(saved_path,fasta_path,ann_seqs_path,id_path,min_len,max_len,ratio,selec
         dd.io.save(saved_path,data)
         print("Save file to {}".format(saved_path))
         
-    if not os.path.exists(saved_gff_path) and input_gff_path is not None:
-        if saved_gff_path is None:
-            raise Exception("Missing saved gff path")
+    if saved_gff_path is not None and not os.path.exists(saved_gff_path) and input_gff_path is not None:
         region_ids = list(data[0].keys())
         gff = read_gff(input_gff_path)
         selected_gff = gff[gff['chr'].isin(region_ids)]

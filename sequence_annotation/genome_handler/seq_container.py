@@ -3,8 +3,8 @@ from abc import abstractmethod
 import pandas as pd
 from ..utils.exception import IdNotFoundException,DuplicateIdException,AttrIsNoneException,ChangeConstValException
 from ..utils.utils import GFF_COLUMNS
-from .exception import InvalidAnnotation
-from .sequence import AnnSequence, SeqInformation
+from .exception import InvalidAnnotation,InvalidStrandType
+from .sequence import AnnSequence, SeqInformation, PLUS, MINUS
 
 class EmptyContainerException(Exception):
     def __init__(self):
@@ -153,8 +153,8 @@ class SeqInfoContainer(SeqContainer):
         selected_df['score'] = '.'
         selected_df['frame'] = '.'
         selected_df['attribute'] = "ID="+df['id'].astype(str)+";Parent="+df['parent'].astype(str)+";Status="+df['ann_status'].astype(str)
-        selected_df['strand']=selected_df['strand'].str.replace("plus", '+')
-        selected_df['strand']=selected_df['strand'].str.replace("minus", '-')
+        selected_df['strand']=selected_df['strand'].str.replace(PLUS, '+')
+        selected_df['strand']=selected_df['strand'].str.replace(MINUS, '-')
         return selected_df[GFF_COLUMNS]
     
     def from_gff(self,gff):
@@ -162,10 +162,13 @@ class SeqInfoContainer(SeqContainer):
             raise Exception("GFF is empty")
         gff.rename(columns={"chr": "chromosome_id", "feature": "ann_type"})
         gff = gff.to_dict('record')
+        strands = set(gff['strand'])
+        if strands != set(['+','-']):
+            raise InvalidStrandType(strands)
         for item in gff:
             item['start'] -= 1
             item['end'] -= 1
-            item['strand'] = itme['strand'].replace("+","plus").replace("-","minus")
+            item['strand'] = itme['strand'].replace("+",PLUS).replace("-",MINUS)
             for attribute in item['attribute'].split(";"):
                 if attribute.startswith("ID="):
                     item['attribute'] = attribute[3:]

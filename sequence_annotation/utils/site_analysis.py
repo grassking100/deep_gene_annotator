@@ -1,4 +1,5 @@
 import numpy as np
+from scipy import stats
 
 def site_diff(answer,predict,types,is_start=True,absolute=True,answer_as_ref=True):
     site_type = 'start' if is_start else 'end'
@@ -50,14 +51,18 @@ def site_abs_diff(answer,predict,round_value=None,**kwargs):
     site_diff_ = {}
     site_diff_['median'] = {}
     site_diff_['mean'] = {}
+    site_diff_['mode'] = {}
     types = ['TSS','CA','donor_site','acceptor_site']
     arrs = [transcript_start_diff_,transcript_end_diff_,
             donor_site_diff_,acceptor_site_diff_]
     for type_,arr in zip(types,arrs):
-        median_ = np.median(arr)
-        mean_ = np.mean(arr)
-        if round_value is not None:
-            mean_ = round(mean_,round_value)
-        site_diff_['median'][type_] = median_
-        site_diff_['mean'][type_] = mean_
+        if len(arr)>0:
+            median_ = np.median(arr)
+            mean_ = np.mean(arr)
+            mode = stats.mode(arr)[0][0]
+            if round_value is not None:
+                mean_ = round(mean_,round_value)
+            site_diff_['median'][type_] = float(median_)
+            site_diff_['mean'][type_] = float(mean_)
+            site_diff_['mode'][type_] = float(mode)
     return site_diff_

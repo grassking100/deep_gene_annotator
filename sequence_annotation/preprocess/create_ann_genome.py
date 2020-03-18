@@ -3,6 +3,8 @@ import deepdish as dd
 sys.path.append(os.path.dirname(__file__)+"/../..")
 from argparse import ArgumentParser
 from sequence_annotation.utils.utils import get_gff_with_attribute, read_gff, read_bed,BASIC_GENE_ANN_TYPES
+from sequence_annotation.preprocess.utils import EXON_SKIPPING,INTRON_RETENTION
+from sequence_annotation.preprocess.utils import ALT_DONOR,ALT_ACCEPTOR
 from sequence_annotation.genome_handler.exception import NotOneHotException
 from sequence_annotation.genome_handler.ann_seq_processor import is_one_hot
 from sequence_annotation.genome_handler.sequence import AnnSequence
@@ -73,14 +75,14 @@ def main(gff_path,region_bed_path,souce_name,output_path,
     ann_types = list(BASIC_GENE_ANN_TYPES)
     one_hot_ann_types = list(BASIC_GENE_ANN_TYPES)
     if with_alt_region:
-        ann_types += ['exon_skipping','intron_retetion']
+        ann_types += [EXON_SKIPPING,INTRON_RETENTION]
 
     if with_alt_site_region:
-        ann_types += ['alt_acceptor','alt_donor']
-        one_hot_ann_types += ['alt_acceptor','alt_donor']
+        ann_types += [ALT_ACCEPTOR,ALT_DONOR]
+        one_hot_ann_types += [ALT_ACCEPTOR,ALT_DONOR]
     
     if discard_alt_region:
-        gff = gff[~gff['feature'].isin(['exon_skipping','intron_retetion'])]
+        gff = gff[~gff['feature'].isin([EXON_SKIPPING,INTRON_RETENTION])]
         
     if discard_UTR_CDS:
         gff = gff[~gff['feature'].isin(['UTR','CDS'])]

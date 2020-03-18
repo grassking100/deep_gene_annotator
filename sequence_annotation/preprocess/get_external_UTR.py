@@ -33,29 +33,25 @@ def get_external_UTR(bed):
         right['id'] = left['id'] = item['id']
         right['strand'] = left['strand'] = strand
         right['chr'] = left['chr'] = item['chr']
+        left.update({'start':left_target_start,'end':left_target_end})
+        right.update({'start':right_target_start,'end':right_target_end})
         #if transcript is coding:
         if thick_start<=thick_end:
-            left.update({'start':left_target_start,'end':min(left_target_end,thick_start-1)})
-            right.update({'start':max(right_target_start,thick_end+1),'end':right_target_end})
-            if strand == '+':
-                left['type'] = 'five_external_utr'
-                right['type'] = 'three_external_utr'
-            else:
-                left['type'] = 'three_external_utr'
-                right['type'] = 'five_external_utr'
+            left['end']  = min(left_target_end,thick_start-1)
+            right['start'] = max(right_target_start,thick_end+1)
 
-            #If left UTR are exist
-            if left['start'] <= left['end']:
-                external_UTR.append(left)
-            #If right UTR are exist
-            if right['start'] <= right['end']:
-                external_UTR.append(right)
-                
+        if strand == '+':
+            left['type'] = 'five_external_utr'
+            right['type'] = 'three_external_utr'
         else:
-            left.update({'start':left_target_start,'end':left_target_end})
-            right.update({'start':right_target_start,'end':right_target_end})
-            right['type'] = left['type'] = 'external_utr'
+            left['type'] = 'three_external_utr'
+            right['type'] = 'five_external_utr'
+
+        #If left UTR are exist
+        if left['start'] <= left['end']:
             external_UTR.append(left)
+        #If right UTR are exist
+        if right['start'] <= right['end']:
             external_UTR.append(right)
 
     external_UTR = pd.DataFrame.from_dict(external_UTR)
@@ -64,14 +60,9 @@ def get_external_UTR(bed):
 if __name__ == "__main__":
     #Reading arguments
     parser = ArgumentParser()
-    parser.add_argument("-b","--bed_path",
-                        help="bed_path",required=True)
-    parser.add_argument("-s", "--saved_root",
-                        help="saved_root",required=True)
+    parser.add_argument("-b","--bed_path",help="bed_path",required=True)
+    parser.add_argument("-s", "--saved_root",help="saved_root",required=True)
     args = parser.parse_args()
-
-    five_UTR_tsv_path = os.path.join(args.saved_root,"external_five_UTR.tsv")
-    three_UTR_tsv_path = os.path.join(args.saved_root,"external_three_UTR.tsv")
     five_UTR_bed_path = os.path.join(args.saved_root,"external_five_UTR.bed")
     three_UTR_bed_path = os.path.join(args.saved_root,"external_three_UTR.bed")
 
@@ -80,13 +71,10 @@ if __name__ == "__main__":
     else:
         bed = read_bed(args.bed_path)
         utr_bed = get_external_UTR(bed)
-        utr_bed['chr'] = utr_bed['chr'].str.replace('Chr','')
         utr_bed['score']='.'
-        five_external_utr = utr_bed[utr_bed['type'].isin(['five_external_utr','external_utr'])]
-        three_external_utr = utr_bed[utr_bed['type'].isin(['three_external_utr','external_utr'])]
-        five_external_utr.to_csv(five_UTR_tsv_path,sep='\t',index=None)
-        three_external_utr.to_csv(three_UTR_tsv_path,sep='\t',index=None)
-        five_external_utr_bed = five_external_utr[['chr','start','end','id','score','strand']].copy()
-        three_external_utr_bed = three_external_utr[['chr','start','end','id','score','strand']].copy()
+        five_external_utr = utr_bed[utr_bed['type'].isin(['five_external_utr'])]
+        three_external_utr = utr_bed[utr_bed['type'].isin(['three_external_utr'])]
+        five_external_utr_bed = five_external_utr[['chr','start','end','id','score','strand']]
+        three_external_utr_bed = three_external_utr[['chr','start','end','id','score','strand']]
         write_bed(five_external_utr_bed,five_UTR_bed_path)
         write_bed(three_external_utr_bed,three_UTR_bed_path)

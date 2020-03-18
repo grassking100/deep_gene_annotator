@@ -10,13 +10,15 @@ from main.utils import backend_deterministic,load_data
 from main.model_executor_creator import ModelExecutorCreator
 
 def main(saved_root,train_data_path,val_data_path,
-         epoch,batch_size,n_initial_points,n_trials,is_maximize,
-         clip_grad_norm=None,has_cnn=False,grad_norm_type=None,**kwargs):
+         epoch,batch_size,n_startup_trials,n_trials,is_maximize,
+         clip_grad_norm=None,has_cnn=False,grad_norm_type=None,
+         use_lr_scheduler=False,**kwargs):
 
     backend_deterministic(False)
     creator = ModelExecutorCreator(clip_grad_norm=clip_grad_norm,
                                    grad_norm_type=grad_norm_type,
-                                   has_cnn=has_cnn)
+                                   has_cnn=has_cnn,
+                                   use_lr_scheduler=use_lr_scheduler)
 
     space_size_path = os.path.join(saved_root,'space_size.json')
     space_size = {'space size':creator.space_size}
@@ -44,7 +46,7 @@ def main(saved_root,train_data_path,val_data_path,
     trainer = OptunaTrainer(train,saved_root,creator,train_data,val_data,epoch,batch_size,
                             monitor_target=monitor_target,is_minimize=not is_maximize,
                             **kwargs)
-    trainer.optimize(n_initial_points,n_trials)
+    trainer.optimize(n_startup_trials,n_trials)
 
 if __name__ == '__main__':
     parser = ArgumentParser()
@@ -55,7 +57,7 @@ if __name__ == '__main__':
     parser.add_argument("-e","--epoch",type=int,default=100)
     parser.add_argument("-b","--batch_size",type=int,default=32)
     parser.add_argument("-n","--n_trials",type=int,default=None)
-    parser.add_argument("-i","--n_initial_points",type=int,default=None)
+    parser.add_argument("-i","--n_startup_trials",type=int,default=None)
     parser.add_argument("--is_maximize",action='store_true')
     parser.add_argument("--by_grid_search",action='store_true')
     parser.add_argument("--trial_start_number",type=int,default=0)
@@ -67,7 +69,8 @@ if __name__ == '__main__':
     parser.add_argument("--save_distribution",action='store_true')
     parser.add_argument("--discard_ratio_min",type=float,default=0)
     parser.add_argument("--discard_ratio_max",type=float,default=0)
-    
+    parser.add_argument("--use_lr_scheduler",action='store_true')
+
     args = parser.parse_args()
     config = dict(vars(args))
     #Create folder

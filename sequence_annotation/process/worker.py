@@ -227,7 +227,8 @@ class TrainWorker(Worker):
             all_callbacks.add(self._checkpoint)
             
         all_callbacks.on_work_begin(worker=self)
-        
+        self.executor.on_work_begin()
+
         if self._checkpoint is not None:
             start = self._checkpoint.epoch_start+1
 
@@ -276,7 +277,8 @@ class TrainWorker(Worker):
                 record.update(train_record)
                 record.update(val_record)
                 record.update(other_record)
-
+                
+                #Executor's on_epoch_end must be called first
                 self.executor.on_epoch_end(epoch=epoch,metric=record)
                 self._train_callbacks.on_epoch_end(metric=train_record)
                 self._val_callbacks.on_epoch_end(metric=val_record)
@@ -343,6 +345,7 @@ class TestWorker(Worker):
         if self._checkpoint is not None:
             self._checkpoint.on_work_begin(worker=self)
         callbacks.on_work_begin(worker=self)
+        self.executor.on_work_begin()
         record = {}
         if self._checkpoint is not None:
             self._checkpoint.on_epoch_begin(counter=epoch_start)

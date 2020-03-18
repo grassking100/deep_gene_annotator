@@ -20,7 +20,8 @@ if __name__ == '__main__':
     parser.add_argument("--target_weight_decay",type=lambda x: [float(v) for v in x.split(',')])
     parser.add_argument("--weight_decay_name",type=lambda x:x.split(','))
     parser.add_argument("--nesterov",action='store_true')
-    parser.add_argument("--reduce_lr_on_plateau",action='store_true')
+    parser.add_argument("--use_lr_scheduler",action='store_true')
+    parser.add_argument("--factor",type=float,default=0.1)
     parser.add_argument("--amsgrad",action='store_true')
     parser.add_argument("--adam_betas",type=lambda x: [float(v) for v in x.split(',')])
 
@@ -30,15 +31,20 @@ if __name__ == '__main__':
     loss_config = {}
     optim_config = {}
     weight_decay_config = {}
+    lr_scheduler_config = {}
     loss_config_keys = ['intron_coef','other_coef','gamma']
     optim_config_keys = ['learning_rate','weight_decay','clip_grad_value','clip_grad_norm','grad_norm_type',
-                         'optim_type','momentum','nesterov','reduce_lr_on_plateau','amsgrad','adam_betas']
-
+                         'optim_type','momentum','nesterov','amsgrad','adam_betas']
+    lr_scheduler_keys = ['use_lr_scheduler','factor']
+    
     for key in loss_config_keys:
         loss_config[key] = kwargs[key]
      
     for key in optim_config_keys:
         optim_config[key] = kwargs[key]
+        
+    for key in lr_scheduler_keys:
+        lr_scheduler_config[key] = kwargs[key]
     
     for key in ['target_weight_decay','weight_decay_name']:
         weight_decay_config[key] = kwargs[key]
@@ -47,6 +53,7 @@ if __name__ == '__main__':
     config['loss_config'] = loss_config
     config['optim_config'] = optim_config
     config['weight_decay_config'] = weight_decay_config
+    config['lr_scheduler_config'] = lr_scheduler_config
     config['generated_time'] = get_time_str()
     
     write_json(config,args.config_path)

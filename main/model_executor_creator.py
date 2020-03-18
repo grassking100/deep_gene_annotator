@@ -8,10 +8,11 @@ from sequence_annotation.process.optuna import IModelExecutorCreator,get_discret
 
 class ModelExecutorCreator(IModelExecutorCreator):
     """Creator to create model and executor by trial parameters"""
-    def __init__(self,clip_grad_norm=None,has_cnn=True,grad_norm_type=None):
+    def __init__(self,clip_grad_norm=None,has_cnn=True,grad_norm_type=None,use_lr_scheduler=False):
         self._grad_norm_type = grad_norm_type or 'inf'
         self._clip_grad_norm = clip_grad_norm
         self._has_cnn = has_cnn
+        self._use_lr_scheduler = use_lr_scheduler
         self._cnn_config_dict = {'cnn_num':'num_layers','cnn_out':'out_channels','kernel_size':'kernel_size'}
         self._rnn_config_dict = {'rnn_hidden':'hidden_size','rnn_num':'num_layers'}
         self._all_config_dict = dict(self._cnn_config_dict)
@@ -29,14 +30,14 @@ class ModelExecutorCreator(IModelExecutorCreator):
         #CNN
         if self._has_cnn:
             config['kernel_size'] = {'lb':65,'ub':321,'step':128,'value':None}
-            config['cnn_out'] = {'lb':4,'ub':8,'step':2,'value':None}
-            config['cnn_num'] = {'lb':4,'ub':12,'step':4,'value':None}
+            config['cnn_out'] = {'lb':8,'ub':16,'step':4,'value':None}
+            config['cnn_num'] = {'lb':8,'ub':16,'step':4,'value':None}
         else:
             config['cnn_num'] = {'value':0}
         #RNN
         config['relation_type'] = {'options':['basic','basic_hier','hier'],'value':None}
         config['rnn_num'] = {'lb':1,'ub':3,'value':None}
-        config['rnn_hidden'] = {'lb':32,'ub':96,'step':32,'value':None}
+        config['rnn_hidden'] = {'lb':64,'ub':128,'step':32,'value':None}
         config['is_rnn_filter'] = {'value':False}
         config['rnn_type'] = {'value':'GRU'}
         #Executor
@@ -60,7 +61,10 @@ class ModelExecutorCreator(IModelExecutorCreator):
         return model_builder        
 
     def _create_executor_builder(self):
-        return ExecutorBuilder()
+        builder = ExecutorBuilder()
+        builder.set_lr_scheduler(self,patience=10,threshold=0.5,
+                                 use_lr_scheduler=self._use_lr_scheduler)
+        return builder
     
     def _set_hyperparameters_from_trial(self,trial,hyper):
         for name, value in trial.params.items():

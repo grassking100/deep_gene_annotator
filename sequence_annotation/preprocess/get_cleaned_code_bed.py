@@ -10,7 +10,7 @@ def main(bed_path,fasta_path,cleaned_bed_path,dirty_bed_path,codes):
     
     bed = read_bed(bed_path)
     fasta = read_fasta(fasta_path)
-    if set(list(bed['id'])) != set(list(fasta.keys())):
+    if set(bed['id']) != set(fasta.keys()):
         raise Exception()
 
     cleaned_ids = []

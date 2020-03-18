@@ -30,7 +30,7 @@ def _append_command(command,appended_command=None,is_maximize=False,by_grid_sear
     return command
     
 def main(saved_root,train_data_path,val_data_path,epoch,batch_size,
-         n_initial_points,n_trials,gpu_ids,
+         n_startup_trials,n_total,gpu_ids,
          appended_command=None,is_maximize=False,by_grid_search=False):
 
     batch_status = None
@@ -57,7 +57,7 @@ def main(saved_root,train_data_path,val_data_path,epoch,batch_size,
         write_json(config,setting_path)
 
     command = COMMAND.format(saved_root,train_data_path,val_data_path,epoch,
-                             batch_size,1,n_initial_points)
+                             batch_size,1,n_startup_trials)
     
     command = _append_command(command,appended_command=appended_command,
                               by_grid_search=by_grid_search,is_maximize=is_maximize)
@@ -65,9 +65,12 @@ def main(saved_root,train_data_path,val_data_path,epoch,batch_size,
     direction = 'maximize' if is_maximize else 'minimize'
     study = create_study(saved_root,direction=direction,load_if_exists=True)
     n_completed = get_n_completed_trial(study)
-    n_total = n_completed + n_trials
-    n_optimized = n_total - n_initial_points
-    n_random = n_initial_points - n_completed
+    if n_completed>=n_startup_trials:
+        n_random = 0
+        n_optimized = n_total-n_completed
+    else:
+        n_random = n_startup_trials - n_completed
+        n_optimized = n_total-n_startup_trials
     if n_random > 0:
         processes = []
         for index in range(n_random):
@@ -87,7 +90,7 @@ def main(saved_root,train_data_path,val_data_path,epoch,batch_size,
 
     if n_optimized >0:
         command = COMMAND.format(saved_root,train_data_path,val_data_path,epoch,
-                                 batch_size,n_optimized,n_initial_points)
+                                 batch_size,n_optimized,n_startup_trials)
         
         command = _append_command(command,appended_command=appended_command,
                                   is_maximize=is_maximize)
@@ -107,9 +110,9 @@ if __name__ == '__main__':
     parser.add_argument("-v","--val_data_path",help="Path of validation data",required=True)
     parser.add_argument("-e","--epoch",type=int,default=100)
     parser.add_argument("-b","--batch_size",type=int,default=32)
-    parser.add_argument("-n","--n_trials",type=int,default=1)   
-    parser.add_argument("-i","--n_initial_points",type=int,default=0)
-    parser.add_argument("-g","--gpu_ids",type=lambda x: int(x).split(','),
+    parser.add_argument("-n","--n_total",type=int,default=1)   
+    parser.add_argument("-i","--n_startup_trials",type=int,default=0)
+    parser.add_argument("-g","--gpu_ids",type=lambda x: [int(item) for item in x.split(',')],
                         default=list(range(torch.cuda.device_count())),help="GPUs to used")
     parser.add_argument("--by_grid_search",action='store_true')    
     parser.add_argument("--is_maximize",action='store_true')

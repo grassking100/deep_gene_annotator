@@ -10,16 +10,20 @@ usage(){
  echo "    -o  <string>  Directory for output"
  echo "    -s  <string>  Source name"
  echo "  Options:"
- echo "    -m  <bool>    Merge regions which are overlapped                        [default: false]"
+ echo "    -m  <bool>    Merge regions which are overlapped                          [default: false]"
  echo "    -c  <bool>    Remove gene with altenative donor site and acceptor site    [default: false]"
+ echo "    -x  <bool>    Remove gene with non-coding transcript                      [default: false]"
  echo "    -t  <string>  Gene and mRNA id converted table path, it will be created if it doesn't be provided"
  echo "    -b  <string>  Path of background bed, it will be set by input path if it doesn't be provided"
+ echo "    -z  <str>     Mode to select for comparing score, valid options are 'bigger_or_equal', 'smaller_or_equal' [default:bigger_or_equal]"
+ echo "    -f  <float>   BED item to preserved when comparing score and threshold, defualt would ignore score"
+ echo "    -y  <float>   If it is true, then the gene with transcript which has failed to passed the score filter would be removed. Otherwise, only the transcript which has failed to passed the score filter would be removed [default: false]"
  echo "    -h            Print help message and exit"
  echo "Example: bash process_data.sh -u 10000 -d 10000 -g /home/io/genome.fasta -i /home/io/example.bed -o ./data/2019_07_12 -s Arabidopsis_1"
  echo ""
 }
 
-while getopts u:d:g:i:o:s:t:b:mcxh option
+while getopts u:d:g:i:o:s:t:b:f:z:mcxyh option
  do
   case "${option}"
   in
@@ -31,9 +35,12 @@ while getopts u:d:g:i:o:s:t:b:mcxh option
    s )source_name=$OPTARG;;
    t )id_convert_table_path=$OPTARG;;
    b )background_bed_path=$OPTARG;;
+   f )score_filter=$OPTARG;;
+   z )compared_mode=$OPTARG;;
    m )merge_overlapped=true;;
    c )remove_alt_site=true;;
    x )remove_non_coding=true;;
+   y )remove_fail_score_gene=true;;
    h )usage; exit 1;;
    : )echo "Option $OPTARG requires an argument"
       usage; exit 1
@@ -80,13 +87,15 @@ if [ ! "$source_name" ]; then
     exit 1
 fi
 
+if [ ! "$id_convert_table_path" ]; then
+    echo "Missing option -t"
+    usage
+    exit 1
+fi
+
 if [ ! "$background_bed_path" ]; then
     echo "Use $bed_path as background_bed_path"
     background_bed_path=$bed_path
-fi
-
-if [ ! "$create_id" ]; then
-    create_id=false
 fi
 
 if [ ! "$merge_overlapped" ]; then
@@ -101,6 +110,13 @@ if [ ! "$remove_non_coding" ]; then
     remove_non_coding=false
 fi
 
+if [ ! "$remove_fail_score_gene" ]; then
+    remove_fail_score_gene=false
+fi
+
+if [ ! "$compared_mode" ]; then
+    compared_mode=bigger_or_equal
+fi
 
 #root
 bash_root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
@@ -108,6 +124,7 @@ result_root=$saved_root/result
 cleaning_root=$saved_root/cleaning
 fasta_root=$saved_root/fasta
 stats_root=$saved_root/stats
+feature_stats_root=$stats_root/feature
 region_selected_root=$saved_root/region_selected
 script_root=$bash_root/..
 preprocess_main_root=$script_root/sequence_annotation/preprocess
@@ -120,17 +137,17 @@ region_bed_path=$result_root/selected_region.bed
 rna_bed_path=$result_root/rna.bed
 result_canonical_bed_path=$result_root/canonical.bed
 region_table_path=$result_root/region_rename_table.tsv
+canonical_gff_path=$result_root/canonical.gff3
+alt_region_gff_path=$result_root/alt_region.gff3
+canonical_h5_path=$result_root/canonical.h5
+alt_region_h5_path=$result_root/alt_region.h5
+alt_region_id_table_path=$result_root/alt_region_id_table.tsv
 
 echo "Start process_main.sh"
 #Create folder
-echo "Step 1: Create folder and create id table"
+echo "Create folder and create id table"
 
 rm -rf $saved_root
-rm -rf $result_root
-rm -rf $region_selected_root
-rm -rf $cleaning_root
-rm -rf $fasta_root
-rm -rf $stats_root
 
 mkdir -p $saved_root
 mkdir -p $result_root
@@ -138,6 +155,7 @@ mkdir -p $cleaning_root
 mkdir -p $region_selected_root
 mkdir -p $fasta_root
 mkdir -p $stats_root
+mkdir -p $feature_stats_root
 
 cp $bed_path $saved_root/input.bed
 
@@ -148,32 +166,42 @@ if [ ! "$id_convert_table_path" ]; then
     
 fi
 
-echo "Step 2: Remove overlapped gene on the same strand"
-python3 $preprocess_main_root/nonoverlap_filter.py -i $saved_root/input.bed -s $cleaning_root \
---use_strand --id_convert_path $id_convert_table_path 
+echo "Step 1: Remove gene or transcript which doesn't pass threshold filter"
 
-echo "Step 2 (Optional): Remove transcript which its gene has alternative donor or acceptor site"
+if [ "$score_filter" ]; then
+    command="$preprocess_main_root/bed_score_filter.py -i $saved_root/input.bed -o $cleaning_root/pass_score_filter.bed --threshold $score_filter --mode $compared_mode -t $id_convert_table_path"
+    if $remove_fail_score_gene ; then
+        command="$command --remove_gene"
+    fi
+    echo "python3 $command"
+    python3 $command
+else
+    cp $saved_root/input.bed $cleaning_root/pass_score_filter.bed
+fi
+
+echo "Step 2: Remove overlapped gene on the same strand"
+python3 $preprocess_main_root/nonoverlap_filter.py -i $cleaning_root/pass_score_filter.bed -s $cleaning_root --use_strand -t $id_convert_table_path 
+
+echo "Step 3 (Optional): Remove transcript which its gene has alternative donor or acceptor site"
 if $remove_alt_site ; then
     python3 $preprocess_main_root/remove_alt_site.py -i $cleaning_root/nonoverlap.bed \
-    -o $cleaning_root/pass_filter_temp.bed -t $id_convert_table_path
+    -o $cleaning_root/pass_no_alt_site_filter.bed -t $id_convert_table_path
 else
-    cp $cleaning_root/nonoverlap.bed $cleaning_root/pass_filter_temp.bed
+    cp $cleaning_root/nonoverlap.bed $cleaning_root/pass_no_alt_site_filter.bed
 fi
 
-echo "Step 2 (Optional): Remove transcript which its gene has non-coding transcript"
+echo "Step 4 (Optional): Remove transcript which its gene has non-coding transcript"
 if $remove_non_coding ; then
-    python3 $preprocess_main_root/belonging_gene_coding_filter.py -i $cleaning_root/pass_filter_temp.bed -t $id_convert_table_path -o $cleaning_root/pass_filter.bed
+    python3 $preprocess_main_root/belonging_gene_coding_filter.py -i $cleaning_root/pass_no_alt_site_filter.bed -t $id_convert_table_path -o $cleaning_root/pass_no_non_coding_filter.bed
 else
-    cp $cleaning_root/pass_filter_temp.bed $cleaning_root/pass_filter.bed
+    cp $cleaning_root/pass_filter_3.bed $cleaning_root/pass_no_non_coding_filter.bed
 fi
 
-rm $cleaning_root/pass_filter_temp.bed
+echo "Step 5: Remove wanted RNAs which are overlapped with unwanted data in specific distance on both strands"
+python3 $preprocess_main_root/recurrent_cleaner.py -r $background_bed_path -c $cleaning_root/pass_no_non_coding_filter.bed -f $genome_fai \
+-u $upstream_dist -d $downstream_dist -s $cleaning_root -t $id_convert_table_path > $cleaning_root/recurrent.log
 
-echo "Step 3: Remove wanted RNAs which are overlapped with unwanted data in specific distance on both strands"
-python3 $preprocess_main_root/recurrent_cleaner.py -r $background_bed_path -c $cleaning_root/pass_filter.bed -f $genome_fai \
--u $upstream_dist -d $downstream_dist -s $cleaning_root --id_convert_path $id_convert_table_path > $cleaning_root/recurrent.log
-
-echo "Step 4: Create regions around wanted RNAs on both strand"
+echo "Step 6: Create regions around wanted RNAs on both strand"
 cp $cleaning_root/recurrent_cleaned.bed $selected_rna_bed_path
 
 if [ -e "$result_root/selected_region.fasta.fai" ]; then
@@ -207,19 +235,19 @@ else
     python3 $preprocess_main_root/region_gene_count_filter.py -i $region_selected_root/rna_region_mapping.bed -r $selected_gene_bed_path -o $region_selected_root/selected_region.bed -e $region_selected_root/discarded_region.bed -u $upstream_dist -d $downstream_dist
 fi
 
-echo "Step 6: Select region which its sequence only has A, T, C, and G"
+echo "Step 7: Select region which its sequence only has A, T, C, and G"
 bedtools getfasta -name -fi $genome_path -bed $region_selected_root/selected_region.bed -fo $region_selected_root/temp.fasta
 python3 $preprocess_main_root/get_cleaned_code_bed.py -b $region_selected_root/selected_region.bed -f $region_selected_root/temp.fasta -o $region_selected_root/cleaned_selected_region.bed -d $region_selected_root/dirty_selected_region.bed
 rm $region_selected_root/temp.fasta
 cp $region_selected_root/cleaned_selected_region.bed $region_bed_path
 
-echo "Step 7: Get RNAs in selected regions"
+echo "Step 8: Get RNAs in selected regions"
 python3 $preprocess_main_root/get_id.py -i $region_bed_path -o $result_root/gene.id
 python3 $preprocess_main_root/get_subbed.py -i $selected_rna_bed_path -d $result_root/gene.id \
 -o $rna_bed_path -t $id_convert_table_path
 rm $result_root/gene.id
 
-echo "Step 8: Rename region and get fasta"
+echo "Step 9: Rename region and get fasta"
 
 python3 $preprocess_main_root/rename_id_by_coordinate.py -i $region_bed_path -p region -t $region_table_path \
 -o $region_bed_path --use_strand --coord_id_as_old_id
@@ -232,32 +260,31 @@ cp $rna_bed_path $result_root/origin_rna.bed
 
 python3 $preprocess_main_root/redefine_coordinate.py -i $rna_bed_path -t $region_table_path -o $rna_bed_path
 
-echo "Step 9: Canonical path decoding"
-python3 $preprocess_main_root/convert_transcript_bed_to_gene_gff.py -i $rna_bed_path -o $result_root/alt_region.gff -t $id_convert_table_path
+echo "Step 10: Create gff about gene structure and alternative status"
+python3 $preprocess_main_root/convert_transcript_to_gene_with_alt_status_gff.py -i $rna_bed_path -o $alt_region_gff_path -t $id_convert_table_path
+
+python3 $preprocess_main_root/create_gene_bed_from_exon_gff.py -i $alt_region_gff_path -o $result_canonical_bed_path
+
+python3 $preprocess_main_root/get_id_table.py -i $alt_region_gff_path -o $alt_region_id_table_path
+python3 $preprocess_main_root/bed2gff.py -i $result_canonical_bed_path -o $canonical_gff_path -t $alt_region_id_table_path
 
 if $remove_alt_site ; then
-    python3 $preprocess_main_root/create_canonical_bed.py -i $result_root/alt_region.gff -o $result_canonical_bed_path -t $preprocess_main_root/standard_codon.tsv -f $result_root/selected_region.fasta
-else
-    python3 $preprocess_main_root/create_canonical_bed.py -i $result_root/alt_region.gff -o $result_canonical_bed_path -t $preprocess_main_root/standard_codon.tsv -f $result_root/selected_region.fasta --alt_site_region_as_exon
-fi
-
-python3 $preprocess_main_root/bed2gff.py -i $result_canonical_bed_path -o $result_root/canonical.gff
-
-if $remove_alt_site ; then
-    python3 $preprocess_main_root/create_ann_genome.py -i $result_root/canonical.gff -r $region_bed_path -o $result_root/canonical.h5 -s source_name --discard_alt_region --discard_UTR_CDS
+    python3 $preprocess_main_root/create_ann_genome.py -i $canonical_gff_path -r $region_bed_path -o $canonical_h5_path -s source_name --discard_alt_region --discard_UTR_CDS
     
 else
-    python3 $preprocess_main_root/create_ann_genome.py -i $result_root/canonical.gff -r $region_bed_path -o $result_root/canonical.h5 -s source_name  --discard_UTR_CDS
+    python3 $preprocess_main_root/create_ann_genome.py -i $canonical_gff_path -r $region_bed_path -o $canonical_h5_path -s source_name  --discard_UTR_CDS
 fi
 
-python3 $preprocess_main_root/create_ann_genome.py -i $result_root/alt_region.gff \
-    -r $region_bed_path -o $result_root/alt_region.h5 -s source_name --with_alt_region --with_alt_site_region
+python3 $preprocess_main_root/create_ann_genome.py -i $alt_region_gff_path \
+    -r $region_bed_path -o $alt_region_h5_path -s source_name --with_alt_region --with_alt_site_region
 
-echo "Step 10: Write statistic data"
+echo "Step 11: Write statistic data"
 num_input_RNAs=$(wc -l < $bed_path )
 num_background_RNAs=$(wc -l < $background_bed_path )
+num_pass_score_filter=$(wc -l < $cleaning_root//pass_score_filter.bed )
 num_nonoverlap=$(wc -l < $cleaning_root/nonoverlap.bed )
-num_pass_filter=$(wc -l < $cleaning_root/pass_filter.bed )
+num_pass_no_alt_site_filter=$(wc -l < $cleaning_root/pass_no_alt_site_filter.bed )
+num_pass_no_non_coding_filter=$(wc -l < $cleaning_root/pass_no_non_coding_filter.bed )
 num_recurrent=$(wc -l < $cleaning_root/recurrent_cleaned.bed )
 num_cleaned_region=$(wc -l < $region_selected_root/selected_region.bed )
 num_dirty_region=$(wc -l < $region_selected_root/dirty_selected_region.bed )
@@ -267,8 +294,10 @@ num_canonical=$(wc -l < $result_canonical_bed_path )
 
 echo "The number of background RNAs: $num_background_RNAs" > $stats_root/count.stats
 echo "The number of selected to input RNAs: $num_input_RNAs" >> $stats_root/count.stats
+echo "The number of RNAs which pass score filter: $num_pass_score_filter" >> $stats_root/count.stats
 echo "The number of RNAs which are not overlap with each other: $num_nonoverlap" >> $stats_root/count.stats
-echo "The number of RNAs passed filter: $num_pass_filter" >> $stats_root/count.stats
+echo "The number of RNAs which their gene have passed no-alt-site filter: $num_pass_no_alt_site_filter" >> $stats_root/count.stats
+echo "The number of RNAs which their gene have passed no-non-coding filter: $num_pass_no_non_coding_filter" >> $stats_root/count.stats
 echo "The number of recurrent-cleaned RNAs: $num_recurrent" >> $stats_root/count.stats
 echo "The number of cleaned regions: $num_cleaned_region" >> $stats_root/count.stats
 echo "The number of dirty regions: $num_dirty_region" >> $stats_root/count.stats
@@ -276,7 +305,7 @@ echo "The number of final regions: $num_final_region" >> $stats_root/count.stats
 echo "The number of cleaned genes in valid regions: $num_canonical" >> $stats_root/count.stats
 echo "The number of cleaned RNAs in valid regions: $num_final_rna" >> $stats_root/count.stats
 
-echo "Step 11: Create double-strand data"
+echo "Step 12: Create double-strand data"
 ds_region_table_path=$result_root/region_rename_table_both_strand.tsv
 ds_region_bed_path=$result_root/selected_region_both_strand.bed
 ds_region_fasta_path=$result_root/selected_region_both_strand.fasta
@@ -288,10 +317,12 @@ bedtools getfasta -name -fi $genome_path -bed $ds_region_bed_path -fo $ds_region
 python3 $preprocess_main_root/rename_bed_chrom.py -i $rna_bed_path -t $ds_region_table_path -o $ds_rna_bed_path
 python3 $preprocess_main_root/rename_bed_chrom.py -i $result_canonical_bed_path -t $ds_region_table_path -o $ds_canonical_bed_path
 
-echo "Step 12: Get fasta of region around TSSs, CAs, donor sites, acceptor sites and get fasta of peptide and cDNA"
+echo "Step 13: Get fasta of region around TSSs, CAs, donor sites, acceptor sites and get fasta of peptide and cDNA"
 echo "       , and write statistic data"
 bash $bash_root/bed_analysis.sh -i $ds_rna_bed_path -f $ds_region_fasta_path \
--o $fasta_root -s $stats_root -c $downstream_dist 1> $stats_root/log.txt 2>&1
+-o $fasta_root -s $stats_root -c $downstream_dist -v $id_convert_table_path 1> $stats_root/log.txt 2>&1
+
+python3  $preprocess_main_root/gff_feature_stats.py -i $canonical_gff_path -f $result_root/selected_region.fasta.fai -o $feature_stats_root
 
 echo "End process_main.sh"
 exit 0

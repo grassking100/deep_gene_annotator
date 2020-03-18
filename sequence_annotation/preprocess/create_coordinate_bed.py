@@ -2,14 +2,16 @@ import os,sys
 sys.path.append(os.path.dirname(__file__)+"/../..")
 import pandas as pd
 from argparse import ArgumentParser
-from sequence_annotation.utils.utils import BED_COLUMNS, read_bed, write_bed
-from utils import get_id_table, coordinate_consist_filter 
+from sequence_annotation.utils.utils import read_gff,get_gff_with_attribute
+from sequence_annotation.utils.utils import read_bed, write_bed
+from sequence_annotation.preprocess.get_id_table import get_id_convert_dict
+from sequence_annotation.preprocess.create_coordinate_data import coordinate_consist_filter 
 
-def create_coordinate_bed(consist_data,bed):
-    consist_data['start_diff'] = consist_data['coordinate_start'] - consist_data['start']
-    consist_data['end_diff'] = consist_data['coordinate_end'] - consist_data['end']
+def create_coordinate_bed(coordinate_bed_data):
+    coordinate_bed_data['start_diff'] = coordinate_bed_data['coordinate_start'] - coordinate_bed_data['start']
+    coordinate_bed_data['end_diff'] = coordinate_bed_data['coordinate_end'] - coordinate_bed_data['end']
     returned = []
-    for item in consist_data.to_dict('record'):
+    for item in coordinate_bed_data.to_dict('record'):
         count = int(item['count'])
         block_related_start = [int(val) for val in item['block_related_start'].split(',')[:count]]
         block_size = [int(val) for val in item['block_size'].split(',')[:count]]
@@ -39,24 +41,28 @@ if __name__ == "__main__":
                             " by cooridnate data and origin data in BED foramt")
     parser.add_argument("-i", "--bed_path",required=True)
     parser.add_argument("-c", "--coordinate_data_path",required=True)
-    parser.add_argument("-t", "--id_convert_path",required=True)
+    parser.add_argument("-t", "--id_table_path",required=True)
     parser.add_argument("-o", "--output_path",required=True)
     parser.add_argument("--single_orf_start_end",action='store_true',
                         help="If it is selected, then only gene data "+
                         "which have single ORF will be saved")
     args = parser.parse_args()
-    id_convert = get_id_table(args.id_convert_path)
+
+    id_convert_dict = get_id_convert_dict(args.id_table_path)
+    
     if os.path.exists(args.output_path):
         print("Result files are already exist, procedure will be skipped.")
     else:
-        coordinat_data = pd.read_csv(args.coordinate_data_path,sep='\t')
+        coordinate_data = get_gff_with_attribute(read_gff(args.coordinate_data_path))
+        coordinate_data = coordinate_data[['start','end','ref_name']]
+        coordinate_data = coordinate_data.rename(columns={'start':'coordinate_start','end':'coordinate_end'})
         bed = read_bed(args.bed_path)
-        coordinat_data = bed.merge(coordinat_data,left_on='id', right_on='ref_name')
-        coordinate_bed = create_coordinate_bed(coordinat_data,bed)
-        coordinate_bed['gene_id'] = [id_convert[id_] for id_ in coordinate_bed['id']]
+        coordinate_bed_data = bed.merge(coordinate_data,left_on='id', right_on='ref_name')
+        coordinate_bed = create_coordinate_bed(coordinate_bed_data)
+        coordinate_bed['gene_id'] = [id_convert_dict[id_] for id_ in coordinate_bed['id']]
         if args.single_orf_start_end:
             coordinate_bed = coordinate_consist_filter(coordinate_bed,'gene_id','thick_start')
             coordinate_bed = coordinate_consist_filter(coordinate_bed,'gene_id','thick_end')
-        coordinate_bed = coordinate_bed[BED_COLUMNS]
-        coordinate_bed = coordinate_bed[~coordinate_bed.duplicated()].sort_values(by=['chr','start','end','strand'])
+        #coordinate_bed = coordinate_bed[~coordinate_bed.duplicated()].sort_values(by=['chr','start','end','strand'])
+        coordinate_bed = coordinate_bed.sort_values(by=['chr','start','end','strand'])
         write_bed(coordinate_bed,args.output_path)

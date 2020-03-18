@@ -8,9 +8,9 @@ from sequence_annotation.genome_handler.exception import InvalidStrandType
 def region_gene_count_filter(region_bed,gene_bed,upstream_distance,
                              downstream_distance):
     regions = region_bed.to_dict('record')
-    invalid_strand = gene_bed[~gene_bed['strand'].isin(['+','-'])]
-    if len(invalid_strand) != 0:
-        raise InvalidStrandType("Invalid strand exist in RNA data")
+    invalid_strands = gene_bed[~gene_bed['strand'].isin(['+','-'])]
+    if len(invalid_strands) != 0:
+        raise InvalidStrandType(invalid_strands)
 
     valid_bed_items = []
     invalid_bed_items = []

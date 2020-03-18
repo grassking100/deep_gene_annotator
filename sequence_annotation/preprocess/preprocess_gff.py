@@ -2,7 +2,7 @@ import os, sys
 sys.path.append(os.path.dirname(__file__)+"/../..")
 from argparse import ArgumentParser
 from sequence_annotation.utils.utils import read_gff, write_gff, dupliacte_gff_by_parent
-from sequence_annotation.utils.utils import get_gff_with_attribute,get_gff_with_update_attribute
+from sequence_annotation.utils.utils import get_gff_with_attribute,get_gff_with_updated_attribute
 from sequence_annotation.preprocess.utils import get_gff_with_belonging,UORF_TYPES,PROTEIN_TYPES,MIRNA_TPYES
 
 if __name__ == "__main__":
@@ -22,5 +22,5 @@ if __name__ == "__main__":
     discarded_gene_ids = list(gff[gff['feature'].isin(['miRNA_primary_transcript'])]['parent'])
     discarded_ids = list(gff[gff['feature'].isin(UORF_TYPES+PROTEIN_TYPES+MIRNA_TPYES)]['id'])
     gff = gff[(~gff['belong_gene'].isin(discarded_gene_ids)) & (~gff['id'].isin(discarded_ids))]
-    gff = get_gff_with_update_attribute(gff)
+    gff = get_gff_with_updated_attribute(gff)
     write_gff(gff,args.output_gff_path)

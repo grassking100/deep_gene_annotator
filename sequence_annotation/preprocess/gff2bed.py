@@ -56,13 +56,13 @@ def simple_gff2bed(gff):
 def gff2bed(gff):
     gff = get_gff_with_attribute(gff,['parent'])
     gff = dupliacte_gff_by_parent(gff)
-    RNAs = gff[gff['feature'].isin(RNA_TYPES)].copy(deep=True)
+    RNAs = gff[gff['feature'].isin(RNA_TYPES)].copy()
 
-    if 'conf_rating' in RNAs.columns:
+    if 'conf_class' in RNAs.columns:
         ratings = []
-        for rating in RNAs['conf_rating']:
-            if rating == rating:
-                ratings.append(len(rating))  
+        for rating in RNAs['conf_class']:
+            if rating is not None:
+                ratings.append(rating)
             else:
                 ratings.append(".")  
         RNAs.loc[:,'score'] = ratings
@@ -75,14 +75,14 @@ def gff2bed(gff):
     bed_info_list = []
     for rna in RNAs.to_dict('record'):
         id_ = rna['id']
-        try:
+        if id_ in exons.groups.keys():
             selected_exons = exons.get_group(id_)
-        except KeyError:
+        else:
             selected_exons = pd.DataFrame.from_dict([rna])
-        try:
+        if id_ in CDSs.groups.keys():
             selected_CDSs = CDSs.get_group(id_)
             orf = extract_orf(selected_CDSs)
-        except KeyError:
+        else:
             orf = {'id':id_,'thick_start':rna['start'],'thick_end':rna['start']-1}
         bed_info = gff_info2bed_info(rna,selected_exons,orf)
         bed_info_list.append(bed_info)

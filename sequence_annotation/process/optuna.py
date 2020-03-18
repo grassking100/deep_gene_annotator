@@ -249,12 +249,12 @@ class OptunaTrainer:
     def _callback(self,study,frozen_trial):
         self._saved_trial_result(frozen_trial)
     
-    def _create_study(self,n_initial_points=None):
-        skopt_kwargs={}
-        if n_initial_points is not None:
-            skopt_kwargs['n_initial_points'] = n_initial_points
+    def _create_study(self,n_startup_trials=None):
+        n_startup_trials = n_startup_trials or 0
+        skopt_kwargs={'n_initial_points':0}
+        sampler = SkoptSampler(skopt_kwargs=skopt_kwargs,n_startup_trials=n_startup_trials)
         study = create_study(self._saved_root,direction=self._direction,load_if_exists=True,
-                             pruner=NopPruner(),sampler=SkoptSampler(skopt_kwargs=skopt_kwargs))
+                             pruner=NopPruner(),sampler=sampler)
         if not os.path.exists(self._trial_list_path):
             with open(self._trial_list_path,"w") as fp:
                 fp.write("trial_number\tpath\n")
@@ -282,8 +282,8 @@ class OptunaTrainer:
         self._objective(trial,set_by_trial_config=True)
         self._saved_trial_result(trial)
 
-    def optimize(self,n_initial_points=None,n_trials=None):
-        n_initial_points = n_initial_points or 0
+    def optimize(self,n_startup_trials=None,n_trials=None):
+        n_startup_trials = n_startup_trials or 0
         n_trials = n_trials or creator.space_size
         create_folder(self._saved_root)
         space_config_path = os.path.join(self._saved_root,'space_config.json')
@@ -304,6 +304,6 @@ class OptunaTrainer:
         torch.cuda.empty_cache()
         print("Memory is available")
 
-        self._study = self._create_study(n_initial_points)
+        self._study = self._create_study(n_startup_trials)
         self._study.optimize(self._objective, n_trials=n_trials,
                              callbacks=[self._callback])

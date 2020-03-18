@@ -4,6 +4,7 @@ import torch
 import random
 import deepdish as dd
 import pandas as pd
+pd.set_option('mode.chained_assignment', 'raise')
 import numpy as np
 sys.path.append(os.path.abspath(os.path.dirname(__file__)+"/.."))
 from sequence_annotation.utils.utils import BASIC_GENE_MAP

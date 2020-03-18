@@ -10,7 +10,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__+"/../..")))
 from sequence_annotation.utils.utils import create_folder, print_progress, write_gff, write_json
 from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES,BASIC_GENE_MAP,read_region_table
 from sequence_annotation.genome_handler.region_extractor import GeneInfoExtractor
-from sequence_annotation.genome_handler.sequence import AnnSequence
+from sequence_annotation.genome_handler.sequence import AnnSequence,PLUS
 from sequence_annotation.genome_handler.region_extractor import RegionExtractor
 from sequence_annotation.genome_handler.seq_container import SeqInfoContainer
 from sequence_annotation.genome_handler.ann_seq_processor import get_background,vecs2seq
@@ -25,16 +25,16 @@ basic_inference = create_basic_inference()
 def _create_ann_seq(chrom,length,ann_types):
     ann_seq = AnnSequence(ann_types,length)
     ann_seq.id = ann_seq.chromosome_id = chrom
-    ann_seq.strand = 'plus'
+    ann_seq.strand = PLUS
     return ann_seq
 
-class GffPostProcessor:
+class GFFProcessor:
     def __init__(self,gene_info_extractor,
                  donor_site_pattern=None,acceptor_site_pattern=None,
                  length_threshold=None,distance=None,
                  gene_length_threshold=None):
         """
-        The post-processor fixes annotatioin result in GFF format by its DNA sequence information
+        The processor fixes annotatioin result in GFF format by its DNA sequence information
         distance : int
             Valid distance  
         donor_site_pattern : str (default : GT)
@@ -164,24 +164,24 @@ class GffPostProcessor:
         return gff
 
 class AnnVecGffConverter:
-    def __init__(self,channel_order,gff_post_processor):
+    def __init__(self,channel_order,gff_processor):
         """
         The converter fix annotation vectors by their DNA sequences' information and convert to GFF format
         Parameters:
         ----------
         channel_order : list of str
             Channel order of annotation vector
-        gff_post_processor : GffPostProcessor
+        gff_processor : GFFProcessor
             The processor fix annotatioin result in GFF format 
         """
         self.channel_order = channel_order
-        self.gff_post_processor = gff_post_processor
+        self.gff_processor = gff_processor
 
     def get_config(self):
         config = {}
         config['class'] = self.__class__.__name__
         config['channel_order'] = self.channel_order
-        config['gff_post_processor'] = self.gff_post_processor.get_config()
+        config['gff_processor'] = self.gff_processor.get_config()
         return config
 
     def _vecs2info_dict(self,chrom_ids,lengths,ann_vecs):
@@ -189,8 +189,8 @@ class AnnVecGffConverter:
         seq_info_dict = {}
         for chrom_id,ann_vec, length in zip(chrom_ids,ann_vecs,lengths):
             one_hot_vec = ann_vec2one_hot_vec(ann_vec,length)
-            ann_seq = vecs2seq(one_hot_vec,chrom_id,'plus',self.channel_order)
-            info = self.gff_post_processor.gene_info_extractor.extract_per_seq(ann_seq)
+            ann_seq = vecs2seq(one_hot_vec,chrom_id,PLUS,self.channel_order)
+            info = self.gff_processor.gene_info_extractor.extract_per_seq(ann_seq)
             seq_info_dict[chrom_id] = info
         return seq_info_dict
     
@@ -210,11 +210,11 @@ class AnnVecGffConverter:
             if len(info) > 0:
                 gff = info.to_gff()
                 try:
-                    info = self.gff_post_processor.process(chrom_id,length,dna_seq,gff)
+                    info = self.gff_processor.process(chrom_id,length,dna_seq,gff)
                     returned.append(info)
                 except EmptyContainerException:
                     pass
-        returned = pd.concat(returned)
+        returned = pd.concat(returned).reset_index(drop=True)
         return returned
     
     def vecs2processed_gff(self,chrom_ids,lengths,dna_seqs,ann_vecs):
@@ -223,19 +223,19 @@ class AnnVecGffConverter:
         fixed_gff = self._info_dict2processed_gff(chrom_ids,lengths,dna_seqs,info_dict)
         return fixed_gff
     
-    def vecs2gff(self,chrom_ids,lengths,ann_vecs):
+    def vecs2gff(self,chrom_ids,lengths,dna_seqs,ann_vecs):
         """Convert annotation vectors to GFF about region data"""
-        p = self.gff_post_processor
+        p = self.gff_processor
         if p.distance==0 and p.length_threshold==0 and p.gene_length_threshold == 0:
             gff = self.vecs2raw_gff(chrom_ids,lengths,ann_vecs)
         else:
-            gff = self.vecs2processed_gff(chrom_ids,lengths,ann_vecs)
+            gff = self.vecs2processed_gff(chrom_ids,lengths,dna_seqs,ann_vecs)
         return gff
 
 def build_ann_vec_gff_converter(channel_order,simply_map,**kwargs):
     gene_info_extractor = GeneInfoExtractor(simply_map)
-    gff_post_processor = GffPostProcessor(gene_info_extractor,**kwargs)
-    ann_vec_gff_converter = AnnVecGffConverter(channel_order,gff_post_processor)
+    gff_processor = GFFProcessor(gene_info_extractor,**kwargs)
+    ann_vec_gff_converter = AnnVecGffConverter(channel_order,gff_processor)
     return ann_vec_gff_converter
 
 def _convert_raw_output_to_vectors(outputs):
@@ -265,7 +265,7 @@ def _convert_vectors_to_gff(chrom_ids,lengths,masks,dna_seqs,ann_vecs,
                          transcript_threshold=transcript_threshold,
                          intron_threshold=intron_threshold)
     ann_vecs = ann_vecs.cpu().numpy()
-    info = ann_vec_gff_converter.vecs2gff(chrom_ids,lengths,ann_vecs)
+    info = ann_vec_gff_converter.vecs2gff(chrom_ids,lengths,dna_seqs,ann_vecs)
     return info
 
 def convert_raw_output_to_gff(raw_outputs,region_table,config_path,gff_path,

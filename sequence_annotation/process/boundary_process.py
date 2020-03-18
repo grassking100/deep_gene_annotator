@@ -1,5 +1,6 @@
 import re
 from ..preprocess.utils import RNA_TYPES
+from ..genome_handler.exception import InvalidStrandType
 from ..genome_handler.sequence import AnnSequence
 from ..genome_handler.ann_seq_processor import get_background
 
@@ -75,8 +76,9 @@ def get_splice_pairs(gff):
     list (tuple)
         List of paired sites of donor site and acceptor site in one based
     """
-    if (gff['strand'] != '+').any():
-        raise Exception("Invalid strand")
+    strands = set(gff['strand'])
+    if strands != set(['+']):
+        raise InvalidStrandType(strands)
 
     introns = gff[gff['feature'] == 'intron']
     pairs = list(zip(list(introns['start']),list(introns['end'])))
