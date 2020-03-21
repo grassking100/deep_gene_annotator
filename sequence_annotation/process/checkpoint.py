@@ -17,6 +17,10 @@ class Recorder(DataCallback):
         self._epoch = None
 
     @property
+    def epoch(self):
+        return self._epoch
+        
+    @property
     def epoch_start(self):
         return self._epoch_start
         
@@ -426,7 +430,8 @@ class Checkpoint(Callback):
         if not self._has_updated:
             return
         name = _get_name(self.recorder.path)
-        new_record_path = '{}_epoch_{}.json'.format(name,self.recorder.epoch_start)
+        epoch = self.recorder.epoch
+        new_record_path = '{}_epoch_{}.json'.format(name,epoch)
         new_record_path = os.path.join(self.checkpoint_root,new_record_path)
         if not os.path.exists(new_record_path):
             copy_file(self.recorder.path,new_record_path)
@@ -502,7 +507,7 @@ class Checkpoint(Callback):
         self.callbacks.on_work_end(**kwargs)
         self._save_checkpoint()
         self._record = self.recorder.data
-        if self.model_checkpoint.best_epoch is not None and self._has_updated:
+        if self.model_checkpoint.best_epoch is not None:
             best_result = get_best_result(self.model_checkpoint.best_epoch,self.record)
             best_target_at_result = best_result[self.model_checkpoint.target]
             if best_target_at_result != self.model_checkpoint.best_result:
@@ -511,8 +516,8 @@ class Checkpoint(Callback):
                                                                                              self.model_checkpoint.best_epoch))
             self._best_result = best_result
             self._best_epoch = self.model_checkpoint.best_epoch
-            print("Save best result of epoch {}".format(self.model_checkpoint.best_epoch))
-            if self.best_record_path is not None:
+            if self._has_updated and self.best_record_path is not None:
+                print("Save best result of epoch {}".format(self.model_checkpoint.best_epoch))
                 best_result = get_best_result(self.model_checkpoint.best_epoch,self.record)
                 best_result = {'best_epoch':self.model_checkpoint.best_epoch,
                                'best_result':best_result,

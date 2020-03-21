@@ -11,7 +11,7 @@ from .data_processor import AnnSeqProcessor
 from .utils import param_num
 from .worker import TrainWorker,TestWorker
 from .tensorboard_writer import TensorboardWriter
-from .callback import CategoricalMetric,TensorboardCallback
+from .callback import CategoricalMetric,TensorboardCallback,LearningRateHolder
 from .callback import SeqFigCallback, Callbacks,ContagionMatrix
 from .signal_handler import build_signal_handler
 from .data_generator import SeqGenerator,seq_collate_wrapper
@@ -123,7 +123,8 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         train_callbacks = Callbacks()
         train_metric = self._create_categorical_metric()
         train_matrix = self._create_contagion_matrix()
-        train_callbacks.add([train_metric,train_matrix])
+        learning_rate_holder = LearningRateHolder()
+        train_callbacks.add([train_metric,train_matrix,learning_rate_holder])
         val_callbacks = Callbacks()
         val_metric = self._create_categorical_metric(prefix='val')
         val_matrix = self._create_contagion_matrix(prefix='val')

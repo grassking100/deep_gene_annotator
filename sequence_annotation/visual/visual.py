@@ -111,6 +111,6 @@ def partial_dependence_plot(df,column_name,round_value=None,only_show_completed=
 
     plt.plot(sorted_keys,sorted_medians,label='median')
     plt.plot(sorted_keys,sorted_values,label='mean')
-    plt.fill_between(sorted_keys,sorted_values-sorted_stds,sorted_values+sorted_stds,alpha=.3,label='std')
-    plt.fill_between(sorted_keys,sorted_mins,sorted_maxs,alpha=.1,label='boundary')
+    plt.fill_between(sorted_keys,sorted_values-sorted_stds,sorted_values+sorted_stds,alpha=.4,label='std')
+    plt.fill_between(sorted_keys,sorted_mins,sorted_maxs,alpha=.2,label='boundary')
     plt.legend()

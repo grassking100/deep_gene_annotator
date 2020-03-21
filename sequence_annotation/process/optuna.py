@@ -1,5 +1,6 @@
 import torch
 import os
+import warnings
 import enum
 import datetime
 import optuna
@@ -59,7 +60,7 @@ def _config_to_frozen_trial(config):
     distributions = dict(config['distributions'])
     config['distributions'] = {}
     for key,value in distributions.items():
-        config['distributions'][key] = eval(value)
+        config['distributions'][key] = eval("optuna.distributions.{}".format(value))
     config["state"] = TrialState.COMPLETE
     return FrozenTrial(**config,trial_id=config['number']+1)
 
@@ -230,17 +231,12 @@ class OptunaTrainer:
 
         #Save best result as final result
         best_result = worker.best_result[self._monitor_target]
-        if optuna_callback.has_updated:
-            trial.report(best_result)
-        else:
-            self._study._storage.set_trial_state(trial.number+1, TrialState.COMPLETE)
-
-        if optuna_callback.is_prune:
-            raise TrialPruned()
-            
+        print("Return {} as best result of trial {}".format(best_result,trial.number+1))
         return best_result
 
     def _saved_trial_result(self,frozen_trial):
+        if not isinstance(frozen_trial,FrozenTrial):
+            raise Exception("Result trail must be FrozenTrial")
         result_path = self._get_trial_result_path(frozen_trial)
         config = _config_to_json(get_frozen_trial_config(frozen_trial))
         _shift_config_number(config,self._trial_start_number)
@@ -252,6 +248,7 @@ class OptunaTrainer:
     def _create_study(self,n_startup_trials=None):
         n_startup_trials = n_startup_trials or 0
         skopt_kwargs={'n_initial_points':0}
+        warnings.warn("The n_initial_points in skopt_kwargs is set to 0, PLEASE MAKE SURE the optuna version is >=1.2.0\n\n")
         sampler = SkoptSampler(skopt_kwargs=skopt_kwargs,n_startup_trials=n_startup_trials)
         study = create_study(self._saved_root,direction=self._direction,load_if_exists=True,
                              pruner=NopPruner(),sampler=sampler)
@@ -269,18 +266,28 @@ class OptunaTrainer:
         trial = Trial(study, trial_id)
         record_path = os.path.join(self._get_trial_root(trial),'checkpoint/train_record.json')
         if os.path.exists(record_path):
+            print("Load existed record {} to trial {}".format(record_path,trial_id))
             record = read_json(record_path)
             for index,value in enumerate(record[self._monitor_target]):
                 trial.report(value,index+1)
-        trial.set_system_attr('fail_reason',None)
-        trial.set_user_attr('set_by_grid_search',True)
+        trial.set_system_attr('fail_reason',float('nan'))
         return trial
 
-    def train_single_trial(self,trial_number):
+    def train_single_trial(self,existed_trial_config):
+        trial_number = existed_trial_config['number']
+        trial_id = trial_number + 1
         self._study = self._create_study()
+        trial = self._study.get_trials()[trial_number]
+        if trial.state == TrialState.COMPLETE:
+            return
         trial = self._get_resumed_trial(self._study,trial_number)
-        self._objective(trial,set_by_trial_config=True)
-        self._saved_trial_result(trial)
+        result = self._objective(trial,set_by_trial_config=True)
+        self._study._storage.set_trial_value(trial_id, result)
+        self._study._storage.set_trial_state(trial_id, TrialState.COMPLETE)
+        self._study._log_completed_trial(trial_number, result)        
+        
+        frozen_trial = self._study.get_trials()[trial_number]
+        self._saved_trial_result(frozen_trial)
 
     def optimize(self,n_startup_trials=None,n_trials=None):
         n_startup_trials = n_startup_trials or 0

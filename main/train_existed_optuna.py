@@ -11,7 +11,9 @@ from main.model_executor_creator import ModelExecutorCreator
 
 def main(optuna_root,saved_root,epoch=None):
     saved_name = saved_root.split('/')[-1]
-    trial_settings = read_json(os.path.join(saved_root,'{}_config.json'.format(saved_name)))
+    config_path = os.path.join(saved_root,'{}_config.json'.format(saved_name))
+    print("Use existed config path, {}, to build trainer".format(config_path))
+    trial_settings = read_json(config_path)
     optuna_settings = read_json(os.path.join(optuna_root,'optuna_setting.json'))
     train_data_path = optuna_settings['train_data_path']
     val_data_path = optuna_settings['val_data_path']
@@ -28,11 +30,14 @@ def main(optuna_root,saved_root,epoch=None):
     grad_norm_type = optuna_settings['grad_norm_type']
     trial_number = trial_settings['number']
     save_distribution = optuna_settings['save_distribution']
+    use_lr_scheduler = optuna_settings['use_lr_scheduler']
+    
 
     backend_deterministic(False)
     creator = ModelExecutorCreator(clip_grad_norm=clip_grad_norm,
                                    grad_norm_type=grad_norm_type,
-                                   has_cnn=has_cnn)
+                                   has_cnn=has_cnn,
+                                   use_lr_scheduler=use_lr_scheduler)
     #Load, parse and save data
     train_data = load_data(train_data_path)
     val_data = load_data(val_data_path)
@@ -48,7 +53,7 @@ def main(optuna_root,saved_root,epoch=None):
                             augment_up_max=augment_up_max,augment_down_max=augment_down_max,
                             save_distribution=save_distribution)
 
-    trainer.train_single_trial(trial_number)
+    trainer.train_single_trial(trial_settings)
 
 if __name__ == '__main__':
     parser = ArgumentParser()

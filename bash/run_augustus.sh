@@ -133,9 +133,9 @@ optimize_augustus.pl  --cpus=8 --species=$species --UTR=on --metapars=$AUGUSTUS_
 echo "Train after hyperparameter optimizer"
 etraining --species=$species $train_gb --UTR=on > train.final.out
 echo "Predict"
-augustus --species=$species $train_fasta --UTR=on --alternatives-from-sampling=$alternatives_from_sampling --genemodel=$genemodel --gff=on > $train_dir/train.final.predict.gff
+augustus --species=$species $train_fasta --UTR=on --alternatives-from-sampling=$alternatives_from_sampling --genemodel=$genemodel --gff3=on > $train_dir/train.final.predict.gff
 augustus --species=$species $train_gb --UTR=on --alternatives-from-sampling=$alternatives_from_sampling --genemodel=$genemodel > $train_dir/train.final.predict.out
-augustus --species=$species $test_fasta --UTR=on --alternatives-from-sampling=$alternatives_from_sampling --genemodel=$genemodel --gff=on > $test_dir/test.final.predict.gff
+augustus --species=$species $test_fasta --UTR=on --alternatives-from-sampling=$alternatives_from_sampling --genemodel=$genemodel --gff3=on > $test_dir/test.final.predict.gff
 augustus --species=$species $test_gb --UTR=on --alternatives-from-sampling=$alternatives_from_sampling --genemodel=$genemodel > $test_dir/test.final.predict.out
 
 cp -r -t $data_root $species_path

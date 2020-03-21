@@ -497,27 +497,27 @@ class OptunaCallback(Callback):
         self.target = target or 'val_loss'
         self._counter = None
         self._worker = None
-        self._is_prune = None
+        #self._is_prune = None
        
     @property
     def has_updated(self):
         return self._counter is not None
     
-    @property
-    def is_prune(self):
-        return self._is_prune
+    #@property
+    #def is_prune(self):
+    #    return self._is_prune
 
-    def _handle_prune(self):
-        self._is_prune = self.trial.should_prune()
-        if self.is_prune:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore",category=WorkerProtectedWarning)
-                self._worker.is_running = False
+    #def _handle_prune(self):
+    #    self._is_prune = self.trial.should_prune()
+    #    if self.is_prune:
+    #        with warnings.catch_warnings():
+    #            warnings.simplefilter("ignore",category=WorkerProtectedWarning)
+    #            self._worker.is_running = False
 
     def on_work_begin(self, worker,**kwargs):
         self._counter = None
         self._worker = worker
-        self._handle_prune()
+        #self._handle_prune()
                 
     def get_config(self,**kwargs):
         config = super().get_config(**kwargs)
@@ -533,4 +533,18 @@ class OptunaCallback(Callback):
             return
 
         self.trial.report(target,self._counter)
-        self._handle_prune()
+        
+class LearningRateHolder(Callback):
+    def __init__(self,prefix=None):
+        set_prefix(self,prefix)
+        self._executor = None
+        
+    def on_work_begin(self,worker,**kwargs):
+        self._executor = worker.executor
+
+    @property
+    def data(self):
+        data = {}
+        for index,group in enumerate(self._executor.optimizer.param_groups):
+            data["{}lr_{}".format(self._prefix,index)] = group['lr']
+        return data

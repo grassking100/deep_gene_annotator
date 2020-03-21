@@ -62,16 +62,23 @@ class ModelExecutorCreator(IModelExecutorCreator):
 
     def _create_executor_builder(self):
         builder = ExecutorBuilder()
-        builder.set_lr_scheduler(self,patience=10,threshold=0.5,
+        builder.set_lr_scheduler(patience=10,threshold=0,factor=0.5,
                                  use_lr_scheduler=self._use_lr_scheduler)
         return builder
     
     def _set_hyperparameters_from_trial(self,trial,hyper):
         for name, value in trial.params.items():
+            if name in ['cnn_num','kernel_size','rnn_num','cnn_out','rnn_hidden']:
+                value = int(value)
+            print("Set trial.param's {} to {}".format(name,value))
+            
             hyper[name] = {'value':value}
         for name, value in trial.system_attrs.items():
+            print("Set trial.system_attrs's {} to {}".format(name,value))
             hyper[name] = {'value':value}
+            
         for name, value in trial.user_attrs.items():
+            print("Set trial.user_attrs's {} to {}".format(name,value))
             hyper[name] = {'value':value}
     
     def _update_builder(self,hyper,model_builder,executor_builder):
@@ -124,7 +131,6 @@ class ModelExecutorCreator(IModelExecutorCreator):
     def get_trial_config(self,trial,set_by_trial_config=False):
         self._index =trial.number
         hyper = self.create_default_hyperparameters()
-
         if set_by_trial_config:
             self._set_hyperparameters_from_trial(trial,hyper)
         
@@ -211,8 +217,6 @@ class ModelExecutorCreator(IModelExecutorCreator):
         return self._create(config)
 
     def create_by_trial(self,trial,set_by_trial_config=False,set_by_grid_search=False):
-        if set_by_trial_config:
-            set_by_grid_search = trial.user_attrs['set_by_grid_search']
         trial.set_user_attr("set_by_grid_search",set_by_grid_search)
         if set_by_grid_search:
             return self._create_by_grid_search(trial)

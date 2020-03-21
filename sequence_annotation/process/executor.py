@@ -237,9 +237,9 @@ class ExecutorBuilder:
         self._learning_rate = 1e-3
         self._optimizer_kwargs = None
         self._use_lr_scheduler = False
-        self._threshold = 0.1
+        self._threshold = 0
         self._patience = 10
-        self._factor = 0
+        self._factor = 0.5
         self._optim_type = 'Adam'
 
     def set_optimizer(self,optim_type,learning_rate=None,
