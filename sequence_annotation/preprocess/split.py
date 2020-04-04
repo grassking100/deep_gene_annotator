@@ -4,7 +4,8 @@ import numpy as np
 from argparse import ArgumentParser
 from collections import OrderedDict
 sys.path.append(os.path.dirname(__file__)+"/../..")
-from sequence_annotation.utils.utils import read_fai, write_json, read_region_table
+from sequence_annotation.utils.utils import read_fai, write_json
+from sequence_annotation.preprocess.utils import read_region_table
 
 def _get_chrom_str(chrom_ids):
     if not isinstance(chrom_ids,list):
@@ -94,7 +95,6 @@ def main(fai_path,region_path,id_source,saved_root,treat_strand_independent=Fals
     if fold_num is None:
         #Splitting Training and valdation chromosomes and testing chromosome
         test_chrom_id = _get_min_chrom(fai)
-        
         test_table = region_rename_table[region_rename_table['chr']==test_chrom_id]
         train_val_table = region_rename_table[region_rename_table['chr']!=test_chrom_id]
         #Assign belonging in train_val_table
@@ -109,6 +109,12 @@ def main(fai_path,region_path,id_source,saved_root,treat_strand_independent=Fals
             train_val_table = train_val_table.assign(belonging=train_val_table['chr'])   
     else:
         train_val_group,test_group = grouping(fai,fold_num)
+        lengths = {}
+        for group_id,group in train_val_group.items():
+            lengths[group_id] = sum([fai[id_] for id_ in group])
+        for group_id,group in test_group.items():
+            lengths[group_id] = sum([fai[id_] for id_ in group])
+        write_json(lengths,os.path.join(saved_root,'lengths.json'))
         write_json(train_val_group,os.path.join(saved_root,'train_val_group.json'))
         write_json(test_group,os.path.join(saved_root,'test_group.json'))
         if treat_strand_independent:
@@ -163,6 +169,9 @@ def main(fai_path,region_path,id_source,saved_root,treat_strand_independent=Fals
     #Write training and validation table
     train_val_path = os.path.join(saved_root,'train_val_{}.txt'.format(_get_chrom_str(train_val_chrom_ids)))
     _export_region_data(train_val_table,train_val_path,id_source)
+    
+    train_val_test_paths = {'train_val_path':train_val_path,'test_path':test_path}
+    write_json(train_val_test_paths,os.path.join(saved_root,'train_val_test_path.json'))
     
     #Write statistic result
     train_val_length = list(train_val_table['length'])

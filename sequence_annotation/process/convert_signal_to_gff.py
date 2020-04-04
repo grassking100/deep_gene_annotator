@@ -1,241 +1,70 @@
 import os
 import sys
 import torch
-import pandas as pd
 import numpy as np
 import deepdish as dd
 from argparse import ArgumentParser
 from torch.nn.utils.rnn import pad_sequence
 sys.path.append(os.path.dirname(os.path.abspath(__file__+"/../..")))
 from sequence_annotation.utils.utils import create_folder, print_progress, write_gff, write_json
-from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES,BASIC_GENE_MAP,read_region_table
+from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES,BASIC_GENE_MAP
 from sequence_annotation.genome_handler.region_extractor import GeneInfoExtractor
-from sequence_annotation.genome_handler.sequence import AnnSequence,PLUS
-from sequence_annotation.genome_handler.region_extractor import RegionExtractor
+from sequence_annotation.genome_handler.sequence import PLUS
 from sequence_annotation.genome_handler.seq_container import SeqInfoContainer
-from sequence_annotation.genome_handler.ann_seq_processor import get_background,vecs2seq
+from sequence_annotation.genome_handler.ann_seq_processor import vecs2seq
+from sequence_annotation.preprocess.utils import read_region_table
 from sequence_annotation.preprocess.flip_and_rename_coordinate import flip_and_rename_gff
-from sequence_annotation.preprocess.utils import RNA_TYPES
 from sequence_annotation.process.utils import get_seq_mask
 from sequence_annotation.process.inference import create_basic_inference,seq_ann_inference,ann_vec2one_hot_vec
-from sequence_annotation.process.boundary_process import get_fixed_intron_boundary,get_exon_boundary
-from sequence_annotation.process.boundary_process import fix_splice_pairs,get_splice_pairs,find_substr
-basic_inference = create_basic_inference()
 
-def _create_ann_seq(chrom,length,ann_types):
-    ann_seq = AnnSequence(ann_types,length)
-    ann_seq.id = ann_seq.chromosome_id = chrom
-    ann_seq.strand = PLUS
-    return ann_seq
-
-class GFFProcessor:
-    def __init__(self,gene_info_extractor,
-                 donor_site_pattern=None,acceptor_site_pattern=None,
-                 length_threshold=None,distance=None,
-                 gene_length_threshold=None):
-        """
-        The processor fixes annotatioin result in GFF format by its DNA sequence information
-        distance : int
-            Valid distance  
-        donor_site_pattern : str (default : GT)
-            Regular expression of donor site
-        acceptor_site_pattern : str (default : AG)
-            Regular expression of acceptor site
-        """
-        self.gene_info_extractor = gene_info_extractor
-        self.extractor = RegionExtractor()
-        self.donor_site_pattern = donor_site_pattern or 'GT'
-        self.acceptor_site_pattern = acceptor_site_pattern or 'AG'
-        self.length_threshold = length_threshold or 0
-        self.distance = distance or 0
-        self.gene_length_threshold = gene_length_threshold or 0
-        self._ann_types = ['exon','intron','other']
-        
-    def get_config(self):
-        config = {}
-        config['class'] = self.__class__.__name__
-        config['gene_info_extractor'] = self.gene_info_extractor.get_config()
-        config['donor_site_pattern'] = self.donor_site_pattern
-        config['acceptor_site_pattern'] = self.acceptor_site_pattern
-        config['length_threshold'] = self.length_threshold
-        config['gene_length_threshold'] = self.gene_length_threshold
-        config['distance'] = self.distance
-        config['ann_types'] = self._ann_types
-        return config
-        
-    def _validate_gff(self,gff):
-        strand = list(set(gff['strand']))
-        if len(strand)!=1 or strand[0] != '+':
-            raise Exception("Got strands, {}".format(strand))
-        
-    def _create_ann_seq(self,chrom,length,gff):
-        ann_seq = _create_ann_seq(chrom,length,self._ann_types)
-        exon_introns = gff[gff['feature'].isin(['exon','intron'])].to_dict('record')
-        for item in exon_introns:
-            ann_seq.add_ann(item['feature'],1,item['start']-1,item['end']-1)
-        other = get_background(ann_seq,['exon','intron'])
-        ann_seq.add_ann('other',other)
-        return ann_seq
-
-    def _process_ann(self,info):
-        info = info.to_data_frame()
-        info = info.assign(length=info['end'] - info['start'] + 1)
-        fragments = info[info['length'] < self.length_threshold].sort_values(by='length')
-        blocks = info[info['length'] >= self.length_threshold]
-        if len(blocks)==0:
-            raise Exception()
-        index=0
-        while True:
-            if len(fragments) == 0:
-                break
-            fragments = fragments.reset_index(drop=True)
-            fragment = dict(fragments.loc[index])
-            rights = blocks[blocks['start'] == fragment['end']+1].to_dict('record')
-            lefts = blocks[blocks['end'] == fragment['start']-1].to_dict('record')
-            feature = None
-            if len(lefts) > 0:
-                left = lefts[0]
-                feature = left['ann_type']
-            elif len(rights) > 0:
-                right = rights[0]
-                feature = right['ann_type']
-            if feature is None:
-                index+=1
-            else:
-                fragment['ann_type'] = feature
-                blocks = blocks.append(fragment,ignore_index=True)
-                fragments=fragments.drop(index)
-                index=0
-        blocks_ = SeqInfoContainer()
-        blocks_.from_dict({'data':blocks.to_dict('record'),'note':None})
-        return blocks_
-
-    def _process_transcript(self,rna,intron_boundarys,ann_seq):
-        rna_boundary = rna['start'],rna['end']
-        length = rna['end']-rna['start']+1
-        if length >= self.gene_length_threshold:
-            rna_intron_boundarys = []
-            for intron_boundary in intron_boundarys:
-                if rna['start'] <= intron_boundary[0] <= intron_boundary[1] <= rna['end']:
-                    rna_intron_boundarys.append(intron_boundary)
-            rna_intron_boundarys = get_fixed_intron_boundary(rna_boundary,rna_intron_boundarys)
-            rna_exon_boundarys = get_exon_boundary(rna_boundary,rna_intron_boundarys)
-            for boundary in rna_exon_boundarys:
-                ann_seq.add_ann('exon',1,boundary[0]-1,boundary[1]-1)
-            for boundary in rna_intron_boundarys:
-                ann_seq.add_ann('intron',1,boundary[0]-1,boundary[1]-1)
-
-    def process(self,chrom,length,seq,gff):
-        """
-        The method fixes annotatioin result in GFF format by its DNA sequence information
-        Parameters:
-        ----------
-        chrom : str
-            Chromosome id to be chosen
-        seq : str
-            DNA sequence which its direction is 5' to 3'
-        length : int
-            Length of chromosome
-        gff : pd.DataFrame    
-            GFF data about exon and intron
-        Returns:
-        ----------
-        SeqInfoContainer
-        """
-        self._validate_gff(gff)
-        gff = gff[gff['chr']==chrom]
-        ann_seq = self._create_ann_seq(chrom,length,gff)
-        info = self.extractor.extract(ann_seq)
-        gff = self._process_ann(info).to_gff()
-        ann_seq = self._create_ann_seq(chrom,length,gff)
-        gff = self.gene_info_extractor.extract_per_seq(ann_seq).to_gff()
-        splice_pairs = get_splice_pairs(gff)
-        ann_donor_sites = [site + 1 for site in find_substr(self.donor_site_pattern,seq)]
-        ann_acceptor_sites = [site + 1 for site in find_substr(self.acceptor_site_pattern,seq,False)]
-        intron_boundarys = fix_splice_pairs(splice_pairs,ann_donor_sites,ann_acceptor_sites,self.distance)
-        fixed_ann_seq = _create_ann_seq(chrom,length,self._ann_types)
-        transcripts = gff[gff['feature'].isin(RNA_TYPES)].to_dict('record')
-        for transcript in transcripts:
-            self._process_transcript(transcript,intron_boundarys,fixed_ann_seq)
-        other = get_background(fixed_ann_seq,['exon','intron'])
-        fixed_ann_seq.add_ann('other',other)
-        info = self.gene_info_extractor.extract_per_seq(fixed_ann_seq)
-        gff = info.to_gff()
-        return gff
+def ann_vecs2gene_info(channel_order,gene_info_extractor,chrom_ids,lengths,ann_vecs):
+    """Convert annotation vectors to dictionay of SeqInformation of region data"""
+    gene_info = {}
+    for chrom_id, length, ann_vec in zip(chrom_ids,lengths,ann_vecs):
+        one_hot_vec = ann_vec2one_hot_vec(ann_vec,length)
+        ann_seq = vecs2seq(one_hot_vec,chrom_id,PLUS,channel_order)
+        info = gene_info_extractor.extract_per_seq(ann_seq)
+        gene_info[chrom_id] = info
+    return gene_info
 
 class AnnVecGffConverter:
-    def __init__(self,channel_order,gff_processor):
+    def __init__(self,channel_order,gene_info_extractor):
         """
         The converter fix annotation vectors by their DNA sequences' information and convert to GFF format
         Parameters:
         ----------
         channel_order : list of str
             Channel order of annotation vector
-        gff_processor : GFFProcessor
-            The processor fix annotatioin result in GFF format 
+        gene_info_extractor : GeneInfoExtractor
+            The GeneInfoExtractor
         """
         self.channel_order = channel_order
-        self.gff_processor = gff_processor
+        self.gene_info_extractor = gene_info_extractor
 
     def get_config(self):
         config = {}
         config['class'] = self.__class__.__name__
         config['channel_order'] = self.channel_order
-        config['gff_processor'] = self.gff_processor.get_config()
+        config['gene_info_extractor'] = self.gene_info_extractor.get_config()
         return config
 
-    def _vecs2info_dict(self,chrom_ids,lengths,ann_vecs):
-        """Convert annotation vectors to dictionay of SeqInformation of region data"""
-        seq_info_dict = {}
-        for chrom_id,ann_vec, length in zip(chrom_ids,ann_vecs,lengths):
-            one_hot_vec = ann_vec2one_hot_vec(ann_vec,length)
-            ann_seq = vecs2seq(one_hot_vec,chrom_id,PLUS,self.channel_order)
-            info = self.gff_processor.gene_info_extractor.extract_per_seq(ann_seq)
-            seq_info_dict[chrom_id] = info
-        return seq_info_dict
-    
-    def vecs2raw_gff(self,chrom_ids,lengths,ann_vecs):
-        """Convert annotation vectors to GFF about region data without fixing"""
-        returned = SeqInfoContainer()
-        info_dict = self._vecs2info_dict(chrom_ids,lengths,ann_vecs)
-        for seq in info_dict.values():
-            returned.add(seq)
-        return returned.to_gff()
-
-    def _info_dict2processed_gff(self,chrom_ids,lengths,dna_seqs,seq_info_dict):
-        """Convert dictionay of SeqInformation to SeqInfoContainer about processed region data"""
-        returned = []
-        for chrom_id,dna_seq, length in zip(chrom_ids,dna_seqs,lengths):
-            info = seq_info_dict[chrom_id]
-            if len(info) > 0:
-                gff = info.to_gff()
-                try:
-                    info = self.gff_processor.process(chrom_id,length,dna_seq,gff)
-                    returned.append(info)
-                except EmptyContainerException:
-                    pass
-        returned = pd.concat(returned).reset_index(drop=True)
-        return returned
-    
-    def vecs2processed_gff(self,chrom_ids,lengths,dna_seqs,ann_vecs):
-        """Convert annotation vectors to GFF about fixed region data"""
-        info_dict = self._vecs2info_dict(chrom_ids,lengths,ann_vecs)
-        fixed_gff = self._info_dict2processed_gff(chrom_ids,lengths,dna_seqs,info_dict)
-        return fixed_gff
-    
-    def vecs2gff(self,chrom_ids,lengths,dna_seqs,ann_vecs):
+    def convert(self,chrom_ids,lengths,dna_seqs,ann_vecs):
         """Convert annotation vectors to GFF about region data"""
-        p = self.gff_processor
-        if p.distance==0 and p.length_threshold==0 and p.gene_length_threshold == 0:
-            gff = self.vecs2raw_gff(chrom_ids,lengths,ann_vecs)
-        else:
-            gff = self.vecs2processed_gff(chrom_ids,lengths,dna_seqs,ann_vecs)
+        gene_info = ann_vecs2gene_info(self.channel_order,self.gene_info_extractor,
+                                       chrom_ids,lengths,ann_vecs)
+        seq_info_container = SeqInfoContainer()
+        for seq in gene_info.values():
+            seq_info_container.add(seq)
+        gff = seq_info_container.to_gff()
         return gff
 
-def build_ann_vec_gff_converter(channel_order,simply_map,**kwargs):
+def build_ann_vec_gff_converter(channel_order=None,simply_map=None):
+    if channel_order is None:
+        channel_order = BASIC_GENE_ANN_TYPES
+    if simply_map is None:
+        simply_map = BASIC_GENE_MAP
     gene_info_extractor = GeneInfoExtractor(simply_map)
-    gff_processor = GFFProcessor(gene_info_extractor,**kwargs)
-    ann_vec_gff_converter = AnnVecGffConverter(channel_order,gff_processor)
+    ann_vec_gff_converter = AnnVecGffConverter(channel_order,gene_info_extractor)
     return ann_vec_gff_converter
 
 def _convert_raw_output_to_vectors(outputs):
@@ -265,13 +94,14 @@ def _convert_vectors_to_gff(chrom_ids,lengths,masks,dna_seqs,ann_vecs,
                          transcript_threshold=transcript_threshold,
                          intron_threshold=intron_threshold)
     ann_vecs = ann_vecs.cpu().numpy()
-    info = ann_vec_gff_converter.vecs2gff(chrom_ids,lengths,dna_seqs,ann_vecs)
-    return info
+    gff = ann_vec_gff_converter.convert(chrom_ids,lengths,dna_seqs,ann_vecs)
+    return gff
 
 def convert_raw_output_to_gff(raw_outputs,region_table,config_path,gff_path,
                               inference,ann_vec_gff_converter,
                               chrom_source=None,chrom_target=None,**kwargs):
     config = ann_vec_gff_converter.get_config()
+    raw_plus_gff_path = '.'.join(gff_path.split('.')[:-1])+"_raw_plus.gff3"
     write_json(config,config_path)
     outputs = _convert_raw_output_to_vectors(raw_outputs)
     gff = _convert_vectors_to_gff(outputs['chrom_ids'],outputs['lengths'],outputs['masks'],
@@ -280,19 +110,17 @@ def convert_raw_output_to_gff(raw_outputs,region_table,config_path,gff_path,
     redefined_gff = flip_and_rename_gff(gff,region_table,
                                         chrom_source=chrom_source,
                                         chrom_target=chrom_target)
+    write_gff(gff,raw_plus_gff_path)
     write_gff(redefined_gff,gff_path)
 
-def convert_main(saved_root,raw_signal_path,region_table_path,distance=None,
-                 length_threshold=None,gene_length_threshold=None,use_native=True,**kwargs):
+def main(saved_root,raw_signal_path,region_table_path,use_native=True,**kwargs):
     raw_outputs = dd.io.load(raw_signal_path)
     region_table = read_region_table(region_table_path)
     config_path = os.path.join(saved_root,"ann_vec_gff_converter_config.json")
     gff_path = os.path.join(saved_root,'converted.gff')
-    converter = build_ann_vec_gff_converter(BASIC_GENE_ANN_TYPES,BASIC_GENE_MAP,
-                                            distance=distance,length_threshold=length_threshold,
-                                            gene_length_threshold=gene_length_threshold)
+    converter = build_ann_vec_gff_converter()
     if use_native:
-        inference_ = basic_inference
+        inference_ = create_basic_inference()
     else:
         inference_ = seq_ann_inference
     convert_raw_output_to_gff(raw_outputs,region_table,config_path,gff_path,
@@ -306,9 +134,6 @@ if __name__ == '__main__':
     parser.add_argument("-g","--gpu_id",type=int,default=0,help="GPU to used")
     parser.add_argument("--transcript_threshold",type=float,default=0.5)
     parser.add_argument("--intron_threshold",type=float,default=0.5)
-    parser.add_argument("--length_threshold",type=int,default=0)
-    parser.add_argument("--distance",type=int,default=0)
-    parser.add_argument("--gene_length_threshold",type=int,default=0)
     parser.add_argument("--use_native",action="store_true")
     parser.add_argument("--chrom_source",help="Valid options are old_id and new_id")
     parser.add_argument("--chrom_target",help="Valid options are old_id and new_id")
@@ -324,4 +149,4 @@ if __name__ == '__main__':
     del kwargs['region_table_path']
         
     with torch.cuda.device(args.gpu_id):
-        convert_main(args.saved_root,args.raw_signal_path,args.region_table_path,**kwargs)
+        main(args.saved_root,args.raw_signal_path,args.region_table_path,**kwargs)

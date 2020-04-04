@@ -72,13 +72,17 @@ fi
 bash_root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 script_root=$bash_root/..
 preprocess_main_root=$script_root/sequence_annotation/preprocess
+raw_stats_root=$saved_root/raw_stats
 stats_root=$saved_root/stats
+site_diff_root=$saved_root/site_diff
 
 echo "Start of program"
 #Create folder
 echo "Step 1: Create folder"
 mkdir -p $saved_root
 mkdir -p $stats_root
+mkdir -p $site_diff_root
+
 
 #Set parameter
 gro_1=$root/raw_data/tss_peak_SRR3647033_background_SRR3647034_2018_11_04.tsv 
@@ -87,7 +91,9 @@ gro_2=$root/raw_data/tss_peak_SRR3647033_background_SRR3647035_2018_11_04.tsv
 pac_path="$root/raw_data/arabidopsis_thaliana_Wild_Type_Control_SRP187778_all_PAC.csv"
 peptide_path=$root/raw_data/Araport11_genes.201606.pep.fasta
 official_gff_path=$root/raw_data/Araport11_GFF3_genes_transposons.201606.gff
+raw_genome_path=$root/raw_data/araport_11_Arabidopsis_thaliana_Col-0.fasta
 genome_path=$saved_root/araport_11_Arabidopsis_thaliana_Col-0_rename.fasta
+region_table_path=$saved_root/region_table.tsv
 ###
 id_convert_table_path=$saved_root/id_convert.tsv
 processed_gff_path=$saved_root/processed.gff3
@@ -98,11 +104,24 @@ tss_path=$saved_root/tss.gff3
 cleavage_site_path=$saved_root/cleavage_site.gff3
 echo "Step 2: Preprocess raw data"
 
+if [ ! -e "$genome_path.fai" ]; then
+    bash $bash_root/rename_fasta.sh $raw_genome_path > $genome_path
+    samtools faidx $genome_path
+fi
+
 python3 $preprocess_main_root/process_GRO_and_PAC.py --output_root $saved_root --gro_1 $gro_1 --gro_2 $gro_2 --pac_path $pac_path
 #python3 $preprocess_main_root/preprocess_raw_data.py --output_root $saved_root --gro_1 $gro_1 --gro_2 $gro_2 --drs_path $DRS_path
 
 if [ ! -e "$processed_gff_path" ]; then
     python3 $preprocess_main_root/preprocess_gff.py -i $official_gff_path -o $processed_gff_path -v '1,2,3,4,5'
+fi
+
+if [ ! -e "$genome_path.fai" ]; then
+    python3 $preprocess_main_root/create_region_table_by_fai.py -i $genome_path.fai -o $region_table_path
+fi
+
+if [ ! -e "$raw_stats_root/gff_analysis.log" ]; then
+    bash $bash_root/gff_analysis.sh -i $processed_gff_path -f $genome_path -o $raw_stats_root -r $region_table_path -s chr
 fi
 
 if [ ! -e "$id_convert_table_path" ]; then
@@ -121,8 +140,8 @@ if [ ! -e "$consistent_bed_path" ]; then
     python3 $preprocess_main_root/gff2bed.py -i $consistent_gff_path -o $consistent_bed_path
 fi
 
-if [ ! -e "$stats_root/site_diff.tsv" ]; then
-    python3 $preprocess_main_root/calculate_distance_between_sites.py -b $consistent_bed_path -t $tss_path -c $cleavage_site_path -s $stats_root
+if [ ! -e "$site_diff_root/site_diff.tsv" ]; then
+    python3 $preprocess_main_root/calculate_distance_between_sites.py -b $consistent_bed_path -t $tss_path -c $cleavage_site_path -s $site_diff_root
 fi
 
 python3 $preprocess_main_root/get_external_UTR.py -b $consistent_bed_path -s $saved_root
@@ -169,6 +188,6 @@ echo "Evidence TSS located at external 5' UTR and is most significant signal: $n
 echo "Evidence CS located at external 3' UTR and is most significant signal: $num_safe_cs" >> $saved_root/preprocess.stats
 echo "The number of mRNAs with both TSSs and CSs site supported and are passed by filter: $num_consist" >> $saved_root/preprocess.stats
 
-if [ ! -e "$stats_root/feature_stats.tsv" ]; then
-    python3  $preprocess_main_root/gff_feature_stats.py -i $processed_gff_path -f $genome_path.fai -o $stats_root
+if [ ! -e "$stats_root/gff_analysis.log" ]; then
+    bash  $bash_root/gff_analysis.sh -i $processed_gff_path -f $genome_path -o $stats_root -r $region_table_path -s chr
 fi

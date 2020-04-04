@@ -33,7 +33,6 @@ class AnnSeqConverter:
     @abstractmethod
     def _create_template_ann_seq(self,length):
         """Create template annotation sequence"""
-        pass
 
     @abstractmethod
     def convert(self,data):

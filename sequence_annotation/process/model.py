@@ -1,3 +1,4 @@
+import torch
 from ..utils.utils import read_json
 from .customized_layer import BasicModel, generate_norm_class
 from .customized_rnn import RNN_TYPES

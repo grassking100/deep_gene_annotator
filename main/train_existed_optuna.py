@@ -5,8 +5,9 @@ from argparse import ArgumentParser
 sys.path.append(os.path.abspath(os.path.dirname(__file__)+"/.."))
 from sequence_annotation.utils.utils import read_json
 from sequence_annotation.process.optuna import OptunaTrainer
+from sequence_annotation.genome_handler.select_data import load_data
 from main.train_model import train
-from main.utils import backend_deterministic,load_data
+from main.utils import backend_deterministic
 from main.model_executor_creator import ModelExecutorCreator
 
 def main(optuna_root,saved_root,epoch=None):
@@ -28,7 +29,6 @@ def main(optuna_root,saved_root,epoch=None):
     has_cnn = optuna_settings['has_cnn']
     clip_grad_norm = optuna_settings['clip_grad_norm']
     grad_norm_type = optuna_settings['grad_norm_type']
-    trial_number = trial_settings['number']
     save_distribution = optuna_settings['save_distribution']
     use_lr_scheduler = optuna_settings['use_lr_scheduler']
     

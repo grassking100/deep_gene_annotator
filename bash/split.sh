@@ -5,6 +5,7 @@ usage(){
  echo "  Arguments:"
  echo "    -g  <string>  Path of genome fasta"
  echo "    -t  <string>  Path of id_convert_table"
+ echo "    -r  <string>  Path of region_table"
  echo "    -p  <string>  Path of processed folder"
  echo "    -o  <string>  Path of output folder"
  echo "  Options:"
@@ -16,12 +17,13 @@ usage(){
  echo ""
 }
 
-while getopts g:t:p:o:n:sdh option
+while getopts g:t:r:p:o:n:sdh option
  do
   case "${option}"
   in
    g )genome_path=$OPTARG;;
    t )id_convert_table_path=$OPTARG;;
+   r )region_table_path=$OPTARG;;
    p )processed_root=$OPTARG;;
    o )saved_root=$OPTARG;;
    n )fold_num=$OPTARG;;
@@ -61,6 +63,13 @@ if [ ! "$saved_root" ]; then
     exit 1
 fi
 
+if [ ! "$region_table_path" ]; then
+    echo "Missing option -r"
+    usage
+    exit 1
+fi
+
+
 if [ ! "$treat_strand_independent" ]; then
     treat_strand_independent=false
 fi
@@ -79,7 +88,7 @@ result_num=$(wc -l < $processed_root/result/selected_region.bed )
 
 if  (( $result_num > 0 )) ; then
 
-    region_path=$processed_root/result/region_rename_table_both_strand.tsv
+    region_path=$processed_root/result/double_strand/region_rename_table_double_strand.tsv
 
     command="$preprocess_main_root/split.py --region_path $region_path --fai_path $genome_path.fai --saved_root $saved_root"
 
@@ -100,49 +109,83 @@ if  (( $result_num > 0 )) ; then
     echo $command
     python3 $command
     
-    echo "Name,Region number" > $saved_root/count.csv
+    df_region_fasta_path=$processed_root/result/double_strand/selected_region_double_strand.fasta
+    region_fasta_path=$processed_root/result/selected_region.fasta
     
     if $on_double_strand_data ; then
-        output_region_fasta_path=$processed_root/result/selected_region_both_strand.fasta
-        rna_bed_path=$processed_root/result/rna_both_strand.bed
-        canonical_bed_path=$processed_root/result/canonical_both_strand.bed
+        output_region_fasta_root=$df_region_fasta_path
+        rna_bed_root=$processed_root/result/double_strand/rna_double_strand.bed
+        canonical_bed_root=$processed_root/result/double_strand/canonical_double_strand.bed
     else
-        output_region_fasta_path=$processed_root/result/selected_region.fasta
-        rna_bed_path=$processed_root/result/rna.bed
-        canonical_bed_path=$processed_root/result/canonical.bed
+        output_region_fasta_root=$region_fasta_path
+        rna_bed_root=$processed_root/result/rna.bed
+        canonical_bed_root=$processed_root/result/canonical.bed
     fi
     alt_region_id_table_path=$processed_root/result/alt_region_id_table.tsv
-    bed_path=$saved_root/bed
-    fasta_path=$saved_root/fasta
-    gff_path=$saved_root/gff
-    stats_path=$saved_root/stats
+    bed_root=$saved_root/bed
+    fasta_root=$saved_root/fasta
+    gff_root=$saved_root/gff
+    length_gaussian_root=$saved_root/length_gaussian
+    region_table_root=$saved_root/region_table
+
+    mkdir -p $bed_root
+    mkdir -p $fasta_root
+    mkdir -p $gff_root
+    mkdir -p $region_table_root
     
-    mkdir -p $bed_path
-    mkdir -p $fasta_path
-    mkdir -p $gff_path
-    mkdir -p $stats_path
+    echo "Name,Region number" > $saved_root/count.csv
     
     for path in $(find $saved_root/* -name '*.txt');
     do
         file_name=$(basename $path)
         file_name="${file_name%.*}"
         source_id_path=$saved_root/$file_name.txt
+        #
+        single_strand_bed=$bed_root/$file_name.bed
+        single_strand_canonical_bed=$bed_root/${file_name}_canonical.bed
+        single_strand_gff=$gff_root/$file_name.gff3
+        single_strand_canonical_gff=$gff_root/${file_name}_canonical.gff3
+        #
+        double_strand_bed=$bed_root/${file_name}_double_strand.bed
+        double_strand_canonical_bed=$bed_root/${file_name}_canonical_double_strand.bed
+        double_strand_gff=$gff_root/${file_name}_double_strand.gff3
+        double_strand_canonical_gff=$gff_root/${file_name}_canonical_double_strand.gff3
         
-        python3 $preprocess_main_root/get_subbed.py -i $rna_bed_path -d $source_id_path -o $bed_path/$file_name.bed --query_column chr
+        region_table_double_strand=$region_table_root/${file_name}_region_table_double_strand.tsv
+        #
+        python3 $preprocess_main_root/get_subbed.py -i $rna_bed_root -d $source_id_path -o $single_strand_bed --query_column chr
+        python3 $preprocess_main_root/get_subbed.py -i $canonical_bed_root -d $source_id_path -o $single_strand_canonical_bed --query_column chr
+        #
+        python3 $preprocess_main_root/bed2gff.py -i $single_strand_bed -o $single_strand_gff -t $id_convert_table_path
+        python3 $preprocess_main_root/bed2gff.py -i $single_strand_canonical_bed -o $single_strand_canonical_gff  -t $alt_region_id_table_path
+        
+        #if ! $on_double_strand_data ; then
+        python3 $preprocess_main_root/rename_chrom.py -i $single_strand_bed -t $region_table_path -o $double_strand_bed
+        python3 $preprocess_main_root/rename_chrom.py -i $single_strand_canonical_bed -t $region_table_path -o $double_strand_canonical_bed
+        python3 $preprocess_main_root/rename_chrom.py -i $single_strand_gff -t $region_table_path -o $double_strand_gff
+        python3 $preprocess_main_root/rename_chrom.py -i $single_strand_canonical_gff -t $region_table_path -o $double_strand_canonical_gff
+        #fi
 
-        python3 $preprocess_main_root/get_subbed.py -i $canonical_bed_path -d $source_id_path -o $bed_path/${file_name}_canonical.bed --query_column chr
-
-        python3 $preprocess_main_root/get_subfasta.py -i $output_region_fasta_path -d $source_id_path -o $fasta_path/$file_name.fasta
-
-        python3 $preprocess_main_root/bed2gff.py -i $bed_path/$file_name.bed -o $gff_path/$file_name.gff -t $id_convert_table_path
-
-        python3 $preprocess_main_root/bed2gff.py -i $bed_path/${file_name}_canonical.bed -o $gff_path/${file_name}_canonical.gff  -t $alt_region_id_table_path
-
-        samtools faidx $fasta_path/$file_name.fasta
+        python3 $preprocess_main_root/get_subfasta.py -i $output_region_fasta_root -d $source_id_path -o $fasta_root/$file_name.fasta
+        samtools faidx $fasta_root/$file_name.fasta
         
         gene_num=$(wc -l < $source_id_path ) 
-        echo "$file_name,$gene_num" >> $stats_path/count.csv
+        echo "$file_name,$gene_num" >> $saved_root/count.csv
         
+        if ! $on_double_strand_data ; then
+            python3 $preprocess_main_root/get_sub_region_table.py -r $processed_root/result/double_strand/region_rename_table_double_strand.tsv -i $source_id_path -s new_id -o $region_table_double_strand
+        else
+            python3 $preprocess_main_root/get_sub_region_table.py -r $processed_root/result/double_strand/region_rename_table_double_strand.tsv -i $source_id_path -s old_id -o $region_table_double_strand
+        fi
+        
+        if [ ! -e "$saved_root/canonical_stats/$file_name/gff_analysis.log" ]; then
+            bash $bash_root/gff_analysis.sh -i $double_strand_canonical_gff -f $df_region_fasta_path -o $saved_root/canonical_stats/$file_name -s new_id -r $region_table_double_strand
+        fi
+        
+        if [ ! -e "$saved_root/rna_stats/$file_name/gff_analysis.log" ]; then
+            bash $bash_root/gff_analysis.sh -i $double_strand_gff -f $df_region_fasta_path -o $saved_root/rna_stats/$file_name -s new_id -r $region_table_double_strand
+        fi
+
     done
 fi
 

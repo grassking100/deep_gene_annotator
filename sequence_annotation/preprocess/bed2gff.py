@@ -119,6 +119,7 @@ def bed2gff(bed,id_convert_dict):
     for list_ in gff_items.values():
         gff_list += list_
     gff = pd.DataFrame.from_dict(gff_list)
+    gff = gff[(gff['end']-gff['start']+1)>0]
     gff = get_gff_with_updated_attribute(gff)
     return gff
 

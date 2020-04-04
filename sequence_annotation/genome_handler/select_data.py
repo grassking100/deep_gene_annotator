@@ -109,3 +109,7 @@ def select_data(fasta_path,ann_seqs_path,chroms,before_mix_simplify_map=None,
         data = selected_seqs,selected_anns.to_dict()
     return data
     
+def load_data(path):
+    data = dd.io.load(path)
+    data = data[0],AnnSeqContainer().from_dict(data[1])
+    return data

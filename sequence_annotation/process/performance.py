@@ -4,16 +4,17 @@ import pandas as pd
 import numpy as np
 from argparse import ArgumentParser
 from  matplotlib import pyplot as plt
-sys.path.append(os.path.abspath(__file__+"/../.."))
+sys.path.append(os.path.dirname(__file__)+"/../..")
 from sequence_annotation.utils.utils import create_folder, write_gff, write_json, read_gff,get_gff_with_updated_attribute
-from sequence_annotation.utils.utils import read_region_table,BASIC_GENE_ANN_TYPES,get_gff_with_attribute,get_gff_with_feature_coord
-from sequence_annotation.utils.site_analysis import site_abs_diff
+from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES,get_gff_with_attribute,get_gff_with_feature_coord
 from sequence_annotation.genome_handler.sequence import AnnSequence, PLUS, MINUS
 from sequence_annotation.genome_handler.ann_seq_processor import get_background,seq2vecs
+from sequence_annotation.preprocess.utils import read_region_table
 from sequence_annotation.preprocess.utils import EXON_TYPES, RNA_TYPES,INTRON_TYPES,GENE_TYPES
 from sequence_annotation.preprocess.utils import get_gff_with_intron
 from sequence_annotation.preprocess.get_id_table import get_id_table,convert_id_table_to_dict
 from sequence_annotation.process.metric import calculate_metric,contagion_matrix,categorical_metric
+from sequence_annotation.process.site_analysis import get_all_site_diff,get_all_site_matched_ratio
 
 pd.set_option('mode.chained_assignment', 'raise')
 
@@ -288,18 +289,8 @@ def gff_performance(predict,answer,region_table,chrom_target,round_value=None):
         rounded at the specified number of digits, if it is None then the result wouldn't be rounded (default is None)
     Returns
     -------
-    base_performance : dict
-        The dictionary about base performance
-    contagion_matrix_ : array
-        The array about contagion matrix
-    block_performance : dict
-        The dictionary about gene and exon performance
-    error_data : pd.DataFrame
-        The dataframe about error gene and exon
-    site_p_a_status : dict
-        A dictionary about median of absolute minimal difference of each predict site to answer site
-    site_a_p_status : dict
-        A dictionary about median of absolute minimal difference of each answer site to predict site
+    result : dict
+        The dictionary about performance
     """
     answer_list = answer.to_dict('record')
     region_table_list = region_table.to_dict('record')
@@ -319,9 +310,18 @@ def gff_performance(predict,answer,region_table,chrom_target,round_value=None):
     answer = answer[~answer['feature'].isin(INTRON_TYPES)]
     predict = get_gff_with_feature_coord(get_gff_with_intron(get_gff_with_attribute(predict)))
     answer = get_gff_with_feature_coord(get_gff_with_intron(get_gff_with_attribute(answer)))
-    block_perform,error_status = block_performance(predict,answer,round_value=round_value)
-    site_p_a_status = site_abs_diff(answer,predict,round_value=round_value)
-    site_a_p_status = site_abs_diff(answer,predict,answer_as_ref=False,round_value=round_value)
+    result = {}
+    result['block_performance'],result['error_status'] = block_performance(predict,answer,round_value=round_value)
+    result['p_a_abs_diff'] = get_all_site_diff(answer,predict,round_value=round_value)
+    result['a_p_abs_diff'] = get_all_site_diff(answer,predict,answer_as_ref=False,round_value=round_value)
+    
+    result['p_a_abs_diff_exclude_zero'] = get_all_site_diff(answer,predict,
+                                                            round_value=round_value,include_zero=False)
+    result['a_p_abs_diff_exclude_zero'] = get_all_site_diff(answer,predict,answer_as_ref=False,
+                                                            round_value=round_value,include_zero=False)
+    
+    result['site_matched'] = get_all_site_matched_ratio(answer,predict,round_value=round_value)
+    
     label_num=len(BASIC_GENE_ANN_TYPES)
     metric = {}
     for type_ in ['TPs','FPs','TNs','FNs']:
@@ -330,7 +330,7 @@ def gff_performance(predict,answer,region_table,chrom_target,round_value=None):
     metric['F'] = 0
     for type_ in ['TPs','FPs','TNs','FNs']:
         metric[type_] = [0]*label_num
-    contagion = np.array([[0]*label_num]*label_num)
+    result['contagion_matrix'] = np.array([[0]*label_num]*label_num)
     for item in region_table.to_dict('record'):
         chrom_id = item[chrom_target]
         length = item['length']
@@ -339,14 +339,14 @@ def gff_performance(predict,answer,region_table,chrom_target,round_value=None):
         answer_vec = _gene_gff2vec(answer,chrom_id,strand,length)
         mask = np.ones((1,length))
         metric_ = categorical_metric(predict_vec,answer_vec,mask)
-        contagion += np.array(contagion_matrix(predict_vec,answer_vec,mask))
+        result['contagion_matrix'] += np.array(contagion_matrix(predict_vec,answer_vec,mask))
         for type_ in ['TPs','FPs','TNs','FNs']:
             for index in range(label_num):
                 metric[type_][index] += metric_[type_][index]
         metric['T'] += metric_['T']
         metric['F'] += metric_['F']
-    base_perform = calculate_metric(metric,label_names=BASIC_GENE_ANN_TYPES,round_value=round_value)
-    return base_perform,contagion,block_perform,error_status,site_p_a_status,site_a_p_status
+    result['base_performance'] = calculate_metric(metric,label_names=BASIC_GENE_ANN_TYPES,round_value=round_value)
+    return result
 
 def draw_contagion_matrix(contagion_matrix,round_number=None):
     """
@@ -424,15 +424,16 @@ def block_performance_table(roots,names):
 def compare_and_save(predict,answer,region_table,saved_root,chrom_target,round_value=None):
     create_folder(saved_root)
     result = gff_performance(predict,answer,region_table,chrom_target,round_value)
-    base_perform,contagion,block_perform,errors,site_p_a_diff,site_a_p_abs_diff = result
-    write_json(base_perform,os.path.join(saved_root,'base_performance.json'))
-    write_json(contagion.tolist(),os.path.join(saved_root,'contagion_matrix.json'))
-    write_json(block_perform,os.path.join(saved_root,'block_performance.json'))
-    if not errors.empty:
-        write_gff(errors, os.path.join(saved_root,'error_status.gff'))
-
-    write_json(site_p_a_diff,os.path.join(saved_root,'p_a_abs_diff.json'))
-    write_json(site_a_p_abs_diff,os.path.join(saved_root,'a_p_abs_diff.json'))
+    write_json(result['base_performance'],os.path.join(saved_root,'base_performance.json'))
+    write_json(result['contagion_matrix'].tolist(),os.path.join(saved_root,'contagion_matrix.json'))
+    write_json(result['block_performance'],os.path.join(saved_root,'block_performance.json'))
+    if not result['error_status'].empty:
+        write_gff(result['error_status'], os.path.join(saved_root,'error_status.gff'))
+    write_json(result['site_matched'],os.path.join(saved_root,'site_matched.json'))
+    write_json(result['p_a_abs_diff'],os.path.join(saved_root,'p_a_abs_diff.json'))
+    write_json(result['a_p_abs_diff'],os.path.join(saved_root,'a_p_abs_diff.json'))
+    write_json(result['p_a_abs_diff_exclude_zero'],os.path.join(saved_root,'p_a_abs_diff_exclude_zero.json'))
+    write_json(result['a_p_abs_diff_exclude_zero'],os.path.join(saved_root,'a_p_abs_diff_exclude_zero.json'))
 
 def main(predict_path,answer_path,region_table_path,saved_root,**kwargs):
     predict = read_gff(predict_path)

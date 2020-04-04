@@ -1,7 +1,8 @@
 import os
 import pandas as pd
 import deepdish as dd
-from ..utils.utils import read_region_table,read_gff
+from ..utils.utils import read_gff
+from ..preprocess.utils import read_region_table
 from .callback import Callback,Callbacks,set_prefix
 from .convert_signal_to_gff import convert_raw_output_to_gff
 from .performance import compare_and_save
@@ -101,7 +102,7 @@ class _SignalGffConverter(Callback):
         self._kwargs = kwargs
         self._config_path = os.path.join(self._saved_root,"converter_config.json")
         self._region_table = read_region_table(self._region_table_path)
-        self._predict_gff_path = os.path.join(self._saved_root,"{}gffcompare.gff3".format(self._prefix))
+        self._predict_gff_path = os.path.join(self._saved_root,"{}predict.gff3".format(self._prefix))
         
     @property
     def predict_gff_path(self):
@@ -157,8 +158,16 @@ class _GFFCompare(Callback):
         compare_and_save(predict,answer,part_region_table,self._saved_root,self._chrom_target)
 
 class SignalHandler(Callback):
-    def __init__(self,signal_saver,signal_gff_converter,gff_compare):
-        self._callbacks = Callbacks([signal_saver,signal_gff_converter,gff_compare])
+    def __init__(self,signal_saver,signal_gff_converter=None,gff_compare=None):
+        if gff_compare is not None:
+            if signal_gff_converter is None:
+                raise Exception("To use gff_compare, the signal_gff_converter should be provided")
+        callbacks = [signal_saver]
+        if signal_gff_converter is not None:
+            callbacks.append(signal_gff_converter)
+        if gff_compare is not None:
+            callbacks.append(gff_compare) 
+        self._callbacks = Callbacks(callbacks)
         
     def get_config(self):
         config = super().get_config()
@@ -182,27 +191,50 @@ class SignalHandler(Callback):
 
     def on_batch_end(self,**kwargs):
         self._callbacks.on_batch_end(**kwargs)
+
+class SignalHandlerBuilder:
+    def __init__(self,saved_root,prefix=None):
+        self.saved_root = saved_root
+        self.prefix = prefix
+        self.inference = None
+        self.region_table_path = None
+        self.ann_vec_gff_converter = None
+        self.is_answer_double_strand = False
+        self.answer_gff_path = None
+        self._add_converter = False
+        self._add_comparer = False
+
+    def add_converter_args(self,inference,region_table_path,ann_vec_gff_converter,
+                           is_answer_double_strand=False):
+        self.inference = inference
+        self.region_table_path = region_table_path
+        self.ann_vec_gff_converter = ann_vec_gff_converter
+        self.is_answer_double_strand = is_answer_double_strand
+        self._add_converter = True
         
-def build_signal_handler(saved_root,region_table_path,answer_gff_path,inference,ann_vec_gff_converter,
-                         prefix=None,is_answer_double_strand=False,use_native=True):
-
-    signal_saver = _SignalSaver(saved_root,prefix=prefix)
-    chrom_source = 'old_id'
-    if is_answer_double_strand:
-        chrom_target = 'new_id'
-    else:
-        chrom_target = 'old_id'
-
-    converter = _SignalGffConverter(saved_root,region_table_path,
-                                    signal_saver.raw_output_path,
-                                    inference,ann_vec_gff_converter,
-                                    prefix=prefix,
-                                    chrom_source=chrom_source,
-                                    chrom_target=chrom_target)
-
-    gff_compare = _GFFCompare(saved_root,region_table_path,converter.predict_gff_path,
-                              answer_gff_path,signal_saver.region_id_path,
-                              chrom_source=chrom_source,chrom_target=chrom_target)
-
-    signal_handler = SignalHandler(signal_saver,converter,gff_compare)
-    return signal_handler
+    def add_answer_path(self,answer_gff_path):
+        self.answer_gff_path = answer_gff_path
+        self._add_comparer = True
+        
+    def build(self):
+        signal_saver = _SignalSaver(self.saved_root,prefix=self.prefix)
+        converter = None
+        gff_compare = None
+        if self._add_converter:
+            chrom_source = 'old_id'
+            if self.is_answer_double_strand:
+                chrom_target = 'new_id'
+            else:
+                chrom_target = 'old_id'
+            converter = _SignalGffConverter(self.saved_root,self.region_table_path,
+                                            signal_saver.raw_output_path,
+                                            self.inference,self.ann_vec_gff_converter,
+                                            prefix=self.prefix,
+                                            chrom_source=chrom_source,
+                                            chrom_target=chrom_target)
+            if self._add_comparer:
+                gff_compare = _GFFCompare(self.saved_root,self.region_table_path,converter.predict_gff_path,
+                                          self.answer_gff_path,signal_saver.region_id_path,
+                                          chrom_source=chrom_source,chrom_target=chrom_target)
+        signal_handler = SignalHandler(signal_saver,converter,gff_compare)
+        return signal_handler

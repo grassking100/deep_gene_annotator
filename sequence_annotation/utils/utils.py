@@ -115,14 +115,17 @@ def read_bed(path,convert_to_one_base=True):
                 temp['three_end'] += 1
                 
         data.append(temp)
-    df = pd.DataFrame.from_dict(data)
-    df = df.astype(str)
+    bed = pd.DataFrame.from_dict(data)
+    bed = bed.astype(str)
     for name in ['start','end','thick_start','thick_end','count']:
-        if name in df.columns:
-            df[name] = df[name].astype(float).astype(int)
+        if name in bed.columns:
+            bed[name] = bed[name].astype(float).astype(int)
             if name in ['start','thick_start'] and convert_to_one_base:
-                df[name] += 1
-    return df
+                bed[name] += 1
+                
+    if len(bed)>0 and len(set(bed['strand']) - set(['+','-','.']))>0:
+        raise Exception("Invalid strand in {}".format(path)) 
+    return bed
 
 def write_bed(bed,path,from_one_base=True):
     """
@@ -139,6 +142,8 @@ def write_bed(bed,path,from_one_base=True):
             bed[name] = bed[name].astype(float).astype(int)
             if name in ['start','thick_start'] and from_one_base:
                 bed[name] -= 1
+    if len(bed)>0 and len(set(bed['strand']) - set(['+','-','.']))>0:
+        raise Exception("Invalid strand in bed") 
     bed.to_csv(path,sep='\t',index=None,header=None)
 
 def read_gff(path):
@@ -147,9 +152,13 @@ def read_gff(path):
     gff = gff[~gff['chr'].str.startswith('#')]
     int_columns = ['start','end']
     gff.loc[:,int_columns] = gff[int_columns].astype(float).astype(int)
+    if len(gff)>0 and len(set(gff['strand']) - set(['+','-','.']))>0:
+        raise Exception("Invalid strand in {}".format(path))
     return gff
     
 def write_gff(gff,path):
+    if len(gff)>0 and len(set(gff['strand']) - set(['+','-','.']))>0:
+        raise Exception("Invalid strand in bed") 
     fp = open(path, 'w')
     fp.write("##gff-version 3\n")
     gff[GFF_COLUMNS].to_csv(fp,header=None,sep='\t',index=None)
@@ -293,15 +302,6 @@ def read_json(path,mode=None):
     with open(path,mode) as fp:
         return json.load(fp)
 
-def read_region_table(path,calculate_length=True):
-    """Get region table about regions"""
-    columns = ['new_id','old_id','chr','strand','start','end']
-    df = pd.read_csv(path,sep='\t',dtype={'chr':str,'start':int,'end':int})
-    if calculate_length:
-        df['length'] = df['end'] - df['start'] + 1
-        columns += ['length']
-    return df[columns]
-
 def replace_utc_to_local(timestamp,timezone_=None):
     timezone_ = timezone_ or pytz.timezone('ROC')
     if timestamp.tzinfo is None:
@@ -324,3 +324,15 @@ def from_time_str(time_str):
 def get_time_str(timezone_=None):
     time_str = to_time_str(get_time(timezone_))
     return time_str
+
+def get_file_name(path,with_postfix=False):
+    name = path.split('/')[-1]
+    if not with_postfix:
+        name = '.'.join(name.split('.')[:-1])
+    return name
+
+def batch_join(project_root,folder_names,path):
+    paths = {}
+    for folder_name in folder_names:
+        paths[folder_name] = os.path.join(project_root,folder_name,path)
+    return paths

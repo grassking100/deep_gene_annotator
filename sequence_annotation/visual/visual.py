@@ -79,7 +79,9 @@ def visual_error(predict, answer,check_length=True):
         plt.plot(error, label=type_)
     plt.legend(loc='upper right')
     
-def partial_dependence_plot(df,column_name,round_value=None,only_show_completed=True):
+def partial_dependence_plot(df,column_name,
+                            round_value=None,only_show_completed=True,
+                             xlabel=None,ylabel=None,title=None):
     if only_show_completed:
         df=df[df['state']=='COMPLETE']
     round_value = round_value or 1
@@ -109,6 +111,13 @@ def partial_dependence_plot(df,column_name,round_value=None,only_show_completed=
     sorted_maxs = np.array(sorted_maxs)
     sorted_mins = np.array(sorted_mins)
 
+    if xlabel is not None:
+        plt.xlabel(xlabel)
+    
+    if ylabel is not None:
+        plt.ylabel(ylabel)
+    if title is not None:
+        plt.title(title)
     plt.plot(sorted_keys,sorted_medians,label='median')
     plt.plot(sorted_keys,sorted_values,label='mean')
     plt.fill_between(sorted_keys,sorted_values-sorted_stds,sorted_values+sorted_stds,alpha=.4,label='std')

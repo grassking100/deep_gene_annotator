@@ -101,7 +101,6 @@ if [ ! "$compared_mode" ]; then
     compared_mode=bigger_or_equal
 fi
 
-
 #Set parameter
 bash_root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 script_root=$bash_root/..
@@ -112,13 +111,28 @@ splitted_root=$saved_root/split
 id_convert_table_path=$preprocessed_root/id_convert.tsv
 processed_bed_path=$preprocessed_root/processed.bed
 preprocess_main_root=$script_root/sequence_annotation/preprocess
-raw_genome_path=$root/raw_data/araport_11_Arabidopsis_thaliana_Col-0.fasta
 genome_path=$preprocessed_root/araport_11_Arabidopsis_thaliana_Col-0_rename.fasta
+length_gaussian_root=$splitted_root/length_gaussian
+ds_rna_bed_path=$processed_root/double_strand/rna_double_strand.bed
+ds_region_fasta_path=$processed_root/double_strand/selected_region_double_strand.fasta
+region_rename_table_double_strand_path=$processed_root/result/double_strand/region_rename_table_double_strand.tsv
 
 mkdir -p $saved_root
+mkdir -p $length_gaussian_root
 
-bash $bash_root/rename_fasta.sh $raw_genome_path > $genome_path
-samtools faidx $genome_path
+echo "name,value" > $saved_root/main_kwargs.csv
+echo "root,$root" >> $saved_root/main_kwargs.csv
+echo "saved_root,$saved_root" >> $saved_root/main_kwargs.csv
+echo "upstream_dist,$upstream_dist" >> $saved_root/main_kwargs.csv
+echo "downstream_dist,$downstream_dist" >> $saved_root/main_kwargs.csv
+echo "source_name,$source_name" >> $saved_root/main_kwargs.csv
+echo "score_filter,$score_filter" >> $saved_root/main_kwargs.csv
+echo "compared_mode,$compared_mode" >> $saved_root/main_kwargs.csv
+echo "merge_overlapped,$merge_overlapped" >> $saved_root/main_kwargs.csv
+echo "remove_alt_site,$remove_alt_site" >> $saved_root/main_kwargs.csv
+echo "remove_non_coding,$remove_non_coding" >> $saved_root/main_kwargs.csv
+echo "remove_inner_end,$remove_inner_end" >> $saved_root/main_kwargs.csv
+echo "remove_fail_score_gene,$remove_fail_score_gene" >> $saved_root/main_kwargs.csv
 
 command="$bash_root/arabidopsis_data_prepair.sh -u $upstream_dist -d $downstream_dist -r $root -o $preprocessed_root -s $source_name"
 if $remove_inner_end; then
@@ -127,7 +141,7 @@ fi
 echo $command
 bash $command
 
-if [ ! -e "$processed_root/result/canonical_both_strand.bed" ]; then
+if [ ! -e "$processed_root/result/double_strand/canonical_double_strand.bed" ]; then
     command="$bash_root/process_data.sh -u $upstream_dist -d $downstream_dist -g $genome_path -i $preprocessed_root/coordinate_consist.bed -o $processed_root -s $source_name -t $id_convert_table_path -b $processed_bed_path"
 
     if $remove_fail_score_gene; then
@@ -156,5 +170,7 @@ else
     echo "The program process_data.sh is skipped"
 fi
 
-bash $bash_root/region_select_split.sh -g $genome_path -t $preprocessed_root/id_convert.tsv -p $processed_root -o $splitted_root -d
-bash $bash_root/region_select_split.sh -g $genome_path -t $preprocessed_root/id_convert.tsv -p $processed_root -o $splitted_root -s
+
+echo "Splitting data"
+#bash $bash_root/region_select_split.sh -g $genome_path -r $region_rename_table_double_strand_path -t $id_convert_table_path -p $processed_root -o $splitted_root -d
+bash $bash_root/region_select_split.sh -g $genome_path -r $region_rename_table_double_strand_path -t $id_convert_table_path -p $processed_root -o $splitted_root -s

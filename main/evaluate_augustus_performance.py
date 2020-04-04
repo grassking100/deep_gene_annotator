@@ -2,7 +2,8 @@ import os
 import sys
 from argparse import ArgumentParser
 sys.path.append(os.path.abspath(os.path.dirname(__file__)+"/.."))
-from sequence_annotation.utils.utils import read_gff,write_gff,read_region_table,get_gff_with_attribute
+from sequence_annotation.utils.utils import read_gff,write_gff,get_gff_with_attribute
+from sequence_annotation.preprocess.utils import read_region_table
 from sequence_annotation.preprocess.convert_transcript_to_gene_with_alt_status_gff import convert_transcript_gff_to_gene_with_alt_status_gff
 from sequence_annotation.preprocess.create_gene_bed_from_exon_gff import create_gene_bed_from_exon_gff
 from sequence_annotation.preprocess.bed2gff import bed2gff
@@ -42,10 +43,10 @@ def main(augustus_result_root,train_val_answer_path,test_answer_path,
     train_evaluate_root = os.path.join(train_root,'evaluate')
     test_evaluate_root = os.path.join(test_root,'evaluate')
     #Set path
-    train_predicted_path = os.path.join(train_root,'train.final.predict.gff3')
-    test_predicted_path = os.path.join(test_root,'test.final.predict.gff3')
-    train_gene_with_alt_status_path = os.path.join(train_root,'train.final.predict_gene_with_alt_status.gff3')
-    test_gene_with_alt_status_path = os.path.join(test_root,'test.final.predict_gene_with_alt_status.gff3')
+    train_predicted_path = os.path.join(train_root,'train.final.predict.gff')
+    test_predicted_path = os.path.join(test_root,'test.final.predict.gff')
+    train_gene_with_alt_status_path = os.path.join(train_root,'train.final.predict_gene_with_alt_status.gff')
+    test_gene_with_alt_status_path = os.path.join(test_root,'test.final.predict_gene_with_alt_status.gff')
     
     compare_gff_gene_result(train_predicted_path,train_val_answer_path,region_table_path,
                             train_evaluate_root,train_gene_with_alt_status_path,chrom_target)

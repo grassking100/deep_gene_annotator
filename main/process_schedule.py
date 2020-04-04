@@ -3,7 +3,7 @@ import pandas as pd
 import torch
 from argparse import ArgumentParser
 sys.path.append(os.path.abspath(os.path.dirname(__file__)+"/.."))
-from sequence_annotation.utils.process import Process,process_schedule
+from sequence_annotation.utils.process_schedule import Process,process_schedule
 from sequence_annotation.utils.utils import create_folder
 
 if __name__ == '__main__':    
@@ -11,6 +11,7 @@ if __name__ == '__main__':
     parser.add_argument("-i","--cmd_table_path",required=True)
     parser.add_argument("-o","--output_path",required=True,
                         help="Path of saved result table (in tsv format)")
+    parser.add_argument("--no_gpu",action='store_true')
     parser.add_argument("-g","--gpu_ids",type=lambda x: [int(item) for item in x.split(',')],
                         default=list(range(torch.cuda.device_count())),help="GPUs to used")
     
@@ -32,8 +33,8 @@ if __name__ == '__main__':
     
     processes = []
     for index,command in enumerate(commands):
-        process = Process(command,name=index)
+        process = Process(command,name=index,no_gpu=args.no_gpu)
         processes.append(process)
         
-    status = process_schedule(processes,args.gpu_ids)
+    status = process_schedule(processes,args.gpu_ids,no_gpu=args.no_gpu)
     status.to_csv(args.output_path,sep='\t',index=False)

@@ -3,7 +3,7 @@ import pandas as pd
 pd.set_option('mode.chained_assignment', 'raise')
 sys.path.append(os.path.dirname(__file__)+"/../..")
 from sequence_annotation.utils.utils import BED_COLUMNS,GFF_COLUMNS,CONSTANT_LIST
-from sequence_annotation.utils.utils import get_gff_with_updated_attribute
+from sequence_annotation.utils.utils import get_gff_with_updated_attribute,get_file_name
 
 preprocess_src_root = os.path.dirname(os.path.abspath(__file__))
     
@@ -77,7 +77,7 @@ def _get_feature_coord(gff_item):
     feature_coord = '_'.join(part)
     return feature_coord
 
-def get_gff_with_intron(gff):
+def get_gff_with_intron(gff,update_attribute=True):
     if 'parent' not in gff.columns:
         raise Exception("GFF file lacks 'parent' column")
     if gff['feature'].isin(INTRON_TYPES).any():
@@ -90,7 +90,7 @@ def get_gff_with_intron(gff):
     introns = []
     for transcript_id,transcripts in transcript_group:
         intron_index=1
-        transcript = dict(transcripts.iloc[0,:])
+        transcript = transcripts.iloc[0,:]
         intron_template = dict(transcript)
         intron_template['parent'] = transcript_id
         intron_template['feature'] = 'intron'
@@ -125,21 +125,25 @@ def get_gff_with_intron(gff):
             introns.append(intron)
 
     if len(introns)>0:
-        gff = gff.append(introns,ignore_index=True,verify_integrity=True)
+        introns = pd.DataFrame.from_dict(introns)
+        if update_attribute:
+            introns = get_gff_with_updated_attribute(introns)
+        gff = gff.append(introns,ignore_index=True,verify_integrity=True,sort=True)
         gff = gff.reset_index(drop=True)
-    gff = get_gff_with_updated_attribute(gff)
     return gff
 
-def get_gff_with_intergenic_region(gff,chrom_length):
+def get_gff_with_intergenic_region(gff,region_table,chrom_source,update_attribute=True):
     transcripts = gff[gff['feature'].isin(RNA_TYPES)]
     intergenic_regions = []
-    for chrom_id,length in chrom_length.items():
-        min_start=1
-        max_end=length+min_start-1
-        for strand in ['+','-']:
+    for chrom_id,group in region_table.groupby(chrom_source):
+        for strand,length in zip(list(group['strand']),list(group['length'])):
+            #print(chrom_id,strand)
+            min_start=1
+            max_end=length+min_start-1
             template = {'chr':chrom_id,'strand':strand,'feature':'intergenic region'}
             items = transcripts[(transcripts['chr']==chrom_id) & (transcripts['strand']==strand)]
-            region_sites = sorted((items['start']-1).tolist()+(items['end']+1).tolist())
+            region_sites = (items['start']-1).tolist()+(items['end']+1).tolist()
+            region_sites = sorted(list(set(region_sites)))
             if len(region_sites)>0:
                 if min(region_sites) != min_start:
                     region_sites = [min_start] + region_sites
@@ -149,15 +153,19 @@ def get_gff_with_intergenic_region(gff,chrom_length):
                 region_sites = [min_start,max_end]
             for index in range(0,len(region_sites)-1,2):
                 intergenic_region = dict(template)
-                intergenic_region['start'] = region_sites[index]
-                intergenic_region['end'] = region_sites[index+1]
+                lhs_site = region_sites[index]
+                rhs_site = region_sites[index+1]
+                intergenic_region['start'] = min(lhs_site,rhs_site)
+                intergenic_region['end'] = max(lhs_site,rhs_site)
                 for column in GFF_COLUMNS:
                     if column not in intergenic_region:
                         intergenic_region[column] = '.'
                 intergenic_regions.append(intergenic_region)
-    gff = gff.append(intergenic_regions,ignore_index=True,verify_integrity=True)
+    intergenic_regions = pd.DataFrame.from_dict(intergenic_regions)
+    if update_attribute:
+        intergenic_regions = get_gff_with_updated_attribute(intergenic_regions)
+    gff = gff.append(intergenic_regions,ignore_index=True,verify_integrity=True,sort=True)
     gff = gff.drop_duplicates().reset_index(drop=True)
-    gff = get_gff_with_updated_attribute(gff)
     return gff
 
 def get_gff_with_belonging(gff):
@@ -187,3 +195,24 @@ def gff_to_bed_command(gff_path,bed_path):
     command = to_bed_command.format(preprocess_src_root,gff_path,bed_path)
     os.system(command)
     
+def get_data_names(split_root):
+    split_table = pd.read_csv(os.path.join(split_root,'split_table.csv')).to_dict('record')
+    paths = {}
+    for item in split_table:
+        training_name = get_file_name(item['training_path'])
+        val_name = get_file_name(item['validation_path'])
+        testing_name = get_file_name(item['testing_path'])
+        name = "{}_{}".format(training_name,val_name)
+        paths[name] = {'validation':val_name,
+                       'testing':testing_name,
+                       'training':training_name}
+    return paths
+
+def read_region_table(path,calculate_length=True):
+    """Get region table about regions"""
+    columns = ['new_id','old_id','chr','strand','start','end']
+    df = pd.read_csv(path,sep='\t',dtype={'chr':str,'start':int,'end':int})
+    if calculate_length:
+        df['length'] = df['end'] - df['start'] + 1
+        columns += ['length']
+    return df[columns]

@@ -1,5 +1,4 @@
 import os
-import warnings
 import seqlogo
 import numpy as np
 import pandas as pd
@@ -8,7 +7,6 @@ from abc import abstractmethod, abstractproperty, ABCMeta
 from ..utils.utils import create_folder
 from ..utils.seq_converter import DNA_CODES
 from .metric import calculate_metric,categorical_metric,contagion_matrix
-from .warning import WorkerProtectedWarning
 from .inference import ann_vec2one_hot_vec,create_basic_inference
 from .signal_analysis import get_signal_ppm, ppms2meme
 
@@ -497,27 +495,14 @@ class OptunaCallback(Callback):
         self.target = target or 'val_loss'
         self._counter = None
         self._worker = None
-        #self._is_prune = None
        
     @property
     def has_updated(self):
         return self._counter is not None
-    
-    #@property
-    #def is_prune(self):
-    #    return self._is_prune
-
-    #def _handle_prune(self):
-    #    self._is_prune = self.trial.should_prune()
-    #    if self.is_prune:
-    #        with warnings.catch_warnings():
-    #            warnings.simplefilter("ignore",category=WorkerProtectedWarning)
-    #            self._worker.is_running = False
 
     def on_work_begin(self, worker,**kwargs):
         self._counter = None
         self._worker = worker
-        #self._handle_prune()
                 
     def get_config(self,**kwargs):
         config = super().get_config(**kwargs)

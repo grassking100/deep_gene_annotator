@@ -1,8 +1,8 @@
+import os
 import abc
 import numpy as np
 import torch
-import os
-from ..utils.utils import create_folder, write_json,BASIC_GENE_ANN_TYPES,get_time_str
+from ..utils.utils import create_folder, write_json,BASIC_GENE_ANN_TYPES,get_time_str,get_file_name,read_json
 from ..utils.seq_converter import SeqConverter
 from ..genome_handler.ann_genome_processor import class_count
 from ..genome_handler.ann_seq_processor import seq2vecs
@@ -13,8 +13,12 @@ from .worker import TrainWorker,TestWorker
 from .tensorboard_writer import TensorboardWriter
 from .callback import CategoricalMetric,TensorboardCallback,LearningRateHolder
 from .callback import SeqFigCallback, Callbacks,ContagionMatrix
-from .signal_handler import build_signal_handler
+from .signal_handler import SignalHandlerBuilder
 from .data_generator import SeqGenerator,seq_collate_wrapper
+from .data_generator import SeqGenerator,seq_collate_wrapper
+from .convert_signal_to_gff import build_ann_vec_gff_converter
+from .model import get_model
+from .executor import get_executor
 
 class SeqAnnEngine(metaclass=abc.ABCMeta):
     def __init__(self,channel_order,shuffle_train_data=True,is_verbose_visible=True):
@@ -90,22 +94,21 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
                     raise Exception("The {} is missing in the dataset".format(key))
             self.update_settings(name,count)
                 
-    def _add_signal_handler(self,inference,ann_vec_gff_converter,region_table_path,
-                            answer_gff_path,callbacks,prefix=None,
-                            is_answer_double_strand=False):
+    def get_signal_handler(self,prefix=None,inference=None,region_table_path=None,
+                           is_answer_double_strand=False,answer_gff_path=None):
         root = self._root
         if root is not None and prefix is not None:
             root = os.path.join(root,prefix)
 
+        builder = SignalHandlerBuilder(root,prefix=prefix)
+        if region_table_path is not None:
+            ann_vec_gff_converter = self.create_ann_vec_gff_converter()
+            builder.add_converter_args(inference,region_table_path,ann_vec_gff_converter,
+                                       is_answer_double_strand=is_answer_double_strand)
         if answer_gff_path is not None:
-            if region_table_path is None:
-                raise Exception("Please provided region table path of single strand data")
-            signal_handler = build_signal_handler(root,region_table_path,answer_gff_path,
-                                                  inference,ann_vec_gff_converter,
-                                                  prefix=prefix,
-                                                  is_answer_double_strand=is_answer_double_strand)
-
-            callbacks.add(signal_handler)
+            builder.add_answer_path(answer_gff_path)
+        signal_handler = builder.build()
+        return signal_handler
 
     def _create_categorical_metric(self,prefix=None):
         metric = CategoricalMetric(len(self.ann_types),
@@ -173,6 +176,10 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         test_gen = SeqGenerator(batch_size=batch_size,shuffle=False,collate_fn=seq_collate_fn)
         return test_gen
     
+    def create_ann_vec_gff_converter(self,simply_map=None):
+        converter = build_ann_vec_gff_converter(self._channel_order,simply_map=simply_map)
+        return converter
+    
     def train(self,model,executor,train_data,val_data,
               epoch=None,batch_size=None,other_callbacks=None,add_grad=True,
               seq_collate_fn_kwargs=None,
@@ -239,20 +246,19 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         return worker
 
     def test(self,model,executor,data,batch_size=None,
-             ann_vec_gff_converter=None,region_table_path=None,
-             answer_gff_path=None,callbacks=None,
-             is_answer_double_strand=False):
+             region_table_path=None,answer_gff_path=None,
+             callbacks=None,is_answer_double_strand=False):
 
         self._update_common_setting()
         self.update_settings('test_setting',{'batch_size':batch_size})
         callbacks = callbacks or Callbacks()
         test_callbacks = self._create_default_test_callbacks()
         callbacks.add(test_callbacks)
-        self._add_tensorboard_callback(self._test_writer,callbacks)
-        if ann_vec_gff_converter is not None and region_table_path is not None:
-            self._add_signal_handler(executor.inference,ann_vec_gff_converter,
-                                     region_table_path,answer_gff_path,callbacks,
-                                     prefix='test',is_answer_double_strand=is_answer_double_strand)
+        self._add_tensorboard_callback(self._test_writer,callbacks)        
+        singal_handler = self.get_signal_handler('test',executor.inference,region_table_path,
+                                                 is_answer_double_strand=is_answer_double_strand,
+                                                 answer_gff_path=answer_gff_path)
+        callbacks.add(singal_handler)
 
         generator = self._create_test_data_gen(batch_size)
         test_seqs,test_ann_seqs = data
@@ -278,6 +284,7 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
 def _get_first_large_data(data,batch_size):
     seqs,ann_container = data
     lengths = {key:len(seq) for key,seq in seqs.items()}
+    print("Max length is {}".format(max(lengths.values())))
     sorted_length_keys = sorted(lengths,key=lengths.get,reverse=True)
     part_keys = sorted_length_keys[:batch_size]
     part_seqs = dict(zip(part_keys,[seqs[key] for key in part_keys]))
@@ -307,3 +314,27 @@ def check_max_memory_usgae(saved_root,model,executor,train_data,val_data,batch_s
         with open(path,"a") as fp:
             fp.write("Memory might be fulled at {}\n".format(get_time_str()))
         raise Exception("Memory is fulled")
+
+def get_model_executor(model_config_path,executor_config_path,
+                       model_weights_path=None,executor_weights_path=None,
+                       frozen_names=None,save_distribution=False):
+    #Create model
+    model = get_model(model_config_path,model_weights_path=model_weights_path,
+                      frozen_names=frozen_names,save_distribution=save_distribution)
+    #Create executor
+    executor = get_executor(model,executor_config_path,executor_weights_path=executor_weights_path)
+    return model,executor
+        
+def get_best_model_and_origin_executor(saved_root):
+    setting = read_json(os.path.join(saved_root,'main_setting.json'))
+    executor_config_path = os.path.join(saved_root,'resource',get_file_name(setting['executor_config_path'],True))
+    model_config_path = os.path.join(saved_root,'resource',get_file_name(setting['model_config_path'],True))
+    model_weights_path = os.path.join(saved_root,'checkpoint','best_model.pth')
+    model,executor = get_model_executor(model_config_path,executor_config_path,
+                                        model_weights_path=model_weights_path)
+    return model,executor
+
+def get_batch_size(saved_root):
+    setting = read_json(os.path.join(saved_root,'main_setting.json'))
+    batch_size = setting['batch_size']
+    return batch_size

@@ -94,17 +94,14 @@ class Worker(metaclass=ABCMeta):
     @abstractmethod
     def _work(self):
         """Work"""
-        pass
 
     @abstractmethod
     def _after_work(self):
         """Do something after worker work"""
-        pass
 
     @abstractmethod
     def _before_work(self):
         """Do something before worker work"""
-        pass
  
     def print_verbose(self,info,is_progress=False):
         if self.is_verbose_visible:

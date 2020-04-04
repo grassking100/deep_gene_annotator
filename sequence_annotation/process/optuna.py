@@ -6,7 +6,7 @@ import datetime
 import optuna
 import pandas as pd
 from abc import abstractmethod,ABCMeta,abstractproperty
-from optuna.structs import TrialPruned,FrozenTrial,TrialState
+from optuna.structs import FrozenTrial,TrialState
 from optuna.trial import Trial
 from optuna.pruners import NopPruner
 from optuna.integration import SkoptSampler

@@ -4,9 +4,11 @@ import nvgpu
 from .utils import get_time_str
 
 class Process:
-    def __init__(self,cmd,name=None):
+    def __init__(self,cmd,name=None,no_gpu=False):
         self.name=name
-        self._cmd=cmd +" -g {}"
+        self._cmd=cmd
+        if not no_gpu:
+            self._cmd += " -g {}"
         self._process = None
         self._returned_code = None
         self._is_start = False
@@ -64,29 +66,40 @@ class Process:
         else:
             return False
         
-def process_schedule(processes,gpu_ids,mem_used_percent_threshold=None):
-    mem_used_percent_threshold = mem_used_percent_threshold or 1
+def process_schedule(processes,gpu_ids,mem_used_percent_threshold=None,no_gpu=False):
+    if no_gpu:
+        process_unit_ids = list(range(40))
+    else:
+        mem_used_percent_threshold = mem_used_percent_threshold or 1
+        if len(set(gpu_ids)) != len(gpu_ids):
+            raise Exception("Duplicated gpu id")
+        process_unit_ids = gpu_ids
     processes_ = processes
     processes = {}
     for index,p in enumerate(processes_):
         p.name = index
         processes[index] = p
-    gpu_ready = [None] * len(gpu_ids)
+    resource_ready = [None] * len(process_unit_ids)
     while True:
-        for index,belong_id in enumerate(gpu_ready):
+        for index,belong_id in enumerate(resource_ready):
             if belong_id is None:
-                gpus = nvgpu.gpu_info()
-                gpu = list(filter(lambda x:x['index']==str(gpu_ids[index]),gpus))
                 ready_ps = [p for p in processes.values() if not p.is_start]
-                if len(ready_ps)>0 and len(gpu)==1:
-                    if gpu[0]['mem_used_percent']<=mem_used_percent_threshold:
+                if len(ready_ps)>0:
+                    if no_gpu:
                         ready_p = ready_ps[0]
-                        ready_p.start(gpu_ids[index])
-                        gpu_ready[index]=ready_p.name
+                        ready_p.start(process_unit_ids[index])
+                        resource_ready[index]=ready_p.name
+                    else:
+                        gpus = nvgpu.gpu_info()
+                        gpu = list(filter(lambda x:x['index']==str(process_unit_ids[index]),gpus))
+                        if gpu[0]['mem_used_percent']<=mem_used_percent_threshold:
+                            ready_p = ready_ps[0]
+                            ready_p.start(process_unit_ids[index])
+                            resource_ready[index]=ready_p.name
             else:
                 p = processes[belong_id]
                 if p.is_finish:
-                    gpu_ready[index] = None
+                    resource_ready[index] = None
 
         if all([p.is_finish for p in processes.values()]):
             break
