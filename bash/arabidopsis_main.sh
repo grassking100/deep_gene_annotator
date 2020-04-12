@@ -9,19 +9,23 @@ usage(){
  echo "    -o  <string>  Directory of output folder"
  echo "    -s  <string>  Source name"
  echo "  Options:"
- echo "    -m  <bool>    Merge regions which are overlapped                 [default: false]"
- echo "    -c  <bool>    Remove gene with altenative donor site and acceptor site    [default: false]"
- echo "    -i  <bool>    Remove regions which inner signal                [default: false]"
- echo "    -x  <bool>    Remove gene with non-coding transcript    [default: false]"
- echo "    -z  <str>     Mode to select for comparing score, valid options are 'bigger_or_equal', 'smaller_or_equal' [default:bigger_or_equal]"
+ echo "    -m  <bool>    Merge regions which are overlapped                                                       [default: false]"
+ echo "    -c  <bool>    Remove gene with altenative donor site and acceptor site                                 [default: false]"
+ echo "    -i  <bool>    Remove regions which inner signal                                                        [default: false]"
+ echo "    -x  <bool>    Remove gene with non-coding transcript                                                   [default: false]"
+ echo "    -n  <bool>    Remove hypothetical protein                                                              [default: false]"
+ echo "    -z  <str>     Mode to select for comparing score, valid options are 'bigger_or_equal', "
+ echo "                  'smaller_or_equal'                                                                       [default:bigger_or_equal]"
  echo "    -f  <float>   BED item to preserved when comparing score and threshold, defualt would ignore score"
- echo "    -y  <float>   If it is true, then the gene with transcript which has failed to passed the score filter would be removed. Otherwise, only the transcript which has failed to passed the score filter would be removed [default: false]"
+ echo "    -y  <float>   If it is true, then the gene with transcript which has failed to passed the score "
+ echo "                  filter would be removed. Otherwise, only the transcript which has failed to passed the "
+ echo "                  score filter would be removed                                                            [default: false]"
  echo "    -h            Print help message and exit"
  echo "Example: bash arabidopsis_main.sh -u 10000 -d 10000 -r /home/io/Arabidopsis_thaliana -o ./data/2019_07_12 -s Arabidopsis_1"
  echo ""
 }
 
-while getopts u:d:r:o:s:f:z:mcxiyh option
+while getopts u:d:r:o:s:f:z:mcxiynh option
  do
   case "${option}"
   in
@@ -37,6 +41,7 @@ while getopts u:d:r:o:s:f:z:mcxiyh option
    x )remove_non_coding=true;;
    i )remove_inner_end=true;;
    y )remove_fail_score_gene=true;;
+   n )remove_non_hypothetical_gene=true;;
    h )usage; exit 1;;
    : )echo "Option $OPTARG requires an argument"
       usage; exit 1
@@ -101,6 +106,10 @@ if [ ! "$compared_mode" ]; then
     compared_mode=bigger_or_equal
 fi
 
+if [ ! "$remove_non_hypothetical_gene" ]; then
+    remove_non_hypothetical_gene=false
+fi
+
 #Set parameter
 bash_root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 script_root=$bash_root/..
@@ -112,13 +121,11 @@ id_convert_table_path=$preprocessed_root/id_convert.tsv
 processed_bed_path=$preprocessed_root/processed.bed
 preprocess_main_root=$script_root/sequence_annotation/preprocess
 genome_path=$preprocessed_root/araport_11_Arabidopsis_thaliana_Col-0_rename.fasta
-length_gaussian_root=$splitted_root/length_gaussian
 ds_rna_bed_path=$processed_root/double_strand/rna_double_strand.bed
 ds_region_fasta_path=$processed_root/double_strand/selected_region_double_strand.fasta
 region_rename_table_double_strand_path=$processed_root/result/double_strand/region_rename_table_double_strand.tsv
 
 mkdir -p $saved_root
-mkdir -p $length_gaussian_root
 
 echo "name,value" > $saved_root/main_kwargs.csv
 echo "root,$root" >> $saved_root/main_kwargs.csv
@@ -133,6 +140,7 @@ echo "remove_alt_site,$remove_alt_site" >> $saved_root/main_kwargs.csv
 echo "remove_non_coding,$remove_non_coding" >> $saved_root/main_kwargs.csv
 echo "remove_inner_end,$remove_inner_end" >> $saved_root/main_kwargs.csv
 echo "remove_fail_score_gene,$remove_fail_score_gene" >> $saved_root/main_kwargs.csv
+echo "remove_non_hypothetical_gene,$remove_non_hypothetical_gene" >> $saved_root/main_kwargs.csv
 
 command="$bash_root/arabidopsis_data_prepair.sh -u $upstream_dist -d $downstream_dist -r $root -o $preprocessed_root -s $source_name"
 if $remove_inner_end; then
@@ -160,6 +168,10 @@ if [ ! -e "$processed_root/result/double_strand/canonical_double_strand.bed" ]; 
         command="$command -x"
     fi
     
+    if $remove_non_hypothetical_gene; then
+        command="$command -l $preprocessed_root/non_hypothetical_gene_id.txt"
+    fi
+
     if [ "$score_filter" ]; then
         command="$command -f $score_filter -z $compared_mode"
     fi
@@ -172,5 +184,11 @@ fi
 
 
 echo "Splitting data"
-#bash $bash_root/region_select_split.sh -g $genome_path -r $region_rename_table_double_strand_path -t $id_convert_table_path -p $processed_root -o $splitted_root -d
-bash $bash_root/region_select_split.sh -g $genome_path -r $region_rename_table_double_strand_path -t $id_convert_table_path -p $processed_root -o $splitted_root -s
+if [ ! -e "$plitted_root/double_strand_data/split_without_strand/count.csv" ]; then
+    bash $bash_root/region_select_split.sh -g $genome_path -r $region_rename_table_double_strand_path -t $id_convert_table_path -p $processed_root -o $splitted_root -d
+
+fi
+
+if [ ! -e "$plitted_root/single_strand_data/split_with_strand/count.csv" ]; then
+    bash $bash_root/region_select_split.sh -g $genome_path -r $region_rename_table_double_strand_path -t $id_convert_table_path -p $processed_root -o $splitted_root -s
+fi

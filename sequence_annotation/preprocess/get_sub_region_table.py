@@ -8,7 +8,6 @@ def main(region_table_path,chrom_id_path,chrom_source,output_path):
     region_table = read_region_table(region_table_path)
     chrom_ids = pd.read_csv(chrom_id_path,header=None)
     chrom_ids = list(chrom_ids[0])
-    #print(chrom_source,region_table.head)
     subtable = region_table[region_table[chrom_source].isin(chrom_ids)]
     subtable.to_csv(output_path,index=None,sep='\t')
 

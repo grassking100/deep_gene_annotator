@@ -1,14 +1,15 @@
-from abc import ABCMeta,abstractproperty
+from abc import ABCMeta, abstractproperty
 from copy import deepcopy
 import numpy as np
-from ..utils.utils import get_protected_attrs_names,logical_not,CONSTANT_LIST
-from ..utils.exception import UninitializedException,NegativeNumberException
-from ..utils.exception import ChangeConstValException,ValueOutOfRange
-from .exception import InvalidAnnotation,InvalidStrandType
+from ..utils.utils import get_protected_attrs_names, logical_not, CONSTANT_LIST
+from ..utils.exception import UninitializedException, NegativeNumberException, InvalidStrandType
+from ..utils.exception import ChangeConstValException, ValueOutOfRange
+from .exception import InvalidAnnotation
 
 PLUS = 'plus'
 MINUS = 'minus'
-STRANDS = CONSTANT_LIST([PLUS,MINUS])
+STRANDS = CONSTANT_LIST([PLUS, MINUS])
+
 
 class Sequence(metaclass=ABCMeta):
     def __init__(self):
@@ -24,9 +25,9 @@ class Sequence(metaclass=ABCMeta):
     def to_dict(self):
         dictionary = {}
         for attr in self._copied_public_attrs():
-            dictionary[attr]=deepcopy(getattr(self,attr))
+            dictionary[attr] = deepcopy(getattr(self, attr))
         for attr in self._copied_protected_attrs():
-            dictionary[attr[1:]]=deepcopy(getattr(self,attr))
+            dictionary[attr[1:]] = deepcopy(getattr(self, attr))
         return dictionary
 
     def _validate_dict_keys(self, dict_):
@@ -37,13 +38,13 @@ class Sequence(metaclass=ABCMeta):
     def from_dict(self, dict_):
         self._validate_dict_keys(dict_)
         for attr in self._copied_public_attrs():
-            setattr(self,attr,deepcopy(dict_[attr]))
+            setattr(self, attr, deepcopy(dict_[attr]))
         for attr in self._copied_protected_attrs():
-            setattr(self,attr,deepcopy(dict_[attr[1:]]))
+            setattr(self, attr, deepcopy(dict_[attr[1:]]))
         return self
 
     def _copied_public_attrs(self):
-        return ['source','chromosome_id','id','note']
+        return ['source', 'chromosome_id', 'id', 'note']
 
     def _copied_protected_attrs(self):
         return ['_strand']
@@ -68,16 +69,20 @@ class Sequence(metaclass=ABCMeta):
 
     @property
     def _checked_attr(self):
-        return ['id','_strand']
+        return ['id', '_strand']
 
     def _validate(self):
-        status = all(getattr(self,attr) is not None for attr in self._checked_attr)
+        status = all(
+            getattr(
+                self,
+                attr) is not None for attr in self._checked_attr)
         return status
 
     def copy(self):
         new_seq = self.__class__()
         new_seq.from_dict(self.to_dict())
         return new_seq
+
 
 class SeqInformation(Sequence):
     def __init__(self):
@@ -91,20 +96,24 @@ class SeqInformation(Sequence):
         super().__init__()
 
     def _copied_public_attrs(self):
-        return super()._copied_public_attrs()+['ann_type','ann_status','extra_index_name','parent']
+        return super()._copied_public_attrs() + \
+            ['ann_type', 'ann_status', 'extra_index_name', 'parent']
 
     def _copied_protected_attrs(self):
-        return super()._copied_protected_attrs()+['_start','_end','_extra_index']
+        return super()._copied_protected_attrs() + \
+            ['_start', '_end', '_extra_index']
 
     def _validated_for_length(self):
-        for attr in ['_start','_end']:
-            if getattr(self,attr) is None:
-                raise Exception("{}'s {} should not be None".format(self.id,attr))
+        for attr in ['_start', '_end']:
+            if getattr(self, attr) is None:
+                raise Exception(
+                    "{}'s {} should not be None".format(
+                        self.id, attr))
 
     @property
     def length(self):
         self._validated_for_length()
-        return self._end-self._start+1
+        return self._end - self._start + 1
 
     @property
     def start(self):
@@ -117,13 +126,13 @@ class SeqInformation(Sequence):
     @start.setter
     def start(self, value):
         if value < 0:
-            raise NegativeNumberException("start",value)
+            raise NegativeNumberException("start", value)
         self._start = value
 
     @end.setter
     def end(self, value):
         if value < 0:
-            raise NegativeNumberException("end",value)
+            raise NegativeNumberException("end", value)
         self._end = value
 
     @property
@@ -133,11 +142,12 @@ class SeqInformation(Sequence):
     @extra_index.setter
     def extra_index(self, value):
         if value < 0:
-            raise NegativeNumberException("extra_index",value)
+            raise NegativeNumberException("extra_index", value)
         self._extra_index = value
 
+
 class AnnSequence(Sequence):
-    def __init__(self,ann_types=None,length=None):
+    def __init__(self, ann_types=None, length=None):
         self._has_space = False
         self._ANN_TYPES = None
         self._length = None
@@ -150,13 +160,13 @@ class AnnSequence(Sequence):
 
         if length is not None:
             self.length = length
-        
+
         if ann_types is not None and length is not None:
             self.init_space()
 
     @property
     def _checked_attr(self):
-        return super()._checked_attr+['_ANN_TYPES','_length']
+        return super()._checked_attr + ['_ANN_TYPES', '_length']
 
     @property
     def absolute_index(self):
@@ -165,7 +175,7 @@ class AnnSequence(Sequence):
     @absolute_index.setter
     def absolute_index(self, value):
         if value < 0:
-            raise NegativeNumberException("absolute_index",value)
+            raise NegativeNumberException("absolute_index", value)
         self._absolute_index = value
 
     @property
@@ -173,9 +183,9 @@ class AnnSequence(Sequence):
         return self._ANN_TYPES
 
     @ANN_TYPES.setter
-    def ANN_TYPES(self,value):
+    def ANN_TYPES(self, value):
         if self._ANN_TYPES is None or not self._has_space:
-            if len(set(value))!=len(value):
+            if len(set(value)) != len(value):
                 raise Exception('Input types has duplicated data')
             self._ANN_TYPES = list(value)
             self._ANN_TYPES.sort()
@@ -183,12 +193,14 @@ class AnnSequence(Sequence):
             raise ChangeConstValException('ANN_TYPES')
 
     def _copied_public_attrs(self):
-        return super()._copied_public_attrs()+['ANN_TYPES','length','processed_status']
+        return super()._copied_public_attrs() + \
+            ['ANN_TYPES', 'length', 'processed_status']
 
     def _copied_protected_attrs(self):
-        return super()._copied_protected_attrs()+['_has_space','_absolute_index']
+        return super()._copied_protected_attrs() + \
+            ['_has_space', '_absolute_index']
 
-    def to_dict(self,only_data=False,without_data=False):
+    def to_dict(self, only_data=False, without_data=False):
         if only_data:
             return self._data
         else:
@@ -197,10 +209,10 @@ class AnnSequence(Sequence):
                 protected_attrs = list(self._copied_protected_attrs())
                 protected_attrs.append('_data')
                 for attr in protected_attrs:
-                    dict_[attr[1:]]=deepcopy(getattr(self,attr))
+                    dict_[attr[1:]] = deepcopy(getattr(self, attr))
             else:
                 dict_['data'] = {}
-                dict_['has_space']=False
+                dict_['has_space'] = False
             return dict_
 
     def from_dict(self, dict_):
@@ -220,7 +232,7 @@ class AnnSequence(Sequence):
     @length.setter
     def length(self, value):
         if value < 0:
-            raise NegativeNumberException("length",value)
+            raise NegativeNumberException("length", value)
         if not self._has_space:
             self._length = value
         else:
@@ -242,29 +254,31 @@ class AnnSequence(Sequence):
         self.processed_status = None
         self._has_space = True
         for ann_type in self.ANN_TYPES:
-            self._data[ann_type] = np.array([0.0]*self._length,dtype=dtype)
+            self._data[ann_type] = np.array([0.0] * self._length, dtype=dtype)
         return self
 
     def _validate_input_index(self, start_index, end_index):
         if start_index < 0:
-            raise NegativeNumberException('start_index',start_index)
-        if end_index < 0 :
-            raise NegativeNumberException('end_index',end_index)
+            raise NegativeNumberException('start_index', start_index)
+        if end_index < 0:
+            raise NegativeNumberException('end_index', end_index)
         if start_index >= self._length:
-            raise ValueOutOfRange('start_index',start_index,list([0,self._length-1]))
-        if end_index >= self._length :
-            raise ValueOutOfRange('end_index',end_index,list([0,self._length-1]))
-        if start_index>end_index:
+            raise ValueOutOfRange('start_index', start_index,
+                                  list([0, self._length - 1]))
+        if end_index >= self._length:
+            raise ValueOutOfRange('end_index', end_index,
+                                  list([0, self._length - 1]))
+        if start_index > end_index:
             raise Exception("Start index must not larger than End index")
 
     def _validate_input_ann_type(self, ann_type):
         if ann_type not in self.ANN_TYPES:
-            raise InvalidAnnotation(ann_type,self.ANN_TYPES)
+            raise InvalidAnnotation(ann_type, self.ANN_TYPES)
 
     def _validate_is_init(self):
         if not self._has_space:
             name = self.__class__.__name__
-            raise UninitializedException(name,"Please use method,init_space")
+            raise UninitializedException(name, "Please use method,init_space")
 
     def op_and_ann(self, stored_ann_type, masked_ann_type, mask_ann_type,
                    start_index=None, end_index=None):
@@ -288,7 +302,7 @@ class AnnSequence(Sequence):
                      logical_function, start_index=None, end_index=None):
         masked_ann = self.get_ann(masked_ann_type, start_index, end_index)
         mask_ann = self.get_ann(mask_ann_type, start_index, end_index)
-        return_ann = logical_function(masked_ann,mask_ann)
+        return_ann = logical_function(masked_ann, mask_ann)
         self.set_ann(stored_ann_type, return_ann, start_index, end_index)
 
     def add_ann(self, ann_type, value, start_index=None, end_index=None):
@@ -296,7 +310,7 @@ class AnnSequence(Sequence):
         self.set_ann(ann_type, ann + value, start_index, end_index)
         return self
 
-    def set_ann(self,ann_type, value, start_index=None, end_index=None):
+    def set_ann(self, ann_type, value, start_index=None, end_index=None):
         if start_index is None:
             start_index = 0
         if end_index is None:
@@ -304,10 +318,10 @@ class AnnSequence(Sequence):
         self._validate_is_init()
         self._validate_input_ann_type(ann_type)
         self._validate_input_index(start_index, end_index)
-        self._data[ann_type][start_index : end_index+1] = value
+        self._data[ann_type][start_index: end_index + 1] = value
         return self
 
-    def get_ann(self,ann_type, start_index=None, end_index=None):
+    def get_ann(self, ann_type, start_index=None, end_index=None):
         if start_index is None:
             start_index = 0
         if end_index is None:
@@ -315,7 +329,7 @@ class AnnSequence(Sequence):
         self._validate_is_init()
         self._validate_input_ann_type(ann_type)
         self._validate_input_index(start_index, end_index)
-        return self._data[ann_type][start_index : end_index+1].copy()
+        return self._data[ann_type][start_index: end_index + 1].copy()
 
     def get_subseq(self, start_index=None, end_index=None, ann_types=None):
         if start_index is None:
@@ -328,5 +342,5 @@ class AnnSequence(Sequence):
         sub_seq.length = end_index - start_index + 1
         sub_seq.init_space()
         for type_ in sub_seq.ANN_TYPES:
-            sub_seq.set_ann(type_,self.get_ann(type_,start_index,end_index))
+            sub_seq.set_ann(type_, self.get_ann(type_, start_index, end_index))
         return sub_seq

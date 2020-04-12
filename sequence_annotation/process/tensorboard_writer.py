@@ -1,94 +1,112 @@
-import torch
-from  matplotlib import pyplot
-pyplot.switch_backend('agg')
-import numpy as np
 from torch.utils.tensorboard import SummaryWriter
+import numpy as np
+import torch
+from matplotlib import pyplot
+pyplot.switch_backend('agg')
+
 
 class TensorboardWriter:
-    def __init__(self,writer):
+    def __init__(self, writer):
         self._writer = writer
         self.counter = 0
 
     @property
     def writer(self):
-        if isinstance(self._writer,str):
+        if isinstance(self._writer, str):
             self._writer = SummaryWriter(self._writer)
         return self._writer
-        
+
     def close(self):
-        if not isinstance(self._writer,str):
+        if not isinstance(self._writer, str):
             self._writer.close()
-        
-    def add_scalar(self,record,prefix=None,counter=None):
+
+    def add_scalar(self, record, prefix=None, counter=None):
         prefix = prefix or ''
-        for name,val in record.items():
+        for name, val in record.items():
             val = np.array(val).reshape(-1)
             if 'val' in name:
                 name = '_'.join(name.split('_')[1:])
-            if len(val)==1:
-                self.writer.add_scalar(prefix+name, val, counter)
+            if len(val) == 1:
+                self.writer.add_scalar(prefix + name, val, counter)
 
-    def add_grad(self,named_parameters,prefix=None,counter=None):
+    def add_grad(self, named_parameters, prefix=None, counter=None):
         prefix = prefix or ''
         counter = counter or self.counter
-        for name,param in named_parameters:
+        for name, param in named_parameters:
             if param.grad is not None:
                 grad = param.grad.cpu().detach().numpy()
-                if  np.isnan(grad).any():
+                if np.isnan(grad).any():
                     print(grad)
-                    raise Exception(name+" has at least one NaN in it.")
-                self.writer.add_histogram("layer_"+prefix+'grad_'+name, grad, counter)
+                    raise Exception(name + " has at least one NaN in it.")
+                self.writer.add_histogram("layer_" + prefix + 'grad_' + name,
+                                          grad, counter)
 
-    def add_distribution(self,name,data,prefix=None,counter=None):
+    def add_distribution(self, name, data, prefix=None, counter=None):
         prefix = prefix or ''
         counter = counter or self.counter
-        if isinstance(data,torch.Tensor):
+        if isinstance(data, torch.Tensor):
             try:
                 data = data.cpu().detach().numpy()
-            except:
+            except BaseException:
                 print(data)
                 raise Exception("{} causes something wrong occur".format(name))
         if np.isnan(data).any():
             print(data)
-            raise Exception(name+" has at least one NaN in it.")
+            raise Exception(name + " has at least one NaN in it.")
         try:
-            self.writer.add_histogram(prefix+name, data.flatten(),counter)
-        except:
+            self.writer.add_histogram(prefix + name, data.flatten(), counter)
+        except BaseException:
             print(data)
             raise Exception("{} causes something wrong occur".format(name))
 
-    def add_weights(self,named_parameters,prefix=None,counter=None):
+    def add_weights(self, named_parameters, prefix=None, counter=None):
         prefix = prefix or ''
         counter = counter or self.counter
-        for name,param in named_parameters:
+        for name, param in named_parameters:
             w = param.cpu().detach().numpy()
-            if  np.isnan(w).any():
+            if np.isnan(w).any():
                 print(w)
-                raise Exception(name+" has at least one NaN in it.")
-            self.writer.add_histogram("layer_"+prefix+name, w, counter)
+                raise Exception(name + " has at least one NaN in it.")
+            self.writer.add_histogram("layer_" + prefix + name, w, counter)
 
-    def add_figure(self,name,value,prefix=None,counter=None,title='',labels=None,
-                   colors=None,use_stack=False,*args,**kwargs):
+    def add_figure(self,
+                   name,
+                   value,
+                   prefix=None,
+                   counter=None,
+                   title='',
+                   labels=None,
+                   colors=None,
+                   use_stack=False,
+                   *args,
+                   **kwargs):
         prefix = prefix or ''
         counter = counter or self.counter
-        #data shape is L,C
-        if len(value.shape)!=2:
-            raise Exception("Value shape size should be two",value.shape)
+        # data shape is L,C
+        if len(value.shape) != 2:
+            raise Exception("Value shape size should be two", value.shape)
         fig = pyplot.figure(dpi=200)
-        if isinstance(value,torch.Tensor):
+        if isinstance(value, torch.Tensor):
             value = value.cpu().detach().numpy()
-        if  np.isnan(value).any():
-            raise Exception(title+" has at least one NaN in it.")
+        if np.isnan(value).any():
+            raise Exception(title + " has at least one NaN in it.")
         length = value.shape[0]
         if labels is not None:
             value = value.transpose()
             if len(value) != len(labels):
-                raise Exception("Labels' size({}) is not same as data's size({})".format(len(labels),len(value)))
+                raise Exception(
+                    "Labels' size({}) is not same as data's size({})".format(
+                        len(labels), len(value)))
             if colors is not None:
                 if len(colors) != len(labels):
-                    raise Exception("Labels' size({}) is not same as colors's size({})".format(len(labels),len(colors)))    
+                    raise Exception(
+                        "Labels' size({}) is not same as colors's size({})".
+                        format(len(labels), len(colors)))
             if use_stack:
-                pyplot.stackplot(list(range(length)),value,labels=labels,colors=colors)
+                pyplot.stackplot(list(range(length)),
+                                 value,
+                                 labels=labels,
+                                 colors=colors)
             else:
                 for index in range(len(labels)):
                     item = value[index]
@@ -97,29 +115,43 @@ class TensorboardWriter:
                         color = colors[index]
                     else:
                         color = None
-                    pyplot.plot(item,label=label,color=color)
+                    pyplot.plot(item, label=label, color=color)
             pyplot.legend()
         else:
             if use_stack:
-                pyplot.stackplot(list(range(length)),value)
+                pyplot.stackplot(list(range(length)), value)
             else:
                 pyplot.plot(value)
         pyplot.xlabel("Sequence (from 5' to 3')")
         pyplot.ylabel("Value")
         pyplot.title(title)
         pyplot.close(fig)
-        self.writer.add_figure(prefix+name,fig,global_step=counter,*args,**kwargs)
+        self.writer.add_figure(prefix + name,
+                               fig,
+                               global_step=counter,
+                               *args,
+                               **kwargs)
 
-    def add_matshow(self,name,value,prefix=None,counter=None,title='',*args,**kwargs):
+    def add_matshow(self,
+                    name,
+                    value,
+                    prefix=None,
+                    counter=None,
+                    title='',
+                    *args,
+                    **kwargs):
         prefix = prefix or ''
         counter = counter or self.counter
         fig = pyplot.figure(dpi=200)
-        if  np.isnan(value).any():
+        if np.isnan(value).any():
             print(value)
-            raise Exception(title+" has at least one NaN in it.")
-        cax = pyplot.matshow(value,fignum=0)
+            raise Exception(title + " has at least one NaN in it.")
+        cax = pyplot.matshow(value, fignum=0)
         fig.colorbar(cax)
         pyplot.title(title)
         pyplot.close(fig)
-        self.writer.add_figure(prefix+name,fig,global_step=counter,*args,**kwargs)
-        
+        self.writer.add_figure(prefix + name,
+                               fig,
+                               global_step=counter,
+                               *args,
+                               **kwargs)

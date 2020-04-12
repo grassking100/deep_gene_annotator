@@ -5,78 +5,96 @@ from collections import OrderedDict
 from torch.nn.init import _calculate_fan_in_and_fan_out, _no_grad_uniform_
 from ..utils.utils import CONSTANT_DICT
 
-BASIC_SIMPLIFY_MAP = CONSTANT_DICT({'exon':['exon'],'intron':['intron'],'other':['other']})
-BASIC_COLOR_SETTING = CONSTANT_DICT({'other':'blue','exon':'red','intron':'yellow'})
+BASIC_SIMPLIFY_MAP = CONSTANT_DICT({
+    'exon': ['exon'],
+    'intron': ['intron'],
+    'other': ['other']
+})
+BASIC_COLOR_SETTING = CONSTANT_DICT({
+    'other': 'blue',
+    'exon': 'red',
+    'intron': 'yellow'
+})
+
 
 def deep_copy(data):
-    if isinstance(data,dict):
+    if isinstance(data, dict):
         copied = {}
-        for key,value in data.items():
+        for key, value in data.items():
             copied[key] = deep_copy(value)
-    elif isinstance(data,list):
+    elif isinstance(data, list):
         copied = []
         for item in data:
             copied.append(deep_copy(item))
-    elif isinstance(data,torch.Tensor):
+    elif isinstance(data, torch.Tensor):
         copied = data.cpu().clone()
     else:
         copied = data
     return copied
 
+
 def get_copied_state_dict(container):
     weights = OrderedDict()
-    for key,data in dict(container.state_dict()).items():
+    for key, data in dict(container.state_dict()).items():
         weights[key] = data.cpu().clone()
     return weights
 
-def get_seq_mask(lengths,max_length=None,to_tensor=True,to_cuda=True):
+
+def get_seq_mask(lengths, max_length=None, to_tensor=True, to_cuda=True):
     max_length = max_length or max(lengths)
     if to_tensor:
-        mask = (torch.arange(max_length)[None,:] < torch.LongTensor(lengths)[:,None]).float()
+        mask = (torch.arange(max_length)[None, :] <
+                torch.LongTensor(lengths)[:, None]).float()
         if to_cuda:
-            mask = mask.cuda()    
+            mask = mask.cuda()
     else:
-        mask = np.zeros((len(lengths),max_length))
-        for index,length in enumerate(lengths):
-            mask[index,:length] = 1
+        mask = np.zeros((len(lengths), max_length))
+        for index, length in enumerate(lengths):
+            mask[index, :length] = 1
     return mask
 
-def param_num(model,requires_grad=True):
+
+def param_num(model, requires_grad=True):
     if requires_grad:
-        model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+        model_parameters = filter(lambda p: p.requires_grad,
+                                  model.parameters())
     else:
         model_parameters = model.parameters()
     return sum([p.numel() for p in model_parameters])
 
-def _get_std_bound(tensor,mode=None,n=None):
-    #Reference:https://pytorch.org/docs/stable/_modules/torch/nn/init.html
+
+def _get_std_bound(tensor, mode=None, n=None):
+    # Reference:https://pytorch.org/docs/stable/_modules/torch/nn/init.html
     mode = mode or 'both'
-    VALID_MODES = ['fan_in','fan_out','both']
+    VALID_MODES = ['fan_in', 'fan_out', 'both']
     if mode not in VALID_MODES:
-        raise Exception("Got wrong mode {}, expect {}".format(mode,VALID_MODES))
+        raise Exception("Got wrong mode {}, expect {}".format(
+            mode, VALID_MODES))
     if n is None:
         fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
         if mode == 'both':
-            n = float(fan_in + fan_out)/2
+            n = float(fan_in + fan_out) / 2
         elif mode == 'fan_in':
             n = fan_in
         else:
             n = fan_out
-    std = math.sqrt(1/n)
+    std = math.sqrt(1 / n)
     return std
-    
-def xavier_uniform_extend_(tensor, gain=1.,mode=None,n=None):
-    #Reference:https://pytorch.org/docs/stable/_modules/torch/nn/init.html
-    std_bound = _get_std_bound(tensor,mode=mode,n=n)
+
+
+def xavier_uniform_extend_(tensor, gain=1., mode=None, n=None):
+    # Reference:https://pytorch.org/docs/stable/_modules/torch/nn/init.html
+    std_bound = _get_std_bound(tensor, mode=mode, n=n)
     bound = math.sqrt(3.0) * gain * std_bound
     return _no_grad_uniform_(tensor, -bound, bound)
 
-def get_name_parameter(model,names):
+
+def get_name_parameter(model, names):
     parameters = []
     returned_names = []
-    for name_,parameter in model.named_parameters():
+    for name_, parameter in model.named_parameters():
         for target_name in names:
             if target_name in name_:
                 parameters.append(parameter)
                 returned_names.append(name_)
-    return returned_names,parameters
+    return returned_names, parameters

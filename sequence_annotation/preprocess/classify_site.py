@@ -2,7 +2,7 @@ import os, sys
 sys.path.append(os.path.dirname(__file__)+"/../..")
 import pandas as pd
 from argparse import ArgumentParser
-from sequence_annotation.utils.utils import read_bed,write_gff,read_gff
+from sequence_annotation.utils.utils import read_bed,write_gff,read_gff,InvalidStrandType
 from sequence_annotation.utils.utils import get_gff_with_updated_attribute,get_gff_with_attribute
 
 def simple_belong_by_boundary(exp_sites,boundarys,exp_site_name,start_name,end_name,ref_site_name):

@@ -1,13 +1,29 @@
 import re
-from ..preprocess.utils import RNA_TYPES
-from ..genome_handler.exception import InvalidStrandType
-from ..genome_handler.sequence import AnnSequence,PLUS
-from ..genome_handler.ann_seq_processor import get_background
+import pandas as pd
+from ..utils.exception import InvalidStrandType
+from ..genome_handler.sequence import AnnSequence, PLUS
 from ..genome_handler.region_extractor import RegionExtractor
 
-def find_substr(regex,string,shift_value=None):
+
+def get_motifs(path, first_n=None):
+    signal = pd.read_csv(path, sep='\t')
+    signal = signal.sort_values('count', ascending=False)
+    motifs = list(signal['motif'])
+    if first_n is not None:
+        motifs = motifs[:first_n]
+    return motifs
+
+
+def get_splicing_regex(path, first_n=None):
+    first_n = first_n or 3
+    motifs = get_motifs(path, first_n)
+    motif_regex = '|'.join(motifs)
+    return motif_regex
+
+
+def find_substr(regex, string, shift_value=None):
     """Find indice of matched text in string
-    
+
     Parameters:
     ----------
     regex : str
@@ -16,7 +32,7 @@ def find_substr(regex,string,shift_value=None):
         String to be searched
     shift_value : int (default: 0)
         Shift the index
-        
+
     Returns:
     ----------
     list (int)
@@ -24,13 +40,14 @@ def find_substr(regex,string,shift_value=None):
     """
     shift_value = shift_value or 0
     iter_ = re.finditer(regex, string)
-    indice = [m.start()+shift_value for m in iter_]
+    indice = [m.start() + shift_value for m in iter_]
     return indice
-    
-def find_closest_site(pred_site,ann_sites,dist):
+
+
+def find_closest_site(pred_site, ann_sites, dist):
     """Find pred_site's most closest annotated sites in specific distance,
     if it not found then it will return pred_site itself
-    
+
     Parameters:
     ----------
     pred_site : int
@@ -39,7 +56,7 @@ def find_closest_site(pred_site,ann_sites,dist):
         Locations of annotated sites
     dist : numeric
         Valid distance from pred_site to ann_sites
-        
+
     Returns:
     ----------
     tuple (numeric, numeric, bool)
@@ -47,10 +64,10 @@ def find_closest_site(pred_site,ann_sites,dist):
           2. Distance between pred_site and closest site
           3. Is annotated site found in specific distance or not
     """
-    diff = [abs(ann_site-pred_site) for ann_site in ann_sites]
+    diff = [abs(ann_site - pred_site) for ann_site in ann_sites]
     fixed_pred_site = None
     fixed_diff = None
-    for diff_, ann_site in zip(diff,ann_sites):
+    for diff_, ann_site in zip(diff, ann_sites):
         if diff_ <= dist:
             if fixed_pred_site is None or diff_ < fixed_diff:
                 fixed_pred_site = ann_site
@@ -59,16 +76,17 @@ def find_closest_site(pred_site,ann_sites,dist):
     if fixed_pred_site is None:
         fixed_pred_site = pred_site
         fixed_diff = 0
-    return fixed_pred_site,fixed_diff,in_dist
-    
+    return fixed_pred_site, fixed_diff, in_dist
+
+
 def get_splice_pairs(gff):
     """Get splice pairs in order of donor site and acceptor site
-    
+
     Parameters:
     ----------
     gff : pd.DataFrame
         GFF data in pd.DataFrame format
-          
+
     Returns:
     ----------
     list (tuple)
@@ -79,11 +97,12 @@ def get_splice_pairs(gff):
         raise InvalidStrandType(strands)
 
     introns = gff[gff['feature'] == 'intron']
-    pairs = list(zip(list(introns['start']),list(introns['end'])))
+    pairs = list(zip(list(introns['start']), list(introns['end'])))
     return pairs
-  
-def get_splice_pair_statuses(splice_pairs,ann_donor_sites,ann_acceptor_sites,
-                             donor_distance,acceptor_distance):
+
+
+def get_splice_pair_statuses(splice_pairs, ann_donor_sites, ann_acceptor_sites,
+                             donor_distance, acceptor_distance):
     """Determite splice pair status by its distance between answer
     Parameters:
     ----------
@@ -103,12 +122,14 @@ def get_splice_pair_statuses(splice_pairs,ann_donor_sites,ann_acceptor_sites,
     """
     splice_pair_statuses = []
     for splice_pair in splice_pairs:
-        donor_site,acceptor_site = splice_pair
-        fixed_donor_site,_,donor_in_dist = find_closest_site(donor_site,ann_donor_sites,donor_distance)
-        fixed_acceptor_site,_,acceptor_in_dist = find_closest_site(acceptor_site,ann_acceptor_sites,acceptor_distance)
-        status = {'donor':{'location':donor_site,'valid':False},
-                  'acceptor':{'location':acceptor_site,'valid':False}
-                 }
+        donor_site, acceptor_site = splice_pair
+        fixed_donor_site, _, donor_in_dist = find_closest_site(
+            donor_site, ann_donor_sites, donor_distance)
+        fixed_acceptor_site, _, acceptor_in_dist = find_closest_site(
+            acceptor_site, ann_acceptor_sites, acceptor_distance)
+        status = {'donor': {'location': donor_site, 'valid': False},
+                  'acceptor': {'location': acceptor_site, 'valid': False}
+                  }
         if donor_in_dist:
             status['donor']['location'] = fixed_donor_site
             status['donor']['valid'] = True
@@ -119,7 +140,8 @@ def get_splice_pair_statuses(splice_pairs,ann_donor_sites,ann_acceptor_sites,
             splice_pair_statuses.append(status)
     return splice_pair_statuses
 
-def get_valid_intron_boundary(rna_boundary,splice_pair_statuses):
+
+def get_valid_intron_boundary(rna_boundary, splice_pair_statuses):
     """Get list of intron boundarys based on gene boundary and intron boundarys
     Parameters:
     ----------
@@ -141,7 +163,7 @@ def get_valid_intron_boundary(rna_boundary,splice_pair_statuses):
         end = status['acceptor']['location']
         if rna_start < start and end < rna_end:
             not_terminal_statuses.append(status)
-        
+
     valid_introns = set()
     valid_donor_introns = set()
     valid_acceptor_introns = set()
@@ -150,44 +172,48 @@ def get_valid_intron_boundary(rna_boundary,splice_pair_statuses):
         is_acceptor_valid = status['acceptor']['valid']
         donor = status['donor']['location']
         acceptor = status['acceptor']['location']
-        id_ = "{}_{}".format(donor,acceptor)
+        id_ = "{}_{}".format(donor, acceptor)
         if is_donor_valid and is_acceptor_valid:
             valid_introns.add(id_)
         if is_donor_valid:
             valid_donor_introns.add(id_)
         if is_acceptor_valid:
             valid_acceptor_introns.add(id_)
-    
+
     for valid_donor_intron in valid_donor_introns:
         valid_donor, valid_partner_acceptor = valid_donor_intron.split('_')
         valid_donor = int(valid_donor)
         valid_partner_acceptor = int(valid_partner_acceptor)
         for valid_acceptor_intron in valid_acceptor_introns:
-            valid_partner_donor, valid_acceptor = valid_acceptor_intron.split('_')
+            valid_partner_donor, valid_acceptor = valid_acceptor_intron.split(
+                '_')
             valid_partner_donor = int(valid_partner_donor)
             valid_acceptor = int(valid_acceptor)
-            #Merge intron
-            if (valid_acceptor-valid_donor+1>0) and ((valid_partner_donor - valid_partner_acceptor -1) <=0):
-                id_ = "{}_{}".format(valid_donor,valid_acceptor)
+            # Merge intron
+            if (valid_acceptor - valid_donor + 1 >
+                    0) and ((valid_partner_donor - valid_partner_acceptor - 1) <= 0):
+                id_ = "{}_{}".format(valid_donor, valid_acceptor)
                 #print("Create merge inton {}".format(id_))
                 valid_introns.add(id_)
-            
-    ann_seq = AnnSequence(['intron'],rna_length)
+
+    ann_seq = AnnSequence(['intron'], rna_length)
     ann_seq.strand = PLUS
     for valid_intron in valid_introns:
-        start,end = valid_intron.split('_')
+        start, end = valid_intron.split('_')
         start = int(start) - rna_start
         end = int(end) - rna_start
-        ann_seq.set_ann("intron",1,start,end)
+        ann_seq.set_ann("intron", 1, start, end)
     blocks = RegionExtractor().extract(ann_seq)
     valid_intron_boundarys_ = []
     for block in blocks:
-        valid_intron_boundarys_.append((block.start+rna_start,block.end+rna_start))
+        valid_intron_boundarys_.append(
+            (block.start + rna_start, block.end + rna_start))
     return valid_intron_boundarys_
 
-def get_exon_boundary(rna_boundary,intron_boundarys):
+
+def get_exon_boundary(rna_boundary, intron_boundarys):
     """Get list of exon boundarys based on gene boundary and intron boundarys
-        
+
     Parameters:
     ----------
     rna_boundary : list (tuple)
@@ -199,27 +225,28 @@ def get_exon_boundary(rna_boundary,intron_boundarys):
     list (tuple)
         List of paired sites of exon's start site and end site in one based
     """
-    intron_boundarys = sorted(intron_boundarys,key=lambda x: x[0])
+    intron_boundarys = sorted(intron_boundarys, key=lambda x: x[0])
     exon_start = rna_boundary[0]
     exon_boundarys = []
     for intron_boundary in intron_boundarys:
         intron_start, intron_end = intron_boundary
         exon_end = intron_start - 1
         if exon_start <= exon_end:
-            exon_boundarys.append((exon_start,exon_end))
+            exon_boundarys.append((exon_start, exon_end))
         else:
-            raise
+            raise Exception("Exon start is larger than exon end")
         exon_start = intron_end + 1
-    
+
     exon_end = rna_boundary[1]
     if exon_start <= exon_end:
-        exon_boundarys.append((exon_start,exon_end))
+        exon_boundarys.append((exon_start, exon_end))
     return exon_boundarys
 
-def guess_boundarys(seq,donor_site_pattern=None,acceptor_site_pattern=None,
-                    donor_site_index_shift=None,acceptor_site_index_shift=None):
+
+def guess_boundarys(seq, donor_site_pattern=None, acceptor_site_pattern=None,
+                    donor_site_index_shift=None, acceptor_site_index_shift=None):
     """Get list of guessed intron boundarys based on donor site pattern and acceptor site pattern
-        
+
     Parameters:
     ----------
     seq : str
@@ -242,13 +269,17 @@ def guess_boundarys(seq,donor_site_pattern=None,acceptor_site_pattern=None,
     acceptor_site_index_shift = acceptor_site_index_shift or 1
     donor_site_pattern = donor_site_pattern or 'GT'
     acceptor_site_pattern = acceptor_site_pattern or 'AG'
-    ann_donor_sites = find_substr(donor_site_pattern,seq,donor_site_index_shift+1)
-    ann_acceptor_sites = find_substr(acceptor_site_pattern,seq,acceptor_site_index_shift+1)
-    type_ =  {}
+    ann_donor_sites = find_substr(
+        donor_site_pattern, seq, donor_site_index_shift + 1)
+    ann_acceptor_sites = find_substr(
+        acceptor_site_pattern,
+        seq,
+        acceptor_site_index_shift + 1)
+    type_ = {}
     for site in ann_donor_sites:
-        type_[site]='D'
+        type_[site] = 'D'
     for site in ann_acceptor_sites:
-        type_[site]='A'
+        type_[site] = 'A'
     sites = sorted(ann_donor_sites + ann_acceptor_sites)
     boundarys = []
     previous_site = None
@@ -259,56 +290,6 @@ def guess_boundarys(seq,donor_site_pattern=None,acceptor_site_pattern=None,
         else:
             if type_[site] == 'A':
                 if previous_site < site:
-                    boundarys.append((previous_site,site))
+                    boundarys.append((previous_site, site))
                     previous_site = None
     return boundarys
-
-def guess_ann(chrom,strand,length,seq,gff,donor_site_pattern=None,acceptor_site_pattern=None):
-    """Get guessed AnnSequence based on donor site pattern and acceptor site pattern
-        
-    Parameters:
-    ----------
-    chrom : str
-        Chromosome id to be chosen
-    length : int
-        Length of chromosome
-    strand : str
-        Strand of chromosome
-    gff : pd.DataFrame    
-        GFF data about RNAs and introns
-    seq : str
-        DNA sequence which its direction is 5' to 3'
-    donor_site_pattern : str (default : GT)
-        Regular expression of donor site
-    acceptor_site_pattern : str (default : AG)
-        Regular expression of acceptor site
-
-    Returns:
-    ----------
-    AnnSequence
-        Guessed AnnSequence based on donor site pattern and acceptor site pattern
-    """
-    selected_gff = gff[gff['chr']==chrom]
-    rnas = selected_gff[selected_gff['feature'].isin(RNA_TYPES)].to_dict('record')
-    ANN_TYPES = ['exon','intron','other']
-    ann_seq = AnnSequence(ANN_TYPES,length)
-    ann_seq.strand = strand
-    ann_seq.id = ann_seq.chromosome_id = chrom
-    for rna in rnas:
-        rna_boundary = rna['start'],rna['end']
-        start = rna['start']
-        end = rna['end']
-        subseq = seq[start-1:end]
-        intron_boundarys = guess_boundarys(subseq,donor_site_pattern=donor_site_pattern,
-                                           acceptor_site_pattern=acceptor_site_pattern)
-        intron_boundarys = [(start+site[0]-1,start+site[1]-1) for site in intron_boundarys]
-        intron_boundarys = get_fixed_intron_boundary(rna_boundary,intron_boundarys)
-        exon_boundarys = get_exon_boundary(rna_boundary,intron_boundarys)
-        for boundary in intron_boundarys:
-            ann_seq.add_ann('intron',1,boundary[0]-1,boundary[1]-1)
-        for boundary in exon_boundarys:
-            ann_seq.add_ann('exon',1,boundary[0]-1,boundary[1]-1)
-
-    other = get_background(ann_seq,['exon','intron'])
-    ann_seq.add_ann('other',other)
-    return ann_seq

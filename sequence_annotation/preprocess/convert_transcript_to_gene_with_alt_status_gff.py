@@ -4,16 +4,16 @@ import pandas as pd
 import warnings
 sys.path.append(os.path.dirname(__file__)+"/../..")
 from argparse import ArgumentParser
-from sequence_annotation.preprocess.utils import EXON_SKIPPING,INTRON_RETENTION
-from sequence_annotation.preprocess.utils import ALT_DONOR,ALT_DONOR_SITE
-from sequence_annotation.preprocess.utils import ALT_ACCEPTOR,ALT_ACCEPTOR_SITE
+from sequence_annotation.utils.exception import InvalidStrandType
 from sequence_annotation.utils.utils import write_gff,read_bed,get_gff_with_updated_attribute,read_gff
-from sequence_annotation.genome_handler.exception import InvalidStrandType
 from sequence_annotation.genome_handler.sequence import STRANDS, PLUS, MINUS
 from sequence_annotation.genome_handler.seq_info_parser import BedInfoParser
 from sequence_annotation.genome_handler.ann_seq_converter import GeneticBedSeqConverter
 from sequence_annotation.genome_handler.region_extractor import RegionExtractor
 from sequence_annotation.genome_handler.ann_seq_processor import get_mixed_seq
+from sequence_annotation.preprocess.utils import EXON_SKIPPING,INTRON_RETENTION
+from sequence_annotation.preprocess.utils import ALT_DONOR,ALT_DONOR_SITE
+from sequence_annotation.preprocess.utils import ALT_ACCEPTOR,ALT_ACCEPTOR_SITE
 from sequence_annotation.preprocess.get_id_table import get_id_table,read_id_table
 from sequence_annotation.preprocess.gff2bed import gff2bed
 
@@ -28,11 +28,6 @@ def _add_to_set(dict_,key,value):
     if key not in dict_.keys():
         dict_[key] = set()
     dict_[key].add(value)
-    
-def _add_to_upstreamed_relation(upstreamed_relation,first_site,other_paired_site):
-    if first_site in upstreamed_relation.keys():
-        first_site = linked_list[first_site]
-    upstreamed_relation[other_paired_site] = first_site
 
 def _get_id(start,end):
     if start <= end:
@@ -222,7 +217,6 @@ def get_canonical_region_and_alt_splice(seqs,select_site_by_election=False):
             raise Exception("The region's start site {} is {}".format(current_site,current_site_types))
             
         if len(next_site_types) > 1:
-            #raise Exception("The region's start site {} and is both donor site and acceptor site".format(next_site))
             if current_site_types == set('D'):
                 site_type= 'A'
             elif current_site_types == set('A'):
@@ -491,6 +485,7 @@ def _to_gff_item(item):
     gene['id'] =  "{}_gene".format(item['id'])
     gene['start'] = item['start'] + 1
     gene['end'] = item['end'] + 1
+    gene['parent'] = None
     
     transcript = dict(gene)
     transcript['feature'] = 'mRNA'

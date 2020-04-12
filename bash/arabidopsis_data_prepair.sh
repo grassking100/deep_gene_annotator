@@ -83,11 +83,9 @@ mkdir -p $saved_root
 mkdir -p $stats_root
 mkdir -p $site_diff_root
 
-
 #Set parameter
 gro_1=$root/raw_data/tss_peak_SRR3647033_background_SRR3647034_2018_11_04.tsv 
 gro_2=$root/raw_data/tss_peak_SRR3647033_background_SRR3647035_2018_11_04.tsv
-#DRS_path=$root/raw_data/NIHMS48846-supplement-2_S10_DRS_peaks_in_coding_genes_private.csv
 pac_path="$root/raw_data/arabidopsis_thaliana_Wild_Type_Control_SRP187778_all_PAC.csv"
 peptide_path=$root/raw_data/Araport11_genes.201606.pep.fasta
 official_gff_path=$root/raw_data/Araport11_GFF3_genes_transposons.201606.gff
@@ -102,6 +100,7 @@ consistent_gff_path=$saved_root/consistent_official.gff3
 consistent_bed_path=$saved_root/consistent.bed
 tss_path=$saved_root/tss.gff3
 cleavage_site_path=$saved_root/cleavage_site.gff3
+non_hypothetical_gene_id_path=$saved_root/non_hypothetical_gene_id.txt
 echo "Step 2: Preprocess raw data"
 
 if [ ! -e "$genome_path.fai" ]; then
@@ -110,13 +109,12 @@ if [ ! -e "$genome_path.fai" ]; then
 fi
 
 python3 $preprocess_main_root/process_GRO_and_PAC.py --output_root $saved_root --gro_1 $gro_1 --gro_2 $gro_2 --pac_path $pac_path
-#python3 $preprocess_main_root/preprocess_raw_data.py --output_root $saved_root --gro_1 $gro_1 --gro_2 $gro_2 --drs_path $DRS_path
 
 if [ ! -e "$processed_gff_path" ]; then
-    python3 $preprocess_main_root/preprocess_gff.py -i $official_gff_path -o $processed_gff_path -v '1,2,3,4,5'
+    python3 $preprocess_main_root/preprocess_gff.py -i $official_gff_path -o $processed_gff_path -v '1,2,3,4,5' --non_hypothetical_gene_id_path $non_hypothetical_gene_id_path
 fi
 
-if [ ! -e "$genome_path.fai" ]; then
+if [ ! -e "$region_table_path" ]; then
     python3 $preprocess_main_root/create_region_table_by_fai.py -i $genome_path.fai -o $region_table_path
 fi
 

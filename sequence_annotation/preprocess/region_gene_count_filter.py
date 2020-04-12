@@ -3,7 +3,7 @@ sys.path.append(os.path.dirname(__file__)+"/../..")
 import pandas as pd
 from argparse import ArgumentParser
 from sequence_annotation.utils.utils import read_bed, write_bed
-from sequence_annotation.genome_handler.exception import InvalidStrandType
+from sequence_annotation.utils.exception import InvalidStrandType
 
 def region_gene_count_filter(region_bed,gene_bed,upstream_distance,
                              downstream_distance):

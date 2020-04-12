@@ -141,30 +141,37 @@ if  (( $result_num > 0 )) ; then
         file_name="${file_name%.*}"
         source_id_path=$saved_root/$file_name.txt
         #
-        single_strand_bed=$bed_root/$file_name.bed
-        single_strand_canonical_bed=$bed_root/${file_name}_canonical.bed
-        single_strand_gff=$gff_root/$file_name.gff3
-        single_strand_canonical_gff=$gff_root/${file_name}_canonical.gff3
+        bed_path=$bed_root/$file_name.bed
+        canonical_bed_path=$bed_root/${file_name}_canonical.bed
+        gff_path=$gff_root/$file_name.gff3
+        canonical_gff_path=$gff_root/${file_name}_canonical.gff3
         #
-        double_strand_bed=$bed_root/${file_name}_double_strand.bed
-        double_strand_canonical_bed=$bed_root/${file_name}_canonical_double_strand.bed
-        double_strand_gff=$gff_root/${file_name}_double_strand.gff3
-        double_strand_canonical_gff=$gff_root/${file_name}_canonical_double_strand.gff3
+        if ! $on_double_strand_data ; then
+            double_strand_bed=$bed_root/${file_name}_double_strand.bed
+            double_strand_canonical_bed=$bed_root/${file_name}_canonical_double_strand.bed
+            double_strand_gff=$gff_root/${file_name}_double_strand.gff3
+            double_strand_canonical_gff=$gff_root/${file_name}_canonical_double_strand.gff3
+        else
+            double_strand_bed=$bed_path
+            double_strand_canonical_bed=$canonical_bed_path
+            double_strand_gff=$gff_path
+            double_strand_canonical_gff=$canonical_gff_path
+        fi
         
         region_table_double_strand=$region_table_root/${file_name}_region_table_double_strand.tsv
         #
-        python3 $preprocess_main_root/get_subbed.py -i $rna_bed_root -d $source_id_path -o $single_strand_bed --query_column chr
-        python3 $preprocess_main_root/get_subbed.py -i $canonical_bed_root -d $source_id_path -o $single_strand_canonical_bed --query_column chr
+        python3 $preprocess_main_root/get_subbed.py -i $rna_bed_root -d $source_id_path -o $bed_path --query_column chr
+        python3 $preprocess_main_root/get_subbed.py -i $canonical_bed_root -d $source_id_path -o $canonical_bed_path --query_column chr
         #
-        python3 $preprocess_main_root/bed2gff.py -i $single_strand_bed -o $single_strand_gff -t $id_convert_table_path
-        python3 $preprocess_main_root/bed2gff.py -i $single_strand_canonical_bed -o $single_strand_canonical_gff  -t $alt_region_id_table_path
+        python3 $preprocess_main_root/bed2gff.py -i $bed_path -o $gff_path -t $id_convert_table_path
+        python3 $preprocess_main_root/bed2gff.py -i $canonical_bed_path -o $canonical_gff_path  -t $alt_region_id_table_path
         
-        #if ! $on_double_strand_data ; then
-        python3 $preprocess_main_root/rename_chrom.py -i $single_strand_bed -t $region_table_path -o $double_strand_bed
-        python3 $preprocess_main_root/rename_chrom.py -i $single_strand_canonical_bed -t $region_table_path -o $double_strand_canonical_bed
-        python3 $preprocess_main_root/rename_chrom.py -i $single_strand_gff -t $region_table_path -o $double_strand_gff
-        python3 $preprocess_main_root/rename_chrom.py -i $single_strand_canonical_gff -t $region_table_path -o $double_strand_canonical_gff
-        #fi
+        if ! $on_double_strand_data ; then
+            python3 $preprocess_main_root/rename_chrom.py -i $bed_path -t $region_table_path -o $double_strand_bed
+            python3 $preprocess_main_root/rename_chrom.py -i $canonical_bed_path -t $region_table_path -o $double_strand_canonical_bed
+            python3 $preprocess_main_root/rename_chrom.py -i $gff_path -t $region_table_path -o $double_strand_gff
+            python3 $preprocess_main_root/rename_chrom.py -i $canonical_gff_path -t $region_table_path -o $double_strand_canonical_gff
+        fi
 
         python3 $preprocess_main_root/get_subfasta.py -i $output_region_fasta_root -d $source_id_path -o $fasta_root/$file_name.fasta
         samtools faidx $fasta_root/$file_name.fasta
