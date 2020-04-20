@@ -6,7 +6,6 @@ usage(){
  echo "    -g  <string>  Path of genome fasta"
  echo "    -t  <string>  Path of id_convert_table"
  echo "    -p  <string>  Path of processed folder"
- echo "    -r  <string>  Path of region_table"
  echo "    -o  <string>  Path of output folder"
  echo "  Options:"
  echo "    -d  <bool>    Split on double-strand data"
@@ -17,13 +16,12 @@ usage(){
  echo ""
 }
 
-while getopts g:t:r:p:o:n:sdnh option
+while getopts g:t:p:o:n:sdnh option
  do
   case "${option}"
   in
    g )genome_path=$OPTARG;;
    t )id_convert_table_path=$OPTARG;;
-   r )region_table_path=$OPTARG;;
    p )processed_root=$OPTARG;;
    o )saved_root=$OPTARG;;
    n )fold_num=$OPTARG;;
@@ -63,12 +61,6 @@ if [ ! "$saved_root" ]; then
     exit 1
 fi
 
-if [ ! "$region_table_path" ]; then
-    echo "Missing option -r"
-    usage
-    exit 1
-fi
-
 if [ ! "$on_double_strand_data" ]; then
     on_double_strand_data=false
 fi
@@ -81,6 +73,7 @@ fi
 bash_root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 script_root=$bash_root/..
 preprocess_main_root=$script_root/sequence_annotation/preprocess
+region_table_path=$processed_root/result/double_strand/region_rename_table_double_strand.tsv
 mkdir -p $saved_root
 
 command="$bash_root/split.sh -g $genome_path -p $processed_root -t $id_convert_table_path -r $region_table_path"

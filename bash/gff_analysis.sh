@@ -86,7 +86,7 @@ fi
 bash_root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 source_root=$bash_root/..
 preprocess_main_root=$source_root/sequence_annotation/preprocess
-visual_root=$source_root/sequence_annotation/visual
+visual_main_root=$source_root/sequence_annotation/visual
 
 bed_root=$output_root/bed
 signal_stats_root=$output_root/signal_stats
@@ -117,10 +117,10 @@ do
     bedtools getfasta -s -fi $genome_path -bed $bed_root/$file_name.bed -fo $fasta_root/$file_name.fasta
 done
 
-python3 $visual_root/plot_composition.py -i $fasta_root/$tss_path.fasta -s "-$tss_radius" --title "Nucleotide composition around TSS" -o $composition_root/$tss_path.png
-python3 $visual_root/plot_composition.py -i $fasta_root/$cs_path.fasta -s "-$cleavage_radius" --title "Nucleotide composition around cleavage site" -o $composition_root/$cs_path.png
-python3 $visual_root/plot_composition.py -i $fasta_root/$donor_path.fasta -s "-$donor_radius" --title "Nucleotide composition around splicing donor site" -o $composition_root/$donor_path.png
-python3 $visual_root/plot_composition.py -i $fasta_root/$acceptor_path.fasta -s "-$acceptor_radius" --title "Nucleotide composition around splicing acceptor site" -o $composition_root/$acceptor_path.png
+python3 $visual_main_root/plot_composition.py -i $fasta_root/$tss_path.fasta -s "-$tss_radius" --title "Nucleotide composition around TSS" -o $composition_root/$tss_path.png
+python3 $visual_main_root/plot_composition.py -i $fasta_root/$cs_path.fasta -s "-$cleavage_radius" --title "Nucleotide composition around cleavage site" -o $composition_root/$cs_path.png
+python3 $visual_main_root/plot_composition.py -i $fasta_root/$donor_path.fasta -s "-$donor_radius" --title "Nucleotide composition around splicing donor site" -o $composition_root/$donor_path.png
+python3 $visual_main_root/plot_composition.py -i $fasta_root/$acceptor_path.fasta -s "-$acceptor_radius" --title "Nucleotide composition around splicing acceptor site" -o $composition_root/$acceptor_path.png
 
 python3 $preprocess_main_root/motif_count.py -i $fasta_root/$tss_signal_path.fasta -o $signal_stats_root/tss_signal_stats.tsv
 python3 $preprocess_main_root/motif_count.py -i $fasta_root/$cleavage_site_signal_path.fasta -o $signal_stats_root/cs_signal_stats.tsv

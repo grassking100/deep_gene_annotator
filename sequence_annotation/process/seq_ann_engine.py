@@ -15,7 +15,6 @@ from .callback import CategoricalMetric, TensorboardCallback, LearningRateHolder
 from .callback import SeqFigCallback, Callbacks, ContagionMatrix
 from .signal_handler import SignalHandlerBuilder
 from .data_generator import SeqGenerator, seq_collate_wrapper
-from .data_generator import SeqGenerator, seq_collate_wrapper
 from .convert_signal_to_gff import build_ann_vec_gff_converter
 from .model import get_model
 from .executor import get_executor

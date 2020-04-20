@@ -131,3 +131,13 @@ if __name__ == "__main__":
         write_gff(get_gff_with_updated_attribute(consist_tss_site),
                   safe_tss_path)
         write_gff(get_gff_with_updated_attribute(consist_cs), safe_cs_path)
+
+        safe_tss_transcript_id_path=os.path.join(args.saved_root, 'safe_tss_transcript_id.txt')
+        with open(safe_tss_transcript_id_path,'w') as fp:
+            for id_ in set(consist_tss_site['ref_name']):
+                fp.write("{}\n".format(id_))
+                
+        safe_cs_transcript_id_path=os.path.join(args.saved_root, 'safe_cs_transcript_id.txt')
+        with open(safe_cs_transcript_id_path,'w') as fp:
+            for id_ in set(consist_cs['ref_name']):
+                fp.write("{}\n".format(id_))

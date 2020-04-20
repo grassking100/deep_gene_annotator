@@ -25,8 +25,8 @@ def get_splicing_kwargs(path_helper, first_n=None):
     kwargs = {}
     kwargs['donor_pattern'] = donor_regex
     kwargs['acceptor_pattern'] = acceptor_regex
-    kwargs['donor_index_shift'] = 1
-    kwargs['acceptor_index_shift'] = 2
+    kwargs['donor_index_shift'] = 0
+    kwargs['acceptor_index_shift'] = 1
     return kwargs
 
 
@@ -62,11 +62,11 @@ def get_overall_loss(peformance_root):
         os.path.join(
             peformance_root,
             'site_matched.json'))
-    block_f1_keys = ['internal_exon_F1', 'exon_F1', 'intron_F1']
-    block_chain_f1_keys = ['gene_F1', 'intron_chain_F1']
+    block_f1_keys = ['internal_exon_F1', 'exon_F1', 'intron_F1'] + ['gene_F1', 'intron_chain_F1']
+    #block_chain_f1_keys = 
     base_loss = 1 - base_performance['macro_F1']
     block_loss = 0
-    block_chain_loss = 0
+    #block_chain_loss = 0
     site_loss = 0
     matched_loss = 0
     for key, value in block_performance.items():
@@ -74,10 +74,10 @@ def get_overall_loss(peformance_root):
             if str(value) == 'nan':
                 value = 0
             block_loss += (1 - value)
-        elif key in block_chain_f1_keys:
-            if str(value) == 'nan':
-                value = 0
-            block_chain_loss += (1 - value)
+        #elif key in block_chain_f1_keys:
+        #    if str(value) == 'nan':
+        #        value = 0
+        #    block_chain_loss += (1 - value)
 
     for value in a_p_abs_diff['mean'].values():
         site_loss += np.log10(value + 1)
@@ -87,10 +87,11 @@ def get_overall_loss(peformance_root):
         matched_loss += (1 - value)
 
     block_loss /= len(block_f1_keys)
-    block_chain_loss /= len(block_chain_f1_keys)
+    #block_chain_loss /= len(block_chain_f1_keys)
     site_loss /= (len(a_p_abs_diff['mean']) + len(p_a_abs_diff['mean']))
     matched_loss /= len(site_matched['F1'])
-    loss = base_loss + block_loss + block_chain_loss + site_loss + matched_loss
+    loss = base_loss + block_loss + site_loss + matched_loss
+    #loss = base_loss + block_loss + block_chain_loss + site_loss + matched_loss
     return loss
 
 
@@ -234,7 +235,7 @@ class AutoReviseEvaluator:
         self._std_nums = [3]
         self._distance_scales = [0,0.3,0.6,0.9]
         self._other_coefs = [0, 0.5]
-        self._first_n_motif_list = [4]
+        self._first_n_motif_list = [1]
         self._methods_1ist = [['length_threshold', 'distance_threshold'],
                               ['distance_threshold', 'length_threshold']]
 

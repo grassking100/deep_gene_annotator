@@ -5,7 +5,7 @@ import pandas as pd
 from argparse import ArgumentParser
 sys.path.append(os.path.abspath(os.path.dirname(__file__)+"/.."))
 from sequence_annotation.utils.utils import write_json,read_json
-from sequence_annotation.utils.process import Process,process_schedule
+from sequence_annotation.utils.process_schedule import Process,process_schedule
 from sequence_annotation.process.optuna import create_study
    
 COMMAND = "python3 "+os.path.dirname(__file__)+"/train_by_optuna.py -s {} -t {} -v {} -e {} -b {} -n {} -i {}"
@@ -50,8 +50,11 @@ def main(saved_root,train_data_path,val_data_path,epoch,batch_size,
     #Save setting
     setting_path = os.path.join(saved_root,"parallel_main_setting.json")
     if os.path.exists(setting_path):
-        existed = read_json(setting_path)
-        if config != existed:
+        existed = dict(read_json(setting_path))
+        config_ = dict(config)
+        del existed['gpu_ids']
+        del config_['gpu_ids']
+        if config_ != existed:
             raise Exception("The {} is not same as previous one".format(setting_path))
     else:
         write_json(config,setting_path)

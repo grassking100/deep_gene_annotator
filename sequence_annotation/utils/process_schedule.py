@@ -1,3 +1,4 @@
+import torch
 import pandas as pd
 import subprocess
 import nvgpu
@@ -5,11 +6,9 @@ from .utils import get_time_str
 
 
 class Process:
-    def __init__(self, cmd, name=None, no_gpu=False):
+    def __init__(self, cmd, name=None):
         self.name = name
         self._cmd = cmd
-        if not no_gpu:
-            self._cmd += " -g {}"
         self._process = None
         self._returned_code = None
         self._is_start = False
@@ -33,14 +32,17 @@ class Process:
     def returned_code(self):
         return self._returned_code
 
-    def start(self, *args):
+    def start(self, gpu_id=None):
         if not self.is_start:
             self._start_time = get_time_str()
-            print(self._cmd.format(*args))
-            self._process = subprocess.Popen(self._cmd.format(*args),
-                                             shell=True)
+            if gpu_id is not None:
+                self._cmd += " -g {}"
+                self._cmd = self._cmd.format(*gpu_id)
+                self._recorded_args = gpu_id
+            print(self._cmd)
+            self._process = subprocess.Popen(self._cmd,shell=True)
             self._is_start = True
-            self._recorded_args = args
+            
 
     @property
     def record(self):
@@ -71,48 +73,52 @@ class Process:
             return False
 
 
-def process_schedule(processes,
-                     gpu_ids,
+def process_schedule(processes_list,resource_ids=None,
                      mem_used_percent_threshold=None,
-                     no_gpu=False):
-    if no_gpu:
-        process_unit_ids = list(range(40))
+                     use_gpu=True):
+    if not use_gpu:
+        resource_ids = resource_ids or list(range(40))
     else:
+        resource_ids = resource_ids or list(range(torch.cuda.device_count()))
         mem_used_percent_threshold = mem_used_percent_threshold or 1
-        if len(set(gpu_ids)) != len(gpu_ids):
+        if len(set(resource_ids)) != len(resource_ids):
             raise Exception("Duplicated gpu id")
-        process_unit_ids = gpu_ids
-    processes_ = processes
+    print("Use resources {} to run {} processes".format(resource_ids,len(processes_list)))
     processes = {}
-    for index, p in enumerate(processes_):
+    for index, p in enumerate(processes_list):
         p.name = index
         processes[index] = p
-    resource_ready = [None] * len(process_unit_ids)
+    resource_status = {}
+    for id_ in resource_ids:
+        resource_status[str(id_)] = None
     while True:
-        for index, belong_id in enumerate(resource_ready):
-            if belong_id is None:
-                ready_ps = [p for p in processes.values() if not p.is_start]
-                if len(ready_ps) > 0:
-                    if no_gpu:
-                        ready_p = ready_ps[0]
-                        ready_p.start(process_unit_ids[index])
-                        resource_ready[index] = ready_p.name
+        for resource_id, process_id in resource_status.items():
+            if process_id is None:
+                unstart_processes = [p for p in processes.values() if not p.is_start]
+                if len(unstart_processes) > 0:
+                    has_resource = False
+                    if not use_gpu:
+                        has_resource = True
                     else:
                         gpus = nvgpu.gpu_info()
-                        gpu = list(
-                            filter(
-                                lambda x: x['index'] == str(process_unit_ids[
-                                    index]), gpus))
-                        if gpu[0][
-                                'mem_used_percent'] <= mem_used_percent_threshold:
-                            ready_p = ready_ps[0]
-                            ready_p.start(process_unit_ids[index])
-                            resource_ready[index] = ready_p.name
+                        gpu = list(filter(lambda x: x['index'] == resource_id, gpus))
+                        mem_used_percent = gpu[0]['mem_used_percent']
+                        if mem_used_percent <= mem_used_percent_threshold:
+                            print("GPU {} has {} of memory be used".format(resource_id,mem_used_percent))
+                            has_resource = True
+                    if has_resource:
+                        process = unstart_processes[0]
+                        if use_gpu:
+                            process.start(gpu_id=resource_id)
+                        else:
+                            process.start()
+                        resource_status[resource_id] = process.name
             else:
-                p = processes[belong_id]
-                if p.is_finish:
-                    resource_ready[index] = None
+                process = processes[process_id]
+                if process.is_finish:
+                    resource_status[resource_id] = None
 
         if all([p.is_finish for p in processes.values()]):
             break
-    return pd.DataFrame.from_dict([p.record for p in processes.values()])
+    df = pd.DataFrame.from_dict([p.record for p in processes.values()])
+    return df

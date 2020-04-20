@@ -1,10 +1,15 @@
 import os,sys
+import signal
 import pandas as pd
 import torch
 from argparse import ArgumentParser
 sys.path.append(os.path.abspath(os.path.dirname(__file__)+"/.."))
 from sequence_annotation.utils.process_schedule import Process,process_schedule
 from sequence_annotation.utils.utils import create_folder
+
+def handle_signal(signum, frame):
+    warning = "Ignore {} signal to process_schedule".format(signum)
+    print(warning)
 
 if __name__ == '__main__':    
     parser = ArgumentParser()
@@ -32,9 +37,13 @@ if __name__ == '__main__':
         create_folder(root)
     
     processes = []
-    for index,command in enumerate(commands):
-        process = Process(command,name=index,no_gpu=args.no_gpu)
+    for command in commands:
+        process = Process(command)
         processes.append(process)
-        
-    status = process_schedule(processes,args.gpu_ids,no_gpu=args.no_gpu)
+
+    signal.signal(signal.SIGTERM, handle_signal)
+    if args.no_gpu:
+        status = process_schedule(processes,use_gpu=False)
+    else:
+        status = process_schedule(processes,args.gpu_ids)
     status.to_csv(args.output_path,sep='\t',index=False)

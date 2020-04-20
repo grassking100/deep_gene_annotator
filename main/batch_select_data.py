@@ -2,7 +2,7 @@ import os
 import sys
 import pandas as pd
 from argparse import ArgumentParser
-sys.path.append(os.path.abspath(__file__) + "/..")
+sys.path.append(os.path.dirname(__file__) + "/..")
 from main.select_data import main as select_data_main
 from sequence_annotation.utils.utils import create_folder, write_json, read_json
 
@@ -14,15 +14,11 @@ def _get_name(path, with_postfix=False):
         return rel_path.split('.')[0]
 
 
-def main(saved_root, usage_table_path=None, stats_path=None,
+def main(saved_root, usage_table_path=None,
          max_len=None, max_key=None, **kwargs):
     usage_table_root = '/'.join(usage_table_path.split('/')[:-1])
     usage_table = pd.read_csv(usage_table_path)
     usage_table = usage_table.to_dict('record')
-
-    if stats_path is not None:
-        max_key = max_key or 'MAD derived threshold'
-        max_len = round(read_json(stats_path)[max_key])
 
     new_table = []
     for item in usage_table:
@@ -56,14 +52,11 @@ if __name__ == '__main__':
                         help="Root to save file")
     parser.add_argument("-u", "--usage_table_path", required=True,
                         help="Usage table in csv format")
-    parser.add_argument("--stats_path", help="The path of statistic result in json format,"
-                        "its 'MAD derived threshold' would be set to max len")
-    parser.add_argument("--max_len", type=int, default=None, help="Sequences' max length,"
-                        " if it is set by stats_path then it will be ignored")
+    parser.add_argument("--max_len", type=int, default=None, help="Sequences' max length")
     parser.add_argument("--min_len", type=int, default=0,
                         help="Sequences' min length")
-    parser.add_argument("--ratio", type=float, default=1, help="Ratio of number to be chosen to train"
-                        " and validate, start chosen by increasing order)")
+    parser.add_argument("--ratio", type=float, default=1, help="Ratio of number to be chosen"
+                        "to train and validate, start chosen by increasing order)")
     parser.add_argument("--select_each_type", action='store_true')
     parser.add_argument("--max_key")
 

@@ -32,15 +32,12 @@ if __name__ == "__main__":
     #Reading arguments
     parser = ArgumentParser(
         description="This program will rename query data by table")
-    parser.add_argument("-i", "--input_bed_path",
-                        help="Input BED file",
-                        required=True)
-    parser.add_argument("-t", "--id_table_path",
-                        help="Table about id conversion",
-                        required=True)
-    parser.add_argument("-o", "--output_bed_path",
-                        help="Output BED file",
-                        required=True)
+    parser.add_argument("-i", "--input_bed_path",required=True,
+                        help="Input BED file")
+    parser.add_argument("-t", "--id_table_path",required=True,
+                        help="Table about id conversion")
+    parser.add_argument("-o", "--output_bed_path",required=True,
+                        help="Output BED file")
     parser.add_argument("--query", default='id',
                         help="Column name to query and replace")
     args = parser.parse_args()

@@ -23,7 +23,7 @@ if __name__ == "__main__":
     else:
         gro_1 = pd.read_csv(args.gro_1_path, comment='#', sep='\t')
         gro_2 = pd.read_csv(args.gro_2_path, comment='#', sep='\t')
-        cleavage_site = pd.read_csv(args.pac_path)
+        cleavage_site = pd.read_csv(args.pac_path,dtype={'chr':str})
         ###Process GRO sites data###
         #The Normalized Tag Count at both data on the same location would be same, because they are from GRO dataset
         gro_columns = ['chr', 'strand', 'Normalized Tag Count', 'start', 'end']
@@ -49,6 +49,7 @@ if __name__ == "__main__":
         gro['feature'] = 'GRO site'
         gro['start'] = gro['end'] = gro['evidence_5_end']
         gro['frame'] = gro['score'] = '.'
+        gro = gro[gro['chr'].isin(['1','2','3','4','5'])]
         gro = gro.drop('evidence_5_end', 1)
         gro = get_gff_with_updated_attribute(gro)
 
@@ -56,6 +57,7 @@ if __name__ == "__main__":
         pac_site['feature'] = 'PAT-Seq PAC'
         pac_site['start'] = pac_site['end'] = pac_site['evidence_3_end']
         pac_site['frame'] = pac_site['score'] = '.'
+        pac_site = pac_site[pac_site['chr'].isin(['1','2','3','4','5'])]
         pac_site = pac_site.drop('evidence_3_end', 1)
         pac_site = get_gff_with_updated_attribute(pac_site)
 

@@ -15,7 +15,7 @@ def get_motifs(path, first_n=None):
 
 
 def get_splicing_regex(path, first_n=None):
-    first_n = first_n or 3
+    first_n = first_n or 1
     motifs = get_motifs(path, first_n)
     motif_regex = '|'.join(motifs)
     return motif_regex

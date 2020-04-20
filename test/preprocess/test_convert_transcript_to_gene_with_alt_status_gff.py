@@ -13,8 +13,7 @@ class TestAltStatusConverter(unittest.TestCase):
         input_path = os.path.join(data_root, 'input.gff3')
         output_gff_path = os.path.join(data_root, 'output.gff3')
         answer_gff_path = os.path.join(data_root, 'answer.gff3')
-        main(input_path,
-             output_gff_path,
+        main(input_path,output_gff_path,
              select_site_by_election=select_site_by_election)
         output = read_gff(output_gff_path).sort_values(
             ['chr', 'strand', 'start', 'end',
@@ -25,6 +24,7 @@ class TestAltStatusConverter(unittest.TestCase):
 
         self.assertTrue(answer.equals(output),
                         "Something wrong happen in {}".format(name))
+        os.remove(output_gff_path)
 
     def test_multiple_start(self):
         self._test('multiple_start', True)

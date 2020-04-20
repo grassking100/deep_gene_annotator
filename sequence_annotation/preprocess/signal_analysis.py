@@ -82,8 +82,8 @@ def main(gff_path, output_root, tss_radius, cleavage_radius, donor_radius,
         gff, TSS_SIGNAL_RADIUS, TSS_SIGNAL_RADIUS)
     cs_signal_region = get_cleavage_site_region(gff, CS_SIGNAL_RADIUS,
                                                 CS_SIGNAL_RADIUS)
-    donor_signal_region = get_donor_site_region(gff, 1, 1)
-    acceptor_signal_region = get_acceptor_site_region(gff, 2, 0)
+    donor_signal_region = get_donor_site_region(gff, 0, 1)
+    acceptor_signal_region = get_acceptor_site_region(gff, 1, 0)
 
     regions = [
         tss_region, cs_region, donor_region, acceptor_region,

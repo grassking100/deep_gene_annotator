@@ -16,52 +16,53 @@ def _conver_r_list(list_):
     return 'c(' + ','.join([str(v) for v in list_]) + ')'
 
 
-def exact_wilcox_signed_rank_test(lhs, rhs, alternative):
-    """The method to calculate Wilcoxon Signed Rank Test by R's wilcox.exact function"""
+def exact_wilcox_rank_sum_test(lhs, rhs, alternative):
+    """The method to calculate Wilcoxon Rank Sum Test by R's wilcox.exact function"""
     importr('exactRankTests')
-    COMMAND = "wilcox.exact({},{},paired=T,exact=T,alternative='{}')$p.value"
-    command = COMMAND.format(_conver_r_list(lhs), _conver_r_list(rhs),
-                             alternative)
+    COMMAND = "wilcox.exact({},{},paired=F,exact=T,alternative='{}')$p.value"
+    lhs = _conver_r_list(lhs)
+    rhs = _conver_r_list(rhs)
+    command = COMMAND.format(lhs, rhs, alternative)
     p_value = np.array(robjects.r(command))[0]
     return p_value
 
-
-def exact_wilcox_signed_rank_compare(df, lhs_name, rhs_name, threshold=None):
-    """The method to calculate p values of dataframe's data by exact_wilcox_signed_rank_test"""
-    COMMAND = "wilcox.test({},{},paired=T,exact=T,correct=F,alternative='{}')$p.value"
+def exact_wilcox_rank_sum_compare(lhs_df, rhs_df, lhs_name, rhs_name, targets=None, threshold=None):
+    """The method to calculate p values of dataframe's data by exact_wilcox_rank_sum_test"""
     threshold = threshold or 0.05
-    table = []
-    targets = set(df['target'])
     lhs_median_name = 'median({})'.format(lhs_name)
     rhs_median_name = 'median({})'.format(rhs_name)
-    for target in targets:
-        lhs_df = df[(df['target'] == target)
-                    & (df['name'] == lhs_name)].sort_values('source')
-        rhs_df = df[(df['target'] == target)
-                    & (df['name'] == rhs_name)].sort_values('source')
-        lhs_values = list(lhs_df['value'])
-        rhs_values = list(rhs_df['value'])
-        lhs_median = np.median(lhs_values)
-        rhs_median = np.median(rhs_values)
+    if set(lhs_df.columns) != set(rhs_df.columns):
+        raise Exception("The columns of lhs_df and rhs_df are not the same")
+    targets = set(lhs_df.columns)    
+    lhs_dict = lhs_df.fillna(0).to_dict('list')
+    rhs_dict = rhs_df.fillna(0).to_dict('list')
+    table = []
+    for name in lhs_df.columns:
+        if name in targets:
+            lhs_values = lhs_dict[name]
+            rhs_values = rhs_dict[name]
+            lhs_median = np.median(lhs_values)
+            rhs_median = np.median(rhs_values)
 
-        if lhs_median < rhs_median:
-            status = 'less'
-        elif lhs_median == rhs_median:
-            status = 'two.sided'
-        else:
-            status = 'greater'
+            if lhs_median < rhs_median:
+                compare = 'greater'
+            elif lhs_median == rhs_median:
+                compare = 'two.sided'
+            else:
+                compare = 'less'
 
-        p_val = exact_wilcox_signed_rank_test(lhs_values, rhs_values, status)
-        item = {}
-        item['target'] = target
-        item[lhs_median_name] = lhs_median
-        item[rhs_median_name] = rhs_median
-        item['status'] = status
-        item['p_val'] = p_val
-        item['pass'] = p_val <= threshold
-        table.append(item)
+            p_val = exact_wilcox_rank_sum_test(rhs_values, lhs_values, compare)
+            item = {}
+            item['metric'] = name
+            item[lhs_median_name] = lhs_median
+            item[rhs_median_name] = rhs_median
+            item['compare'] = compare
+            item['p_val'] = p_val
+            item['threshold'] = threshold
+            item['pass'] = p_val <= threshold
+            item['test'] = 'Wilcoxon Rank Sum Test'
+            table.append(item)
 
-    columns = [
-        'target', 'status', 'p_val', 'pass', lhs_median_name, rhs_median_name
-    ]
+    columns = [lhs_median_name, rhs_median_name, 'metric',
+               'compare', 'p_val', 'threshold', 'pass', 'test']
     return pd.DataFrame.from_dict(table)[columns]

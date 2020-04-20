@@ -1,10 +1,10 @@
-from sequence_annotation.utils.utils import get_file_name
 import os
 import sys
 import pandas as pd
 from argparse import ArgumentParser
 ROOT = os.path.dirname(__file__) + "/.."
 sys.path.append(ROOT)
+from sequence_annotation.utils.utils import get_file_name
 
 
 def main(data_root, saved_root, save_command_table_path,

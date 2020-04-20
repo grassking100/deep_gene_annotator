@@ -1,14 +1,14 @@
-from main.model_executor_creator import ModelExecutorCreator
-from main.utils import backend_deterministic
-from main.train_model import train
-from sequence_annotation.genome_handler.select_data import load_data
-from sequence_annotation.process.optuna import OptunaTrainer
-from sequence_annotation.utils.utils import write_json, copy_path, create_folder, read_json
 import os
 import sys
 import torch
 from argparse import ArgumentParser
 sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/.."))
+from sequence_annotation.genome_handler.select_data import load_data
+from sequence_annotation.process.optuna import OptunaTrainer
+from sequence_annotation.utils.utils import write_json, copy_path, create_folder, read_json
+from main.model_executor_creator import ModelExecutorCreator
+from main.utils import backend_deterministic
+from main.train_model import train
 
 
 def main(saved_root, train_data_path, val_data_path,
