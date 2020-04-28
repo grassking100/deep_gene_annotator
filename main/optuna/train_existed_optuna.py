@@ -8,7 +8,7 @@ from sequence_annotation.process.optuna import OptunaTrainer
 from sequence_annotation.genome_handler.select_data import load_data
 from main.train_model import train
 from main.utils import backend_deterministic
-from main.model_executor_creator import ModelExecutorCreator
+from main.optuna.model_executor_creator import ModelExecutorCreator
 
 def main(optuna_root,saved_root,epoch=None):
     saved_name = saved_root.split('/')[-1]
@@ -47,10 +47,14 @@ def main(optuna_root,saved_root,epoch=None):
     else:
         monitor_target = 'val_loss'
     
-    trainer = OptunaTrainer(train,optuna_root,creator,train_data,val_data,epoch,batch_size,
-                            monitor_target=monitor_target,is_minimize=not is_maximize,
-                            discard_ratio_max=discard_ratio_max,discard_ratio_min=discard_ratio_min,
-                            augment_up_max=augment_up_max,augment_down_max=augment_down_max,
+    trainer = OptunaTrainer(train,optuna_root,creator,train_data,
+                            val_data,epoch,batch_size,
+                            monitor_target=monitor_target,
+                            is_minimize=not is_maximize,
+                            discard_ratio_max=discard_ratio_max,
+                            discard_ratio_min=discard_ratio_min,
+                            augment_up_max=augment_up_max,
+                            augment_down_max=augment_down_max,
                             save_distribution=save_distribution)
 
     trainer.train_single_trial(trial_settings)

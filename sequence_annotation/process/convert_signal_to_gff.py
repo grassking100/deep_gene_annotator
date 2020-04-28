@@ -1,11 +1,13 @@
 import os
 import sys
 import torch
+import pandas as pd
 import numpy as np
 import deepdish as dd
 from argparse import ArgumentParser
 from torch.nn.utils.rnn import pad_sequence
-sys.path.append(os.path.dirname(os.path.abspath(__file__ + "/../..")))
+from multiprocessing import Pool
+sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.utils.utils import create_folder, print_progress, write_gff, write_json
 from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES, BASIC_GENE_MAP
 from sequence_annotation.genome_handler.region_extractor import GeneInfoExtractor
@@ -18,8 +20,8 @@ from sequence_annotation.process.utils import get_seq_mask
 from sequence_annotation.process.inference import create_basic_inference, seq_ann_inference, ann_vec2one_hot_vec
 
 
-def ann_vecs2gene_info(channel_order, gene_info_extractor, chrom_ids, lengths,
-                       ann_vecs):
+def ann_vecs2gene_info(channel_order, gene_info_extractor,
+                       chrom_ids, lengths,ann_vecs):
     """Convert annotation vectors to dictionay of SeqInformation of region data"""
     gene_info = {}
     for chrom_id, length, ann_vec in zip(chrom_ids, lengths, ann_vecs):
@@ -51,11 +53,11 @@ class AnnVecGffConverter:
         config['gene_info_extractor'] = self.gene_info_extractor.get_config()
         return config
 
-    def convert(self, chrom_ids, lengths, dna_seqs, ann_vecs):
+    def convert(self, chrom_ids, lengths, ann_vecs):
         """Convert annotation vectors to GFF about region data"""
         gene_info = ann_vecs2gene_info(self.channel_order,
-                                       self.gene_info_extractor, chrom_ids,
-                                       lengths, ann_vecs)
+                                       self.gene_info_extractor,
+                                       chrom_ids,lengths, ann_vecs)
         seq_info_container = SeqInfoContainer()
         for seq in gene_info.values():
             seq_info_container.add(seq)
@@ -77,17 +79,15 @@ def build_ann_vec_gff_converter(channel_order=None, simply_map=None):
 def _convert_raw_output_to_vectors(outputs):
     """Convert vectors in dictionary to torch's tensors for each attributes"""
     data = {}
-    columns = ['dna_seqs', 'lengths', 'outputs', 'chrom_ids']
+    columns = ['lengths', 'outputs', 'chrom_ids']
     for key in columns:
         data[key] = []
     for index, item in enumerate(outputs):
-        print_progress("{}% of data have been processed".format(
-            int(100 * index / len(outputs))))
-        for key in ['dna_seqs', 'lengths', 'chrom_ids']:
+        for key in ['lengths', 'chrom_ids']:
             data[key] += [item[key]]
         item = torch.FloatTensor(item['outputs']).transpose(1, 2)
         data['outputs'] += item
-    for key in ['dna_seqs', 'lengths', 'chrom_ids']:
+    for key in ['lengths', 'chrom_ids']:
         data[key] = np.concatenate(data[key])
     data['outputs'] = pad_sequence(data['outputs'], batch_first=True)
     data['outputs'] = data['outputs'].transpose(2, 1).cuda()
@@ -95,59 +95,33 @@ def _convert_raw_output_to_vectors(outputs):
     return data
 
 
-def _convert_vectors_to_gff(chrom_ids,
-                            lengths,
-                            masks,
-                            dna_seqs,
-                            ann_vecs,
-                            inference,
-                            ann_vec_gff_converter,
-                            transcript_threshold=None,
-                            intron_threshold=None):
-    """Convert raw output's torch tensor to GFF dataframe"""
-    ann_vecs = inference(ann_vecs,
-                         masks,
-                         transcript_threshold=transcript_threshold,
-                         intron_threshold=intron_threshold)
-    ann_vecs = ann_vecs.cpu().numpy()
-    gff = ann_vec_gff_converter.convert(chrom_ids, lengths, dna_seqs, ann_vecs)
-    return gff
-
-
-def convert_raw_output_to_gff(raw_outputs,
-                              region_table,
-                              config_path,
-                              gff_path,
-                              inference,
-                              ann_vec_gff_converter,
-                              chrom_source=None,
-                              chrom_target=None,
-                              **kwargs):
+def convert_raw_output_to_gff(raw_outputs,region_table,config_path,
+                              raw_plus_gff_path,gff_path,
+                              inference,ann_vec_gff_converter):
     config = ann_vec_gff_converter.get_config()
-    raw_plus_gff_path = '.'.join(gff_path.split('.')[:-1]) + "_raw_plus.gff3"
     write_json(config, config_path)
-    outputs = _convert_raw_output_to_vectors(raw_outputs)
-    gff = _convert_vectors_to_gff(outputs['chrom_ids'],
-                                  outputs['lengths'],
-                                  outputs['masks'],
-                                  outputs['dna_seqs'],
-                                  outputs['outputs'],
-                                  inference,
-                                  ann_vec_gff_converter=ann_vec_gff_converter,
-                                  **kwargs)
-    redefined_gff = flip_and_rename_gff(gff,
-                                        region_table,
-                                        chrom_source=chrom_source,
-                                        chrom_target=chrom_target)
+    onehot_list = []
+    output_list = []
+    for index,raw_output in enumerate(raw_outputs):
+        print_progress("{}% of data have been processed".format(int(100 * index / len(raw_outputs))))
+        output = _convert_raw_output_to_vectors([raw_output])
+        onehot_vecs = inference(output['outputs'],output['masks'])
+        onehot_vecs = onehot_vecs.cpu().numpy()
+        output_list.append(output)
+        onehot_list.append(onehot_vecs)
+    arg_list = []
+    for onehot_vecs,output in zip(onehot_list,output_list):
+        arg_list.append((output['chrom_ids'],output['lengths'], onehot_vecs))
+    with Pool(processes=40) as pool:
+        gffs = pool.starmap(ann_vec_gff_converter.convert, arg_list)
+    gff = pd.concat(gffs).sort_values(by=['chr','start','end','strand'])
+    redefined_gff = flip_and_rename_gff(gff,region_table)
     write_gff(gff, raw_plus_gff_path)
     write_gff(redefined_gff, gff_path)
 
 
-def main(saved_root,
-         raw_signal_path,
-         region_table_path,
-         use_native=True,
-         **kwargs):
+def main(saved_root,raw_signal_path,region_table_path,
+         use_native=True,**kwargs):
     raw_outputs = dd.io.load(raw_signal_path)
     region_table = read_region_table(region_table_path)
     config_path = os.path.join(saved_root, "ann_vec_gff_converter_config.json")
@@ -157,33 +131,25 @@ def main(saved_root,
         inference_ = create_basic_inference()
     else:
         inference_ = seq_ann_inference
-    convert_raw_output_to_gff(raw_outputs, region_table, config_path, gff_path,
-                              inference_, converter, **kwargs)
+    raw_plus_gff_path = '.'.join(gff_path.split('.')[:-1]) + "_raw_plus.gff3"
+    convert_raw_output_to_gff(raw_outputs, region_table, config_path,
+                              raw_plus_gff_path,gff_path,
+                              inference_, converter,**kwargs)
 
 
 if __name__ == '__main__':
     parser = ArgumentParser(description='Convert raw output to GFF')
-    parser.add_argument("--saved_root",
-                        help="Root to save file",
-                        required=True)
-    parser.add_argument("--raw_signal_path",
-                        help="The path of raw signal file in h5 format",
-                        required=True)
-    parser.add_argument("--region_table_path",
-                        help="The path of region data",
-                        required=True)
-    parser.add_argument("-g",
-                        "--gpu_id",
-                        type=int,
-                        default=0,
+    parser.add_argument("--saved_root",required=True,
+                        help="Root to save file")
+    parser.add_argument("--raw_signal_path",required=True,
+                        help="The path of raw signal file in h5 format")
+    parser.add_argument("--region_table_path",required=True,
+                        help="The path of region data")
+    parser.add_argument("-g","--gpu_id",type=int,default=0,
                         help="GPU to used")
     parser.add_argument("--transcript_threshold", type=float, default=0.5)
     parser.add_argument("--intron_threshold", type=float, default=0.5)
     parser.add_argument("--use_native", action="store_true")
-    parser.add_argument("--chrom_source",
-                        help="Valid options are old_id and new_id")
-    parser.add_argument("--chrom_target",
-                        help="Valid options are old_id and new_id")
     args = parser.parse_args()
     create_folder(args.saved_root)
     setting = vars(args)

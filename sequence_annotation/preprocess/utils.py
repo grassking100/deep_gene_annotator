@@ -5,7 +5,7 @@ sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.utils.utils import BED_COLUMNS, GFF_COLUMNS, CONSTANT_LIST
 from sequence_annotation.utils.utils import get_gff_with_updated_attribute, get_file_name
 
-preprocess_src_root = os.path.dirname(os.path.abspath(__file__))
+preprocess_src_root = os.path.dirname(__file__)
 
 GENE_TYPES = CONSTANT_LIST([
     'gene', 'transposable_element', 'transposable_element_gene', 'pseudogene'
@@ -14,7 +14,7 @@ RNA_TYPES = CONSTANT_LIST([
     'mRNA', 'pseudogenic_tRNA', 'pseudogenic_transcript', 'antisense_lncRNA',
     'lnc_RNA', 'antisense_RNA', 'transcript_region', 'transposon_fragment',
     'miRNA_primary_transcript', 'tRNA', 'snRNA', 'ncRNA', 'snoRNA', 'rRNA',
-    'transcript'
+    'transcript','pre_miRNA'
 ])
 EXON_TYPES = CONSTANT_LIST(['exon', 'pseudogenic_exon'])
 INTRON_TYPES = CONSTANT_LIST(['intron'])
@@ -260,7 +260,6 @@ def get_data_names(split_root):
 
 def read_region_table(path, calculate_length=True):
     """Get region table about regions"""
-    columns = ['new_id', 'old_id', 'chr', 'strand', 'start', 'end']
     df = pd.read_csv(path,
                      sep='\t',
                      dtype={
@@ -270,5 +269,4 @@ def read_region_table(path, calculate_length=True):
                      })
     if calculate_length:
         df['length'] = df['end'] - df['start'] + 1
-        columns += ['length']
-    return df[columns]
+    return df

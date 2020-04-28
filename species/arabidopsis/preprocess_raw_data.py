@@ -14,16 +14,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     tss_gff_path = os.path.join(args.output_root, 'tss.gff3')
-    cleavage_site_gff_path = os.path.join(args.output_root,
-                                          'cleavage_site.gff3')
-    paths = [tss_gff_path, cleavage_site_gff_path]
+    cs_gff_path = os.path.join(args.output_root,'cleavage_site.gff3')
+    paths = [tss_gff_path, cs_gff_path]
     exists = [os.path.exists(path) for path in paths]
     if all(exists):
         print("Result files are already exist, procedure will be skipped.")
     else:
         gro_1 = pd.read_csv(args.gro_1_path, comment='#', sep='\t')
         gro_2 = pd.read_csv(args.gro_2_path, comment='#', sep='\t')
-        cleavage_site = pd.read_csv(args.pac_path,dtype={'chr':str})
+        cs = pd.read_csv(args.pac_path,dtype={'chr':str})
         ###Process GRO sites data###
         #The Normalized Tag Count at both data on the same location would be same, because they are from GRO dataset
         gro_columns = ['chr', 'strand', 'Normalized Tag Count', 'start', 'end']
@@ -36,7 +35,7 @@ if __name__ == "__main__":
         evidence_5_end = round((gro['end'] + gro['start']) / 2)
         gro = gro.assign(evidence_5_end=pd.Series(evidence_5_end).values)
         ###Process cleavage sites data###
-        pac_site = cleavage_site[['chr', 'strand', 'coord',
+        pac_site = cs[['chr', 'strand', 'coord',
                                   'tot_tag']].copy(deep=True)
         pac_site.columns = [
             'chr', 'strand', 'evidence_3_end', 'experimental_score'
@@ -62,4 +61,4 @@ if __name__ == "__main__":
         pac_site = get_gff_with_updated_attribute(pac_site)
 
         write_gff(gro, tss_gff_path)
-        write_gff(pac_site, cleavage_site_gff_path)
+        write_gff(pac_site, cs_gff_path)

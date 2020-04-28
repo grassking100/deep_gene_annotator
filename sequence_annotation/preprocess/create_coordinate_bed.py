@@ -8,13 +8,11 @@ from sequence_annotation.preprocess.get_id_table import get_id_convert_dict
 from sequence_annotation.preprocess.create_coordinate_data import coordinate_consist_filter
 
 
-def create_coordinate_bed(coordinate_bed_data):
-    coordinate_bed_data['start_diff'] = coordinate_bed_data[
-        'coordinate_start'] - coordinate_bed_data['start']
-    coordinate_bed_data['end_diff'] = coordinate_bed_data[
-        'coordinate_end'] - coordinate_bed_data['end']
+def create_coordinate_bed(coordinate):
+    coordinate['start_diff'] = coordinate['coordinate_start'] - coordinate['start']
+    coordinate['end_diff'] = coordinate['coordinate_end'] - coordinate['end']
     returned = []
-    for item in coordinate_bed_data.to_dict('record'):
+    for item in coordinate.to_dict('record'):
         count = int(item['count'])
         block_related_start = [
             int(val) for val in item['block_related_start'].split(',')[:count]
@@ -51,16 +49,15 @@ def create_coordinate_bed(coordinate_bed_data):
 
 if __name__ == "__main__":
     #Reading arguments
-    parser = ArgumentParser(
-        description="This program will create data in BED format"
-        " by cooridnate data and origin data in BED foramt")
+    parser = ArgumentParser(description="This program will create "
+                            "data in BED format by cooridnate data "
+                            "and origin data in BED foramt")
     parser.add_argument("-i", "--bed_path", required=True)
     parser.add_argument("-c", "--coordinate_data_path", required=True)
     parser.add_argument("-t", "--id_table_path", required=True)
     parser.add_argument("-o", "--output_path", required=True)
-    parser.add_argument("--single_orf_start_end",
-                        action='store_true',
-                        help="If it is selected, then only gene data " +
+    parser.add_argument("--single_orf_start_end", action='store_true',
+                        help="If it is selected, then only gene data "
                         "which have single ORF will be saved")
     args = parser.parse_args()
 
@@ -80,17 +77,10 @@ if __name__ == "__main__":
         coordinate_bed_data = bed.merge(coordinate_data,
                                         left_on='id',
                                         right_on='ref_name')
-        coordinate_bed = create_coordinate_bed(coordinate_bed_data)
-        coordinate_bed['gene_id'] = [
-            id_convert_dict[id_] for id_ in coordinate_bed['id']
-        ]
+        bed = create_coordinate_bed(coordinate_bed_data)
+        bed['gene_id'] = [id_convert_dict[id_] for id_ in bed['id']]
         if args.single_orf_start_end:
-            coordinate_bed = coordinate_consist_filter(coordinate_bed,
-                                                       'gene_id',
-                                                       'thick_start')
-            coordinate_bed = coordinate_consist_filter(coordinate_bed,
-                                                       'gene_id', 'thick_end')
-        #coordinate_bed = coordinate_bed[~coordinate_bed.duplicated()].sort_values(by=['chr','start','end','strand'])
-        coordinate_bed = coordinate_bed.sort_values(
-            by=['chr', 'start', 'end', 'strand'])
-        write_bed(coordinate_bed, args.output_path)
+            bed = coordinate_consist_filter(bed,'gene_id','thick_start')
+            bed = coordinate_consist_filter(bed,'gene_id', 'thick_end')
+        bed = bed.sort_values(by=['chr', 'start','end', 'strand'])
+        write_bed(bed, args.output_path)

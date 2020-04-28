@@ -11,7 +11,7 @@ from sequence_annotation.process.utils import BASIC_COLOR_SETTING
 from sequence_annotation.genome_handler.ann_seq_processor import class_count
 from sequence_annotation.genome_handler.select_data import load_data
 from main.utils import backend_deterministic
-from main.test_model import test
+from main.deep_learning.test_model import test
 
 def _get_max_target_seqs(seqs,ann_seqs,seq_fig_target=None):
     max_count = 0

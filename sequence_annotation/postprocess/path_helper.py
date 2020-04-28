@@ -9,7 +9,7 @@ class PathHelper:
         self._raw_data_root = raw_data_root
         self._processed_root = processed_root
         self.split_root=os.path.join(raw_data_root,'split/single_strand_data/split_with_strand')
-        self.region_table_path = os.path.join(raw_data_root,'processed/result/double_strand/region_rename_table_double_strand.tsv')
+        self.region_table_path = os.path.join(raw_data_root,'processed/result/region_id_conversion.tsv')
         self._test_name = get_file_name(read_json(os.path.join(self.split_root,'train_val_test_path.json'))['test_path'])
         self._data_usage = get_data_names(self.split_root)
         train_val_test_path=read_json(os.path.join(self.split_root,'train_val_test_path.json'))

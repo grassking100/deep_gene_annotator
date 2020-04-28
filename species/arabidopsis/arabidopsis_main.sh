@@ -80,9 +80,10 @@ echo "filter_kwargs,$filter_kwargs" >> $saved_root/main_kwargs.csv
 echo "process_data_kwargs,$process_data_kwargs" >> $saved_root/main_kwargs.csv
 
 #Set parameter
-bash_root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
-script_root=$bash_root/..
-preprocess_main_root=$script_root/sequence_annotation/preprocess
+arabidopsis_util_root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+src_root=$arabidopsis_util_root/../..
+bash_root=$src_root/bash
+preprocess_main_root=$src_root/sequence_annotation/preprocess
 preprocessed_root=$saved_root/preprocessed
 id_convert_table_path=$preprocessed_root/id_convert.tsv
 preserved_bed_path=$preprocessed_root/consistent.bed
@@ -92,8 +93,8 @@ cs_gff_path=$preprocessed_root/cleavage_site.gff3
 genome_path=$preprocessed_root/araport_11_Arabidopsis_thaliana_Col-0_rename.fasta
 non_hypothetical_gene_id_path=$preprocessed_root/non_hypothetical_gene_id.txt
 
-if [ ! -e "$consistent_bed_path" ]; then
-    bash $bash_root/arabidopsis_data_prepair.sh -r $root -o $preprocessed_root
+if [ ! -e "$preprocessed_root/consistent.bed" ]; then
+    bash $arabidopsis_util_root/prepair_data.sh -r $root -o $preprocessed_root
 fi
 
 command="$bash_root/pipeline.sh -p $preserved_bed_path -b $background_bed_path -t $tss_gff_path -c $cs_gff_path -g $genome_path -i $id_convert_table_path -u $upstream_dist -d $downstream_dist -o $saved_root -s $source_name"

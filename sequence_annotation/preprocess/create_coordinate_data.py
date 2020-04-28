@@ -56,36 +56,36 @@ if __name__ == "__main__":
                                                       'feature':'cleavage_site_feature'})
         merged_data = cleavage_site.merge(tss,left_on=['chr','strand','ref_name'],right_on=['chr','strand','ref_name'])
         number = {}
-        clean_merged_data = merged_data[(~merged_data['evidence_5_end'].isna()) & (~merged_data['evidence_3_end'].isna())]
-        if set(clean_merged_data['strand']) != set(['+','-']):
+        cleaned = merged_data[(~merged_data['evidence_5_end'].isna()) & (~merged_data['evidence_3_end'].isna())]
+        if set(cleaned['strand']) != set(['+','-']):
             raise Exception("Invalid strand")
         
-        number['transcript'] = len(clean_merged_data)
-        print("Merged boundary number is {}".format(len(clean_merged_data)))
-        plus_index = clean_merged_data['strand'] == '+'
-        minus_index = clean_merged_data['strand'] == '-'
-        plus_valid_order = (clean_merged_data.loc[plus_index,'evidence_5_end'] <= clean_merged_data.loc[plus_index,'evidence_3_end']).index
-        minus_valid_order = (clean_merged_data.loc[minus_index,'evidence_5_end'] >= clean_merged_data.loc[minus_index,'evidence_3_end']).index
-        clean_merged_data = clean_merged_data.loc[list(plus_valid_order)+list(minus_valid_order),:]
-        number['valid transcript'] = len(clean_merged_data)
-        print("Merged valid boundary number is {}".format(len(clean_merged_data)))
-        evidence_site = clean_merged_data[['evidence_5_end','evidence_3_end']]
-        clean_merged_data['start'] =  evidence_site.min(1)
-        clean_merged_data['end'] =  evidence_site.max(1)
+        number['transcript'] = len(cleaned)
+        print("Merged boundary number is {}".format(len(cleaned)))
+        plus_index = cleaned['strand'] == '+'
+        minus_index = cleaned['strand'] == '-'
+        plus_valid_order = (cleaned.loc[plus_index,'evidence_5_end'] <= cleaned.loc[plus_index,'evidence_3_end']).index
+        minus_valid_order = (cleaned.loc[minus_index,'evidence_5_end'] >= cleaned.loc[minus_index,'evidence_3_end']).index
+        cleaned = cleaned.loc[list(plus_valid_order)+list(minus_valid_order),:]
+        number['valid transcript'] = len(cleaned)
+        print("Merged valid boundary number is {}".format(len(cleaned)))
+        evidence_site = cleaned[['evidence_5_end','evidence_3_end']]
+        cleaned['start'] =  evidence_site.min(1)
+        cleaned['end'] =  evidence_site.max(1)
         print('Consist data with gene id')
-        clean_merged_data['gene_id'] = [id_convert_dict[id_] for id_ in list(clean_merged_data['ref_name'])]
+        cleaned['gene_id'] = [id_convert_dict[id_] for id_ in list(cleaned['ref_name'])]
 
         if args.single_start_end:
-            clean_merged_data = consist(clean_merged_data,'gene_id','tss_score',drop_duplicated=False)
-            clean_merged_data = consist(clean_merged_data,'gene_id','cleavage_site_score',drop_duplicated=False)
-            clean_merged_data = coordinate_consist_filter(clean_merged_data,'gene_id','start')
-            clean_merged_data = coordinate_consist_filter(clean_merged_data,'gene_id','end')
-            number['transcript which its gene has single start and single end'] = len(clean_merged_data)
-        clean_merged_data = get_gff_with_updated_attribute(clean_merged_data)
-        clean_merged_data['source'] = 'Experiment'
-        clean_merged_data['feature'] = 'boundary'
-        clean_merged_data['score'] = clean_merged_data['frame'] = '.'
-        write_gff(clean_merged_data,args.output_path)
+            cleaned = consist(cleaned,'gene_id','tss_score',drop_duplicated=False)
+            cleaned = consist(cleaned,'gene_id','cleavage_site_score',drop_duplicated=False)
+            cleaned = coordinate_consist_filter(cleaned,'gene_id','start')
+            cleaned = coordinate_consist_filter(cleaned,'gene_id','end')
+            number['transcript which its gene has single start and single end'] = len(cleaned)
+        cleaned = get_gff_with_updated_attribute(cleaned)
+        cleaned['source'] = 'Experiment'
+        cleaned['feature'] = 'boundary'
+        cleaned['score'] = cleaned['frame'] = '.'
+        write_gff(cleaned,args.output_path)
 
         if args.stats_path is not None:
             write_json(number,args.stats_path)

@@ -11,6 +11,9 @@ class RegionExtractor:
 
     def __init__(self):
         self._region_id = 0
+        
+    def reset(self):
+        self._region_id = 0
 
     def extract(self, ann_seq, focus_types=None):
         focus_types = focus_types or ann_seq.ANN_TYPES
@@ -80,14 +83,18 @@ class GeneInfoExtractor(IInfoExtractor):
 
     def __init__(self, simply_map):
         """The simply_map defines rule to simplify inputed annotation, it must have \'gene\' in its key"""
-        self.extractor = RegionExtractor()
-        self._simply_map = simply_map
+        self._extractor = RegionExtractor()
+        self._simply_map = dict(simply_map)
         self._use_alt = False
         self._alt_num = 0
         self._alt_region_id = 0
         if 'gene' not in self._simply_map.keys():
             raise Exception("Gene must in map's key.")
-
+            
+    def reset(self):
+        self._extractor.reset()
+        self._alt_region_id = 0
+            
     def get_config(self):
         config = {}
         config['simply_map'] = self._simply_map
@@ -108,7 +115,7 @@ class GeneInfoExtractor(IInfoExtractor):
         seq_infos = SeqInfoContainer()
         simple_seq = simplify_seq(ann, self._simply_map)
         simple_seq.chromosome_id = ann.chromosome_id or ann.id
-        genes = [region for region in self.extractor.extract(
+        genes = [region for region in self._extractor.extract(
             simple_seq) if region.ann_type == 'gene']
         seq_infos.add(genes)
         for gene in genes:
@@ -120,7 +127,7 @@ class GeneInfoExtractor(IInfoExtractor):
             subseq.id = mRNA.id
             subseq.chromosome_id = mRNA.chromosome_id
             subseq.source = mRNA.source
-            regions = self.extractor.extract(subseq)
+            regions = self._extractor.extract(subseq)
             if self._use_alt:
                 self._add_alt_regions(mRNA, regions, seq_infos)
             else:

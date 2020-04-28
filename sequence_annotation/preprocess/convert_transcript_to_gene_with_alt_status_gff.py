@@ -89,13 +89,13 @@ def _validate_canonical_path(canonical_region_list,length,allow_partial_gene=Fal
         start,end = canonical_region['start'], canonical_region['end']
         canonical_path[start] = end
         
-    #if allow_partial_gene:
-    #    start = min(canonical_path.keys())
-    #    end = max(canonical_path.values())
-    #    if 0 not in canonical_path:
-    #        canonical_path[0] = start
-    #    if length not in canonical_path.values():
-    #        canonical_path[end] = length
+    if allow_partial_gene:
+        start = min(canonical_path.keys())
+        end = max(canonical_path.values())
+        if 0 not in canonical_path:
+            canonical_path[0] = start
+        if length not in canonical_path.values():
+            canonical_path[end] = length
 
     start = 0
     for _ in range(len(canonical_path)):
@@ -122,6 +122,7 @@ def get_canonical_region_and_alt_splice(seqs,select_site_by_election=False):
     canonical splicing site. If there are muliple candidates, then the most upstream splicing site
     would be chosen as canoncial site
     """
+    #print(seqs)
     start_sites = list(set([int(seq['start']) for seq in seqs]))
     end_sites = list(set([int(seq['end']) for seq in seqs]))
     strand = seqs[0]['strand']
@@ -294,18 +295,21 @@ def get_canonical_region_and_alt_splice(seqs,select_site_by_election=False):
                 acceptor_site_groups.append(acceptor_site_group)
             acceptor_site_group = []
 
+    #rint(intron_boundary_pairs)
+    #rint(donor_site_groups)
+    #rint(acceptor_site_groups)
+            
     for group in donor_site_groups:
         if len(group)>1:
             site_counts_ = [site_counts[site] for site in group] 
-            other_sites = group[1:]
-            other_counts = site_counts_[1:]
-            max_other_count = max(other_counts)
             exon_end = group[0]
             intron_start = group[-1]
             #Intron start and exon end
-            new_site = exon_end
-            if select_site_by_election and site_counts_[0] < max_other_count:                    
-                new_site = other_sites[other_counts.index(max_other_count)]
+            if select_site_by_election:
+                index = site_counts_.index(max(site_counts_))
+                new_site = group[index]
+            else:
+                new_site = exon_end
             #Get exon end
             exon_boundary_starts = list(exon_boundary_pairs.keys())
             exon_boundary_ends = list(exon_boundary_pairs.values())
@@ -324,15 +328,14 @@ def get_canonical_region_and_alt_splice(seqs,select_site_by_election=False):
     for group in acceptor_site_groups:
         if len(group)>1:
             site_counts_ = [site_counts[site] for site in group]
-            other_sites = group[1:]
-            other_counts = site_counts_[1:]
-            max_other_count = max(other_counts)
             intron_end = group[0]
             exon_start = group[-1]
             #Intron end and exon start
-            new_site = intron_end
-            if select_site_by_election and site_counts_[0] < max_other_count:
-                new_site = other_sites[other_counts.index(max_other_count)]
+            if select_site_by_election:
+                index = site_counts_.index(max(site_counts_))
+                new_site = group[index]
+            else:
+                new_site = intron_end
             #Get intron start
             intron_boundary_starts = list(intron_boundary_pairs.keys())
             intron_boundary_ends = list(intron_boundary_pairs.values())
@@ -593,16 +596,16 @@ def convert_transcript_gff_to_gene_with_alt_status_gff(gff,**kwargs):
     gff = convert_transcript_bed_to_gene_with_alt_status_gff(bed,id_table,**kwargs)
     return gff
 
-def main(input_path,output_gff_path,select_site_by_election=False,id_table_path=None):
+def main(input_path,output_gff_path,id_table_path=None,**kwargs):
     if 'bed' in input_path.split('.')[-1]:
         if id_table_path is None:
             raise Exception("If input data is bed format, then the id_table_path must be provided")
         bed = read_bed(input_path)
         id_table = read_id_table(id_table_path)
-        gene_gff = convert_transcript_bed_to_gene_with_alt_status_gff(bed,id_table,select_site_by_election)
+        gene_gff = convert_transcript_bed_to_gene_with_alt_status_gff(bed,id_table,**kwargs)
     else:
         gff = read_gff(input_path)
-        gene_gff = convert_transcript_gff_to_gene_with_alt_status_gff(gff,select_site_by_election=select_site_by_election)
+        gene_gff = convert_transcript_gff_to_gene_with_alt_status_gff(gff,**kwargs)
 
     write_gff(gene_gff,output_gff_path)
 
@@ -613,5 +616,6 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output_gff_path",required=True)
     parser.add_argument("-t", "--id_table_path")
     parser.add_argument("--select_site_by_election",action='store_true')
+    parser.add_argument("--allow_partial_gene",action='store_true')
     args = parser.parse_args()
     main(**vars(args))

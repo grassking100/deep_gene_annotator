@@ -3,7 +3,7 @@ import sys
 import torch
 import pandas as pd
 from argparse import ArgumentParser
-sys.path.append(os.path.abspath(os.path.dirname(__file__)+"/.."))
+sys.path.append(os.path.dirname(__file__)+"/..")
 from sequence_annotation.utils.utils import write_json,read_json
 from sequence_annotation.utils.process_schedule import Process,process_schedule
 from sequence_annotation.process.optuna import create_study

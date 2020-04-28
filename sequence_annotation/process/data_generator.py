@@ -9,18 +9,21 @@ class SeqDataset(Dataset):
     def __init__(self, data):
         self._ids = data['ids']
         self._inputs = data['inputs']
-        self._answers = data['answers']
+        self._has_gene_statuses = self._answers = None
+        #self._strands = 
+        if 'answers' in data:
+            self._answers = data['answers']
+            self._has_gene_statuses = data['has_gene_statuses']
+            #self._strands = data['strands']
         self._lengths = data['lengths']
         self._seqs = data['seqs']
-        self._strands = data['strands']
-        self._has_gene_statuses = data['has_gene_statuses']
         self._num = len(self._ids)
 
     @property
     def data(self):
         data = {}
         keys = [
-            'ids', 'inputs', 'answers', 'lengths', 'seqs', 'strands',
+            'ids', 'inputs', 'answers', 'lengths', 'seqs',# 'strands',
             'has_gene_statuses'
         ]
         for key in keys:
@@ -47,9 +50,9 @@ class SeqDataset(Dataset):
     def seqs(self):
         return self._seqs
 
-    @property
-    def strands(self):
-        return self._strands
+   # @property
+    #def strands(self):
+    #    return self._strands
 
     @property
     def has_gene_statuses(self):
@@ -61,7 +64,10 @@ class SeqDataset(Dataset):
     def __getitem__(self, index):
         returned = {}
         for key, list_ in self.data.items():
-            returned[key] = list_[index]
+            if list_ is not None:
+                returned[key] = list_[index]
+            else:
+                returned[key] = None
         return returned
 
 
@@ -123,10 +129,11 @@ def seq_collate_wrapper(discard_ratio_min=None,
     def seq_collate_fn(data):
         ids = [item['ids'] for item in data]
         inputs = [item['inputs'] for item in data]
+        answers = reordered_answers = None
         answers = [item['answers'] for item in data]
         lengths = [item['lengths'] for item in data]
         seqs = [item['seqs'] for item in data]
-        strands = [item['strands'] for item in data]
+        #strands = [item['strands'] for item in data]
         has_gene_statuses = [item['has_gene_statuses'] for item in data]
         if (augment_up_max + augment_down_max + discard_ratio_min +
                 discard_ratio_max) > 0:
@@ -135,35 +142,44 @@ def seq_collate_wrapper(discard_ratio_min=None,
                                   augment_up_max, augment_down_max)
             inputs, answers, lengths = result
         inputs = pad_sequence(inputs, batch_first=True)
-        answers = pad_sequence(answers, batch_first=True)
+        if answers[0] is not None:
+            answers = pad_sequence(answers, batch_first=True)
         length_order = np.flip(np.argsort(lengths), axis=0).copy()
         reordered_ids = order(ids, length_order)
         reordered_inputs = inputs[length_order].transpose(1, 2)
-        reordered_answers = answers[length_order].transpose(1, 2)
+        
+        if answers[0] is not None:
+            reordered_answers = answers[length_order].transpose(1, 2)
         reordered_lengths = order(lengths, length_order)
         reordered_seqs = order(seqs, length_order)
-        reordered_strands = order(strands, length_order)
+        #reordered_strands = order(strands, length_order)
         reordered_has_gene_statuses = order(has_gene_statuses, length_order)
+        #print(reordered_answers)
         data = {
             'ids': reordered_ids,
             'inputs': reordered_inputs,
             'answers': reordered_answers,
             'lengths': reordered_lengths,
             'seqs': reordered_seqs,
-            'strands': reordered_strands,
+            #'strands': reordered_strands,
             'has_gene_statuses': reordered_has_gene_statuses
         }
-        return data
+        return SeqDataset(data)
 
     return seq_collate_fn
 
 
 class SeqGenerator:
-    def __init__(self, *args, **kwargs):
+    def __init__(self, seq_collate_fn=None,*args, **kwargs):
+        self.seq_collate_fn = seq_collate_fn or seq_collate_wrapper()
         self.args = args
         self.kwargs = kwargs
 
     def __call__(self, dataset):
+        dataset = SeqDataset(dataset)
         dataset._inputs = [torch.FloatTensor(i) for i in dataset.inputs]
-        dataset._answers = [torch.LongTensor(a) for a in dataset.answers]
-        return DataLoader(dataset, *self.args, **self.kwargs)
+        if dataset.answers is not None:
+            dataset._answers = [torch.LongTensor(a) for a in dataset.answers]
+        return DataLoader(dataset, collate_fn=self.seq_collate_fn,
+                          *self.args, **self.kwargs)
+

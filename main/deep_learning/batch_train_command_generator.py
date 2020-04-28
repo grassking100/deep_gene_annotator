@@ -2,15 +2,14 @@ import os
 import sys
 import pandas as pd
 from argparse import ArgumentParser
-ROOT = os.path.dirname(__file__) + "/.."
-sys.path.append(ROOT)
+sys.path.append(os.path.dirname(__file__) + "/..")
 from sequence_annotation.utils.utils import get_file_name
 
 
 def main(data_root, saved_root, save_command_table_path,
          model_config_path, executor_config_path, appended_command=None):
 
-    MAIN_PATH = '{}/main/train_model.py'.format(ROOT)
+    MAIN_PATH = os.path.dirname(__file__)+'/train_model.py'
     COMMAND = "python3 " + MAIN_PATH + " -m {} -e {} -t {} -v {} -s {}"
     paths = [MAIN_PATH, model_config_path, executor_config_path]
 

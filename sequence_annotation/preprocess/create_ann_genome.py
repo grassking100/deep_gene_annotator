@@ -2,7 +2,7 @@ import os, sys
 import deepdish as dd
 sys.path.append(os.path.dirname(__file__)+"/../..")
 from argparse import ArgumentParser
-from sequence_annotation.utils.utils import get_gff_with_attribute, read_gff, read_bed,BASIC_GENE_ANN_TYPES
+from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES, get_gff_with_attribute, read_gff
 from sequence_annotation.preprocess.utils import EXON_SKIPPING,INTRON_RETENTION
 from sequence_annotation.preprocess.utils import ALT_DONOR,ALT_ACCEPTOR
 from sequence_annotation.genome_handler.exception import NotOneHotException
@@ -10,7 +10,8 @@ from sequence_annotation.genome_handler.ann_seq_processor import is_one_hot
 from sequence_annotation.genome_handler.sequence import AnnSequence
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
 from sequence_annotation.genome_handler.ann_genome_processor import get_backgrounded_genome
-from sequence_annotation.preprocess.utils import RNA_TYPES
+from sequence_annotation.preprocess.utils import RNA_TYPES,read_region_table
+
 
 STRAND_CONVERT = {'+':'plus','-':'minus'}
 
@@ -38,15 +39,15 @@ class Gff2AnnSeqs:
         if not is_one_hot(ann_seq,self._one_hot_ann_types):
             raise NotOneHotException(ann_seq.id)
 
-    def convert(self,gff,region_bed,source):
+    def convert(self,gff,region_table,source):
         gff = get_gff_with_attribute(gff)
         is_transcript = gff['feature'].isin(RNA_TYPES)
         transcripts = gff[is_transcript].to_dict('record')
         blocks = gff[~is_transcript].groupby('parent')
         genome = AnnSeqContainer()
         genome.ANN_TYPES = self.ANN_TYPES
-        for region in region_bed.to_dict('record'):
-            chrom = self._create_seq(region['id'],region['strand'],region['end']-region['start']+1)
+        for region in region_table.to_dict('record'):
+            chrom = self._create_seq(region['ordinal_id_with_strand'],region['strand'],region['length'])
             chrom.source = source
             genome.add(chrom)
 
@@ -64,12 +65,12 @@ class Gff2AnnSeqs:
             self._validate(chrom)
         return backgrounded
 
-def create_ann_genome(gff,region_bed,souce_name,ann_types,one_hot_ann_types):
+def create_ann_genome(gff,region_table,souce_name,ann_types,one_hot_ann_types):
     converter = Gff2AnnSeqs(ann_types,one_hot_ann_types)
-    genome = converter.convert(gff,region_bed,souce_name)   
+    genome = converter.convert(gff,region_table,souce_name)   
     return genome
 
-def main(gff_path,region_bed_path,souce_name,output_path,
+def main(gff_path,region_table_path,souce_name,output_path,
          with_alt_region,with_alt_site_region,discard_alt_region,discard_UTR_CDS):
     gff = read_gff(gff_path)
     ann_types = list(BASIC_GENE_ANN_TYPES)
@@ -92,8 +93,8 @@ def main(gff_path,region_bed_path,souce_name,output_path,
         invalid_options = set(part_gff['feature'])
         raise Exception("Invalid features, {}, in GFF, valid options are {}".format(invalid_options,ann_types))
             
-    region_bed = read_bed(region_bed_path)
-    genome = create_ann_genome(gff,region_bed,souce_name,ann_types,one_hot_ann_types)
+    region_table = read_region_table(region_table_path)
+    genome = create_ann_genome(gff,region_table,souce_name,ann_types,one_hot_ann_types)
     try:
         dd.io.save(output_path,genome.to_dict())
     except OverflowError:
@@ -105,7 +106,7 @@ if __name__ == "__main__":
     #Reading arguments
     parser = ArgumentParser()
     parser.add_argument("-i", "--gff_path",required=True)
-    parser.add_argument("-r", "--region_bed_path",required=True)
+    parser.add_argument("-r", "--region_table_path",required=True)
     parser.add_argument("-o", "--output_path",required=True)
     parser.add_argument("-s", "--souce_name",required=True)
     parser.add_argument("--with_alt_region",action='store_true')

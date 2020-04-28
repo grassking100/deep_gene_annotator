@@ -1,7 +1,7 @@
 import math
 import sys,os
 from collections import OrderedDict
-sys.path.append(os.path.abspath(os.path.dirname(__file__)+"/.."))
+sys.path.append(os.path.dirname(__file__)+"/..")
 from sequence_annotation.process.model import SeqAnnBuilder
 from sequence_annotation.process.executor import ExecutorBuilder
 from sequence_annotation.process.optuna import IModelExecutorCreator,get_discrete_uniform,get_bool_choices,get_choices

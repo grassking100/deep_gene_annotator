@@ -12,7 +12,8 @@ def main(bed_path, fasta_path, cleaned_bed_path, dirty_bed_path, codes):
     bed = read_bed(bed_path)
     fasta = read_fasta(fasta_path, check_unique_id=False)
     if set(bed['id']) != set(fasta.keys()):
-        raise Exception()
+        ids = set(bed['id']).symmetric_difference(set(fasta.keys()))
+        raise Exception("BED ids are not same as fasta ids, got {}".format(ids))
 
     cleaned_ids = []
     dirty_ids = []

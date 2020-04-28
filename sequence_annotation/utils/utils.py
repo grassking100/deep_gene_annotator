@@ -126,6 +126,12 @@ def validate_bed(bed):
         if ((bed['end'] - bed['start'] + 1) <= 0).any():
             raise Exception("Wrong transcript size")
 
+        if 'start' in bed and (bed['start']<=0).any():
+            raise Exception("Wrong transcript start")
+
+        if 'end' in bed and (bed['end']<=0).any():
+            raise Exception("Wrong transcript end")
+            
         if 'thick_end' in bed.columns and 'thick_start' in bed.columns:
             if ((bed['thick_end'] - bed['thick_start'] + 1) < 0).any():
                 raise Exception("Wrong coding size")
@@ -154,7 +160,10 @@ def validate_gff(gff):
             raise InvalidStrandType()
         if ((gff['end'] - gff['start'] + 1) <= 0).any():
             raise Exception("Wrong block size")
-
+        if any(gff['start']<=0):
+            raise Exception("Wrong block start")
+        if any(gff['end']<=0):
+            raise Exception("Wrong block end")
 
 def read_bed(path):
     """
@@ -201,7 +210,6 @@ def write_bed(bed, path):
         if name in bed.columns:
             columns.append(name)
     bed = bed[columns].astype(str)
-
     for name in ['start', 'end', 'thick_start', 'thick_end', 'count']:
         if name in bed.columns:
             bed[name] = bed[name].astype(float).astype(int)
@@ -351,7 +359,7 @@ def read_fasta(path, check_unique_id=True):
     return data
 
 
-def write_fasta(path, seqs):
+def write_fasta(seqs,path):
     """Read dictionary of sequneces into fasta file"""
     with open(path, "w") as file:
         for id_, seq in seqs.items():

@@ -24,12 +24,19 @@ def get_subbed(bed,ids,id_table_path=None,query_column=None):
     new_bed = pd.DataFrame.from_dict(new_bed)
     return new_bed
     
-def main(input_path,id_path,output_path,**kwargs):
+def main(input_path,id_path,output_path,treat_id_path_as_ids=False,**kwargs):
     bed = read_bed(input_path)
-    try:
-        ids = set(list(pd.read_csv(id_path,header=None)[0]))
-    except:
-        raise Exception("The path {} is not exist".format(id_path))
+    if treat_id_path_as_ids:
+        ids = id_path.split(',')
+    else:
+        try:
+            data = set(list(pd.read_csv(id_path,header=None,sep='\t')[0]))
+            ids = []
+            for item in data:
+                ids += item.split(',')
+
+        except:
+            raise Exception("The path {} is not exist".format(id_path))
     part_bed = get_subbed(bed,ids,**kwargs)
     write_bed(part_bed,output_path)
 
@@ -40,7 +47,8 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--id_path",required=True)
     parser.add_argument("-o", "--output_path",required=True)
     parser.add_argument("-t", "--id_table_path")
-    parser.add_argument("--query_column",type=str)
+    parser.add_argument("--query_column",type=str,help="Defualt :id")
+    parser.add_argument("--treat_id_path_as_ids",action='store_true')
     
     args = parser.parse_args()
     kwargs = vars(args)

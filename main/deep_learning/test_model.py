@@ -2,7 +2,7 @@ import os
 import sys
 import torch
 from argparse import ArgumentParser
-sys.path.append(os.path.abspath(os.path.dirname(__file__)+"/.."))
+sys.path.append(os.path.dirname(__file__)+"/..")
 from sequence_annotation.utils.utils import create_folder
 from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES
 from sequence_annotation.process.seq_ann_engine import SeqAnnEngine,get_best_model_and_origin_executor,get_batch_size

@@ -20,4 +20,4 @@ if __name__ == "__main__":
     for id_, seq in fasta.items():
         if id_ in ids:
             subfasta[id_] = seq
-    write_fasta(args.output_path, subfasta)
+    write_fasta(subfasta,args.output_path)

@@ -23,12 +23,13 @@ class AnnSeqProcessor:
         self._discard_invalid_seq = discard_invalid_seq
 
     def _validate(self, data):
-        for id_, input_, answer in zip(data['ids'], data['inputs'],
-                                       data['answers']):
-            seq_length = np.shape(input_)[0]
-            ann_length = np.shape(answer)[0]
-            if ann_length != seq_length:
-                raise LengthNotEqualException(ann_length, seq_length, id_)
+        if 'answers' in data:
+            for id_, input_, answer in zip(data['ids'], data['inputs'],
+                                           data['answers']):
+                seq_length = np.shape(input_)[0]
+                ann_length = np.shape(answer)[0]
+                if ann_length != seq_length:
+                    raise LengthNotEqualException(ann_length, seq_length, id_)
 
     def _split(self, data):
         if self._validation_split > 0 and not 'validation' in data.keys():
@@ -56,32 +57,36 @@ class AnnSeqProcessor:
     def _to_dict(self, item):
         data = {
             'inputs': [],
-            'answers': [],
             'lengths': [],
             'ids': [],
             'seqs': [],
-            'strands': [],
+           # 'strands': [],
             'has_gene_statuses': []
         }
+        has_gene_list = {}
         seqs = self._seq_converter.seqs2dict_vec(item['inputs'],
                                                  self._discard_invalid_seq)
-        ann_seq_dict = ann_genome_processor.genome2dict_vec(
-            item['answers'], self._channel_order)
-        has_gene_list = {}
-        for ann_seq in item['answers']:
-            has_gene_list[ann_seq.id] = (sum(ann_seq.get_ann('intron')) +
-                                         sum(ann_seq.get_ann('exon'))) > 0
+        if 'answers' in item:
+            data['answers'] = []
+            ann_seq_dict = ann_genome_processor.genome2dict_vec(
+                item['answers'], self._channel_order)
+
+            for ann_seq in item['answers']:
+                has_gene_list[ann_seq.id] = (sum(ann_seq.get_ann('intron')) +
+                                             sum(ann_seq.get_ann('exon'))) > 0
 
         for name in seqs.keys():
             seq = seqs[name]
-            answer = ann_seq_dict[name]
             data['ids'].append(name)
             data['seqs'].append(item['inputs'][name])
             data['inputs'].append(seq)
-            data['answers'].append(answer)
             data['lengths'].append(len(seq))
-            data['strands'].append(item['answers'][name].strand)
-            data['has_gene_statuses'].append(has_gene_list[name])
+            if 'answers' in item:
+                answer = ann_seq_dict[name]
+                data['answers'].append(answer)
+              #  data['strands'].append(item['answers'][name].strand)
+                data['has_gene_statuses'].append(has_gene_list[name])
+            
         return data
 
     def process(self, data):

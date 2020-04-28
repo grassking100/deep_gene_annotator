@@ -30,10 +30,10 @@ def get_splicing_kwargs(path_helper, first_n=None):
     return kwargs
 
 
-def get_distances(peformance_root, scale):
+def get_distances(root, scale):
     a_p_abs_diff = read_json(
         os.path.join(
-            peformance_root,
+            root,
             'a_p_abs_diff_exclude_zero.json'))
     donor_distance = a_p_abs_diff['mean']['donor_site'] * scale
     acceptor_distance = a_p_abs_diff['mean']['acceptor_site'] * scale
@@ -41,32 +41,20 @@ def get_distances(peformance_root, scale):
             'acceptor_distance': acceptor_distance}
 
 
-def get_overall_loss(peformance_root):
+def get_overall_loss(root):
     block_performance = read_json(
-        os.path.join(
-            peformance_root,
-            'block_performance.json'))
+        os.path.join(root,'block_performance.json'))
     base_performance = read_json(
-        os.path.join(
-            peformance_root,
-            'base_performance.json'))
+        os.path.join(root,'base_performance.json'))
     a_p_abs_diff = read_json(
-        os.path.join(
-            peformance_root,
-            'a_p_abs_diff.json'))
+        os.path.join(root,'a_p_abs_diff.json'))
     p_a_abs_diff = read_json(
-        os.path.join(
-            peformance_root,
-            'p_a_abs_diff.json'))
+        os.path.join(root,'p_a_abs_diff.json'))
     site_matched = read_json(
-        os.path.join(
-            peformance_root,
-            'site_matched.json'))
+        os.path.join(root,'site_matched.json'))
     block_f1_keys = ['internal_exon_F1', 'exon_F1', 'intron_F1'] + ['gene_F1', 'intron_chain_F1']
-    #block_chain_f1_keys = 
     base_loss = 1 - base_performance['macro_F1']
     block_loss = 0
-    #block_chain_loss = 0
     site_loss = 0
     matched_loss = 0
     for key, value in block_performance.items():
@@ -74,10 +62,6 @@ def get_overall_loss(peformance_root):
             if str(value) == 'nan':
                 value = 0
             block_loss += (1 - value)
-        #elif key in block_chain_f1_keys:
-        #    if str(value) == 'nan':
-        #        value = 0
-        #    block_chain_loss += (1 - value)
 
     for value in a_p_abs_diff['mean'].values():
         site_loss += np.log10(value + 1)
@@ -87,11 +71,9 @@ def get_overall_loss(peformance_root):
         matched_loss += (1 - value)
 
     block_loss /= len(block_f1_keys)
-    #block_chain_loss /= len(block_chain_f1_keys)
     site_loss /= (len(a_p_abs_diff['mean']) + len(p_a_abs_diff['mean']))
     matched_loss /= len(site_matched['F1'])
     loss = base_loss + block_loss + site_loss + matched_loss
-    #loss = base_loss + block_loss + block_chain_loss + site_loss + matched_loss
     return loss
 
 
@@ -125,11 +107,10 @@ class Reviser:
         self._input_raw_plus_gff_path = input_raw_plus_gff_path
         self._fasta_path = fasta_path
         self._region_table_path = region_table_path
-
+        
     def revise(self, saved_root, **kwargs):
         gff_revise_main(saved_root, self._input_raw_plus_gff_path,
-                        self._region_table_path, self._fasta_path, **kwargs)
-
+                        self._region_table_path,self._fasta_path,**kwargs)
 
 class Evaluator:
     def __init__(self, answer_path, region_table_path):
@@ -141,7 +122,7 @@ class Evaluator:
         if not os.path.exists(loss_path):
             performance_main(predict_path, self._answer_path,
                              self._region_table_path,
-                             saved_root, chrom_target='new_id')
+                             saved_root, chrom_target='ordinal_id_wo_strand')
             overall_loss = get_overall_loss(saved_root)
             with open(loss_path, "w") as fp:
                 fp.write("{}\n".format(overall_loss))
@@ -160,25 +141,19 @@ class ReviseEvaluator:
             predicted_root, 'test_predict_raw_plus.gff3')
         self._answer_path = path_helper.get_answer_path(
             trained_id, usage, on_double_strand=True)
-        self._reviser = Reviser(
+        self.reviser = Reviser(
             self._raw_plus_gff_path,
             self._fasta_path,
             self._region_table_path)
-        self._evaluator = Evaluator(self._answer_path, self._region_table_path)
+        self.evaluator = Evaluator(self._answer_path, self._region_table_path)
 
     def process(self, revised_root, **kwargs):
-        peformance_root = os.path.join(revised_root, 'test')
-        revised_path = os.path.join(revised_root, 'revised.gff3')
-        revised_double_strand = os.path.join(
-            revised_root, 'revised_double_strand.gff3')
-        if not os.path.exists(revised_path):
-            self._reviser.revise(revised_root, **kwargs)
-        if not os.path.exists(revised_double_strand):
-            rename_chrom_main(
-                revised_path,
-                self._path_helper.region_table_path,
-                revised_double_strand)
-        return self._evaluator.evaluate(revised_double_strand, peformance_root)
+        root = os.path.join(revised_root, 'test')
+        revised = os.path.join(revised_root, 'revised.gff3')
+        if not os.path.exists(revised):
+            self.reviser.revise(revised_root, **kwargs)
+        #if not os.path.exists(revised):
+        return self.evaluator.evaluate(revised, root)
 
 
 def test(trained_root, test_result_root, path_helper, trained_id, usage=None):
@@ -204,7 +179,9 @@ def test(trained_root, test_result_root, path_helper, trained_id, usage=None):
         rename_chrom_main(
             predict_path,
             path_helper.region_table_path,
-            predict_double_strand)
+            predict_double_strand,
+            'ordinal_id_with_strand',
+            'ordinal_id_wo_strand')
         overall_loss = get_overall_loss(os.path.join(test_result_root, 'test'))
         with open(loss_path, "w") as fp:
             fp.write("{}\n".format(overall_loss))
@@ -389,16 +366,16 @@ class AutoReviseEvaluator:
             self._process_on_test(trained_name)
 
         record_path = os.path.join(self._saved_root, 'record.tsv')
-        pd.DataFrame.from_dict(
-            self._records).to_csv(
-            record_path,
-            sep='\t',
-            index=None)
-        write_json(
-            self._best_hyperparams,
-            os.path.join(
-                self._saved_root,
-                'best_revised_config.json'))
+        pd.DataFrame.from_dict(self._records).to_csv(record_path,
+                                                     sep='\t',
+                                                     index=None)
+        write_json(self._best_hyperparams,os.path.join(self._saved_root,'best_revised_config.json'))
+        gff_reviser_config_path = os.path.join(self._saved_root,'revised_test',
+                                               list(data_usage.keys())[0],
+                                               'testing','reviser_config.json')
+        gff_reviser_config = read_json(gff_reviser_config_path)
+        write_json(gff_reviser_config,os.path.join(self._saved_root,
+                                                   'best_gff_reviser_config.json'))
 
 
 def main(raw_data_root, processed_root, trained_project_root, saved_root):
@@ -439,7 +416,9 @@ def main(raw_data_root, processed_root, trained_project_root, saved_root):
     train_val_answer_path = path_helper.get_answer_path(
         path_helper.train_val_name, on_double_strand=True)
     rename_chrom_main(predicted_path,path_helper.region_table_path,
-                      predicted_double_strand_path)
+                      predicted_double_strand_path,
+                      'ordinal_id_with_strand',
+                      'ordinal_id_wo_strand')
     evaluator = Evaluator(train_val_answer_path, path_helper.region_table_path)
     evaluator.evaluate(predicted_double_strand_path,
                        os.path.join(merged_val_root,'test'))

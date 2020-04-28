@@ -9,7 +9,7 @@ from ..genome_handler.ann_seq_processor import seq2vecs
 from ..genome_handler.seq_container import AnnSeqContainer
 from .data_processor import AnnSeqProcessor
 from .utils import param_num
-from .worker import TrainWorker, TestWorker
+from .worker import TrainWorker, TestWorker,PredictWorker
 from .tensorboard_writer import TensorboardWriter
 from .callback import CategoricalMetric, TensorboardCallback, LearningRateHolder
 from .callback import SeqFigCallback, Callbacks, ContagionMatrix
@@ -21,9 +21,7 @@ from .executor import get_executor
 
 
 class SeqAnnEngine(metaclass=abc.ABCMeta):
-    def __init__(self,
-                 channel_order,
-                 shuffle_train_data=True,
+    def __init__(self,channel_order,shuffle_train_data=True,
                  is_verbose_visible=True):
         self._settings = {}
         self._root = None
@@ -69,12 +67,9 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
                                  colors=colors)
         return seq_fig
 
-    def set_root(self,
-                 root,
-                 with_train=True,
-                 with_val=True,
-                 with_test=True,
-                 create_tensorboard=True):
+    def set_root(self,root,with_train=True,with_val=True,
+                 with_test=True,create_tensorboard=True,
+                 with_predict=False):
         self.update_settings('set_root', locals())
         self._root = root
         create_folder(self._root)
@@ -95,6 +90,9 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
             create_folder(folder)
             if create_tensorboard:
                 self._test_writer = TensorboardWriter(folder)
+        if with_predict:
+            folder = os.path.join(self._root, "predict")
+            create_folder(folder)
 
     def _record_ann_count(self, name, ann_seqs):
         if ann_seqs is not None:
@@ -108,15 +106,13 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
                         "The {} is missing in the dataset".format(key))
             self.update_settings(name, count)
 
-    def get_signal_handler(self,
-                           prefix=None,
-                           inference=None,
+    def get_signal_handler(self,root,prefix=None,inference=None,
                            region_table_path=None,
                            is_answer_double_strand=False,
                            answer_gff_path=None):
-        root = self._root
-        if root is not None and prefix is not None:
-            root = os.path.join(root, prefix)
+        #root = self._root
+        #if root is not None and prefix is not None:
+        #    root = os.path.join(root, prefix)
 
         builder = SignalHandlerBuilder(root, prefix=prefix)
         if region_table_path is not None:
@@ -184,26 +180,25 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         keys = list(raw_data.keys())
         data = AnnSeqProcessor(self._channel_order).process(raw_data)
         for key in keys:
-            self._update_ann_seqs_count(key, len(raw_data[key]['answers'].ids),
-                                        len(data[key]['ids']))
-            self._record_ann_count('{}_ann_counut'.format(key),
-                                   raw_data[key]['answers'])
-            has_gene_statuses_count = int(sum(data[key]['has_gene_statuses']))
-            self.update_settings('{}_has_gene_count'.format(key),
-                                 has_gene_statuses_count)
+            if 'answers' in raw_data[key]:
+                self._update_ann_seqs_count(key, len(raw_data[key]['answers'].ids),
+                                            len(data[key]['ids']))
+                self._record_ann_count('{}_ann_counut'.format(key),
+                                       raw_data[key]['answers'])
+                has_gene_statuses_count = int(sum(data[key]['has_gene_statuses']))
+                self.update_settings('{}_has_gene_count'.format(key),
+                                     has_gene_statuses_count)
         return data
 
-    def _create_train_data_gen(self, batch_size, seq_collate_fn):
+    def _create_data_gen(self, batch_size, seq_collate_fn):
         train_gen = SeqGenerator(batch_size=batch_size,
                                  shuffle=self._shuffle_train_data,
                                  collate_fn=seq_collate_fn)
         return train_gen
 
-    def _create_test_data_gen(self, batch_size):
-        seq_collate_fn = seq_collate_wrapper()
+    def _create_basic_data_gen(self, batch_size):
         test_gen = SeqGenerator(batch_size=batch_size,
-                                shuffle=False,
-                                collate_fn=seq_collate_fn)
+                                shuffle=False)
         return test_gen
 
     def create_ann_vec_gff_converter(self, simply_map=None):
@@ -211,16 +206,9 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
                                                 simply_map=simply_map)
         return converter
 
-    def train(self,
-              model,
-              executor,
-              train_data,
-              val_data,
-              epoch=None,
-              batch_size=None,
-              other_callbacks=None,
-              add_grad=True,
-              seq_collate_fn_kwargs=None,
+    def train(self,model,executor,train_data,val_data,
+              epoch=None,batch_size=None,other_callbacks=None,
+              add_grad=True,seq_collate_fn_kwargs=None,
               checkpoint_kwargs=None):
         seq_collate_fn_kwargs = seq_collate_fn_kwargs or {}
         self._update_common_setting()
@@ -248,8 +236,8 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
 
         # Create worker
         collate_fn = seq_collate_wrapper(**seq_collate_fn_kwargs)
-        train_gen = self._create_train_data_gen(batch_size, collate_fn)
-        val_gen = self._create_test_data_gen(batch_size)
+        train_gen = self._create_data_gen(batch_size, collate_fn)
+        val_gen = self._create_basic_data_gen(batch_size)
 
         # Process data
         raw_data = {
@@ -262,9 +250,7 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         data = self._process_data(raw_data)
 
         # Create worker
-        worker = TrainWorker(model,
-                             data,
-                             train_generator=train_gen,
+        worker = TrainWorker(model,data,train_generator=train_gen,
                              val_generator=val_gen,
                              executor=executor,
                              train_callbacks=train_callbacks,
@@ -303,15 +289,9 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         worker.work()
         return worker
 
-    def test(self,
-             model,
-             executor,
-             data,
-             batch_size=None,
-             region_table_path=None,
-             answer_gff_path=None,
-             callbacks=None,
-             is_answer_double_strand=False):
+    def test(self,model,executor,data,batch_size=None,
+             region_table_path=None,answer_gff_path=None,
+             callbacks=None,is_answer_double_strand=False):
 
         self._update_common_setting()
         self.update_settings('test_setting', {'batch_size': batch_size})
@@ -319,30 +299,54 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         test_callbacks = self._create_default_test_callbacks()
         callbacks.add(test_callbacks)
         self._add_tensorboard_callback(self._test_writer, callbacks)
+        root = os.path.join(self._root, 'test')
         singal_handler = self.get_signal_handler(
-            'test',
-            executor.inference,
-            region_table_path,
+            root,'test',executor.inference,region_table_path,
             is_answer_double_strand=is_answer_double_strand,
-            answer_gff_path=answer_gff_path)
+            answer_gff_path=answer_gff_path
+        )
         callbacks.add(singal_handler)
 
-        generator = self._create_test_data_gen(batch_size)
+        generator = self._create_basic_data_gen(batch_size)
         test_seqs, test_ann_seqs = data
         raw_data = {'testing': {'inputs': test_seqs, 'answers': test_ann_seqs}}
         data = self._process_data(raw_data)
 
-        worker = TestWorker(model,
-                            data,
-                            generator=generator,
-                            callbacks=callbacks,
-                            executor=executor,
+        worker = TestWorker(model,data,generator=generator,
+                            callbacks=callbacks,executor=executor,
                             root=self._root)
 
         if self._root is not None:
             root = os.path.join(self._root, 'settings')
             create_folder(root)
             path = os.path.join(root, "test_setting.json")
+            if not os.path.exists(path):
+                write_json(self._settings, path)
+
+        worker.work()
+        return worker
+    
+    def predict(self,model,executor,seqs,batch_size=None,
+                region_table_path=None,callbacks=None):
+
+        self._update_common_setting()
+        self.update_settings('predict_setting', {'batch_size': batch_size})
+        callbacks = callbacks or Callbacks()
+        root = os.path.join(self._root, 'predict')
+        singal_handler = self.get_signal_handler(root,inference=executor.inference,
+                                                 region_table_path=region_table_path)
+        callbacks.add(singal_handler)
+        generator = self._create_basic_data_gen(batch_size)
+        raw_data = {'predicting': {'inputs': seqs}}
+        data = self._process_data(raw_data)
+        worker = PredictWorker(model,data,generator=generator,
+                            callbacks=callbacks,executor=executor,
+                            root=self._root)
+
+        if self._root is not None:
+            root = os.path.join(self._root, 'settings')
+            create_folder(root)
+            path = os.path.join(root, "predict_setting.json")
             if not os.path.exists(path):
                 write_json(self._settings, path)
 
@@ -392,8 +396,7 @@ def check_max_memory_usgae(saved_root, model, executor, train_data, val_data,
         raise Exception("Memory is fulled")
 
 
-def get_model_executor(model_config_path,
-                       executor_config_path,
+def get_model_executor(model_config_path,executor_config_path,
                        model_weights_path=None,
                        executor_weights_path=None,
                        frozen_names=None,

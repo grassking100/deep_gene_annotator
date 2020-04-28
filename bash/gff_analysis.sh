@@ -14,7 +14,7 @@ usage(){
  echo "    -a  <int>     Radius of Acceptor sites                           [default: 100]"
  echo "    -c  <int>     Radius of Cleavage sites                           [default: 100]"
  echo "    -h            Print help message and exit"
- echo "Example: bash gff_analysis.sh -i example.gff3 -g genome.fasta -o output -s old_id -r region_table.tsv"
+ echo "Example: bash gff_analysis.sh -i example.gff3 -f genome.fasta -o output -s old_id -r region_table.tsv"
  echo ""
 }
 
@@ -48,7 +48,7 @@ if [ ! "$gff_path" ]; then
     exit 1
 fi
 if [ ! "$genome_path" ]; then
-    echo "Missing option -g"
+    echo "Missing option -f"
     usage
     exit 1
 fi

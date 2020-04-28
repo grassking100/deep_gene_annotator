@@ -73,10 +73,10 @@ fi
 bash_root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 script_root=$bash_root/..
 preprocess_main_root=$script_root/sequence_annotation/preprocess
-region_table_path=$processed_root/result/double_strand/region_rename_table_double_strand.tsv
+region_path=$processed_root/result/region_id_conversion.tsv
 mkdir -p $saved_root
 
-command="$bash_root/split.sh -g $genome_path -p $processed_root -t $id_convert_table_path -r $region_table_path"
+command="$bash_root/split.sh -g $genome_path -p $processed_root -t $id_convert_table_path -r $region_path"
 
 if [ "$fold_num" ]; then
     command="${command} -n $fold_num"

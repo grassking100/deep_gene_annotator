@@ -7,8 +7,7 @@ import torch
 import numpy as np
 from abc import ABCMeta, abstractmethod
 from ..utils.utils import create_folder, print_progress, write_json, get_time_str
-from .data_generator import SeqDataset, SeqGenerator
-from .executor import BasicExecutor
+from .data_generator import SeqGenerator
 from .callback import MeanRecorder, Callbacks, DataHolder
 from .warning import WorkerProtectedWarning
 from .checkpoint import build_checkpoint
@@ -41,40 +40,49 @@ def train_per_batch(model, seq_data, executor, callbacks):
 
 
 def evaluate_per_batch(model, seq_data, executor, callbacks):
-    _batch_process(model,
-                   seq_data,
-                   executor.evaluate,
-                   callbacks,
-                   accumulate=True)
+    _batch_process(model, seq_data, executor.evaluate,
+                   callbacks,accumulate=True)
 
+    
+def predict_per_batch(model, seq_data, executor, callbacks):
+    torch.cuda.empty_cache()
+    callbacks.on_batch_begin()
+    returned = executor.predict(model,seq_data.inputs,
+                                lengths=seq_data.lengths)
+    torch.cuda.empty_cache()
+    with torch.no_grad():
+        callbacks.on_batch_end(predicts=returned['predicts'],
+                               outputs=returned['outputs'],
+                               seq_data=seq_data,
+                               masks=returned['masks'],
+                               metric=None)
+    torch.cuda.empty_cache()
+    
 
-def validate_gradient(epoch,
-                      model,
-                      gradient_warning_recorder=None,
-                      gradient_recorder=None):
+def validate_gradient(epoch,model,grad_warn_recorder=None,
+                      grad_recorder=None):
     total_norm = 0
     for p in model.parameters():
         param_norm = p.grad.data.norm(2.)
         total_norm += param_norm.item()**2.
     total_norm = total_norm**(1. / 2.)
-    if gradient_warning_recorder is not None:
+    if grad_warn_recorder is not None:
         l2_verbose = L2_VERBOSE.format(epoch, total_norm)
-        gradient_warning_recorder.notify([l2_verbose])
+        grad_warn_recorder.notify([l2_verbose])
 
     for name, param in model.named_parameters():
         if param.grad is not None:
             grad = param.grad.cpu().detach().numpy()
-            if (np.abs(grad) >
-                    1).any() and gradient_warning_recorder is not None:
+            if (np.abs(grad) >1).any() and grad_warn_recorder is not None:
                 warning = GRADIENT_WARNING.format(epoch, name,
                                                   np.abs(grad).max())
-                gradient_warning_recorder.notify([warning])
-            if gradient_recorder is not None:
+                grad_warn_recorder.notify([warning])
+            if grad_recorder is not None:
                 verbose = GRADIENT_VERBOSE.format(epoch, name,
                                                   np.abs(grad).max(),
                                                   np.abs(grad).min(),
                                                   grad.var())
-                gradient_recorder.notify([verbose])
+                grad_recorder.notify([verbose])
 
 
 class MessageRecorder:
@@ -90,7 +98,7 @@ class MessageRecorder:
 
 
 class Worker(metaclass=ABCMeta):
-    def __init__(self, model, data, executor=None, root=None):
+    def __init__(self, model, data, executor, root=None):
         super().__init__()
         self.model = model
         self.data = data
@@ -99,8 +107,6 @@ class Worker(metaclass=ABCMeta):
         self.is_verbose_visible = True
         self._settings = {}
         self.root = root
-        if executor is None:
-            self.executor = BasicExecutor()
         if self.root is not None:
             create_folder(self.root)
         self._message_recorder = None
@@ -116,11 +122,9 @@ class Worker(metaclass=ABCMeta):
     def _work(self):
         """Work"""
 
-    @abstractmethod
     def _after_work(self):
         """Do something after worker work"""
 
-    @abstractmethod
     def _before_work(self):
         """Do something before worker work"""
 
@@ -137,19 +141,11 @@ class Worker(metaclass=ABCMeta):
 
 class TrainWorker(Worker):
     """a worker which will train and evaluate the model"""
-    def __init__(self,
-                 model,
-                 data,
-                 executor=None,
-                 train_generator=None,
-                 val_generator=None,
-                 train_callbacks=None,
-                 val_callbacks=None,
-                 other_callbacks=None,
-                 writer=None,
-                 epoch=None,
-                 root=None,
-                 checkpoint_kwargs=None):
+    def __init__(self,model,data,executor,
+                 train_generator=None,val_generator=None,
+                 train_callbacks=None,val_callbacks=None,
+                 other_callbacks=None,writer=None,
+                 epoch=None,root=None,checkpoint_kwargs=None):
         super().__init__(model, data, executor, root=root)
         self._train_generator = train_generator
         self._val_generator = val_generator
@@ -215,10 +211,8 @@ class TrainWorker(Worker):
             write_json(self._settings, path)
 
     def _before_work(self):
-        self._train_loader = self._train_generator(
-            SeqDataset(self.data['training']))
-        self._val_loader = self._val_generator(
-            SeqDataset(self.data['validation']))
+        self._train_loader = self._train_generator(self.data['training'])
+        self._val_loader = self._val_generator(self.data['validation'])
         if self.root is not None:
             checkpoint_root = os.path.join(self.root, 'checkpoint')
             self._checkpoint = build_checkpoint(checkpoint_root,
@@ -291,8 +285,7 @@ class TrainWorker(Worker):
                     self._writer.counter = epoch
                 all_callbacks.on_epoch_begin(counter=epoch)
                 self.model.save_distribution = False
-                for index, item in enumerate(self._train_loader):
-                    seq_data = SeqDataset(item)
+                for index, seq_data in enumerate(self._train_loader):
                     train_per_batch(self.model, seq_data, self.executor,
                                     self._train_callbacks)
                     status = 100 * index / len(self._train_loader)
@@ -304,8 +297,7 @@ class TrainWorker(Worker):
                                       self._gradient_recorder)
 
                 if self._val_loader is not None:
-                    for index, item in enumerate(self._val_loader):
-                        seq_data = SeqDataset(item)
+                    for index, seq_data in enumerate(self._val_loader):
                         evaluate_per_batch(self.model, seq_data, self.executor,
                                            self._val_callbacks)
                         status = 100 * index / len(self._val_loader)
@@ -360,12 +352,8 @@ class TrainWorker(Worker):
 
 class TestWorker(Worker):
     """a worker which will evaluate the model"""
-    def __init__(self,
-                 model,
-                 data,
-                 executor=None,
-                 generator=None,
-                 callbacks=None,
+    def __init__(self,model,data,executor,
+                 generator=None,callbacks=None,
                  root=None):
         super().__init__(model, data, executor, root=root)
         self._generator = generator
@@ -390,7 +378,7 @@ class TestWorker(Worker):
             write_json(self._settings, path)
 
     def _before_work(self):
-        self._loader = self._generator(SeqDataset(self.data['testing']))
+        self._loader = self._generator(self.data['testing'])
         if self.root is not None:
             self._checkpoint = build_checkpoint(self.root,
                                                 only_recorder=True,
@@ -406,15 +394,13 @@ class TestWorker(Worker):
             self._checkpoint.on_work_begin(worker=self)
         callbacks.on_work_begin(worker=self)
         self.executor.on_work_begin()
-        record = {}
         if self._checkpoint is not None:
             self._checkpoint.on_epoch_begin(counter=epoch_start)
         callbacks.on_epoch_begin(counter=epoch_start)
         batch_info = "Testing data: {0:.1f}%"
         save_distribution = self.model.save_distribution
         self.model.save_distribution = False
-        for index, item in enumerate(self._loader):
-            seq_data = SeqDataset(item)
+        for index, seq_data in enumerate(self._loader):
             evaluate_per_batch(self.model, seq_data, self.executor,
                                self._callbacks)
             status = 100 * index / len(self._loader)
@@ -436,3 +422,54 @@ class TestWorker(Worker):
                 self.result = self._checkpoint.record
             else:
                 self.result = self._checkpoint.data
+                
+class PredictWorker(Worker):
+    """A worker which will predict"""
+    def __init__(self,model,data,executor,
+                 generator=None,callbacks=None,
+                 root=None):
+        super().__init__(model, data, executor, root=root)
+        self._generator = generator
+        self._callbacks = callbacks
+
+        if generator is None:
+            self._generator = SeqGenerator(shuffle=False)
+        if callbacks is None:
+            self._callbacks = Callbacks()
+
+    def _save_setting(self):
+        if self.root is not None:
+            for key in ['_callbacks', 'executor', 'root']:
+                attr = getattr(self, key)
+                if hasattr(attr, 'get_config'):
+                    attr = attr.get_config()
+                self._settings[key] = attr
+            root = os.path.join(self.root, 'settings')
+            create_folder(root)
+            path = os.path.join(root, "predict_worker_setting.json")
+            write_json(self._settings, path)
+
+    def _before_work(self):
+        self._loader = self._generator(self.data['predicting'])
+        self._save_setting()
+
+    def _work(self):
+        """Test model"""
+        epoch_start = 1
+        callbacks = Callbacks(self._callbacks)
+        callbacks.on_work_begin(worker=self)
+        self.executor.on_work_begin()
+        callbacks.on_epoch_begin(counter=epoch_start)
+        batch_info = "Predict data: {0:.1f}%"
+        save_distribution = self.model.save_distribution
+        self.model.save_distribution = False
+        for index, seq_data in enumerate(self._loader):
+            predict_per_batch(self.model, seq_data, self.executor,
+                              self._callbacks)
+            status = 100 * index / len(self._loader)
+            self.print_verbose(batch_info.format(status), True)
+        
+        self.model.save_distribution = save_distribution
+        self.executor.on_epoch_end(epoch=epoch_start,metric=None)
+        callbacks.on_epoch_end(metric=None)
+        callbacks.on_work_end()

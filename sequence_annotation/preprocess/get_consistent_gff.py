@@ -2,8 +2,10 @@ import sys, os
 import numpy as np
 import pandas as pd
 sys.path.append(os.path.dirname(__file__) + "/../..")
-from sequence_annotation.utils.utils import read_gff, write_gff, GFF_COLUMNS, get_gff_with_attribute, get_gff_with_updated_attribute
-from sequence_annotation.preprocess.utils import GENE_TYPES, RNA_TYPES, EXON_TYPES, SUBEXON_TYPES
+from sequence_annotation.utils.utils import read_gff, write_gff, GFF_COLUMNS
+from sequence_annotation.utils.utils import get_gff_with_attribute, get_gff_with_updated_attribute
+from sequence_annotation.utils.utils import dupliacte_gff_by_parent
+from sequence_annotation.preprocess.utils import GENE_TYPES, RNA_TYPES, EXON_TYPES, SUBEXON_TYPES,get_gff_with_belonging
 from argparse import ArgumentParser
 
 
@@ -256,14 +258,20 @@ def repair_gff(gff):
     return repaired
 
 
-def main(input_path, saved_root, postfix):
+def main(input_path, saved_root, postfix,split_by_parent=False):
     gff = read_gff(input_path)
-    gff = get_gff_with_attribute(gff)
+    if split_by_parent:
+        gff = get_gff_with_attribute(gff, ['parent'])
+        gff = dupliacte_gff_by_parent(gff)
+        gff = get_gff_with_belonging(gff)
+    else:
+        gff = get_gff_with_attribute(gff)
+    
     gff.loc[:, 'coord_id'] = _get_coord_ids(gff)
 
     repaired_gff = repair_gff(gff)
-    write_gff(repaired_gff,
-              os.path.join(saved_root, 'repaired_{}.gff3').format(postfix))
+    repaired_path = os.path.join(saved_root,'repaired_{}.gff3').format(postfix)
+    write_gff(repaired_gff,repaired_path)
 
     origin_coord_ids = set(gff['coord_id'])
     created_coord_ids = set(repaired_gff['coord_id'])
@@ -298,15 +306,15 @@ if __name__ == '__main__':
         "repair missing UTR, use CDS and UTR to repair exon\n" +
         ", and use exon to repair transcript, and use transcript to repair gene."
         + "Output data would be consistent data which are not changed.")
-    parser.add_argument("-i",
-                        "--input_path",
+    parser.add_argument("-i","--input_path",
                         help="Path of input GFF file",
                         required=True)
-    parser.add_argument("-s",
-                        "--saved_root",
+    parser.add_argument("-s","--saved_root",
                         help="Root to save result",
                         required=True)
     parser.add_argument("-p", "--postfix", required=True)
+    parser.add_argument("--split_by_parent", action='store_true')
+    
     args = parser.parse_args()
 
     kwargs = vars(args)

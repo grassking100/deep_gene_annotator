@@ -1,7 +1,7 @@
 import os
 import sys
 from argparse import ArgumentParser
-sys.path.append(os.path.abspath(os.path.dirname(__file__)+"/.."))
+sys.path.append(os.path.dirname(__file__)+"/..")
 from sequence_annotation.utils.utils import write_json,get_time_str
 from sequence_annotation.process.cnn import PADDING_HANDLE
 

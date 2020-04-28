@@ -59,16 +59,12 @@ def main(gff_path, bed_path):
 
 
 if __name__ == '__main__':
-    parser = ArgumentParser(
-        description="This program will group cDNAs with same id together"
-        ", and write to bed format")
-    parser.add_argument("-i",
-                        "--gff_path",
-                        required=True,
+    parser = ArgumentParser(description="This program will group "
+                            "cDNAs with same id together, and "
+                            "write to bed format")
+    parser.add_argument("-i","--gff_path",required=True,
                         help="Path of input gff file")
-    parser.add_argument("-o",
-                        "--bed_path",
-                        required=True,
+    parser.add_argument("-o","--bed_path",required=True,
                         help="Path of output bed file")
     args = parser.parse_args()
     kwargs = vars(args)

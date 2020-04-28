@@ -3,14 +3,14 @@ import sys
 import pandas as pd
 import numpy as np
 from argparse import ArgumentParser
+from multiprocessing import Pool
 sys.path.append(os.path.dirname(__file__) + "/..")
 from sequence_annotation.utils.utils import BASIC_GENE_MAP, get_gff_with_attribute
 from sequence_annotation.utils.utils import create_folder, write_gff, write_json, read_json, read_gff, read_fasta
 from sequence_annotation.genome_handler.ann_seq_processor import get_background
 from sequence_annotation.genome_handler.seq_container import SeqInfoContainer
-from sequence_annotation.genome_handler.region_extractor import RegionExtractor
+from sequence_annotation.genome_handler.region_extractor import RegionExtractor,GeneInfoExtractor
 from sequence_annotation.genome_handler.sequence import AnnSequence, PLUS
-from sequence_annotation.genome_handler.region_extractor import GeneInfoExtractor
 from sequence_annotation.preprocess.utils import RNA_TYPES, get_gff_with_intron, get_gff_with_intergenic_region, read_region_table
 from sequence_annotation.process.flip_and_rename_coordinate import flip_and_rename_gff
 from sequence_annotation.postprocess.boundary_process import get_valid_intron_boundary, get_splice_pairs, find_substr
@@ -27,7 +27,7 @@ def _create_ann_seq(chrom, length, ann_types):
 class GFFReviser:
     def __init__(self, gene_info_extractor, donor_pattern=None, acceptor_pattern=None,
                  length_thresholds=None, donor_distance=None, acceptor_distance=None,
-                 donor_index_shift=None, acceptor_index_shift=None):
+                 donor_index_shift=None, acceptor_index_shift=None,methods=None):
         """
         The reviser fixes annotatioin result by its DNA sequence information and length
         Parameters:
@@ -46,8 +46,9 @@ class GFFReviser:
         acceptor_index_shift : int (default : 1)
             Shift value of acceptor site index
         """
-        self.gene_info_extractor = gene_info_extractor
-        self.extractor = RegionExtractor()
+        #self.kwargs = locals()
+        self._gene_info_extractor = gene_info_extractor
+        self._extractor = RegionExtractor()
         self.donor_pattern = donor_pattern or 'GT'
         self.acceptor_pattern = acceptor_pattern or 'AG'
         if length_thresholds is not None:
@@ -60,11 +61,12 @@ class GFFReviser:
         self.donor_index_shift = donor_index_shift or 0
         self.acceptor_index_shift = acceptor_index_shift or 1
         self._ann_types = ['exon', 'intron', 'other']
-
+        self.methods = methods or []
+        
     def get_config(self):
         config = {}
         config['class'] = self.__class__.__name__
-        config['gene_info_extractor'] = self.gene_info_extractor.get_config()
+        config['gene_info_extractor'] = self._gene_info_extractor.get_config()
         config['donor_pattern'] = self.donor_pattern
         config['acceptor_pattern'] = self.acceptor_pattern
         config['length_thresholds'] = self.length_thresholds
@@ -73,6 +75,7 @@ class GFFReviser:
         config['ann_types'] = self._ann_types
         config['donor_index_shift'] = self.donor_index_shift
         config['acceptor_index_shift'] = self.acceptor_index_shift
+        config['methods'] = self.methods
         return config
 
     def _validate_gff(self, gff):
@@ -161,10 +164,10 @@ class GFFReviser:
         # Filter exon,intron,other
         gff = self._preprocess_gff(chrom_id, length, gff)
         ann_seq = self._create_ann_seq(chrom_id, length, gff)
-        blocks = self.extractor.extract(ann_seq)
+        blocks = self._extractor.extract(ann_seq)
         gff = self._filter_ann(blocks).to_gff()
         ann_seq = self._create_ann_seq(chrom_id, length, gff)
-        filtered = self.gene_info_extractor.extract_per_seq(ann_seq)
+        filtered = self._gene_info_extractor.extract_per_seq(ann_seq)
         filtered_gff = None
         if len(filtered) > 0:
             filtered_gff = filtered.to_gff()
@@ -216,13 +219,13 @@ class GFFReviser:
                 transcript, splice_pair_statuses, fixed_ann_seq)
         other = get_background(fixed_ann_seq, ['exon', 'intron'])
         fixed_ann_seq.add_ann('other', other)
-        info = self.gene_info_extractor.extract_per_seq(fixed_ann_seq)
+        info = self._gene_info_extractor.extract_per_seq(fixed_ann_seq)
         fixed_gff = None
         if len(info) > 0:
             fixed_gff = info.to_gff()
         return fixed_gff
 
-    def process(self, chrom_id, length, seq, gff, methods=None):
+    def process(self, chrom_id, length, seq, gff):
         """
         The method fixes annotatioin result in GFF format by its DNA sequence information and threshold
         Parameters:
@@ -241,8 +244,8 @@ class GFFReviser:
         ----------
         pd.DataFrame
         """
-        methods = methods or []
-        for method in methods:
+        gff = gff[gff['chr'] == chrom_id]
+        for method in self.methods:
             if gff is None or len(gff) == 0:
                 break
             if method == 'length_threshold':
@@ -251,7 +254,8 @@ class GFFReviser:
                 gff = self.fix_splicing_site(chrom_id, length, seq, gff)
             else:
                 raise Exception("Invalid method {}".format(method))
-
+        if gff is not None and len(gff)>0:
+            gff = gff[gff['feature'].isin(['gene','mRNA','exon'])]
         return gff
 
 
@@ -260,66 +264,62 @@ def build_gff_reviser(simply_map, **kwargs):
     gff_reviser = GFFReviser(gene_info_extractor, **kwargs)
     return gff_reviser
 
+def _revise_and_save(reviser,chrom_id,length,seq,input_gff):
+    print("Revising data {}".format(chrom_id))
+    gff = reviser.process(chrom_id,length,seq,input_gff)
+    return gff
 
-def revise(input_gff, region_table, fasta, reviser, methods=None):
-    gff_list = []
-    for chrom_id in set(input_gff['chr']):
-        length = list(
-            region_table[region_table['old_id'] == chrom_id]['length'])[0]
+def revise(input_gff, region_table, fasta, reviser):
+    chroms = set(input_gff['chr'])
+    arg_list = []
+    lengths = dict(zip(region_table['ordinal_id_with_strand'] ,region_table['length']))
+    groups = input_gff.groupby('chr')
+    for chrom_id in chroms:
+        length = lengths[chrom_id]
         seq = fasta[chrom_id]
-        gff = reviser.process(
-            chrom_id,
-            length,
-            seq,
-            input_gff,
-            methods=methods)
-        if gff is not None:
-            gff_list.append(gff)
+        gff = groups.get_group(chrom_id)
+        arg_list.append((reviser,chrom_id,length,seq,gff))
+    with Pool(processes=40) as pool:
+        gff_list = pool.starmap(_revise_and_save, arg_list)
     gff = pd.concat(gff_list, sort=True).reset_index(drop=True)
     return gff
 
-
-def main(saved_root, input_raw_plus_gff_path, region_table_path, fasta_path,
+def main(output_root, raw_plus_gff_path, region_table_path, fasta_path,
          length_thresholds=None, length_threshold_path=None, methods=None, **kwargs):
-    create_folder(saved_root)
-    raw_plus_gff_path = os.path.join(saved_root, "revised_raw_plus.gff3")
-    revised_gff_path = os.path.join(saved_root, "revised.gff3")
+    create_folder(output_root)
+    revised_gff_path = os.path.join(output_root, "revised.gff3")
+    plus_revised_gff_path = os.path.join(output_root, "plus_revised.gff3")
     if length_thresholds is None and length_threshold_path is not None:
         length_thresholds = read_json(length_threshold_path)
     region_table = read_region_table(region_table_path)
-    input_gff = read_gff(input_raw_plus_gff_path)
+    input_gff = read_gff(raw_plus_gff_path)
     fasta = read_fasta(fasta_path)
-    reviser = build_gff_reviser(
-        BASIC_GENE_MAP,
-        length_thresholds=length_thresholds,
-        **kwargs)
+    reviser = build_gff_reviser(BASIC_GENE_MAP,methods=methods,
+                                length_thresholds=length_thresholds,**kwargs)
     config = reviser.get_config()
-    config_path = os.path.join(saved_root, "reviser_config.json")
+    config_path = os.path.join(output_root, "reviser_config.json")
     write_json(config, config_path)
-    gff = revise(input_gff, region_table, fasta, reviser, methods)
-    write_gff(gff, raw_plus_gff_path)
-    flipped_gff = flip_and_rename_gff(
-        gff,
-        region_table,
-        chrom_source='old_id',
-        chrom_target='old_id')
+    gff = revise(input_gff, region_table, fasta, reviser)
+    write_gff(gff, plus_revised_gff_path)
+    flipped_gff = flip_and_rename_gff(gff,region_table)
     write_gff(flipped_gff, revised_gff_path)
 
 
 if __name__ == '__main__':
     parser = ArgumentParser(description='Revise the GFF')
-    parser.add_argument("-r","--saved_root",required=True,
-                        help="The root to save result")
-    parser.add_argument("-i", "--input_raw_plus_gff_path", help="The path of origin "
+    parser.add_argument("-i", "--raw_plus_gff_path", help="The path of origin "
                         "of single-strand plus-only data in GFf format", required=True)
     parser.add_argument("-t","--region_table_path",required=True,
                         help="The path of region data")
     parser.add_argument("-f","--fasta_path",required=True,
                         help="The path of fasta")
+    parser.add_argument("-o","--output_root",required=True,
+                        help="The root to save result")
     parser.add_argument("--length_threshold_path", type=str, help="The path of "
                         "length threshold for each type, written in JSON format")
     parser.add_argument("--donor_distance", type=int, default=0)
     parser.add_argument("--acceptor_distance", type=int, default=0)
+    parser.add_argument("--methods", type=lambda x:x.split(','))
     args = parser.parse_args()
     kwargs = vars(args)
     main(**kwargs)

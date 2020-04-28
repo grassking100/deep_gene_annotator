@@ -447,7 +447,7 @@ if __name__ == '__main__':
     parser.add_argument("-a","--answer_path",help='The path of answer result in GFF format',required=True)
     parser.add_argument("-r","--region_table_path",help='The path of region table',required=True)
     parser.add_argument("-s","--saved_root",help="Path to save result",required=True)
-    parser.add_argument("-t","--chrom_target",help="Valid options are old_id and new_id",required=True)
+    parser.add_argument("-t","--chrom_target",required=True)
     args = parser.parse_args()
 
     config_path = os.path.join(args.saved_root,'performance_setting.json')

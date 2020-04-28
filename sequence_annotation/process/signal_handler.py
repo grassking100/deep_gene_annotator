@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import deepdish as dd
-from ..utils.utils import read_gff
+from ..utils.utils import read_gff,create_folder
 from ..preprocess.utils import read_region_table
 from .callback import Callback, Callbacks, set_prefix
 from .convert_signal_to_gff import convert_raw_output_to_gff
@@ -17,21 +17,24 @@ class _SignalSaver(Callback):
         self._raw_outputs = None
         self._raw_answers = None
         self._region_ids = None
-        self._raw_answer_path = os.path.join(
-            self._saved_root, '{}raw_answer.h5').format(self._prefix)
-        self._raw_output_path = os.path.join(
-            self._saved_root, '{}raw_output.h5').format(self._prefix)
-        self._region_id_path = os.path.join(
-            self._saved_root, '{}region_ids.tsv').format(self._prefix)
+        self._storage_root = os.path.join(self._saved_root,'signal_saver_storage')
+        self._answer_root = os.path.join(self._storage_root, '{}answer').format(self._prefix)
+        self._output_root = os.path.join(self._storage_root, '{}output').format(self._prefix)
+        self._region_id_path = os.path.join(self._saved_root, '{}region_ids.tsv').format(self._prefix)
         self._has_finish = True
+        self._index = None
 
     @property
-    def raw_answer_path(self):
-        return self._raw_answer_path
+    def storage_root(self):
+        return self._storage_root
+    
+    @property
+    def answer_root(self):
+        return self._answer_root
 
     @property
-    def raw_output_path(self):
-        return self._raw_output_path
+    def output_root(self):
+        return self._output_root
 
     @property
     def region_id_path(self):
@@ -50,44 +53,49 @@ class _SignalSaver(Callback):
         self._raw_outputs = []
         self._raw_answers = []
         self._region_ids = []
+        self._index = 0
+        create_folder(self.storage_root)
+        create_folder(self.answer_root)
+        create_folder(self.output_root)
+        
 
     def on_batch_end(self, outputs, seq_data, **kwargs):
         if not self._has_finish:
-            answers = seq_data.answers.cpu().numpy()
-            self._raw_outputs.append({
+            raw_output_path = os.path.join(self.output_root, '{}raw_output_{}.h5').format(self._prefix,self._index)
+            raw_outputs = {
                 'outputs': outputs,
                 'chrom_ids': seq_data.ids,
-                'dna_seqs': seq_data.seqs,
                 'lengths': seq_data.lengths
-            })
-
-            self._raw_answers.append({
-                'outputs': answers,
-                'chrom_ids': seq_data.ids,
-                'dna_seqs': seq_data.seqs,
-                'lengths': seq_data.lengths
-            })
+            }
+            self._raw_outputs.append(raw_outputs)
+            dd.io.save(raw_output_path, raw_outputs)
+            
+            if seq_data.answers is not None:
+                raw_answer_path = os.path.join(self.answer_root, '{}raw_answer_{}.h5').format(self._prefix,self._index)
+                answers = seq_data.answers.cpu().numpy()
+                raw_answers = {
+                    'outputs': answers,
+                    'chrom_ids': seq_data.ids,
+                    'lengths': seq_data.lengths
+                }
+                self._raw_answers.append(raw_answers)
+                dd.io.save(raw_answer_path, raw_answers)
             self._region_ids += seq_data.ids
+            self._index += 1
 
     def on_epoch_end(self, **kwargs):
         self._has_finish = True
 
     def on_work_end(self, **kwargs):
-        dd.io.save(self.raw_output_path, self._raw_outputs)
-        dd.io.save(self.raw_answer_path, self._raw_answers)
         region_ids = {'region_id': self._region_ids}
         pd.DataFrame.from_dict(region_ids).to_csv(self.region_id_path,
                                                   index=None)
 
 
 class _SignalGffConverter(Callback):
-    def __init__(self,
-                 saved_root,
-                 region_table_path,
-                 raw_output_path,
-                 inference,
-                 ann_vec_gff_converter,
-                 prefix=None,
+    def __init__(self,saved_root,region_table_path,
+                 signal_saver_output_root,inference,
+                 ann_vec_gff_converter,prefix=None,
                  **kwargs):
         """
         Parameters:
@@ -96,7 +104,7 @@ class _SignalGffConverter(Callback):
             The root to save GFF result and config
         region_table_path: str
             The Path about region table
-        raw_output_path: SignalSaver
+        signal_saver_storage_root: SignalSaver
             The Callback to save signal
         ann_vec_gff_converter: AnnVecGffConverter
             The Converter which convert annotation vectors to GFF
@@ -105,11 +113,11 @@ class _SignalGffConverter(Callback):
         """
         set_prefix(self, prefix)
         variables = [
-            saved_root, region_table_path, raw_output_path,
+            saved_root, region_table_path, signal_saver_output_root,
             ann_vec_gff_converter
         ]
         names = [
-            'saved_root', 'region_table_path', 'raw_output_path',
+            'saved_root', 'region_table_path', 'signal_saver_output_root',
             'ann_vec_gff_converter'
         ]
         for name, variable in zip(names, variables):
@@ -119,7 +127,7 @@ class _SignalGffConverter(Callback):
         self._inference = inference
         self._saved_root = saved_root
         self._region_table_path = region_table_path
-        self._raw_output_path = raw_output_path
+        self._signal_saver_output_root = signal_saver_output_root
         self._ann_vec_gff_converter = ann_vec_gff_converter
         self._kwargs = kwargs
         self._config_path = os.path.join(self._saved_root,
@@ -127,6 +135,8 @@ class _SignalGffConverter(Callback):
         self._region_table = read_region_table(self._region_table_path)
         self._predict_gff_path = os.path.join(
             self._saved_root, "{}predict.gff3".format(self._prefix))
+        self._raw_plus_gff_path = os.path.join(
+            self._saved_root, "{}predict_raw_plus.gff3".format(self._prefix))
 
     @property
     def predict_gff_path(self):
@@ -142,16 +152,22 @@ class _SignalGffConverter(Callback):
         return config
 
     def on_work_end(self, **kwargs):
-        raw_predicts = dd.io.load(self._raw_output_path)
-        convert_raw_output_to_gff(raw_predicts, self._region_table,
-                                  self._config_path, self.predict_gff_path,
-                                  self._inference, self._ann_vec_gff_converter,
-                                  **self._kwargs)
+        raw_predicts = []
+        for name in os.listdir(self._signal_saver_output_root):
+            if name.split('.')[-1] == 'h5':
+                path = os.path.join(self._signal_saver_output_root,name)
+                print("Load {}".format(path))
+                data = dd.io.load(path)
+                raw_predicts.append(data)
+        convert_raw_output_to_gff(raw_predicts, self._region_table,self._config_path,
+                                  self._raw_plus_gff_path,self.predict_gff_path,
+                                  self._inference, self._ann_vec_gff_converter)
 
 
 class _GFFCompare(Callback):
-    def __init__(self, saved_root, region_table_path, predict_path,
-                 answer_path, region_id_path, chrom_source, chrom_target):
+    def __init__(self, saved_root, region_table_path,
+                 predict_path,answer_path,region_id_path,
+                 chrom_source, chrom_target):
         variables = [
             saved_root, predict_path, answer_path, region_table_path,
             region_id_path
@@ -268,14 +284,14 @@ class SignalHandlerBuilder:
         converter = None
         gff_compare = None
         if self._add_converter:
-            chrom_source = 'old_id'
+            chrom_source = 'ordinal_id_with_strand'
             if self.is_answer_double_strand:
-                chrom_target = 'new_id'
+                chrom_target = 'ordinal_id_wo_strand'
             else:
-                chrom_target = 'old_id'
+                chrom_target = 'ordinal_id_with_strand'
             converter = _SignalGffConverter(self.saved_root,
                                             self.region_table_path,
-                                            signal_saver.raw_output_path,
+                                            signal_saver.output_root,
                                             self.inference,
                                             self.ann_vec_gff_converter,
                                             prefix=self.prefix,

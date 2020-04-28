@@ -52,7 +52,7 @@ def save_optuna_image(study, saved_root):
         'params_rnn_hidden',
         ylabel='macro F1',
         title='The partial '
-        'dependence plot of hidden size of each RNN layer (per direction)',
+        'dependence plot of size of each RNN layer (per direction)',
         xlabel='hidden size of each RNN layer (per direction)')
     plt.savefig(os.path.join(saved_root, 'rnn_hidden_pdp.png'))
 

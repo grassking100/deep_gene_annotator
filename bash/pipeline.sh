@@ -165,12 +165,34 @@ if [ ! -e "$processed_root/result/double_strand/canonical_double_strand.bed" ]; 
     eval "bash $command"
 fi
 
-echo "Step 4: Splitting data"
-splitted_root=$saved_root/split
-if [ ! -e "$splitted_root/double_strand_data/split_without_strand/count.csv" ]; then
-    bash $bash_root/region_select_split.sh -g $genome_path -t $id_convert_table_path -p $processed_root -o $splitted_root -d
+echo "Step 4: Write statistic data of GFF"
+result_root=$processed_root/result
+double_strand_root=$result_root/double_strand
+ds_rna_gff_path=$double_strand_root/rna_double_strand.gff3
+ds_canonical_gff_path=$double_strand_root/canonical_double_strand.gff3
+ds_region_fasta_path=$double_strand_root/selected_region_double_strand.fasta
+region_table_path=$result_root/region_id_conversion.tsv
+
+if [ ! -e "$saved_root/rna_stats/gff_analysis.log" ]; then
+    #echo "run rna"
+    bash  $bash_root/gff_analysis.sh -i $ds_rna_gff_path -f $ds_region_fasta_path -o $saved_root/rna_stats \
+    -r $region_table_path -s ordinal_id_wo_strand
 fi
 
-if [ ! -e "$splitted_root/single_strand_data/split_with_strand/count.csv" ]; then
-    bash $bash_root/region_select_split.sh -g $genome_path -t $id_convert_table_path -p $processed_root -o $splitted_root -s
+if [ ! -e "$saved_root/canonical_stats/gff_analysis.log" ]; then
+    #echo "run gene"
+    bash  $bash_root/gff_analysis.sh -i $ds_canonical_gff_path -f $ds_region_fasta_path -o $saved_root/canonical_stats \
+    -r $region_table_path -s ordinal_id_wo_strand
 fi
+
+echo "Step 5: Splitting data"
+splitted_root=$saved_root/split
+#if [ ! -e "$splitted_root/double_strand_data/split_without_strand/count.csv" ]; then
+    #echo "split ds"
+    bash $bash_root/region_select_split.sh -g $genome_path -t $id_convert_table_path -p $processed_root -o $splitted_root -d
+#fi
+
+#if [ ! -e "$splitted_root/single_strand_data/split_with_strand/count.csv" ]; then
+    echo "split ss"
+    bash $bash_root/region_select_split.sh -g $genome_path -t $id_convert_table_path -p $processed_root -o $splitted_root -s
+#fi

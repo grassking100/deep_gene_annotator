@@ -3,7 +3,7 @@ import sys
 import deepdish as dd
 import pandas as pd
 from argparse import ArgumentParser
-sys.path.append(os.path.abspath(os.path.dirname(__file__)+"/.."))
+sys.path.append(os.path.dirname(__file__)+"/..")
 from sequence_annotation.utils.utils import read_gff,write_gff
 from sequence_annotation.utils.utils import BASIC_GENE_MAP
 from sequence_annotation.utils.seq_converter import DNA_CODES

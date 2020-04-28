@@ -4,8 +4,6 @@ import venn
 from matplotlib import pyplot as plt
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__)+"/../..")
-from sequence_annotation.utils.utils import read_bed,read_gff,get_gff_with_attribute
-from sequence_annotation.preprocess.get_id_table import get_id_convert_dict
 
 def main(input_paths,id_names,output_path=None,venn_path=None):
     input_paths = input_paths.split(',')
