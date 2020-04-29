@@ -95,8 +95,7 @@ class _SignalSaver(Callback):
 class _SignalGffConverter(Callback):
     def __init__(self,saved_root,region_table_path,
                  signal_saver_output_root,inference,
-                 ann_vec_gff_converter,prefix=None,
-                 **kwargs):
+                 ann_vec_gff_converter,prefix=None):
         """
         Parameters:
         ----------
@@ -108,8 +107,6 @@ class _SignalGffConverter(Callback):
             The Callback to save signal
         ann_vec_gff_converter: AnnVecGffConverter
             The Converter which convert annotation vectors to GFF
-        kwargs: dict
-            The optional settings to seq_ann_inference
         """
         set_prefix(self, prefix)
         variables = [
@@ -129,18 +126,17 @@ class _SignalGffConverter(Callback):
         self._region_table_path = region_table_path
         self._signal_saver_output_root = signal_saver_output_root
         self._ann_vec_gff_converter = ann_vec_gff_converter
-        self._kwargs = kwargs
         self._config_path = os.path.join(self._saved_root,
                                          "converter_config.json")
         self._region_table = read_region_table(self._region_table_path)
-        self._predict_gff_path = os.path.join(
-            self._saved_root, "{}predict.gff3".format(self._prefix))
-        self._raw_plus_gff_path = os.path.join(
-            self._saved_root, "{}predict_raw_plus.gff3".format(self._prefix))
+        self._double_strand_gff_path = os.path.join(
+            self._saved_root, "{}predict_double_strand.gff3".format(self._prefix))
+        self._plus_strand_gff_path = os.path.join(
+            self._saved_root, "{}predict_plus_strand.gff3".format(self._prefix))
 
     @property
-    def predict_gff_path(self):
-        return self._predict_gff_path
+    def gff_path(self):
+        return self._double_strand_gff_path
 
     def get_config(self):
         config = super().get_config()
@@ -156,18 +152,16 @@ class _SignalGffConverter(Callback):
         for name in os.listdir(self._signal_saver_output_root):
             if name.split('.')[-1] == 'h5':
                 path = os.path.join(self._signal_saver_output_root,name)
-                print("Load {}".format(path))
                 data = dd.io.load(path)
                 raw_predicts.append(data)
         convert_raw_output_to_gff(raw_predicts, self._region_table,self._config_path,
-                                  self._raw_plus_gff_path,self.predict_gff_path,
+                                  self._plus_strand_gff_path,self._double_strand_gff_path,
                                   self._inference, self._ann_vec_gff_converter)
 
 
 class _GFFCompare(Callback):
     def __init__(self, saved_root, region_table_path,
-                 predict_path,answer_path,region_id_path,
-                 chrom_source, chrom_target):
+                 predict_path,answer_path,region_id_path):
         variables = [
             saved_root, predict_path, answer_path, region_table_path,
             region_id_path
@@ -186,8 +180,6 @@ class _GFFCompare(Callback):
         self._region_table_path = region_table_path
         self._region_id_path = region_id_path
         self._region_table = read_region_table(self._region_table_path)
-        self._chrom_source = chrom_source
-        self._chrom_target = chrom_target
 
     def get_config(self):
         config = super().get_config()
@@ -196,19 +188,14 @@ class _GFFCompare(Callback):
         config['answer_path'] = self._answer_path
         config['region_table_path'] = self._region_table_path
         config['region_id_path'] = self._region_id_path
-        config['chrom_source'] = self._chrom_source
-        config['chrom_target'] = self._chrom_target
         return config
 
     def on_work_end(self, **kwargs):
         predict = read_gff(self._predict_path)
         answer = read_gff(self._answer_path)
         region_ids = set(pd.read_csv(self._region_id_path)['region_id'])
-        part_region_table = self._region_table[self._region_table[
-            self._chrom_source].isin(region_ids)]
-        print("Compare prediction with answer at {}".format(self._saved_root))
-        compare_and_save(predict, answer, part_region_table, self._saved_root,
-                         self._chrom_target)
+        part_region_table = self._region_table[self._region_table['ordinal_id_with_strand'].isin(region_ids)]
+        compare_and_save(predict, answer, part_region_table,self._saved_root)
 
 
 class SignalHandler(Callback):
@@ -259,7 +246,6 @@ class SignalHandlerBuilder:
         self.inference = None
         self.region_table_path = None
         self.ann_vec_gff_converter = None
-        self.is_answer_double_strand = False
         self.answer_gff_path = None
         self._add_converter = False
         self._add_comparer = False
@@ -267,12 +253,10 @@ class SignalHandlerBuilder:
     def add_converter_args(self,
                            inference,
                            region_table_path,
-                           ann_vec_gff_converter,
-                           is_answer_double_strand=False):
+                           ann_vec_gff_converter):
         self.inference = inference
         self.region_table_path = region_table_path
         self.ann_vec_gff_converter = ann_vec_gff_converter
-        self.is_answer_double_strand = is_answer_double_strand
         self._add_converter = True
 
     def add_answer_path(self, answer_gff_path):
@@ -284,26 +268,17 @@ class SignalHandlerBuilder:
         converter = None
         gff_compare = None
         if self._add_converter:
-            chrom_source = 'ordinal_id_with_strand'
-            if self.is_answer_double_strand:
-                chrom_target = 'ordinal_id_wo_strand'
-            else:
-                chrom_target = 'ordinal_id_with_strand'
             converter = _SignalGffConverter(self.saved_root,
                                             self.region_table_path,
                                             signal_saver.output_root,
                                             self.inference,
                                             self.ann_vec_gff_converter,
-                                            prefix=self.prefix,
-                                            chrom_source=chrom_source,
-                                            chrom_target=chrom_target)
+                                            prefix=self.prefix)
             if self._add_comparer:
                 gff_compare = _GFFCompare(self.saved_root,
                                           self.region_table_path,
-                                          converter.predict_gff_path,
+                                          converter.gff_path,
                                           self.answer_gff_path,
-                                          signal_saver.region_id_path,
-                                          chrom_source=chrom_source,
-                                          chrom_target=chrom_target)
+                                          signal_saver.region_id_path)
         signal_handler = SignalHandler(signal_saver, converter, gff_compare)
         return signal_handler

@@ -157,14 +157,10 @@ if  (( $result_num > 0 )) ; then
             part_ds_canonical_gff_path=$part_canonical_gff_path
         fi
         
-        
-        
-        #
         python3 $preprocess_main_root/get_subbed.py -i $rna_bed_path -d $source_id_path \
         -o $part_bed_path --query_column chr
         python3 $preprocess_main_root/get_subbed.py -i $canonical_bed_path -d $source_id_path \
         -o $part_canonical_bed_path --query_column chr
-        #
         python3 $preprocess_main_root/bed2gff.py -i $part_bed_path -o $part_gff_path -t $id_convert_table_path
         python3 $preprocess_main_root/bed2gff.py -i $part_canonical_bed_path -o $part_canonical_gff_path \
         -t $alt_region_id_table_path
@@ -195,18 +191,18 @@ if  (( $result_num > 0 )) ; then
             -s ordinal_id_wo_strand -o $part_region_table_path
         fi
         
-        if [ ! -e "$saved_root/canonical_stats/$file_name/gff_analysis.log" ]; then
+        #if [ ! -e "$saved_root/canonical_stats/$file_name/gff_analysis.log" ]; then
             echo "gene"
             #echo $ds_region_fasta_path
             bash $bash_root/gff_analysis.sh -i $part_ds_canonical_gff_path -f $ds_region_fasta_path \
             -o $saved_root/canonical_stats/$file_name -s ordinal_id_wo_strand -r $part_region_table_path
-        fi
+        #fi
         
-        if [ ! -e "$saved_root/rna_stats/$file_name/gff_analysis.log" ]; then
+        #if [ ! -e "$saved_root/rna_stats/$file_name/gff_analysis.log" ]; then
             echo "rna"
             bash $bash_root/gff_analysis.sh -i $part_ds_gff_path -f $ds_region_fasta_path \
             -o $saved_root/rna_stats/$file_name -s ordinal_id_wo_strand -r $part_region_table_path
-        fi
+        #fi
 
     done
 fi

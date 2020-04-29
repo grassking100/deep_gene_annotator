@@ -4,13 +4,13 @@ import numpy as np
 import pandas as pd
 import torch
 from multiprocessing import Process
+from multiprocessing import Pool
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.postprocess.boundary_process import get_splicing_regex
 from sequence_annotation.postprocess.path_helper import PathHelper
 from sequence_annotation.postprocess.gff_reviser import main as gff_revise_main
 from sequence_annotation.process.seq_ann_engine import get_best_model_and_origin_executor, SeqAnnEngine, get_batch_size
-from sequence_annotation.preprocess.rename_chrom import main as rename_chrom_main
 from sequence_annotation.preprocess.utils import get_data_names
 from sequence_annotation.process.performance import main as performance_main
 from sequence_annotation.genome_handler.select_data import load_data
@@ -103,13 +103,13 @@ def get_length_thresholds(path_helper, trained_id, std_num, other_coef):
 
 
 class Reviser:
-    def __init__(self, input_raw_plus_gff_path, fasta_path, region_table_path):
-        self._input_raw_plus_gff_path = input_raw_plus_gff_path
+    def __init__(self, plust_strand_gff_path, fasta_path, region_table_path):
+        self._plus_strand_gff_path = plust_strand_gff_path
         self._fasta_path = fasta_path
         self._region_table_path = region_table_path
         
     def revise(self, saved_root, **kwargs):
-        gff_revise_main(saved_root, self._input_raw_plus_gff_path,
+        gff_revise_main(saved_root, self._plus_strand_gff_path,
                         self._region_table_path,self._fasta_path,**kwargs)
 
 class Evaluator:
@@ -119,16 +119,11 @@ class Evaluator:
 
     def evaluate(self, predict_path, saved_root):
         loss_path = os.path.join(saved_root, 'overall_loss.txt')
-        if not os.path.exists(loss_path):
-            performance_main(predict_path, self._answer_path,
-                             self._region_table_path,
-                             saved_root, chrom_target='ordinal_id_wo_strand')
-            overall_loss = get_overall_loss(saved_root)
-            with open(loss_path, "w") as fp:
-                fp.write("{}\n".format(overall_loss))
-        else:
-            with open(loss_path, "r") as fp:
-                overall_loss = float(fp.read())
+        performance_main(predict_path, self._answer_path,
+                         self._region_table_path,saved_root)
+        overall_loss = get_overall_loss(saved_root)
+        with open(loss_path, "w") as fp:
+            fp.write("{}\n".format(overall_loss))
         return overall_loss
 
 
@@ -137,21 +132,19 @@ class ReviseEvaluator:
         self._path_helper = path_helper
         self._region_table_path = path_helper.region_table_path
         self._fasta_path = path_helper.get_fasta_path(trained_id, usage)
-        self._raw_plus_gff_path = path = os.path.join(
-            predicted_root, 'test_predict_raw_plus.gff3')
-        self._answer_path = path_helper.get_answer_path(
-            trained_id, usage, on_double_strand=True)
+        self._plus_strand_gff_path = os.path.join(predicted_root, 'test_predict_plus_strand.gff3')
+        self._answer_path = path_helper.get_answer_path(trained_id, usage)
         self.reviser = Reviser(
-            self._raw_plus_gff_path,
+            self._plus_strand_gff_path,
             self._fasta_path,
             self._region_table_path)
         self.evaluator = Evaluator(self._answer_path, self._region_table_path)
 
     def process(self, revised_root, **kwargs):
         root = os.path.join(revised_root, 'test')
-        revised = os.path.join(revised_root, 'revised.gff3')
-        if not os.path.exists(revised):
-            self.reviser.revise(revised_root, **kwargs)
+        revised = os.path.join(revised_root, 'revised_double_strand.gff3')
+        #if not os.path.exists(revised):
+        self.reviser.revise(revised_root, **kwargs)
         #if not os.path.exists(revised):
         return self.evaluator.evaluate(revised, root)
 
@@ -172,16 +165,6 @@ def test(trained_root, test_result_root, path_helper, trained_id, usage=None):
         engine.test(best_model, origin_executor, data, batch_size=batch_size,
                     region_table_path=path_helper.region_table_path,
                     answer_gff_path=answer_path)
-        predict_path = os.path.join(
-            test_result_root, 'test', 'test_predict.gff3')
-        predict_double_strand = os.path.join(
-            test_result_root, 'test', 'test_predict_double_strand.gff3')
-        rename_chrom_main(
-            predict_path,
-            path_helper.region_table_path,
-            predict_double_strand,
-            'ordinal_id_with_strand',
-            'ordinal_id_wo_strand')
         overall_loss = get_overall_loss(os.path.join(test_result_root, 'test'))
         with open(loss_path, "w") as fp:
             fp.write("{}\n".format(overall_loss))
@@ -207,6 +190,9 @@ class AutoReviseEvaluator:
         self._first_n_motif_list = None
         self._methods_1ist = None
         self._init_revised_space()
+        self._revise_evaluator = ReviseEvaluator(self._path_helper,
+                                                 self._path_helper.train_val_name,
+                                                 self._val_result_root)
 
     def _init_revised_space(self):
         self._std_nums = [3]
@@ -226,20 +212,14 @@ class AutoReviseEvaluator:
         config['methods_1ist'] = self._methods_1ist
         return config
 
-    def _create_execute_revise_evaluator(
+    def _execute_revise_evaluator(
             self, target, methods, length_thresholds, distances, first_n_motif):
         print("Working on {}".format(target))
-        revised_root = os.path.join(
-            self._saved_root,
-            'revised_train_val',
-            target,
-            'testing')
-        revise_evaluator = ReviseEvaluator(self._path_helper,
-                                           self._path_helper.train_val_name,
-                                           self._val_result_root)
+        revised_root = os.path.join(self._saved_root,'revised_val',
+                                    target,'testing')
         splicing_kwargs = get_splicing_kwargs(self._path_helper,
-                                              first_n=first_n_motif)
-        revise_evaluator.process(revised_root, methods=methods,
+                                              first_n=int(first_n_motif))
+        self._revise_evaluator.process(revised_root, methods=methods,
                                  length_thresholds=length_thresholds,
                                  acceptor_distance=distances['acceptor_distance'],
                                  donor_distance=distances['donor_distance'],
@@ -249,9 +229,10 @@ class AutoReviseEvaluator:
     def _revise_and_evaluate_on_val(self, methods, std_num=None, other_coef=None,
                                     distance_scale=None, first_n_motif=None):
         self._index += 1
+        print("Revising {}".format(self._index))
         length_thresholds = None
         distances = {'acceptor_distance': None, 'donor_distance': None}
-        target = 'revised_train_val_{}'.format(self._index)
+        target = 'revised_val_{}'.format(self._index)
         hyperparams = {'std_num': std_num, 'other_coef': other_coef,
                        'distance_scale': distance_scale, 'methods': methods,
                        'first_n_motif': first_n_motif,
@@ -265,9 +246,8 @@ class AutoReviseEvaluator:
                                                       self._path_helper.train_val_name,
                                                       std_num, other_coef)
 
-        process = Process(target=self._create_execute_revise_evaluator,
-                          args=(target, methods, length_thresholds, distances, first_n_motif))
-        return process
+        kwargs = (target,methods,length_thresholds,distances,first_n_motif)
+        return kwargs
 
     def _process_on_test(self, trained_name):
         target = '{}_testing'.format(trained_name)
@@ -292,12 +272,13 @@ class AutoReviseEvaluator:
                                            'testing','test')
         revised_root = os.path.join(self._saved_root, 'revised_test',
                                     trained_name,'testing')
-        self._test_revise_evaluator = ReviseEvaluator(
+        test_revise_evaluator = ReviseEvaluator(
             self._path_helper, trained_name, predict_result_root, usage='testing')
-        loss = self._test_revise_evaluator.process(revised_root, methods=methods,
+        loss = test_revise_evaluator.process(revised_root, methods=methods,
                                                    length_thresholds=length_thresholds,
                                                    acceptor_distance=distances['acceptor_distance'],
                                                    donor_distance=distances['donor_distance'],
+                                                   multiprocess=40,
                                                    **splicing_kwargs)
         print("Finish working on {}".format(target))
         record = dict(self._best_hyperparams)
@@ -318,39 +299,38 @@ class AutoReviseEvaluator:
         self._best_loss = val_loss
 
         processes = []
+        kwargs_list = []
         for std_num in self._std_nums:
             for other_coef in self._other_coefs:
                 for distance_scale in self._distance_scales:
                     for first_n_motif in self._first_n_motif_list:
                         for methods in self._methods_1ist:
-                            process = self._revise_and_evaluate_on_val(methods, std_num, other_coef,
+                            kwargs = self._revise_and_evaluate_on_val(methods, std_num, other_coef,
                                                                        distance_scale=distance_scale,
                                                                        first_n_motif=first_n_motif)
-                            processes.append(process)
+                            kwargs_list.append(kwargs)
 
         for std_num in self._std_nums:
             for other_coef in self._other_coefs:
                 for first_n_motif in self._first_n_motif_list:
                     methods = ['length_threshold']
-                    process = self._revise_and_evaluate_on_val(methods, std_num, other_coef,
+                    kwargs = self._revise_and_evaluate_on_val(methods, std_num, other_coef,
                                                                first_n_motif=first_n_motif)
-                    processes.append(process)
+                    kwargs_list.append(kwargs)
 
         for distance_scale in self._distance_scales:
             for first_n_motif in self._first_n_motif_list:
                 methods = ['distance_threshold']
-                process = self._revise_and_evaluate_on_val(methods, distance_scale=distance_scale,
+                kwargs = self._revise_and_evaluate_on_val(methods, distance_scale=distance_scale,
                                                            first_n_motif=first_n_motif)
-                processes.append(process)
+                kwargs_list.append(kwargs)
 
-        print("Run {} proceeses".format(len(processes)))
-        for p in processes:
-            p.start()
-        for p in processes:
-            p.join()
+                
+        with Pool(processes=40) as pool:
+            pool.starmap(self._execute_revise_evaluator, kwargs_list)
 
         for record in self._records:
-            overall_loss_path = os.path.join(self._saved_root, 'revised_train_val',
+            overall_loss_path = os.path.join(self._saved_root, 'revised_val',
                                              record['target'], 'testing', 'test', 'overall_loss.txt')
             with open(overall_loss_path, "r") as fp:
                 loss = float(fp.read())
@@ -381,47 +361,41 @@ class AutoReviseEvaluator:
 def main(raw_data_root, processed_root, trained_project_root, saved_root):
     path_helper = PathHelper(raw_data_root, processed_root)
     data_usage = get_data_names(path_helper.split_root)
-    val_gffs = []
-    val_raw_plus_gffs = []
     predicted_root = os.path.join(saved_root, 'predicted')
     merged_val_root = os.path.join(saved_root, 'merged_val')
 
+    
     for usage in ['validation', 'testing']:
         for trained_name in data_usage.keys():
+            print("Predicted by {} for {}".format(trained_name,usage))
             trained_root = os.path.join(trained_project_root, trained_name)
             result_root = os.path.join(predicted_root, trained_name, usage)
             torch.cuda.empty_cache()
             test(trained_root, result_root, path_helper, trained_name, usage)
             torch.cuda.empty_cache()
 
+    plus_gffs = []
+    gffs = []
+    
     for trained_name in data_usage.keys():
         result_root = os.path.join(predicted_root, trained_name, 'validation')
-        gff = read_gff(os.path.join(result_root, 'test', 'test_predict.gff3'))
-        raw_plus_gff = read_gff(os.path.join(result_root,'test',
-                                             'test_predict_raw_plus.gff3'))
-        val_gffs.append(gff)
-        val_raw_plus_gffs.append(raw_plus_gff)
-
-    val_gffs = pd.concat(val_gffs)
-    val_raw_plus_gffs = pd.concat(val_raw_plus_gffs)
+        plus_gff = read_gff(os.path.join(result_root, 'test', 'test_predict_plus_strand.gff3'))
+        gff = read_gff(os.path.join(result_root, 'test', 'test_predict_double_strand.gff3'))
+        plus_gffs.append(plus_gff)
+        gffs.append(gff)
+        
+    merged_plus_gff = pd.concat(plus_gffs)
+    merged_gff = pd.concat(gffs)
     create_folder(merged_val_root)
-    predicted_path = os.path.join(merged_val_root, 'test_predict.gff3')
-    predicted_raw_plus_path = os.path.join(merged_val_root, 
-                                           'test_predict_raw_plus.gff3')
-    predicted_double_strand_path = os.path.join(
-        merged_val_root, 'test_predict_double_strand.gff3')
-    write_gff(val_gffs, predicted_path)
-    write_gff(val_raw_plus_gffs, predicted_raw_plus_path)
+    merged_plus_predicted_path = os.path.join(merged_val_root,'test_predict_plus_strand.gff3')
+    merged_predicted_path = os.path.join(merged_val_root,'test_predict_double_strand.gff3')
+    write_gff(merged_plus_gff, merged_plus_predicted_path)
+    write_gff(merged_gff, merged_predicted_path)
 
-    train_val_answer_path = path_helper.get_answer_path(
-        path_helper.train_val_name, on_double_strand=True)
-    rename_chrom_main(predicted_path,path_helper.region_table_path,
-                      predicted_double_strand_path,
-                      'ordinal_id_with_strand',
-                      'ordinal_id_wo_strand')
+    print("Evaluating the merged result")
+    train_val_answer_path = path_helper.get_answer_path(path_helper.train_val_name)
     evaluator = Evaluator(train_val_answer_path, path_helper.region_table_path)
-    evaluator.evaluate(predicted_double_strand_path,
-                       os.path.join(merged_val_root,'test'))
+    evaluator.evaluate(merged_predicted_path,os.path.join(merged_val_root,'test'))
 
     processor = AutoReviseEvaluator(path_helper,merged_val_root,
                                     saved_root,predicted_root)

@@ -153,7 +153,7 @@ fi
 
 echo "Step 3: Processing data"
 processed_root=$saved_root/processed
-if [ ! -e "$processed_root/result/double_strand/canonical_double_strand.bed" ]; then
+#if [ ! -e "$processed_root/result/double_strand/canonical_double_strand.bed" ]; then
 
     command="$bash_root/process_data.sh -p $filtered_bed_path -b $background_merged_bed_path \
     -u $upstream_dist -d $downstream_dist -g $genome_path \
@@ -163,7 +163,7 @@ if [ ! -e "$processed_root/result/double_strand/canonical_double_strand.bed" ]; 
     fi
     echo $command
     eval "bash $command"
-fi
+#fi
 
 echo "Step 4: Write statistic data of GFF"
 result_root=$processed_root/result

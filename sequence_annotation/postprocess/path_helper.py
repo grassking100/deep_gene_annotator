@@ -46,12 +46,9 @@ class PathHelper:
         path = os.path.join(self.split_root,'fasta',name+".fasta")
         return path
     
-    def get_answer_path(self,trained_id,usage=None,on_double_strand=False):
+    def get_answer_path(self,trained_id,usage=None):
         name = self.get_file_name(trained_id,usage)
-        if on_double_strand:
-            path = os.path.join(self.split_root,'gff',name+"_canonical_double_strand.gff3")
-        else:
-            path = os.path.join(self.split_root,'gff',name+"_canonical.gff3")
+        path = os.path.join(self.split_root,'gff',name+"_canonical_double_strand.gff3")
         return path
     
     def get_processed_data_path(self,trained_id,usage=None):

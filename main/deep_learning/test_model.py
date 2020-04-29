@@ -32,10 +32,7 @@ if __name__ == '__main__':
     parser.add_argument("-g","--gpu_id",type=int,default=0,help="GPU to used")
     parser.add_argument("--deterministic",action="store_true")
     parser.add_argument("--answer_gff_path",help='The answer in gff format')
-    parser.add_argument("--region_table_path",help="The path of region data table "
-                        "which its old_id is single-strand data's chromosome and "
-                        "new_id is double-strand data's chromosome")
-    parser.add_argument("--is_answer_double_strand",action="store_true")
+    parser.add_argument("--region_table_path",help="The path of region table")
     
     args = parser.parse_args()
     setting = vars(args)

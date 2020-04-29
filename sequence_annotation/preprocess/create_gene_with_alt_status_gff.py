@@ -525,7 +525,7 @@ def _to_gff_item(item):
         
     return regions
 
-def convert_transcript_bed_to_gene_with_alt_status_gff(bed,id_table,select_site_by_election=False,allow_partial_gene=False):
+def convert_from_bed_to_gene_with_alt_status_gff(bed,id_table,select_site_by_election=False,allow_partial_gene=False):
     """Return site-based data"""
     #Read bed file from path
     parser = BedInfoParser()
@@ -590,11 +590,12 @@ def convert_transcript_bed_to_gene_with_alt_status_gff(bed,id_table,select_site_
     gff = get_gff_with_updated_attribute(gff)    
     return gff
 
-def convert_transcript_gff_to_gene_with_alt_status_gff(gff,**kwargs):
+def convert_from_gff_to_gene_with_alt_status_gff(gff,**kwargs):
     bed = gff2bed(gff)
     id_table = get_id_table(gff)
-    gff = convert_transcript_bed_to_gene_with_alt_status_gff(bed,id_table,**kwargs)
+    gff = convert_from_bed_to_gene_with_alt_status_gff(bed,id_table,**kwargs)
     return gff
+
 
 def main(input_path,output_gff_path,id_table_path=None,**kwargs):
     if 'bed' in input_path.split('.')[-1]:
@@ -602,7 +603,7 @@ def main(input_path,output_gff_path,id_table_path=None,**kwargs):
             raise Exception("If input data is bed format, then the id_table_path must be provided")
         bed = read_bed(input_path)
         id_table = read_id_table(id_table_path)
-        gene_gff = convert_transcript_bed_to_gene_with_alt_status_gff(bed,id_table,**kwargs)
+        gene_gff = convert_from_gff_to_gene_with_alt_status_gff(bed,id_table,**kwargs)
     else:
         gff = read_gff(input_path)
         gene_gff = convert_transcript_gff_to_gene_with_alt_status_gff(gff,**kwargs)

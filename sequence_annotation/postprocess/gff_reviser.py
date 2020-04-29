@@ -264,42 +264,46 @@ def build_gff_reviser(simply_map, **kwargs):
     gff_reviser = GFFReviser(gene_info_extractor, **kwargs)
     return gff_reviser
 
-def _revise_and_save(reviser,chrom_id,length,seq,input_gff):
+def _revise_and_save(reviser,chrom_id,length,seq,plus_strand_gff):
     print("Revising data {}".format(chrom_id))
-    gff = reviser.process(chrom_id,length,seq,input_gff)
+    gff = reviser.process(chrom_id,length,seq,plus_strand_gff)
     return gff
 
-def revise(input_gff, region_table, fasta, reviser):
-    chroms = set(input_gff['chr'])
-    arg_list = []
+def revise(plus_strand_gff, region_table, fasta, reviser,multiprocess=None):
+    chroms = set(plus_strand_gff['chr'])
+    kwarg_list = []
     lengths = dict(zip(region_table['ordinal_id_with_strand'] ,region_table['length']))
-    groups = input_gff.groupby('chr')
+    groups = plus_strand_gff.groupby('chr')
     for chrom_id in chroms:
         length = lengths[chrom_id]
         seq = fasta[chrom_id]
         gff = groups.get_group(chrom_id)
-        arg_list.append((reviser,chrom_id,length,seq,gff))
-    with Pool(processes=40) as pool:
-        gff_list = pool.starmap(_revise_and_save, arg_list)
+        kwarg_list.append((reviser,chrom_id,length,seq,gff))
+    if multiprocess is None:
+        gff_list = [_revise_and_save(*kwargs) for kwargs in kwarg_list]
+    else:
+        with Pool(processes=multiprocess) as pool:
+            gff_list = pool.starmap(_revise_and_save, kwarg_list)
     gff = pd.concat(gff_list, sort=True).reset_index(drop=True)
     return gff
 
-def main(output_root, raw_plus_gff_path, region_table_path, fasta_path,
-         length_thresholds=None, length_threshold_path=None, methods=None, **kwargs):
+def main(output_root, plus_strand_gff_path, region_table_path, fasta_path,
+         length_thresholds=None, length_threshold_path=None, methods=None,
+         multiprocess=None,**kwargs):
     create_folder(output_root)
-    revised_gff_path = os.path.join(output_root, "revised.gff3")
-    plus_revised_gff_path = os.path.join(output_root, "plus_revised.gff3")
+    revised_gff_path = os.path.join(output_root, "revised_double_strand.gff3")
+    plus_revised_gff_path = os.path.join(output_root, "plus_strand_revised.gff3")
     if length_thresholds is None and length_threshold_path is not None:
         length_thresholds = read_json(length_threshold_path)
     region_table = read_region_table(region_table_path)
-    input_gff = read_gff(raw_plus_gff_path)
+    plus_strand_gff = read_gff(plus_strand_gff_path)
     fasta = read_fasta(fasta_path)
     reviser = build_gff_reviser(BASIC_GENE_MAP,methods=methods,
                                 length_thresholds=length_thresholds,**kwargs)
     config = reviser.get_config()
     config_path = os.path.join(output_root, "reviser_config.json")
     write_json(config, config_path)
-    gff = revise(input_gff, region_table, fasta, reviser)
+    gff = revise(plus_strand_gff, region_table, fasta, reviser,multiprocess)
     write_gff(gff, plus_revised_gff_path)
     flipped_gff = flip_and_rename_gff(gff,region_table)
     write_gff(flipped_gff, revised_gff_path)
@@ -307,7 +311,7 @@ def main(output_root, raw_plus_gff_path, region_table_path, fasta_path,
 
 if __name__ == '__main__':
     parser = ArgumentParser(description='Revise the GFF')
-    parser.add_argument("-i", "--raw_plus_gff_path", help="The path of origin "
+    parser.add_argument("-i", "--plus_strand_gff_path", help="The path of origin "
                         "of single-strand plus-only data in GFf format", required=True)
     parser.add_argument("-t","--region_table_path",required=True,
                         help="The path of region data")
@@ -320,6 +324,7 @@ if __name__ == '__main__':
     parser.add_argument("--donor_distance", type=int, default=0)
     parser.add_argument("--acceptor_distance", type=int, default=0)
     parser.add_argument("--methods", type=lambda x:x.split(','))
+    parser.add_argument("--multiprocess", type=int,default=None)
     args = parser.parse_args()
     kwargs = vars(args)
     main(**kwargs)

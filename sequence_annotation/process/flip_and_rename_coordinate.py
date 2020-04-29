@@ -9,6 +9,8 @@ def flip_and_rename_gff(gff,region_table):
     """
     The method would flip data's coordinate to its origin strands
     """
+    if set(gff['strand']) != set(['+']):
+        raise
     redefined_gff = []
     region_info_dict = {}
     for region in region_table.to_dict('record'):

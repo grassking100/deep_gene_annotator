@@ -1,6 +1,6 @@
 #!/bin/bash
 usage(){
- echo "Usage: Pipeline creating annotation data"
+ echo "Usage: Pipeline filtering annotation data"
  echo "  Arguments:"
  echo "    -i  <string>  Path of bed"
  echo "    -t  <string>  Gene and transcript id conversion table path"
@@ -17,7 +17,7 @@ usage(){
  echo "                  filter would be removed. Otherwise, only the transcript which has failed to passed "
  echo "                  the score filter would be removed                                                    [default: false]"
  echo "    -h            Print help message and exit"
- echo "Example: bash process_data.sh -i /home/io/example.bed -o filtered_result"
+ echo "Example: bash filter.sh -i /home/io/example.bed -o filtered_result -t table.tsv"
  echo ""
 }
 

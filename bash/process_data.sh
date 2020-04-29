@@ -173,7 +173,7 @@ python3 $preprocess_main_root/get_id.py -i $origin_region_bed_path -o $final_gen
 python3 $preprocess_main_root/get_subbed.py -i $recurrent_cleaned_bed_path -d $final_gene_id_path \
 -o $origin_rna_bed_path -t $id_convert_table_path
 
-echo "Step 6: Rename region and get fasta"
+echo "Step 6: Rename fasta"
 region_table_path=$result_root/region_id_conversion.tsv
 coord_region_bed_path=$result_root/coord_region.bed
 region_fasta_path=$result_root/selected_region.fasta
@@ -189,7 +189,7 @@ if [ -e "$region_fasta_path.fai" ]; then
 fi
 samtools faidx $region_fasta_path
 
-echo "Step 7: Redefine coordinate based on region data"
+echo "Step 7: Redefine coordinate based on region data (Note: the strand is not considered)"
 rna_bed_path=$result_root/rna.bed
 python3 $preprocess_main_root/redefine_coordinate.py -i $origin_rna_bed_path -t $region_table_path -o $rna_bed_path 
 
@@ -200,11 +200,10 @@ canonical_h5_path=$result_root/canonical.h5
 alt_region_gff_path=$result_root/alt_region.gff3
 alt_region_h5_path=$result_root/alt_region.h5
 alt_region_id_table_path=$result_root/alt_region_id_table.tsv
-python3 $preprocess_main_root/convert_transcript_to_gene_with_alt_status_gff.py -i $rna_bed_path \
--o $alt_region_gff_path -t $id_convert_table_path
-python3 $preprocess_main_root/create_gene_bed_from_exon_gff.py -i $alt_region_gff_path -o $canonical_bed_path
-python3 $preprocess_main_root/get_id_table.py -i $alt_region_gff_path -o $alt_region_id_table_path
-python3 $preprocess_main_root/bed2gff.py -i $canonical_bed_path -o $canonical_gff_path -t $alt_region_id_table_path
+
+python3 $preprocess_main_root/create_canonical_gene.py -i $rna_bed_path -t $id_convert_table_path -s $alt_region_gff_path \
+-b $canonical_bed_path -g $canonical_gff_path -o $alt_region_id_table_path
+
 if $remove_alt_site ; then
     python3 $preprocess_main_root/create_ann_genome.py -i $canonical_gff_path -r $region_table_path -o $canonical_h5_path \
     -s source_name --discard_alt_region --discard_UTR_CDS

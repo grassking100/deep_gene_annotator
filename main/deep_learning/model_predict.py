@@ -38,7 +38,8 @@ def main(trained_root,revised_root,output_root,fasta_path,region_table_path,
     plus_revised_gff_path = os.path.join(revised_root,'plus_revised.gff3')
     plus_revised_bed_path = os.path.join(revised_root,'plus_revised.bed')
     predicted_transcript_fasta_path = os.path.join(revised_root,'predicted_transcript.fasta')
-    revised_main(revised_root, raw_plus_gff, region_table_path, fasta_path,**revised_config)
+    revised_main(revised_root, raw_plus_gff, region_table_path, fasta_path,
+                 multiprocess=40,**revised_config)
     gff2bed_main(plus_revised_gff_path,plus_revised_bed_path,simple_mode=False)
     os.system("bedtools getfasta -fi {} -bed {} -fo {} -name -split".format(fasta_path,plus_revised_bed_path,
                                                                     predicted_transcript_fasta_path))

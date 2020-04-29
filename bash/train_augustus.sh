@@ -7,18 +7,16 @@ usage(){
  echo "    -s  <string>  Root of saved result"
  echo "    -t  <string>  Training fasta"
  echo "    -g  <string>  Training answer in GFF format"
- echo "    -x  <string>  Testing fasta"
- echo "    -d  <string>  Testing answer in GFF format"
  echo "    -n  <string>  Species name"
  echo "    -f  <int>     Flanking distance around gene of each direction"
  echo "    -m  <string>  The genemodel to be used"
  echo "    -a  <bool>    Do output prediction by alternatives_from_sampling [default: false]"
  echo "    -h            Print help message and exit"
- echo "Example: bash run_augustus.sh -s saved_root -t train_fasta -g train_gff -x val_fasta -d val_gff -n arabidopsis_2020_02_28_${i} -f 398 -a -m partial -r /root/augustus"
+ echo "Example: bash train_augustus.sh -s saved_root -t train_fasta -g train_gff -n arabidopsis_2020_02_28_${i} -f 398 -a -m partial -r /root/augustus"
  echo ""
 }
 
-while getopts r:s:t:g:x:d:n:f:m:ah option
+while getopts r:s:t:g:n:f:m:ah option
  do
   case "${option}"
   in
@@ -26,8 +24,6 @@ while getopts r:s:t:g:x:d:n:f:m:ah option
    s )saved_root=$OPTARG;;
    t )train_fasta=$OPTARG;;
    g )train_gff=$OPTARG;;
-   x )test_fasta=$OPTARG;;
-   d )test_gff=$OPTARG;;
    n )species=$OPTARG;;
    f )flanking=$OPTARG;;
    m )genemodel=$OPTARG;;
@@ -66,17 +62,6 @@ if [ ! "$train_gff" ]; then
     exit 1
 fi
 
-if [ ! "$test_fasta" ]; then
-    echo "Missing option -x"
-    usage
-    exit 1
-fi
-
-if [ ! "$test_gff" ]; then
-    echo "Missing option -d"
-    usage
-    exit 1
-fi
 
 if [ ! "$species" ]; then
     echo "Missing option -n"
@@ -101,11 +86,9 @@ fi
 
 data_root=$saved_root/$species
 train_dir=$data_root/train
-test_dir=$data_root/test
 mkdir -p $saved_root
 mkdir -p $data_root
 mkdir -p $train_dir
-mkdir -p $test_dir
 
 cd $data_root
 
@@ -114,12 +97,9 @@ export AUGUSTUS_CONFIG_PATH=$augustus_root/config
 export augustus_bin_path=$augustus_root/bin
 species_path=$AUGUSTUS_CONFIG_PATH/species/$species
 train_gb=$data_root/train.gb
-test_gb=$data_root/test.gb
 
 echo "Create gb for training"
 gff2gbSmallDNA.pl $train_gff $train_fasta $flanking $train_gb
-echo "Create gb for testing"
-gff2gbSmallDNA.pl $test_gff $test_fasta $flanking $test_gb
 
 echo "Create paremeters for species"
 rm -rf $species_path
@@ -133,9 +113,7 @@ optimize_augustus.pl  --cpus=8 --species=$species --UTR=on --metapars=$AUGUSTUS_
 echo "Train after hyperparameter optimizer"
 etraining --species=$species $train_gb --UTR=on > train.final.out
 echo "Predict"
-augustus --species=$species $train_fasta --UTR=on --alternatives-from-sampling=$alternatives_from_sampling --genemodel=$genemodel --gff3=on > $train_dir/train.final.predict.gff
+augustus --species=$species $train_fasta --UTR=on --alternatives-from-sampling=$alternatives_from_sampling --genemodel=$genemodel --gff3=on > $train_dir/train.final.predict.gff3
 augustus --species=$species $train_gb --UTR=on --alternatives-from-sampling=$alternatives_from_sampling --genemodel=$genemodel > $train_dir/train.final.predict.out
-augustus --species=$species $test_fasta --UTR=on --alternatives-from-sampling=$alternatives_from_sampling --genemodel=$genemodel --gff3=on > $test_dir/test.final.predict.gff
-augustus --species=$species $test_gb --UTR=on --alternatives-from-sampling=$alternatives_from_sampling --genemodel=$genemodel > $test_dir/test.final.predict.out
 
 cp -r -t $data_root $species_path

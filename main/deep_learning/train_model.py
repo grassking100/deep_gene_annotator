@@ -147,9 +147,7 @@ if __name__ == '__main__':
     parser.add_argument("--frozen_names",type=lambda x:x.split(','),default=None)
     parser.add_argument("--monitor_target")
     parser.add_argument("--deterministic",action="store_true")
-    parser.add_argument("--region_table_path",help="The path of region data table which its "
-                        "old_id is single-strand data's chromosome and new_id is "
-                        "double-strand data's chromosome")
+    parser.add_argument("--region_table_path",help="The path of region data table")
     
     args = parser.parse_args()
     kwargs = dict(vars(args))

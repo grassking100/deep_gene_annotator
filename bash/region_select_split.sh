@@ -96,7 +96,7 @@ else
     result_root=$result_root/split_without_strand
 fi
 
-rm -rf $result_root
+#rm -rf $result_root
 command="${command} -o $result_root"
 
 echo $command

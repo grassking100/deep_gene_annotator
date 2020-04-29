@@ -108,7 +108,6 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
 
     def get_signal_handler(self,root,prefix=None,inference=None,
                            region_table_path=None,
-                           is_answer_double_strand=False,
                            answer_gff_path=None):
         #root = self._root
         #if root is not None and prefix is not None:
@@ -120,8 +119,7 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
             builder.add_converter_args(
                 inference,
                 region_table_path,
-                ann_vec_gff_converter,
-                is_answer_double_strand=is_answer_double_strand)
+                ann_vec_gff_converter)
         if answer_gff_path is not None:
             builder.add_answer_path(answer_gff_path)
         signal_handler = builder.build()
@@ -291,7 +289,7 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
 
     def test(self,model,executor,data,batch_size=None,
              region_table_path=None,answer_gff_path=None,
-             callbacks=None,is_answer_double_strand=False):
+             callbacks=None):
 
         self._update_common_setting()
         self.update_settings('test_setting', {'batch_size': batch_size})
@@ -302,7 +300,6 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         root = os.path.join(self._root, 'test')
         singal_handler = self.get_signal_handler(
             root,'test',executor.inference,region_table_path,
-            is_answer_double_strand=is_answer_double_strand,
             answer_gff_path=answer_gff_path
         )
         callbacks.add(singal_handler)
