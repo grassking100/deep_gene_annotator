@@ -65,15 +65,15 @@ canonical_bed_path=$output_root/canonical.bed
 canonical_gff_path=$output_root/canonical.gff3
 alt_region_gff_path=$output_root/alt_region.gff3
 alt_region_id_table_path=$output_root/alt_region_id_table.tsv
-canoncial_cDNA_path==$output_root/canoncial_cDNA.fasta
+canoncial_cDNA_path=$output_root/canoncial_cDNA.fasta
 
 mkdir -p $output_root
 mkdir -p $transdecoder_result_root
 
-python3 $preprocess_main_root/create_canonical_gene.py -i $transcript_gff_path -t $id_convert_table_path \
--s $alt_region_gff_path -b $canonical_bed_path -g $canonical_gff_path -o $alt_region_id_table_path
+#python3 $preprocess_main_root/create_canonical_gene.py -i $transcript_gff_path  \
+#-s $alt_region_gff_path -b $canonical_bed_path -g $canonical_gff_path -o $alt_region_id_table_path
 
-bedtools getfasta -fi $fasta_path -bed $canonical_bed_path -split -s -fo $canoncial_cDNA_path
+#bedtools getfasta -fi $fasta_path -bed $canonical_bed_path -split -s -fo $canoncial_cDNA_path
 
 cd $transdecoder_result_root
 perl $transdecoder_root/TransDecoder.LongOrfs -t $canoncial_cDNA_path > $transdecoder_result_root/long_orf_record.log

@@ -1,7 +1,7 @@
 #!/bin/bash
 ## function print usage
 usage(){
- echo "Usage: The pipeline selects regions around gene"
+ echo "Usage: The pipeline selects regions around transcription"
  echo "  Arguments:"
  echo "    -i  <string>  Path of input gff"
  echo "    -u  <int>     Upstream distance"
@@ -11,7 +11,7 @@ usage(){
  echo "    -t  <string>  Directory of TransDecoder"
  echo "  Options:"
  echo "    -h            Print help message and exit"
- echo "Example: bash select_region.sh -u 1000 -d 1000 -g genome.fasta -i example.bed -o result"
+ echo "Example: bash select_transcription_potential_region.sh -u 1000 -d 1000 -g genome.fasta -i example.bed -o result"
  echo ""
 }
 
@@ -115,7 +115,7 @@ alt_region_gff_path=$saved_root/alt_region.gff3
 canonical_bed_path=$saved_root/canonical.bed
 canonical_gff_path=$saved_root/canonical.gff3
 
-canonical_fasta_path=$saved_root/canonical.fasta
+canonical_fasta_path=$saved_root/canonical_cDNA.fasta
 input_bed_path=$saved_root/input.bed
 region_table_path=$saved_root/region_id_conversion.tsv
 coord_region_bed_path=$saved_root/coord_region.bed
@@ -161,8 +161,8 @@ echo "Step 5: Get canonical gene annotation"
 #bedtools getfasta -s -name -split -fi $genome_path -bed $canonical_bed_path -fo $canonical_fasta_path
 
 echo "Step 6: Get redefined coordinate bed"
-python3 $preprocess_main_root/redefine_coordinate.py -i $transcript_bed_path -t $region_table_path -o $redefined_transcript_bed_path --chrom_target 'ordinal_id_wo_strand'
-python3 $preprocess_main_root/redefine_coordinate.py -i $canonical_bed_path -t $region_table_path -o $redefined_canonical_bed_path --chrom_target 'ordinal_id_wo_strand'
+#python3 $preprocess_main_root/redefine_coordinate.py -i $transcript_bed_path -t $region_table_path -o $redefined_transcript_bed_path --chrom_target 'ordinal_id_wo_strand'
+#python3 $preprocess_main_root/redefine_coordinate.py -i $canonical_bed_path -t $region_table_path -o $redefined_canonical_bed_path --chrom_target 'ordinal_id_wo_strand'
 
 echo "Step 7: Write statistic data"
 num_transcript=$(wc -l < $all_transcript_gff_path )
@@ -181,5 +181,5 @@ echo "Step 8: Get peptide"
 transdecoder_result_root=$saved_root/transdecoder
 mkdir -p $transdecoder_result_root
 cd $transdecoder_result_root
-#perl $transdecoder_root/TransDecoder.LongOrfs -t $canonical_fasta_path > $transdecoder_result_root/long_orf_record.log
-#perl $transdecoder_root/TransDecoder.Predict -t $canonical_fasta_path > $transdecoder_result_root/predict_record.log
+perl $transdecoder_root/TransDecoder.LongOrfs -t $canonical_fasta_path > $transdecoder_result_root/long_orf_record.log
+perl $transdecoder_root/TransDecoder.Predict -t $canonical_fasta_path > $transdecoder_result_root/predict_record.log
