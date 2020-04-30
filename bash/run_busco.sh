@@ -80,7 +80,8 @@ echo "lineage_name,$lineage_name" >> $kwargs_path
 echo "output_root,$output_root" >> $kwargs_path
 echo "name,$name" >> $kwargs_path
 echo "ncpu,$ncpu" >> $kwargs_path
+echo "mode,$mode" >> $kwargs_path
 
-cp -$fasta_path $result_root/seq.fasta
+cp $fasta_path $result_root/seq.fasta
 cd $result_root
 docker run -u $(id -u) -v $(pwd):/busco_wd ezlabgva/busco:v4.0.6_cv1 busco -m $mode -i seq.fasta -o $name -l $lineage_name -c $ncpu
