@@ -2,7 +2,8 @@ import os
 import abc
 import numpy as np
 import torch
-from ..utils.utils import create_folder, write_json, BASIC_GENE_ANN_TYPES, get_time_str, get_file_name, read_json
+from ..utils.utils import create_folder, write_json, BASIC_GENE_ANN_TYPES, get_time_str
+from ..utils.utils import get_file_name, read_json,write_fasta
 from ..utils.seq_converter import SeqConverter
 from ..genome_handler.ann_genome_processor import class_count
 from ..genome_handler.ann_seq_processor import seq2vecs
@@ -109,9 +110,6 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
     def get_signal_handler(self,root,prefix=None,inference=None,
                            region_table_path=None,
                            answer_gff_path=None):
-        #root = self._root
-        #if root is not None and prefix is not None:
-        #    root = os.path.join(root, prefix)
 
         builder = SignalHandlerBuilder(root, prefix=prefix)
         if region_table_path is not None:
@@ -191,7 +189,7 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
     def _create_data_gen(self, batch_size, seq_collate_fn):
         train_gen = SeqGenerator(batch_size=batch_size,
                                  shuffle=self._shuffle_train_data,
-                                 collate_fn=seq_collate_fn)
+                                 seq_collate_fn=seq_collate_fn)
         return train_gen
 
     def _create_basic_data_gen(self, batch_size):
@@ -207,7 +205,7 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
     def train(self,model,executor,train_data,val_data,
               epoch=None,batch_size=None,other_callbacks=None,
               add_grad=True,seq_collate_fn_kwargs=None,
-              checkpoint_kwargs=None):
+              checkpoint_kwargs=None,same_generator=False):
         seq_collate_fn_kwargs = seq_collate_fn_kwargs or {}
         self._update_common_setting()
         other_callbacks = other_callbacks or Callbacks()
@@ -218,11 +216,13 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
                 'batch_size': batch_size,
                 'seq_collate_fn_kwargs': seq_collate_fn_kwargs,
                 'add_grad': add_grad,
-                'checkpoint_kwargs': checkpoint_kwargs
+                'checkpoint_kwargs': checkpoint_kwargs,
+                'same_generator':same_generator
             })
         # Set data
         train_seqs, train_ann_seqs = train_data
         val_seqs, val_ann_seqs = val_data
+        
         # Set callbacks and writer
         train_callbacks, val_callbacks = self._create_default_train_callbacks()
         self._add_tensorboard_callback(self._train_writer,
@@ -235,7 +235,10 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         # Create worker
         collate_fn = seq_collate_wrapper(**seq_collate_fn_kwargs)
         train_gen = self._create_data_gen(batch_size, collate_fn)
-        val_gen = self._create_basic_data_gen(batch_size)
+        if same_generator:
+            val_gen = train_gen
+        else:
+            val_gen = self._create_basic_data_gen(batch_size)
 
         # Process data
         raw_data = {
@@ -367,19 +370,16 @@ def _get_first_large_data(data, batch_size):
 
 
 def check_max_memory_usgae(saved_root, model, executor, train_data, val_data,
-                           batch_size):
+                           batch_size,concat=False):
     create_folder(saved_root)
     train_data = _get_first_large_data(train_data, batch_size)
     val_data = _get_first_large_data(val_data, batch_size)
     engine = SeqAnnEngine(BASIC_GENE_ANN_TYPES, is_verbose_visible=False)
     try:
         torch.cuda.reset_max_memory_cached()
-        engine.train(model,
-                     executor,
-                     train_data,
-                     val_data=val_data,
-                     batch_size=batch_size,
-                     epoch=1)
+        engine.train(model,executor,train_data,val_data=val_data,
+                     batch_size=batch_size,epoch=1,
+                     seq_collate_fn_kwargs={'concat':concat})
         max_memory = torch.cuda.max_memory_reserved()
         messenge = "Max memory allocated is {}\n".format(max_memory)
         print(messenge)

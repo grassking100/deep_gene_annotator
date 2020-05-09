@@ -6,15 +6,12 @@ from matplotlib import pyplot as plt
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.utils.utils import create_folder, read_gff
+from sequence_annotation.utils.utils import get_gff_with_attribute
+from sequence_annotation.preprocess.utils import get_gff_with_intron,INTRON_TYPES
 
-
-def get_site_diff(answer,
-                  predict,
-                  types,
-                  is_start=True,
-                  absolute=True,
-                  answer_as_ref=True,
-                  include_zero=True):
+def get_site_diff(answer,predict,types,
+                  is_start=True,absolute=True,
+                  answer_as_ref=True,include_zero=True):
     site_type = 'start' if is_start else 'end'
     answer = answer[answer['feature'].isin(types)]
     predict = predict[predict['feature'].isin(types)]
@@ -40,6 +37,7 @@ def get_site_diff(answer,
                         compare_site - ref_site
                         for compare_site in compare_sites
                     ]
+                    
                     if not include_zero:
                         diffs = [diff for diff in diffs if diff != 0]
                     if len(diffs) > 0:
@@ -71,11 +69,8 @@ def get_transcript_end_diff(answer, predict, absolute=True, **kwargs):
     return get_site_diff(answer, predict, ['mRNA'], is_start=False, **kwargs)
 
 
-def get_site_matched_ratio(answer,
-                           predict,
-                           types,
-                           is_start=True,
-                           answer_denominator=True):
+def get_site_matched_ratio(answer,predict,types,
+                           is_start=True,answer_denominator=True):
     site_type = 'start' if is_start else 'end'
     answer = answer[answer['feature'].isin(types)]
     predict = predict[predict['feature'].isin(types)]
@@ -116,23 +111,16 @@ def get_donor_site_matched_ratio(answer, predict, **kwargs):
 
 
 def get_acceptor_site_matched_ratio(answer, predict, absolute=True, **kwargs):
-    return get_site_matched_ratio(answer,
-                                  predict, ['intron'],
-                                  is_start=False,
+    return get_site_matched_ratio(answer,predict, ['intron'],is_start=False,
                                   **kwargs)
 
 
-def get_transcript_start_matched_ratio(answer,
-                                       predict,
-                                       absolute=True,
-                                       **kwargs):
+def get_transcript_start_matched_ratio(answer,predict,absolute=True,**kwargs):
     return get_site_matched_ratio(answer, predict, ['mRNA'], **kwargs)
 
 
 def get_transcript_end_matched_ratio(answer, predict, absolute=True, **kwargs):
-    return get_site_matched_ratio(answer,
-                                  predict, ['mRNA'],
-                                  is_start=False,
+    return get_site_matched_ratio(answer,predict, ['mRNA'],is_start=False,
                                   **kwargs)
 
 
@@ -171,11 +159,8 @@ def get_all_site_matched_ratio(answer, predict, round_value=None):
     return ratio
 
 
-def get_all_site_diff(answer,
-                      predict,
-                      round_value=None,
-                      return_value=False,
-                      **kwargs):
+def get_all_site_diff(answer,predict,round_value=None,
+                      return_value=False,**kwargs):
     start_diff = get_transcript_start_diff(answer, predict, **kwargs)
     end_diff = get_transcript_end_diff(answer, predict, **kwargs)
     donor_diff = get_donor_site_diff(answer, predict, **kwargs)
@@ -203,38 +188,45 @@ def get_all_site_diff(answer,
     return site_diffs
 
 
-def main(predict_path, answer_path, saved_root):
+def plot_site_diff(predict,answer,saved_root,answer_as_ref=True):
     create_folder(saved_root)
-    predict = read_gff(predict_path)
-    answer = read_gff(answer_path)
-    site_diffs = get_all_site_diff(answer,
-                                   predict,
-                                   return_value=True,
-                                   absolute=False)
+    predict = predict[~predict['feature'].isin(INTRON_TYPES)]
+    answer = answer[~answer['feature'].isin(INTRON_TYPES)]
+    predict = get_gff_with_intron(get_gff_with_attribute(predict))
+    answer = get_gff_with_intron(get_gff_with_attribute(answer))
+    site_diffs = get_all_site_diff(answer,predict,return_value=True,
+                                   absolute=False,answer_as_ref=answer_as_ref)
     for type_, diffs in site_diffs.items():
         plt.clf()
-        plt.title("The distance between predict {} and real {}".format(
-            type_, type_))
+        if answer_as_ref:
+            plt.title("The distance between nearest predict {} to real {}".format(type_, type_))
+        else:
+            plt.title("The distance between nearest real {} to predict {}".format(type_, type_))
         plt.ylabel("Number")
         plt.xlabel("Distance")
         plt.hist(diffs, bins=100, log=True)
-        plt.savefig(
-            os.path.join(saved_root, "{}_diff_distribution.png".format(type_)))
+        if answer_as_ref:
+            plt.savefig(os.path.join(saved_root, "{}_p_a_diff_distribution.png".format(type_)))
+        else:
+            plt.savefig(os.path.join(saved_root, "{}_a_p_diff_distribution.png".format(type_)))
+    
+def main(predict_path, answer_path, saved_root):
+    predict = read_gff(predict_path)
+    answer = read_gff(answer_path)
+    plot_site_diff(predict,answer,saved_root)
+    plot_site_diff(predict,answer,saved_root,answer_as_ref=False)
 
 
 if __name__ == '__main__':
     parser = ArgumentParser(
         description='Show distance between predict GFF to answer GFF')
-    parser.add_argument("-p",
-                        "--predict_path",
+    parser.add_argument("-p","--predict_path",
                         help='The path of prediction result in GFF format',
                         required=True)
-    parser.add_argument("-a",
-                        "--answer_path",
+    parser.add_argument("-a","--answer_path",
                         help='The path of answer result in GFF format',
                         required=True)
-    parser.add_argument("-s",
-                        "--saved_root",
+    parser.add_argument("-s","--saved_root",
                         help="Path to save result",
                         required=True)
     args = parser.parse_args()

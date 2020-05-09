@@ -20,11 +20,7 @@ L2_VERBOSE = "Epoch {}'s gradient L2 norm is {}"
 def _batch_process(model, seq_data, process, callbacks, **kwargs):
     torch.cuda.empty_cache()
     callbacks.on_batch_begin()
-    returned = process(model,
-                       seq_data.inputs,
-                       seq_data.answers,
-                       lengths=seq_data.lengths,
-                       **kwargs)
+    returned = process(model,seq_data,**kwargs)
     torch.cuda.empty_cache()
     with torch.no_grad():
         callbacks.on_batch_end(predicts=returned['predicts'],
@@ -289,22 +285,19 @@ class TrainWorker(Worker):
                     train_per_batch(self.model, seq_data, self.executor,
                                     self._train_callbacks)
                     status = 100 * index / len(self._train_loader)
-                    self.print_verbose(
-                        batch_info.format(epoch, self._epoch, 'training',
-                                          status), True)
+                    self.print_verbose(batch_info.format(epoch, self._epoch,
+                                                         'training',status), True)
                     validate_gradient(epoch, self.model,
                                       self._gradient_warning_recorder,
                                       self._gradient_recorder)
 
-                if self._val_loader is not None:
-                    for index, seq_data in enumerate(self._val_loader):
-                        evaluate_per_batch(self.model, seq_data, self.executor,
-                                           self._val_callbacks)
-                        status = 100 * index / len(self._val_loader)
-                        self.print_verbose(
-                            batch_info.format(epoch, self._epoch, 'validating',
-                                              status), True)
-
+                for index, seq_data in enumerate(self._val_loader):
+                    evaluate_per_batch(self.model, seq_data, self.executor,
+                                       self._val_callbacks)
+                    status = 100 * index / len(self._val_loader)
+                    self.print_verbose(batch_info.format(epoch, self._epoch,
+                                                         'validating',status),True)
+                
                 self.model.save_distribution = save_distribution
                 train_record = self._train_callbacks.get_data()
                 val_record = self._val_callbacks.get_data()

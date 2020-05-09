@@ -6,12 +6,13 @@ from argparse import ArgumentParser
 from multiprocessing import Pool
 sys.path.append(os.path.dirname(__file__) + "/..")
 from sequence_annotation.utils.utils import BASIC_GENE_MAP, get_gff_with_attribute
-from sequence_annotation.utils.utils import create_folder, write_gff, write_json, read_json, read_gff, read_fasta
+from sequence_annotation.utils.utils import create_folder, write_gff, write_json, read_json, read_gff, read_fasta,write_bed
 from sequence_annotation.genome_handler.ann_seq_processor import get_background
 from sequence_annotation.genome_handler.seq_container import SeqInfoContainer
 from sequence_annotation.genome_handler.region_extractor import RegionExtractor,GeneInfoExtractor
 from sequence_annotation.genome_handler.sequence import AnnSequence, PLUS
 from sequence_annotation.preprocess.utils import RNA_TYPES, get_gff_with_intron, get_gff_with_intergenic_region, read_region_table
+from sequence_annotation.preprocess.gff2bed import gff2bed
 from sequence_annotation.process.flip_and_rename_coordinate import flip_and_rename_gff
 from sequence_annotation.postprocess.boundary_process import get_valid_intron_boundary, get_splice_pairs, find_substr
 from sequence_annotation.postprocess.boundary_process import get_splice_pair_statuses, get_exon_boundary
@@ -291,8 +292,6 @@ def main(output_root, plus_strand_gff_path, region_table_path, fasta_path,
          length_thresholds=None, length_threshold_path=None, methods=None,
          multiprocess=None,**kwargs):
     create_folder(output_root)
-    revised_gff_path = os.path.join(output_root, "revised_double_strand.gff3")
-    plus_revised_gff_path = os.path.join(output_root, "plus_strand_revised.gff3")
     if length_thresholds is None and length_threshold_path is not None:
         length_thresholds = read_json(length_threshold_path)
     region_table = read_region_table(region_table_path)
@@ -304,9 +303,14 @@ def main(output_root, plus_strand_gff_path, region_table_path, fasta_path,
     config_path = os.path.join(output_root, "reviser_config.json")
     write_json(config, config_path)
     gff = revise(plus_strand_gff, region_table, fasta, reviser,multiprocess)
+    plus_revised_gff_path = os.path.join(output_root, "revised_plus_strand.gff3")
     write_gff(gff, plus_revised_gff_path)
     flipped_gff = flip_and_rename_gff(gff,region_table)
+    revised_gff_path = os.path.join(output_root, "revised_double_strand.gff3")
     write_gff(flipped_gff, revised_gff_path)
+    revised_bed_path = os.path.join(output_root, "revised_double_strand.bed")
+    flipped_bed = gff2bed(flipped_gff)
+    write_bed(flipped_bed, revised_bed_path)
 
 
 if __name__ == '__main__':

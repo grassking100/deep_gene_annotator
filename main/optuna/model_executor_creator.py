@@ -54,9 +54,9 @@ class ModelExecutorCreator(IModelExecutorCreator):
 
     def _create_model_builder(self):
         model_builder = SeqAnnBuilder()
-        model_builder.update_feature_block(customized_init='kaiming_uniform_cnn_init',
+        model_builder.set_feature_block(customized_init='kaiming_uniform_cnn_init',
                                            padding_handle='same')
-        model_builder.update_relation_block(customized_cnn_init='xavier_uniform_cnn_init',
+        model_builder.set_relation_block(customized_cnn_init='xavier_uniform_cnn_init',
                                             customized_rnn_init='in_xav_bias_zero_gru_init')
         return model_builder        
 
@@ -81,23 +81,23 @@ class ModelExecutorCreator(IModelExecutorCreator):
             print("Set trial.user_attrs's {} to {}".format(name,value))
             hyper[name] = {'value':value}
     
-    def _update_builder(self,hyper,model_builder,executor_builder):
+    def _set_builder(self,hyper,model_builder,executor_builder):
         for key,set_key in self._cnn_config_dict.items():
             if key in hyper:
                 value = hyper[key]['value']
-                model_builder.update_feature_block(**{set_key:value})
+                model_builder.set_feature_block(**{set_key:value})
 
         for key,set_key in self._rnn_config_dict.items():
             if key in hyper:
                 value = hyper[key]['value']
-                model_builder.update_relation_block(**{set_key:value})
+                model_builder.set_relation_block(**{set_key:value})
 
         is_filter = hyper['is_rnn_filter']['value']
         relation_type = hyper['relation_type']['value']
         rnn_type = hyper['rnn_type']['value']
         is_gru = rnn_type == 'GRU'
         if relation_type == 'hier':
-            model_builder.update_relation_block(rnn_type='HierRNN',is_gru=is_gru,
+            model_builder.set_relation_block(rnn_type='HierRNN',is_gru=is_gru,
                                                 use_first_filter=is_filter,
                                                 use_second_filter=is_filter)
             executor_builder.use_native = False
@@ -114,7 +114,7 @@ class ModelExecutorCreator(IModelExecutorCreator):
                 output_act = 'sigmoid'
                 out_channels = 2
 
-            model_builder.update_relation_block(rnn_type=rnn_type,is_gru=is_gru,
+            model_builder.set_relation_block(rnn_type=rnn_type,is_gru=is_gru,
                                                 out_channels=out_channels,output_act=output_act)
 
             executor_builder.use_native = relation_type == 'basic'
@@ -201,10 +201,17 @@ class ModelExecutorCreator(IModelExecutorCreator):
     def _create(self,config):
         model_builder = self._create_model_builder()
         executor_builder = self._create_executor_builder()
-        self._update_builder(config,model_builder,executor_builder)
+        self._set_builder(config,model_builder,executor_builder)
         model = model_builder.build().cuda()
         executor = executor_builder.build(model.parameters())
-        return model,executor
+        
+        model_set_kwargs = model_builder.get_set_kwargs()
+        executor_set_kwargs = executor_builder.get_set_kwargs()
+        return {
+            'model_set_kwargs':model_set_kwargs,
+            'executor_set_kwargs':executor_set_kwargs,
+            'model':model,'executor':executor
+        }
         
     def _create_by_grid_search(self,trial):
         if trial.number >= self.space_size:

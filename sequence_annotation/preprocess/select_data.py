@@ -5,10 +5,7 @@ import pandas as pd
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__)+"/..")
 from sequence_annotation.utils.utils import read_gff,write_gff
-from sequence_annotation.utils.utils import BASIC_GENE_MAP
-from sequence_annotation.utils.seq_converter import DNA_CODES
 from sequence_annotation.genome_handler.select_data import select_data
-from sequence_annotation.process.utils import BASIC_SIMPLIFY_MAP
 
 
 def main(saved_path,fasta_path,ann_seqs_path,id_path,
@@ -23,10 +20,7 @@ def main(saved_path,fasta_path,ann_seqs_path,id_path,
         ids = list(pd.read_csv(id_path,header=None)[0])
         data = select_data(fasta_path,ann_seqs_path,ids,
                            min_len=min_len,max_len=max_len,ratio=ratio,
-                           select_each_type=select_each_type,
-                           simplify_map=BASIC_SIMPLIFY_MAP,
-                           gene_map=BASIC_GENE_MAP,
-                           codes=DNA_CODES)
+                           select_each_type=select_each_type)
         print("Number of parsed data:{}".format(len(data[0])))
         dd.io.save(saved_path,data)
         print("Save file to {}".format(saved_path))

@@ -1,6 +1,7 @@
 """This submodule will handler character sequence and one-hot encoding seqeunce conversion"""
 from ..utils.exception import CodeException, SeqException
 import numpy as np
+from multiprocessing import Pool
 
 DNA_CODES = 'ATCG'
 AA_CODES = 'ARNDCQEGHILKMFPSTWYV'
@@ -111,13 +112,20 @@ class SeqConverter:
         else:
             return seq
 
-    def seqs2dict_vec(self, seqs, discard_invalid_seq=False):
+    def _seq2dict_vec(self,name,seq):
+        data = {name:self.seq2vecs(seq)}
+        return data
+        
+    def seqs2dict_vec(self, seqs):
         """convert dictionary of seqeucnces to dictionary of one-hot encoding vectors"""
-        data = {}
+        multiprocess = 40
+        kwarg_list = []
         for name, seq in seqs.items():
-            try:
-                data[name] = self.seq2vecs(seq)
-            except SeqException as exp:
-                if not discard_invalid_seq:
-                    raise exp
+            kwarg_list.append((name,seq))
+            #data[name] = self.seq2vecs(seq)    
+        with Pool(processes=multiprocess) as pool:
+            items = pool.starmap(self._seq2dict_vec, kwarg_list)
+        data = {}
+        for item in items:
+            data.update(item)
         return data

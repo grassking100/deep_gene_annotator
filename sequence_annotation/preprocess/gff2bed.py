@@ -114,16 +114,11 @@ if __name__ == '__main__':
     parser = ArgumentParser(
         description="This program will convert gff file to bed file. "
         "It will treat alt_acceptor and alt_donor regions as intron")
-    parser.add_argument("-i",
-                        "--gff_path",
-                        required=True,
+    parser.add_argument("-i","--gff_path",required=True,
                         help="Path of input gff file")
-    parser.add_argument("-o",
-                        "--bed_path",
-                        required=True,
+    parser.add_argument("-o","--bed_path",required=True,
                         help="Path of output bed file")
-    parser.add_argument("-m",
-                        "--simple_mode",
+    parser.add_argument("-m","--simple_mode",
                         action='store_true',
                         default=False,
                         help="Use simple mode or not")

@@ -5,17 +5,23 @@ from argparse import ArgumentParser
 from sequence_annotation.utils.utils import read_bed,write_bed
 from sequence_annotation.preprocess.get_id_table import get_id_convert_dict
 
-def get_subbed(bed,ids,id_table_path=None,query_column=None):
+def get_subbed(bed,ids,id_table_path=None,query_column=None,convert_input_id=False):
+    ids = list(ids)
     query_column = query_column or 'id'
     id_convert_dict= None
     if id_table_path is not None:
         id_convert_dict = get_id_convert_dict(id_table_path)
+        if convert_input_id:
+            new_ids = []
+            for id_ in ids:
+                new_ids.append(id_convert_dict[id_])
+            ids = new_ids
 
     bed = bed.to_dict('record')
     new_bed = []
     for item in bed:
         query_id = item[query_column]
-        if id_convert_dict is not None:
+        if id_convert_dict is not None and not convert_input_id:
             #Convert to id based on table
             query_id = id_convert_dict[query_id]
         if query_id in ids:
@@ -49,6 +55,7 @@ if __name__ == "__main__":
     parser.add_argument("-t", "--id_table_path")
     parser.add_argument("--query_column",type=str,help="Defualt :id")
     parser.add_argument("--treat_id_path_as_ids",action='store_true')
+    parser.add_argument("--convert_input_id",action='store_true')
     
     args = parser.parse_args()
     kwargs = vars(args)

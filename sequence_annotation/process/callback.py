@@ -9,7 +9,7 @@ from ..utils.seq_converter import DNA_CODES
 from .metric import calculate_metric, categorical_metric, contagion_matrix
 from .inference import ann_vec2one_hot_vec, create_basic_inference
 from .signal_analysis import get_signal_ppm, ppms2meme
-
+from .data_generator import SeqDataset
 
 class ICallback(metaclass=ABCMeta):
     @abstractmethod
@@ -176,7 +176,8 @@ class SeqFigCallback(Callback):
                  prefix=None):
         set_prefix(self, prefix)
         self._writer = tensorboard_writer
-        self._data = data
+        self._data = SeqDataset({'ids':[None],'inputs':data,
+                                 'lengths':[data.shape[2]]})
         self._answer = answer
         self._model = None
         self._counter = None
@@ -211,8 +212,7 @@ class SeqFigCallback(Callback):
 
     def on_epoch_end(self, **kwargs):
         # Value's shape should be (1,C,L)
-        predict_result = self._executor.predict(
-            self._model, self._data, [self._data.shape[2]])['predicts']
+        predict_result = self._executor.predict(self._model, self._data)['predicts']
         if self.do_add_distribution and hasattr(self._model,
                                                 'saved_distribution'):
             for name, value in self._model.saved_distribution.items():

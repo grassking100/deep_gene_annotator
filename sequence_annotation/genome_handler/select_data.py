@@ -1,4 +1,5 @@
 import deepdish as dd
+from ..utils.seq_converter import DNA_CODES
 from ..utils.utils import read_fasta, BASIC_GENE_ANN_TYPES
 from .seq_container import AnnSeqContainer
 from .ann_genome_processor import get_mixed_genome, simplify_genome, is_one_hot_genome
@@ -122,17 +123,14 @@ def _preprocess(ann_seqs, before_mix_simplify_map=None, simplify_map=None):
 
 
 def select_data(fasta_path, ann_seqs_path, chroms, before_mix_simplify_map=None,
-                simplify_map=None, gene_map=None, select_func=None,
+                simplify_map=None, select_func=None,
                 select_each_type=False, codes=None, **kwargs):
-
+    codes = codes or DNA_CODES
     if select_func is None:
         if select_each_type:
             select_func = select_data_by_length_each_type
         else:
             select_func = select_data_by_length
-
-    if codes is not None:
-        codes = set(list(codes.upper()))
 
     h5 = dd.io.load(ann_seqs_path)
     fasta = read_fasta(fasta_path)

@@ -4,8 +4,8 @@ from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.utils.utils import read_bed, write_bed
 from sequence_annotation.genome_handler.seq_info_parser import BedInfoParser
-from sequence_annotation.preprocess.convert_transcript_to_gene_with_alt_status_gff import get_most_start_end_transcripts
-from sequence_annotation.preprocess.convert_transcript_to_gene_with_alt_status_gff import get_canonical_region_and_alt_splice
+from sequence_annotation.preprocess.create_gene_with_alt_status_gff import get_most_start_end_transcripts
+from sequence_annotation.preprocess.create_gene_with_alt_status_gff import get_canonical_region_and_alt_splice
 from sequence_annotation.preprocess.get_subbed import get_subbed
 
 

@@ -76,35 +76,27 @@ def build_ann_vec_gff_converter(channel_order=None, simply_map=None):
     return ann_vec_gff_converter
 
 
-def _convert_raw_output_to_vectors(outputs):
+def simple_output_to_vectors(outputs):
     """Convert vectors in dictionary to torch's tensors for each attributes"""
     data = {}
     columns = ['lengths', 'outputs', 'chrom_ids']
-    for key in columns:
-        data[key] = []
-    for index, item in enumerate(outputs):
-        for key in ['lengths', 'chrom_ids']:
-            data[key] += [item[key]]
-        item = torch.FloatTensor(item['outputs']).transpose(1, 2)
-        data['outputs'] += item
     for key in ['lengths', 'chrom_ids']:
-        data[key] = np.concatenate(data[key])
-    data['outputs'] = pad_sequence(data['outputs'], batch_first=True)
-    data['outputs'] = data['outputs'].transpose(2, 1).cuda()
+        data[key] = outputs[key]
+    outputs = outputs['outputs'].transpose(1, 2)
+    outputs = pad_sequence(outputs, batch_first=True)
+    data['outputs'] = outputs.transpose(2, 1).cuda()
     data['masks'] = get_seq_mask(data['lengths'], to_cuda=True)
     return data
+    
 
-
-def convert_raw_output_to_gff(raw_outputs,region_table,config_path,
-                              raw_plus_gff_path,gff_path,
-                              inference,ann_vec_gff_converter):
-    config = ann_vec_gff_converter.get_config()
-    write_json(config, config_path)
+def convert_output_to_gff(raw_outputs,region_table,
+                          raw_plus_gff_path,gff_path,
+                          inference,ann_vec_gff_converter):
     onehot_list = []
     output_list = []
     for index,raw_output in enumerate(raw_outputs):
         print_progress("{}% of data have been processed".format(int(100 * index / len(raw_outputs))))
-        output = _convert_raw_output_to_vectors([raw_output])
+        output = simple_output_to_vectors(raw_output)
         onehot_vecs = inference(output['outputs'],output['masks'])
         onehot_vecs = onehot_vecs.cpu().numpy()
         output_list.append(output)
@@ -132,9 +124,11 @@ def main(saved_root,raw_signal_path,region_table_path,
     else:
         inference_ = seq_ann_inference
     raw_plus_gff_path = '.'.join(gff_path.split('.')[:-1]) + "_raw_plus.gff3"
-    convert_raw_output_to_gff(raw_outputs, region_table, config_path,
-                              raw_plus_gff_path,gff_path,
-                              inference_, converter,**kwargs)
+    config = converter.get_config()
+    write_json(config, config_path)
+    convert_output_to_gff(raw_outputs, region_table,
+                          raw_plus_gff_path,gff_path,
+                          inference_, converter,**kwargs)
 
 
 if __name__ == '__main__':

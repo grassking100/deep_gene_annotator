@@ -5,17 +5,6 @@ from collections import OrderedDict
 from torch.nn.init import _calculate_fan_in_and_fan_out, _no_grad_uniform_
 from ..utils.utils import CONSTANT_DICT
 
-BASIC_SIMPLIFY_MAP = CONSTANT_DICT({
-    'exon': ['exon'],
-    'intron': ['intron'],
-    'other': ['other']
-})
-BASIC_COLOR_SETTING = CONSTANT_DICT({
-    'other': 'blue',
-    'exon': 'red',
-    'intron': 'yellow'
-})
-
 
 def deep_copy(data):
     if isinstance(data, dict):

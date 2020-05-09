@@ -129,6 +129,11 @@ class BasicModel(nn.Module, metaclass=ABCMeta):
             if hasattr(layer, 'reset_parameters'):
                 layer.reset_parameters()
 
+    def reset(self):
+        """Reset the state of all children if they have method reset"""
+        for layer in self.children():
+            if hasattr(layer, 'reset'):
+                layer.reset()
 
 class PaddedBatchNorm1d(BasicModel):
     def __init__(self, in_channels, **kwrags):

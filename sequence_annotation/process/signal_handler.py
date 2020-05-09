@@ -1,18 +1,17 @@
 import os
+import torch
 import pandas as pd
 import deepdish as dd
 from ..utils.utils import read_gff,create_folder
 from ..preprocess.utils import read_region_table
 from .callback import Callback, Callbacks, set_prefix
-from .convert_signal_to_gff import convert_raw_output_to_gff
+from .convert_signal_to_gff import convert_output_to_gff
 from .performance import compare_and_save
 
 
 class _SignalSaver(Callback):
     def __init__(self, saved_root, prefix=None):
         set_prefix(self, prefix)
-        if saved_root is None:
-            raise Exception("The saved_root should not be None")
         self._saved_root = saved_root
         self._raw_outputs = None
         self._raw_answers = None
@@ -63,7 +62,7 @@ class _SignalSaver(Callback):
         if not self._has_finish:
             raw_output_path = os.path.join(self.output_root, '{}raw_output_{}.h5').format(self._prefix,self._index)
             raw_outputs = {
-                'outputs': outputs,
+                'outputs': torch.Tensor(outputs),
                 'chrom_ids': seq_data.ids,
                 'lengths': seq_data.lengths
             }
@@ -72,7 +71,7 @@ class _SignalSaver(Callback):
             
             if seq_data.answers is not None:
                 raw_answer_path = os.path.join(self.answer_root, '{}raw_answer_{}.h5').format(self._prefix,self._index)
-                answers = seq_data.answers.cpu().numpy()
+                answers = seq_data.answers.cpu()
                 raw_answers = {
                     'outputs': answers,
                     'chrom_ids': seq_data.ids,
@@ -91,7 +90,7 @@ class _SignalSaver(Callback):
         pd.DataFrame.from_dict(region_ids).to_csv(self.region_id_path,
                                                   index=None)
 
-
+        
 class _SignalGffConverter(Callback):
     def __init__(self,saved_root,region_table_path,
                  signal_saver_output_root,inference,
@@ -117,17 +116,11 @@ class _SignalGffConverter(Callback):
             'saved_root', 'region_table_path', 'signal_saver_output_root',
             'ann_vec_gff_converter'
         ]
-        for name, variable in zip(names, variables):
-            if variable is None:
-                raise Exception("The {} should not be None".format(name))
-
         self._inference = inference
         self._saved_root = saved_root
         self._region_table_path = region_table_path
         self._signal_saver_output_root = signal_saver_output_root
         self._ann_vec_gff_converter = ann_vec_gff_converter
-        self._config_path = os.path.join(self._saved_root,
-                                         "converter_config.json")
         self._region_table = read_region_table(self._region_table_path)
         self._double_strand_gff_path = os.path.join(
             self._saved_root, "{}predict_double_strand.gff3".format(self._prefix))
@@ -154,9 +147,11 @@ class _SignalGffConverter(Callback):
                 path = os.path.join(self._signal_saver_output_root,name)
                 data = dd.io.load(path)
                 raw_predicts.append(data)
-        convert_raw_output_to_gff(raw_predicts, self._region_table,self._config_path,
-                                  self._plus_strand_gff_path,self._double_strand_gff_path,
-                                  self._inference, self._ann_vec_gff_converter)
+        convert_output_to_gff(raw_predicts, self._region_table,
+                              self._plus_strand_gff_path,
+                              self._double_strand_gff_path,
+                              self._inference,
+                              self._ann_vec_gff_converter)
 
 
 class _GFFCompare(Callback):

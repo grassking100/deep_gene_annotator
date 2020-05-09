@@ -60,13 +60,17 @@ def optimizer_generator(type_,
                          **kwargs)
 
 
-def _evaluate(loss, model, inputs, labels, lengths, inference, **kwargs):
+def _evaluate(loss, model,seq_data, inference, **kwargs):
+    inputs = seq_data.inputs.cuda()
+    labels = seq_data.answers.cuda()
+    lengths = seq_data.lengths
     model.train(False)
     with torch.no_grad():
         outputs, lengths = model(inputs, lengths=lengths)
         outputs = outputs.float()
         masks = get_seq_mask(lengths).cuda()
-        loss_ = loss(outputs, labels, masks, **kwargs).item()
+        loss_ = loss(outputs, labels, masks,
+                     seq_data=seq_data,**kwargs).item()
         predict_result = inference(outputs, masks)
     return {
         'loss': loss_,
@@ -77,7 +81,9 @@ def _evaluate(loss, model, inputs, labels, lengths, inference, **kwargs):
     }
 
 
-def _predict(model, inputs, lengths, inference):
+def _predict(model, seq_data, inference):
+    inputs = seq_data.inputs.cuda()
+    lengths=seq_data.lengths
     model.train(False)
     with torch.no_grad():
         outputs, lengths = model(inputs, lengths=lengths)
@@ -147,29 +153,23 @@ class _Executor(IExecutor):
         config['inference'] = self.inference.__name__
         return config
 
-    def predict(self, model, inputs, lengths):
-        inputs = inputs.cuda()
-        returned = _predict(model, inputs, lengths, inference=self.inference)
+    def predict(self, model, seq_data):
+        model.reset()
+        returned = _predict(model, seq_data, inference=self.inference)
+        model.reset()
         return returned
 
-    def evaluate(self, model, inputs, labels, lengths, **kwargs):
-        inputs = inputs.cuda()
-        labels = labels.cuda()
+    def evaluate(self, model,seq_data, **kwargs):
+        model.reset()
         if self.loss is not None:
-            returned = _evaluate(self.loss,
-                                 model,
-                                 inputs,
-                                 labels,
-                                 lengths,
-                                 inference=self.inference,
-                                 **kwargs)
+            returned = _evaluate(self.loss,model,seq_data,
+                                 inference=self.inference,**kwargs)
             returned['metric'] = {'loss': returned['loss']}
         else:
-            returned = _predict(model,
-                                inputs,
-                                lengths,
+            returned = _predict(model,seq_data,
                                 inference=self.inference)
             returned['metric'] = {}
+        model.reset()
         return returned
 
 
@@ -231,22 +231,19 @@ class BasicExecutor(_Executor):
             config['lr_scheduler_target'] = self.lr_scheduler_target
         return config
 
-    def fit(self, model, inputs, labels, lengths, **kwargs):
+    def fit(self, model, seq_data, **kwargs):
+        inputs = seq_data.inputs.cuda()
+        labels = seq_data.answers.cuda()
+        lengths=seq_data.lengths
         self._has_fit = True
         if self.optimizer is None:
             raise Exception("Exectutor must set optimizer for fitting")
-        inputs = inputs.cuda()
-        labels = labels.cuda()
         model.train()
         self.optimizer.zero_grad()
         outputs, lengths = model(inputs, lengths=lengths, answers=labels)
         masks = get_seq_mask(lengths).cuda()
         predict_result = self.inference(outputs, masks)
-        loss_ = self.loss(outputs,
-                          labels,
-                          masks,
-                          predict_result=predict_result,
-                          **kwargs)
+        loss_ = self.loss(outputs,labels,masks,seq_data=seq_data,**kwargs)
         loss_.backward()
         if self.clip_grad_value is not None:
             nn.utils.clip_grad_value_(model.parameters(), self.clip_grad_value)
@@ -297,6 +294,23 @@ class ExecutorBuilder:
         self._factor = 0.5
         self._optim_type = 'Adam'
 
+
+        self._set_optimizer_kwargs = None
+        self._set_loss_kwargs = None
+        self._set_lr_scheduler_kwargs = None
+
+    def get_set_kwargs(self):
+        config = {}
+        config['optimizer_kwargs'] = dict(self._set_optimizer_kwargs)
+        config['loss_kwargs'] = dict(self._set_loss_kwargs)
+        config['lr_scheduler_kwargs'] = dict(self._set_lr_scheduler_kwargs)
+        config['use_native'] = self.use_native
+        for values in config.values():
+            if 'self' in values:
+                del values['self']
+
+        return config
+        
     def set_optimizer(self,
                       optim_type,
                       learning_rate=None,
@@ -304,6 +318,7 @@ class ExecutorBuilder:
                       clip_grad_norm=None,
                       grad_norm_type=None,
                       **kwargs):
+        self._set_optimizer_kwargs = locals()
         self._optimizer_kwargs = kwargs
         self._optim_type = optim_type or self._optim_type
         self._learning_rate = learning_rate or self._learning_rate
@@ -312,6 +327,7 @@ class ExecutorBuilder:
         self._grad_norm_type = grad_norm_type or self._grad_norm_type
 
     def set_loss(self, gamma=None, intron_coef=None, other_coef=None):
+        self._set_loss_kwargs = locals()
         self._gamma = gamma
         self._intron_coef = intron_coef
         self._other_coef = other_coef
@@ -321,6 +337,7 @@ class ExecutorBuilder:
                          factor=None,
                          threshold=None,
                          use_lr_scheduler=None):
+        self._set_lr_scheduler_kwargs = locals()
         if use_lr_scheduler is not None:
             self._use_lr_scheduler = use_lr_scheduler
         self._threshold = threshold or self._threshold
@@ -394,7 +411,10 @@ def get_executor(model, config, executor_weights_path=None):
     builder.set_optimizer(**config['optim_config'])
     builder.set_loss(**config['loss_config'])
     builder.set_lr_scheduler(**config['lr_scheduler_config'])
-    params = get_params(model, **config['weight_decay_config'])
+    if 'weight_decay_config' in config:
+        params = get_params(model, **config['weight_decay_config'])
+    else:
+        params = get_params(model)
     executor = builder.build(params,
                              executor_weights_path=executor_weights_path)
     return executor

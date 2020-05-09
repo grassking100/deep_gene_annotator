@@ -36,10 +36,10 @@ def main(input_path, output_root):
     plot_log10_length(lengths,output_root)
     stats = {'median':{},'count':{},'max':{},'min':{}}
     for type_,lengths_ in lengths.items():
-        stats['count'][type_.replace(' ','_')] = len(lengths_)
-        stats['median'][type_.replace(' ','_')] = np.median(lengths_)
-        stats['max'][type_.replace(' ','_')] = max(lengths_)
-        stats['min'][type_.replace(' ','_')] = min(lengths_)
+        stats['count'][type_.replace(' ','_')] = int(len(lengths_))
+        stats['median'][type_.replace(' ','_')] = int(np.median(lengths_))
+        stats['max'][type_.replace(' ','_')] = int(max(lengths_))
+        stats['min'][type_.replace(' ','_')] = int(min(lengths_))
     
     write_json(stats,os.path.join(output_root,'length_stats.json'))
     

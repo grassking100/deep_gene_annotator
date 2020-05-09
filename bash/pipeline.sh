@@ -196,3 +196,4 @@ splitted_root=$saved_root/split
     echo "split ss"
     bash $bash_root/region_select_split.sh -g $genome_path -t $id_convert_table_path -p $processed_root -o $splitted_root -s
 #fi
+

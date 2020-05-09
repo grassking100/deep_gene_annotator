@@ -36,10 +36,6 @@ def bce_loss(output, answer, mask=None, return_mean=True):
 
 
 class ILoss(nn.Module, metaclass=ABCMeta):
-    @abstractproperty
-    def accumulated_data(self):
-        pass
-
     @abstractmethod
     def reset_accumulated_data(self):
         pass
@@ -55,10 +51,6 @@ class FocalLoss(ILoss):
         self.gamma = gamma or 0
         self._accumulated_loss_sum = None
         self._accumulated_mask_sum = None
-
-    @property
-    def accumulated_data(self):
-        return self._accumulated_loss_sum, self._accumulated_mask_sum
 
     def reset_accumulated_data(self):
         self._accumulated_loss_sum = None
@@ -113,15 +105,11 @@ class FocalLoss(ILoss):
         return loss
 
 
-class CCELoss(nn.Module):
+class CCELoss(ILoss):
     """Categorical cross entropy"""
     def __init__(self):
         super().__init__()
         self._loss = FocalLoss(0)
-
-    @property
-    def accumulated_data(self):
-        return self._loss.accumulated_data
 
     def reset_accumulated_data(self):
         self._loss.reset_accumulated_data()
@@ -137,7 +125,7 @@ class CCELoss(nn.Module):
         return loss
 
 
-class SeqAnnLoss(nn.Module):
+class SeqAnnLoss(ILoss):
     def __init__(self, intron_coef=None, other_coef=None):
         super().__init__()
         self.intron_coef = intron_coef or 1
@@ -146,12 +134,6 @@ class SeqAnnLoss(nn.Module):
         self._accumulated_other_loss_sum = None
         self._accumulated_mask_sum = None
         self._accumulated_transcript_mask_sum = None
-
-    @property
-    def accumulated_data(self):
-        return (self._accumulated_intron_loss_sum,
-                self._accumulated_other_loss_sum, self._accumulated_mask_sum,
-                self._accumulated_transcript_mask_sum)
 
     def reset_accumulated_data(self):
         self._accumulated_intron_loss_sum = None
@@ -174,7 +156,8 @@ class SeqAnnLoss(nn.Module):
         loss = loss / (self.intron_coef + self.other_coef)
         return loss
 
-    def forward(self, output, answer, mask, accumulate=False, **kwargs):
+    def forward(self, output, answer, mask, accumulate=False,
+                weights=None, **kwargs):
         """
             Data shape is N,C,L.
             Output channel order: Transcription, Intron|Transcription
@@ -200,7 +183,7 @@ class SeqAnnLoss(nn.Module):
         intron_answer = answer[:, 1, :]
         other_answer = answer[:, 2, :]
         transcript_output = output[:, 0, :]
-        intron_transcript_output = output[:, 1, :]
+        intron_output = output[:, 1, :]
         transcript_answer = 1 - other_answer
         other_output = 1 - transcript_output
         # Get mask
@@ -208,10 +191,12 @@ class SeqAnnLoss(nn.Module):
         # Calculate loss
         other_loss = bce_loss(other_output, other_answer,
                               return_mean=False) * self.other_coef
-        intron_loss = bce_loss(
-            intron_transcript_output, intron_answer,
-            return_mean=False) * self.intron_coef * transcript_mask
-        # Calculate sum
+        intron_loss = bce_loss(intron_output, intron_answer,
+                               return_mean=False) * self.intron_coef * transcript_mask
+        if weights is not None:
+            other_loss = other_loss*weights
+            intron_loss = intron_loss*weights
+        # intron_loss sum
         other_loss_sum = sum_by_mask(other_loss, mask)
         intron_loss_sum = sum_by_mask(intron_loss, mask)
         mask_sum = mask.sum()
@@ -244,16 +229,12 @@ class SeqAnnLoss(nn.Module):
         return loss
 
 
-class LabelLoss(nn.Module):
+class LabelLoss(ILoss):
     def __init__(self, loss):
         super().__init__()
         self.loss = loss
         self.predict_inference = create_basic_inference(3)
         self.answer_inference = create_basic_inference(3)
-
-    @property
-    def accumulated_data(self):
-        return self.loss.accumulated_data
 
     def reset_accumulated_data(self):
         self.loss.reset_accumulated_data()
@@ -270,4 +251,25 @@ class LabelLoss(nn.Module):
         label_predict = self.predict_inference(output, mask)
         label_answer = self.answer_inference(answer, mask)
         loss = self.loss(label_predict, label_answer, mask, **kwargs)
+        return loss
+
+class WeightLabelLoss(ILoss):
+    def __init__(self, label_loss,score_calculator,output_root):
+        super().__init__()
+        self.label_loss = label_loss
+        self.score_calculator = score_calculator
+        self.output_root = output_root
+
+    def reset_accumulated_data(self):
+        self.label_loss.reset_accumulated_data()
+
+    def get_config(self):
+        config = {}
+        config['name'] = self.__class__.__name__
+        config['label_loss'] = self.label_loss.get_config()
+        return config
+
+    def forward(self, output, answer, mask, seq_data,  **kwargs):
+        weights = self.score_calculator.get_score(output,seq_data,self.output_root)
+        loss = self.label_loss(output, answer, mask, weights=weights, **kwargs)
         return loss

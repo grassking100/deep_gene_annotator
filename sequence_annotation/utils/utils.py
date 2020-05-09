@@ -57,6 +57,17 @@ BASIC_GENE_MAP = CONSTANT_DICT({
 })
 BASIC_GENE_ANN_TYPES = CONSTANT_LIST(['exon', 'intron', 'other'])
 
+BASIC_SIMPLIFY_MAP = CONSTANT_DICT({
+    'exon': ['exon'],
+    'intron': ['intron'],
+    'other': ['other']
+})
+
+BASIC_COLOR_SETTING = CONSTANT_DICT({
+    'other': 'blue',
+    'exon': 'red',
+    'intron': 'yellow'
+})
 
 def get_gff_with_feature_coord(gff):
     gff = gff.copy()

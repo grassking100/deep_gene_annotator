@@ -93,7 +93,7 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--bed_path", required=True,
                         help="Single-strand region bed file to be renamed")
     parser.add_argument("-c", "--coord_region_bed_path", required=True,
-                        help="Path to saved coprdinate single-strand bed file")
+                        help="Path to saved coordinate single-strand bed file")
     parser.add_argument("-t", "--region_table_path", required=True,
                         help="Path to saved one-based renamed table")
     parser.add_argument("-p", "--id_prefix", help="Prefix of new id")

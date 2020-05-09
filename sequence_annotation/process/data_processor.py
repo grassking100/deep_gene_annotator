@@ -12,7 +12,6 @@ class AnnSeqProcessor:
     def __init__(self,
                  channel_order,
                  seq_converter=None,
-                 discard_invalid_seq=False,
                  validation_split=None):
         self._validation_split = validation_split or 0
         if seq_converter is None:
@@ -20,7 +19,6 @@ class AnnSeqProcessor:
         else:
             self._seq_converter = seq_converter
         self._channel_order = channel_order
-        self._discard_invalid_seq = discard_invalid_seq
 
     def _validate(self, data):
         if 'answers' in data:
@@ -60,12 +58,10 @@ class AnnSeqProcessor:
             'lengths': [],
             'ids': [],
             'seqs': [],
-           # 'strands': [],
             'has_gene_statuses': []
         }
         has_gene_list = {}
-        seqs = self._seq_converter.seqs2dict_vec(item['inputs'],
-                                                 self._discard_invalid_seq)
+        seqs = self._seq_converter.seqs2dict_vec(item['inputs'])
         if 'answers' in item:
             data['answers'] = []
             ann_seq_dict = ann_genome_processor.genome2dict_vec(
@@ -84,7 +80,6 @@ class AnnSeqProcessor:
             if 'answers' in item:
                 answer = ann_seq_dict[name]
                 data['answers'].append(answer)
-              #  data['strands'].append(item['answers'][name].strand)
                 data['has_gene_statuses'].append(has_gene_list[name])
             
         return data

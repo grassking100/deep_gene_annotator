@@ -244,23 +244,35 @@ class OptunaTrainer:
     def _objective(self, trial, set_by_trial_config=False):
         # Set path
         trial_root = self._get_trial_root(trial)
+        create_folder(trial_root)
         trial_config_path = self._get_trial_config_path(trial)
         # Check memory
         print("Check memory")
-        temp_model, temp_executor = self._creator.create_by_trial(trial, set_by_trial_config=set_by_trial_config,
-                                                                  set_by_grid_search=self._by_grid_search)
+        temp = self._creator.create_by_trial(trial, set_by_trial_config=set_by_trial_config,
+                                             set_by_grid_search=self._by_grid_search)
+        temp_model = temp['model']
+        temp_executor = temp['executor']
+        model_set_kwargs = temp['model_set_kwargs']
+        executor_set_kwargs = temp['executor_set_kwargs']
+        model_builder_set_kwarg_path =  os.path.join(trial_root,'model_builder_set_kwargs.json')
+        executor_builder_set_kwarg_path =  os.path.join(trial_root,'executor_builder_set_kwargs.json')
+        write_json(model_set_kwargs,model_builder_set_kwarg_path)
+        write_json(executor_set_kwargs,executor_builder_set_kwarg_path)
         check_max_memory_usgae(trial_root, temp_model, temp_executor,
-                               self._train_data, self._val_data, self._batch_size)
+                               self._train_data, self._val_data,
+                               self._batch_size)
         del temp_model
         del temp_executor
         torch.cuda.empty_cache()
         print("Memory is available")
         # Start training
-        model, executor = self._creator.create_by_trial(trial, set_by_trial_config=set_by_trial_config,
-                                                        set_by_grid_search=self._by_grid_search)
+        created = self._creator.create_by_trial(trial, set_by_trial_config=set_by_trial_config,
+                                                set_by_grid_search=self._by_grid_search)
+        model = created['model']
+        executor = created['executor']          
         model.save_distribution = self._save_distribution
         # save settings
-        create_folder(trial_root)
+        
         self._record_trial_path(trial)
         config = _config_to_json(get_trial_config(trial))
         config = _shift_config_number(config, self._trial_start_number)

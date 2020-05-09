@@ -113,3 +113,24 @@ fi
 
 echo $command
 eval "bash $command"
+
+processed_root=$saved_root/processed
+result_root=$processed_root/result
+mkdir $half_data_root
+
+fasta_path=$result_root/selected_region.fasta
+gff_path=$result_root/canonical.gff3
+ann_seqs_path=$result_root/canonical.h5
+train_id_path=$splitted_root/single_strand_data/split_with_strand/train_1_2_plus_3_5.txt
+val_id_path=$splitted_root/single_strand_data/split_with_strand/val_2_minus.txt
+half_data_root=$saved_root/half_data
+train_saved_path=$half_data_root/train_1_2_plus_3_5_small_len_ratio_f5.h5
+val_saved_path=$half_data_root/val_2_minus_small_len_ratio_f5.h5
+train_gff_path=$half_data_root/train_1_2_plus_3_5_small_len_ratio_f5.gff3
+val_gff_path=$half_data_root/val_2_minus_small_len_ratio_f5.gff3
+
+python3 $preprocess_main_root/select_data.py -f $fasta_path -a $ann_seqs_path -s $train_saved_path -i $train_id_path --ratio 0.5 --select_each_type --input_gff_path $gff_path --saved_gff_path $train_gff_path
+
+python3 $preprocess_main_root/select_data.py -f $fasta_path -a $ann_seqs_path -s $val_saved_path -i $val_id_path --ratio 0.5 --select_each_type --input_gff_path $gff_path --saved_gff_path $val_gff_path
+
+

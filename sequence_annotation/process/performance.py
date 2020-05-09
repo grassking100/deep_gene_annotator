@@ -9,12 +9,11 @@ from sequence_annotation.utils.utils import create_folder, write_gff, write_json
 from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES,get_gff_with_attribute,get_gff_with_feature_coord
 from sequence_annotation.genome_handler.sequence import AnnSequence, PLUS, MINUS
 from sequence_annotation.genome_handler.ann_seq_processor import get_background,seq2vecs
-from sequence_annotation.preprocess.utils import read_region_table
+from sequence_annotation.preprocess.utils import read_region_table,get_gff_with_intron
 from sequence_annotation.preprocess.utils import EXON_TYPES, RNA_TYPES,INTRON_TYPES,GENE_TYPES
-from sequence_annotation.preprocess.utils import get_gff_with_intron
 from sequence_annotation.preprocess.get_id_table import get_id_table,convert_id_table_to_dict
 from sequence_annotation.process.metric import calculate_metric,contagion_matrix,categorical_metric
-from sequence_annotation.process.site_analysis import get_all_site_diff,get_all_site_matched_ratio
+from sequence_annotation.process.site_analysis import get_all_site_diff,get_all_site_matched_ratio,plot_site_diff
 
 pd.set_option('mode.chained_assignment', 'raise')
 
@@ -229,6 +228,7 @@ def block_performance(predict,answer,round_value=None):
     #Compare gene and get status
     _compare_gene(predict,answer)
     predict_genes = predict[predict['feature'].isin(GENE_TYPES)]
+
     answer_genes = answer[answer['feature'].isin(GENE_TYPES)]
     gene_status = _get_status(predict_genes,answer_genes,'id')
     status_list = [intron_status,exon_status,transcript_status,
@@ -246,7 +246,8 @@ def block_performance(predict,answer,round_value=None):
         performances.update(performance)
     error_df = pd.concat(error_list,ignore_index=True)
     error_df = get_gff_with_updated_attribute(error_df)
-    return performances,error_df
+    partners = answer[(~answer['partner_gene'].isna())&(answer['feature'].isin(RNA_TYPES))][['id','partner_gene']]
+    return performances,error_df,partners
 
 def _create_ann_seq(chrom,length,strand):
     ann_seq = AnnSequence(['gene']+BASIC_GENE_ANN_TYPES,length)
@@ -306,7 +307,7 @@ def gff_performance(predict,answer,region_table,round_value=None):
     predict = get_gff_with_feature_coord(get_gff_with_intron(get_gff_with_attribute(predict)))
     answer = get_gff_with_feature_coord(get_gff_with_intron(get_gff_with_attribute(answer)))
     result = {}
-    result['block_performance'],result['error_status'] = block_performance(predict,answer,round_value=round_value)
+    result['block_performance'],result['error_status'],result['partners'] = block_performance(predict,answer,round_value=round_value)
     result['p_a_abs_diff'] = get_all_site_diff(answer,predict,round_value=round_value)
     result['a_p_abs_diff'] = get_all_site_diff(answer,predict,answer_as_ref=False,round_value=round_value)
     
@@ -429,6 +430,9 @@ def compare_and_save(predict,answer,region_table,saved_root,round_value=None):
     write_json(result['a_p_abs_diff'],os.path.join(saved_root,'a_p_abs_diff.json'))
     write_json(result['p_a_abs_diff_exclude_zero'],os.path.join(saved_root,'p_a_abs_diff_exclude_zero.json'))
     write_json(result['a_p_abs_diff_exclude_zero'],os.path.join(saved_root,'a_p_abs_diff_exclude_zero.json'))
+    result['partners'].to_csv(os.path.join(saved_root,'partners.csv'),index=None)
+    plot_site_diff(predict,answer,saved_root)
+    plot_site_diff(predict,answer,saved_root,answer_as_ref=False)
 
 def main(predict_path,answer_path,region_table_path,saved_root,**kwargs):
     predict = read_gff(predict_path)

@@ -8,23 +8,24 @@ from torch.nn.utils.rnn import pad_sequence
 class SeqDataset(Dataset):
     def __init__(self, data):
         self._ids = data['ids']
+        self._num = len(self._ids)
         self._inputs = data['inputs']
-        self._has_gene_statuses = self._answers = None
-        #self._strands = 
+        self._has_gene_statuses = None
+        self._answers = None
+        self._seqs = None
+        self._lengths = data['lengths']
+        if 'seqs' in data:
+            self._seqs = data['seqs']
         if 'answers' in data:
             self._answers = data['answers']
             self._has_gene_statuses = data['has_gene_statuses']
-            #self._strands = data['strands']
-        self._lengths = data['lengths']
-        self._seqs = data['seqs']
-        self._num = len(self._ids)
 
     @property
     def data(self):
         data = {}
         keys = [
-            'ids', 'inputs', 'answers', 'lengths', 'seqs',# 'strands',
-            'has_gene_statuses'
+            'ids', 'inputs', 'answers', 'lengths',
+            'seqs','has_gene_statuses'
         ]
         for key in keys:
             data[key] = getattr(self, "_" + key)
@@ -50,10 +51,6 @@ class SeqDataset(Dataset):
     def seqs(self):
         return self._seqs
 
-   # @property
-    #def strands(self):
-    #    return self._strands
-
     @property
     def has_gene_statuses(self):
         return self._has_gene_statuses
@@ -70,12 +67,14 @@ class SeqDataset(Dataset):
                 returned[key] = None
         return returned
 
-
-def augment_seqs(inputs, answers, lengths, has_gene_statuses,
+    
+def augment_seqs(inputs, answers,seqs, lengths, has_gene_statuses,
                  discard_ratio_min, discard_ratio_max, augment_up_max,
                  augment_down_max):
     inputs_ = []
     answers_ = []
+    seqs_ = []
+    new_lengths = []
     num = len(lengths)
     start_diff_list = np.random.randint(0, augment_up_max + 1, size=num)
     end_diff_list = np.random.randint(0, augment_down_max + 1, size=num)
@@ -84,9 +83,8 @@ def augment_seqs(inputs, answers, lengths, has_gene_statuses,
         size=num) * discard_diff + discard_ratio_min
     discard_right_ratio_list = np.random.random_sample(
         size=num) * discard_diff + discard_ratio_min
-    new_lengths = []
-    for index, (input_, answer, length, has_gene_status) in enumerate(
-            zip(inputs, answers, lengths, has_gene_statuses)):
+    for index, (input_, answer,seq, length, has_gene_status) in enumerate(
+            zip(inputs, answers,seqs, lengths, has_gene_statuses)):
         if has_gene_status:
             new_start_index = start_diff_list[index]
             end_diff = end_diff_list[index]
@@ -101,21 +99,66 @@ def augment_seqs(inputs, answers, lengths, has_gene_statuses,
                          (1 - discard_right_ratio))) + new_start_index
         input_ = input_[new_start_index:new_end_index]
         answer = answer[new_start_index:new_end_index]
+        seq = seq[new_start_index:new_end_index]
         length = input_.shape[0]
         inputs_.append(input_)
         answers_.append(answer)
+        seqs_.append(seq)
         new_lengths.append(length)
-    return inputs_, answers_, new_lengths
+    return inputs_, answers_,seqs_, new_lengths
 
 
 def order(data, indice):
     return [data[index] for index in indice]
 
 
+def concat_seq(ids,inputs,answers,lengths,seqs,has_gene_statuses):
+    indice = list(range(len(ids)))
+    if len(indice)%3 == 1:
+        indice += [None,None]
+    elif len(indice)%3 == 2:
+        indice += [None]
+    np.random.shuffle(indice)
+    step = int(len(indice)/3)
+    left = indice[:step]
+    middle = indice[step:step*2]
+    right = indice[step*2:]
+    returned = []
+    for indice in zip(left,middle,right):
+        item = {}
+        for index in indice:
+            if index is not None:
+                if 'ids' not in item:
+                    item['ids'] = ids[index]
+                    item['inputs'] = inputs[index]
+                    item['answers'] = answers[index]
+                    item['lengths'] = lengths[index]
+                    item['seqs'] = seqs[index]
+                    item['has_gene_statuses'] = has_gene_statuses[index]
+                else:
+                    item['ids'] += ("_and_" + ids[index])
+                    item['inputs'] = torch.cat((item['inputs'],inputs[index]))
+                    item['answers'] = torch.cat((item['answers'],answers[index]))
+                    item['lengths'] += lengths[index] 
+                    item['seqs'] += seqs[index]
+                    item['has_gene_statuses'] = item['has_gene_statuses'] or has_gene_statuses[index]
+        returned.append(item)
+    return returned
+
+def _get_list(data):
+    ids = [item['ids'] for item in data]
+    inputs = [item['inputs'] for item in data]
+    answers = [item['answers'] for item in data]
+    lengths = [item['lengths'] for item in data]
+    seqs = [item['seqs'] for item in data]
+    has_gene_statuses = [item['has_gene_statuses'] for item in data]
+    return ids,inputs,answers,lengths,seqs,has_gene_statuses
+
 def seq_collate_wrapper(discard_ratio_min=None,
                         discard_ratio_max=None,
                         augment_up_max=None,
-                        augment_down_max=None):
+                        augment_down_max=None,
+                        concat=False):
     discard_ratio_min = discard_ratio_min or 0
     discard_ratio_max = discard_ratio_max or 0
     augment_up_max = augment_up_max or 0
@@ -127,20 +170,20 @@ def seq_collate_wrapper(discard_ratio_min=None,
         raise Exception("Invalid discard_ratio_max value")
 
     def seq_collate_fn(data):
-        ids = [item['ids'] for item in data]
-        inputs = [item['inputs'] for item in data]
         answers = reordered_answers = None
-        answers = [item['answers'] for item in data]
-        lengths = [item['lengths'] for item in data]
-        seqs = [item['seqs'] for item in data]
-        #strands = [item['strands'] for item in data]
-        has_gene_statuses = [item['has_gene_statuses'] for item in data]
-        if (augment_up_max + augment_down_max + discard_ratio_min +
-                discard_ratio_max) > 0:
-            result = augment_seqs(inputs, answers, lengths, has_gene_statuses,
+        data = _get_list(data)
+        ids,inputs,answers,lengths,seqs,has_gene_statuses = data
+        change = augment_up_max + augment_down_max + discard_ratio_min + discard_ratio_max 
+        if change > 0:
+            result = augment_seqs(inputs, answers, seqs, lengths, has_gene_statuses,
                                   discard_ratio_min, discard_ratio_max,
                                   augment_up_max, augment_down_max)
-            inputs, answers, lengths = result
+            inputs, answers,seqs, lengths = result
+
+        if concat:
+            concat_result = concat_seq(ids,inputs,answers,lengths,seqs,has_gene_statuses)
+            ids,inputs,answers,lengths,seqs,has_gene_statuses = _get_list(concat_result)
+            
         inputs = pad_sequence(inputs, batch_first=True)
         if answers[0] is not None:
             answers = pad_sequence(answers, batch_first=True)
@@ -152,16 +195,13 @@ def seq_collate_wrapper(discard_ratio_min=None,
             reordered_answers = answers[length_order].transpose(1, 2)
         reordered_lengths = order(lengths, length_order)
         reordered_seqs = order(seqs, length_order)
-        #reordered_strands = order(strands, length_order)
         reordered_has_gene_statuses = order(has_gene_statuses, length_order)
-        #print(reordered_answers)
         data = {
             'ids': reordered_ids,
             'inputs': reordered_inputs,
             'answers': reordered_answers,
             'lengths': reordered_lengths,
             'seqs': reordered_seqs,
-            #'strands': reordered_strands,
             'has_gene_statuses': reordered_has_gene_statuses
         }
         return SeqDataset(data)

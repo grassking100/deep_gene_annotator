@@ -3,8 +3,8 @@ import sys
 import pandas as pd
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__) + "/..")
-from main.deep_learning.select_data import main as select_data_main
 from sequence_annotation.utils.utils import create_folder, write_json
+from sequence_annotation.preprocess.select_data import main as select_data_main
 
 def _get_name(path, with_postfix=False):
     rel_path = path.split('/')[-1]

@@ -1,6 +1,7 @@
 import sys, os
 import numpy as np
 import pandas as pd
+from multiprocessing import Pool
 sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.utils.utils import read_gff, write_gff, GFF_COLUMNS
 from sequence_annotation.utils.utils import get_gff_with_attribute, get_gff_with_updated_attribute
@@ -157,6 +158,7 @@ def _get_item_with_repaired_boundary(parent, child_list):
 
 
 def _get_repaired_subexon_and_exon(transcript_id, exon_group, subexon_group):
+    print("Preproess for {}".format(transcript_id))
     #If subexon exists, then try to use it to repair UTRs and exons and add reapired exons to list
     #Otherwise, directly add exons to list
     exon_list = []
@@ -196,6 +198,20 @@ def _group_list_by_parent(item_list):
         group[parent].append(item)
     return group
 
+def _repair_transcript(transcript,exon_list_group):
+    transcript_id = transcript['id']
+    print("Repair for {}".format(transcript_id))
+    if transcript_id in exon_list_group:
+        matched_list = exon_list_group[transcript_id]
+        transcript = _get_item_with_repaired_boundary(
+            transcript, matched_list)
+    return transcript
+
+def _repair_gene(gene,transcript_group):
+    print("Repair for {}".format(gene['id']))
+    matched_list = transcript_group.get_group(gene['id']).to_dict('record')
+    gene = _get_item_with_repaired_boundary(gene, matched_list)
+    return gene
 
 def repair_gff(gff):
     strand = set(gff['strand'])
@@ -215,12 +231,16 @@ def repair_gff(gff):
     exon_list = []
     subexons_list = []
     print("Create exon and UTR")
+    kwargs_list = []
     for index, transcript_id in enumerate(list(transcripts['id'])):
         print("Processed {}%".format(int(100 * index / len(transcripts))),
               end='\r')
         sys.stdout.write('\033[K')
-        subexons_list_, exon_list_ = _get_repaired_subexon_and_exon(
-            transcript_id, exon_group, subexon_group)
+        kwargs_list.append((transcript_id, exon_group, subexon_group))
+        
+    with Pool(processes=40) as pool:
+        result_tuples = pool.starmap(_get_repaired_subexon_and_exon,kwargs_list)
+    for subexons_list_,exon_list_ in result_tuples:
         exon_list += exon_list_
         subexons_list += subexons_list_
 
@@ -229,25 +249,28 @@ def repair_gff(gff):
     exon_list_group = _group_list_by_parent(exon_list)
 
     print("Repair transcript boundary if transcript has any exon")
+    repaired_kwargs_list = []
     for index, transcript in enumerate(transcript_list):
         print("Processed {}%".format(int(100 * index / len(transcript_list))),
               end='\r')
         sys.stdout.write('\033[K')
-        transcript_id = transcript['id']
-        if transcript_id in exon_list_group:
-            matched_list = exon_list_group[transcript_id]
-            transcript = _get_item_with_repaired_boundary(
-                transcript, matched_list)
-        repaired_transcripts.append(transcript)
-        repaired.append(transcript)
+        repaired_kwargs_list.append((transcript,exon_list_group))
+    
+    with Pool(processes=40) as pool:
+        repaired_transcripts = pool.starmap(_repair_transcript,repaired_kwargs_list)
+        
+    repaired += repaired_transcripts
 
     print("Repair gene boundary")
+    repaired_gene_kwargs_list = []
     for index, gene in enumerate(gene_list):
         print("Processed {}%".format(int(100 * index / len(genes))), end='\r')
         sys.stdout.write('\033[K')
-        matched_list = transcript_group.get_group(gene['id']).to_dict('record')
-        gene = _get_item_with_repaired_boundary(gene, matched_list)
-        repaired.append(gene)
+        repaired_gene_kwargs_list.append((gene,transcript_group))
+        
+    with Pool(processes=40) as pool:
+        repaired_genes = pool.starmap(_repair_gene,repaired_gene_kwargs_list)
+    repaired += repaired_genes
 
     ALL_types = GENE_TYPES + RNA_TYPES + EXON_TYPES + SUBEXON_TYPES
     others = gff[~gff['feature'].isin(ALL_types)].to_dict('record')

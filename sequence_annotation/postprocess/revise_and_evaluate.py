@@ -109,8 +109,9 @@ class Reviser:
         self._region_table_path = region_table_path
         
     def revise(self, saved_root, **kwargs):
-        gff_revise_main(saved_root, self._plus_strand_gff_path,
-                        self._region_table_path,self._fasta_path,**kwargs)
+        pass
+        #gff_revise_main(saved_root, self._plus_strand_gff_path,
+        #                self._region_table_path,self._fasta_path,**kwargs)
 
 class Evaluator:
     def __init__(self, answer_path, region_table_path):
@@ -371,7 +372,7 @@ def main(raw_data_root, processed_root, trained_project_root, saved_root):
             trained_root = os.path.join(trained_project_root, trained_name)
             result_root = os.path.join(predicted_root, trained_name, usage)
             torch.cuda.empty_cache()
-            test(trained_root, result_root, path_helper, trained_name, usage)
+            #test(trained_root, result_root, path_helper, trained_name, usage)
             torch.cuda.empty_cache()
 
     plus_gffs = []

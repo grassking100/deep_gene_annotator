@@ -140,7 +140,7 @@ python3 $preprocess_main_root/create_coordinate_bed.py -i $transcript_bed_path \
 -c $saved_root/coordinate.gff3 -t $id_convert_table_path -o $coordinate_consist_bed_path
 
 python3 $preprocess_main_root/coordinate_compare.py -r $transcript_bed_path -c $coordinate_consist_bed_path \
--o $saved_root/coordinate_compared.gff3
+-o $saved_root/coordinate_compared.tsv
 
 coding_transcript_id_path=$saved_root/coding_transcript_id.txt
 safe_tss_transcript_id_path=$saved_root/safe_tss_transcript_id.txt

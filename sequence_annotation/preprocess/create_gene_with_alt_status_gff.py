@@ -595,28 +595,3 @@ def convert_from_gff_to_gene_with_alt_status_gff(gff,**kwargs):
     id_table = get_id_table(gff)
     gff = convert_from_bed_to_gene_with_alt_status_gff(bed,id_table,**kwargs)
     return gff
-
-
-def main(input_path,output_gff_path,id_table_path=None,**kwargs):
-    if 'bed' in input_path.split('.')[-1]:
-        if id_table_path is None:
-            raise Exception("If input data is bed format, then the id_table_path must be provided")
-        bed = read_bed(input_path)
-        id_table = read_id_table(id_table_path)
-        gene_gff = convert_from_gff_to_gene_with_alt_status_gff(bed,id_table,**kwargs)
-    else:
-        gff = read_gff(input_path)
-        gene_gff = convert_transcript_gff_to_gene_with_alt_status_gff(gff,**kwargs)
-
-    write_gff(gene_gff,output_gff_path)
-
-if __name__ == "__main__":
-    #Reading arguments
-    parser = ArgumentParser()
-    parser.add_argument("-i", "--input_path",required=True)
-    parser.add_argument("-o", "--output_gff_path",required=True)
-    parser.add_argument("-t", "--id_table_path")
-    parser.add_argument("--select_site_by_election",action='store_true')
-    parser.add_argument("--allow_partial_gene",action='store_true')
-    args = parser.parse_args()
-    main(**vars(args))

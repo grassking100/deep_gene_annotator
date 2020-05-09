@@ -1,4 +1,5 @@
 from abc import abstractmethod
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -118,20 +119,28 @@ RNN_INIT_MODE = {
 
 def _forward(rnn, x, lengths, state=None, batch_first=True):
     # Input:N,C,L, Output: N,C,L
+    N,C,L = x.shape
+    hidden_size = rnn.hidden_size
+    num_layers = rnn.num_layers
+    if rnn.bidirectional:
+        n_direction = 2
+    else:
+        n_direction = 1
     if not batch_first:
         x = x.transpose(0, 1)
     x = x.transpose(1, 2)
     x = pack_padded_sequence(x, lengths, batch_first=batch_first)
-    x = rnn(x, state)[0]
+    x,hidden_states = rnn(x, state)
+    hidden_states = hidden_states.view(num_layers,n_direction,N,hidden_size)    
     x, _ = pad_packed_sequence(x, batch_first=batch_first)
     x = x.transpose(1, 2)
     if not batch_first:
         x = x.transpose(0, 1)
-    return x
+    return x,hidden_states
 
 
 class _RNN(BasicModel):
-    def __init__(self, in_channels, customized_init=None, **kwargs):
+    def __init__(self, in_channels, customized_init=None,use_previous_state=False,**kwargs):
         super().__init__()
         if isinstance(customized_init, str):
             customized_init = RNN_INIT_MODE[customized_init]
@@ -140,11 +149,35 @@ class _RNN(BasicModel):
         self.kwargs = kwargs
         self.in_channels = in_channels
         self.out_channels = self.rnn.hidden_size
+        self.use_previous_state = use_previous_state
         if self.rnn.bidirectional:
             self.out_channels *= 2
-        self.batch_first = self.rnn.batch_first if hasattr(
-            self.rnn, 'batch_first') else True
+        self.batch_first = True
+        if hasattr(self.rnn, 'batch_first'):
+            self.batch_first = self.rnn.batch_first 
+        
+        if self.use_previous_state:
+            C = self.rnn.hidden_size
+            num_layers = self.rnn.num_layers
+            if self.rnn.bidirectional:
+                forward_state = torch.zeros(num_layers,1,C).cuda()
+                backward_state = torch.zeros(num_layers,1,C).cuda()
+                self.register_buffer('forward_state', forward_state)
+                self.register_buffer('backward_state', backward_state)
+            else:
+                state = torch.zeros(num_layers,1,C).cuda()
+                self.register_buffer('state', state)
         self.reset_parameters()
+            
+    def reset(self):
+        if self.use_previous_state:
+            C = self.rnn.hidden_size
+            num_layers = self.rnn.num_layers
+            if self.rnn.bidirectional:
+                self.forward_state = torch.zeros(num_layers,1,C).cuda()
+                self.backward_state = torch.zeros(num_layers,1,C).cuda()
+            else:
+                self.state = torch.zeros(num_layers,1,C).cuda()
 
     @property
     def dropout(self):
@@ -158,6 +191,7 @@ class _RNN(BasicModel):
         config = super().get_config()
         config['setting'] = self.kwargs
         config['customized_init'] = str(self.customized_init)
+        config['use_previous_state'] = self.use_previous_state
         return config
 
     def reset_parameters(self):
@@ -170,8 +204,47 @@ class GRU(_RNN):
     def _create_rnn(self, in_channels, **kwargs):
         return nn.GRU(in_channels, **kwargs)
 
-    def forward(self, x, lengths, state=None, **kwargs):
-        x = _forward(self.rnn, x, lengths, state, self.batch_first)
+    def forward(self, x, lengths, **kwargs):
+        N = len(x)
+        C = self.rnn.hidden_size
+        num_layers = self.rnn.num_layers
+        state = None
+        if self.use_previous_state:
+            if self.rnn.bidirectional:
+                forward_state = torch.zeros(num_layers,N,C).cuda()
+                backward_state = torch.zeros(num_layers,N,C).cuda()
+                if self.forward_state is not None:
+                    previous_num = self.forward_state.shape[1]
+                    indice = list(range(previous_num))
+                    np.random.shuffle(indice)
+                    if previous_num > N:
+                        indice = indice[:N]
+                        forward_state = self.forward_state[:,indice]
+                        backward_state = self.backward_state[:,indice]
+                    else:
+                        forward_state[:,indice] += self.forward_state[:,indice]
+                        backward_state[:,indice] += self.backward_state[:,indice]
+                state = torch.cat([forward_state,backward_state],0)
+            else:
+                state = torch.zeros(num_layers,N,C).cuda()
+                if self.state is not None:
+                    previous_num = self.state.shape[1]
+                    indice = list(range(previous_num))
+                    np.random.shuffle(indice)
+                    if previous_num > N:
+                        indice = indice[:N]
+                        state = self.state[:,indice]
+                    else:
+                        state[:,indice] += self.state[:,indice]
+        #print(state)
+        x,hidden_states = _forward(self.rnn, x, lengths, state, self.batch_first)        
+        if self.use_previous_state:
+            #Get state with shape (num_layers,N,H)
+            if self.rnn.bidirectional:
+                self.forward_state = hidden_states[:,0].detach()
+                self.backward_state = hidden_states[:,1].detach()
+            else:
+                self.state = hidden_states[:,0].detach()
         return x
 
 
@@ -180,20 +253,16 @@ class LSTM(_RNN):
         return nn.LSTM(in_channels, **kwargs)
 
     def forward(self, x, lengths, state=None, **kwargs):
+        if self.use_previous_state:
+            raise
         x = _forward(self.rnn, x, lengths, state, self.batch_first)
         return x
 
 
 class ProjectedRNN(BasicModel):
-    def __init__(self,
-                 in_channels,
-                 out_channels,
-                 customized_cnn_init=None,
-                 customized_rnn_init=None,
-                 name=None,
-                 output_act=None,
-                 is_gru=True,
-                 **kwargs):
+    def __init__(self,in_channels,out_channels,
+                 customized_cnn_init=None,customized_rnn_init=None,
+                 name=None,output_act=None,is_gru=True,**kwargs):
         super().__init__()
         self.output_act = output_act
         if name is None or name == '':
