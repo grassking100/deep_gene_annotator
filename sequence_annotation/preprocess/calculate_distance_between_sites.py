@@ -75,22 +75,14 @@ def plot_hist(title, path, values):
 if __name__ == "__main__":
     #Reading arguments
     parser = ArgumentParser()
-    parser.add_argument("-b",
-                        "--bed_path",
-                        help="Path of selected official gene info file",
-                        required=True)
-    parser.add_argument("-t",
-                        "--tss_path",
-                        help="Path of TSS file",
-                        required=True)
-    parser.add_argument("-c",
-                        "--cs_path",
-                        help="Path of CS file",
-                        required=True)
-    parser.add_argument("-s",
-                        "--saved_root",
-                        help="Path to save",
-                        required=True)
+    parser.add_argument("-b","--bed_path",required=True,
+                        help="Path of selected official gene info file")
+    parser.add_argument("-t","--tss_path",required=True,
+                        help="Path of TSS file")
+    parser.add_argument("-c","--cs_path",required=True,
+                        help="Path of CS file")
+    parser.add_argument("-s","--saved_root",required=True,
+                        help="Path to save")
     args = parser.parse_args()
 
     ###Read file###
@@ -98,40 +90,35 @@ if __name__ == "__main__":
     tss_sites = read_gff(args.tss_path)
     cleavage_sites = read_gff(args.cs_path)
     ##
-    tss_site_r_to_e_diff, tss_site_e_to_r_diff = compare_site_distance(
-        tss_sites, reference_bed, 'start', 'five_end')
-    cleavage_site_r_to_e_diff, cleavage_site_e_to_r_diff = compare_site_distance(
-        cleavage_sites, reference_bed, 'start', 'three_end')
+    tss_result = compare_site_distance(tss_sites, reference_bed, 'start', 'five_end')
+    tss_site_r_to_e_diff, tss_site_e_to_r_diff = tss_result
+    cs_result = compare_site_distance(cleavage_sites, reference_bed, 'start', 'three_end')
+    cleavage_site_r_to_e_diff, cleavage_site_e_to_r_diff = cs_result
     stats_list = []
-    stats_list.append(
-        calculate_stats('tss_site_r_to_e_diff', tss_site_r_to_e_diff))
-    stats_list.append(
-        calculate_stats('tss_site_e_to_r_diff', tss_site_e_to_r_diff))
-    stats_list.append(
-        calculate_stats('cleavage_site_r_to_e_diff',
-                        cleavage_site_r_to_e_diff))
-    stats_list.append(
-        calculate_stats('cleavage_site_e_to_r_diff',
-                        cleavage_site_e_to_r_diff))
-    pd.DataFrame.from_dict(stats_list).to_csv(os.path.join(
-        args.saved_root, "site_diff.tsv"),
-                                              index=False,
-                                              sep='\t')
+    stats_list.append(calculate_stats('tss_site_r_to_e_diff',
+                                      tss_site_r_to_e_diff))
+    stats_list.append(calculate_stats('tss_site_e_to_r_diff',
+                                      tss_site_e_to_r_diff))
+    stats_list.append(calculate_stats('cleavage_site_r_to_e_diff',
+                                      cleavage_site_r_to_e_diff))
+    stats_list.append(calculate_stats('cleavage_site_e_to_r_diff',
+                                      cleavage_site_e_to_r_diff))
+    siter_diff_path = os.path.join(args.saved_root, "site_diff.tsv")
+    pd.DataFrame.from_dict(stats_list).to_csv(siter_diff_path,index=False,sep='\t')
 
-    plot_hist(
-        'The distance from the closest reference TSS to experimental TSS',
-        os.path.join(args.saved_root, 'tss_site_r_to_e_diff.png'),
-        tss_site_r_to_e_diff)
+    tss_title='The distance from the closest reference TSS to experimental TSS'
+    tss_path=os.path.join(args.saved_root, 'tss_site_r_to_e_diff.png')
+    plot_hist(tss_title,tss_path,tss_site_r_to_e_diff)
 
-    plot_hist(
-        'The distance from the closest experimental TSS to reference TSS',
-        os.path.join(args.saved_root, 'tss_site_e_to_r_diff.png'),
-        tss_site_e_to_r_diff)
+    
+    tss_ref_title='The distance from the closest experimental TSS to reference TSS'
+    tss_ref_path=os.path.join(args.saved_root, 'tss_site_e_to_r_diff.png')
+    plot_hist(tss_ref_title,tss_ref_path,tss_site_e_to_r_diff)
 
-    plot_hist('The distance from the closest reference CS to experimental CS',
-              os.path.join(args.saved_root, 'cleavage_site_r_to_e_diff.png'),
-              cleavage_site_r_to_e_diff)
+    cs_title='The distance from the closest reference CS to experimental CS'
+    cs_path=os.path.join(args.saved_root, 'cleavage_site_r_to_e_diff.png')
+    plot_hist(cs_title,cs_path,cleavage_site_r_to_e_diff)
 
-    plot_hist('The distance from the closest experimental CS to reference CS',
-              os.path.join(args.saved_root, 'cleavage_site_e_to_r_diff.png'),
-              cleavage_site_e_to_r_diff)
+    cs_ref_title='The distance from the closest experimental CS to reference CS'
+    cs_ref_path=os.path.join(args.saved_root, 'cleavage_site_e_to_r_diff.png')
+    plot_hist(cs_ref_title,cs_ref_path,cleavage_site_e_to_r_diff)

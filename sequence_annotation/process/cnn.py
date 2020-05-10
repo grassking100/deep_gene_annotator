@@ -200,7 +200,7 @@ class CANBlock(BasicModel):
                 "after_activation": self.out_channels
             }
             self.norm = self.norm_class(in_channel[self.norm_mode])
-        self.dropout = dropout or 0
+        self.dropout = dropout
         self.reset_parameters()
 
     def _normalized(self, x, lengths):

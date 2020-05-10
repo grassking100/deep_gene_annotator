@@ -26,6 +26,7 @@ def get_site_diff(answer,predict,types,
             answer_sites = list(answer_group[site_type])
             predict_sites = list(predict_group[site_type])
             if len(answer_sites) > 0 and len(predict_sites) > 0:
+                #print(types,answer_sites,predict_sites)
                 if answer_as_ref:
                     ref_sites = answer_sites
                     compare_sites = predict_sites
@@ -50,6 +51,7 @@ def get_site_diff(answer,predict,types,
                             index = abs(diffs).argmin()
                             diff = diffs[index]
                         site_diffs.append(diff)
+                #print(absolute,site_diffs)
     return site_diffs
 
 
@@ -57,15 +59,15 @@ def get_donor_site_diff(answer, predict, **kwargs):
     return get_site_diff(answer, predict, ['intron'], **kwargs)
 
 
-def get_acceptor_site_diff(answer, predict, absolute=True, **kwargs):
+def get_acceptor_site_diff(answer, predict, **kwargs):
     return get_site_diff(answer, predict, ['intron'], is_start=False, **kwargs)
 
 
-def get_transcript_start_diff(answer, predict, absolute=True, **kwargs):
+def get_transcript_start_diff(answer, predict, **kwargs):
     return get_site_diff(answer, predict, ['mRNA'], **kwargs)
 
 
-def get_transcript_end_diff(answer, predict, absolute=True, **kwargs):
+def get_transcript_end_diff(answer, predict, **kwargs):
     return get_site_diff(answer, predict, ['mRNA'], is_start=False, **kwargs)
 
 
@@ -110,16 +112,16 @@ def get_donor_site_matched_ratio(answer, predict, **kwargs):
     return get_site_matched_ratio(answer, predict, ['intron'], **kwargs)
 
 
-def get_acceptor_site_matched_ratio(answer, predict, absolute=True, **kwargs):
+def get_acceptor_site_matched_ratio(answer, predict, **kwargs):
     return get_site_matched_ratio(answer,predict, ['intron'],is_start=False,
                                   **kwargs)
 
 
-def get_transcript_start_matched_ratio(answer,predict,absolute=True,**kwargs):
+def get_transcript_start_matched_ratio(answer,predict,**kwargs):
     return get_site_matched_ratio(answer, predict, ['mRNA'], **kwargs)
 
 
-def get_transcript_end_matched_ratio(answer, predict, absolute=True, **kwargs):
+def get_transcript_end_matched_ratio(answer, predict, **kwargs):
     return get_site_matched_ratio(answer,predict, ['mRNA'],is_start=False,
                                   **kwargs)
 
@@ -220,15 +222,12 @@ def main(predict_path, answer_path, saved_root):
 if __name__ == '__main__':
     parser = ArgumentParser(
         description='Show distance between predict GFF to answer GFF')
-    parser.add_argument("-p","--predict_path",
-                        help='The path of prediction result in GFF format',
-                        required=True)
-    parser.add_argument("-a","--answer_path",
-                        help='The path of answer result in GFF format',
-                        required=True)
-    parser.add_argument("-s","--saved_root",
-                        help="Path to save result",
-                        required=True)
+    parser.add_argument("-p","--predict_path",required=True,
+                        help='The path of prediction result in GFF format')
+    parser.add_argument("-a","--answer_path",required=True,
+                        help='The path of answer result in GFF format')
+    parser.add_argument("-s","--saved_root",required=True,
+                        help="Path to save result")
     args = parser.parse_args()
 
     config_path = os.path.join(args.saved_root, 'performance_setting.json')

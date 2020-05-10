@@ -37,7 +37,7 @@ def main(compared_bed_path,comparing_bed_path,output_path):
 
 if __name__ == "__main__":
     #Reading arguments
-    parser = ArgumentParser(description="This program will compare tss cand cs between two files")
+    parser = ArgumentParser(description="This program will compare tss and cs between two files")
     parser.add_argument("-r", "--compared_bed_path",help="Bed file to compared",required=True)
     parser.add_argument("-c", "--comparing_bed_path",help="Bed file to comparing",required=True)
     parser.add_argument("-o", "--output_path",help="Path of compared result",required=True)

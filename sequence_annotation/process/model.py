@@ -109,22 +109,20 @@ class SeqAnnBuilder:
         self._use_feature_block = self._feature_block_config['num_layers'] != 0
         self._stack_cnn_class = stack_cnn_class or self._stack_cnn_class
 
-    def set_relation_block(self,
-                              out_channels=None,
-                              rnn_type=None,
-                              filter_num=None,
-                              filter_hidden=None,
-                              use_first_filter=None,
-                              use_second_filter=None,
-                              use_common_filter=None,
-                              output_act=None,
-                              **config):
+    def set_relation_block(self,out_channels=None,rnn_type=None,
+                           filter_num=None,filter_hidden=None,
+                           use_first_filter=None,use_second_filter=None,
+                           use_common_filter=None,output_act=None,
+                           use_norm=None,**config):
         self._set_relation_block_kwargs = locals()
         self._output_act = output_act or self._output_act
         self._rnn_type = rnn_type or self._rnn_type
         self._out_channels = out_channels or self._out_channels
         self._filter_num = filter_num or self._filter_num
         self._filter_hidden = filter_hidden or self._filter_hidden
+
+        if use_norm is not None:
+            self._use_rnn_norm = use_norm
 
         if use_first_filter is not None:
             self._use_first_filter = use_first_filter
@@ -140,12 +138,12 @@ class SeqAnnBuilder:
         in_channels = self._in_channels
         feature_block = None
         norm_input_block = None
+        norm_rnn_class = None
         norm_class = generate_norm_class(
             self._norm_config['norm_class'],
             affine=self._norm_config['affine'],
             momentum=self._norm_config['momentum'])
         if self.use_input_norm:
-
             norm_input_block = norm_class(in_channels)
 
         if self._use_feature_block:
@@ -155,22 +153,28 @@ class SeqAnnBuilder:
                 **self._feature_block_config)
             in_channels = feature_block.out_channels
 
+        if self._use_rnn_norm:
+            norm_rnn_class = norm_class
+            
         if self._rnn_type in RNN_TYPES:
             rnn_class = RNN_TYPES[self._rnn_type]
             relation_block = rnn_class(in_channels,
                                        output_act=self._output_act,
                                        out_channels=self._out_channels,
+                                       norm_class=norm_rnn_class,
                                        **self._relation_block_config)
 
         elif self._rnn_type == 'FilteredRNN':
             relation_block = FilteredRNN(in_channels,
                                          output_act=self._output_act,
                                          out_channels=self._out_channels,
+                                         norm_class=norm_rnn_class,
                                          **self._relation_block_config)
 
         elif self._rnn_type == 'HierRNN':
             builder = HierRNNBuilder(in_channels,
                                      output_act='sigmoid',
+                                     norm_class=norm_rnn_class,
                                      **self._relation_block_config)
             builder.set_filter_place(first=self._use_first_filter,
                                      second=self._use_second_filter,

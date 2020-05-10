@@ -260,7 +260,7 @@ class LSTM(_RNN):
 
 
 class ProjectedRNN(BasicModel):
-    def __init__(self,in_channels,out_channels,
+    def __init__(self,in_channels,out_channels,norm_class=None,
                  customized_cnn_init=None,customized_rnn_init=None,
                  name=None,output_act=None,is_gru=True,**kwargs):
         super().__init__()
@@ -282,6 +282,9 @@ class ProjectedRNN(BasicModel):
                               out_channels=self.out_channels,
                               kernel_size=1,
                               customized_init=customized_cnn_init)
+        self.norm = None
+        if norm_class is not None:
+            self.norm = norm_class(in_channels)
         self.reset_parameters()
 
     def get_config(self):
@@ -290,9 +293,13 @@ class ProjectedRNN(BasicModel):
         config['project'] = self.project.get_config()
         config['name'] = self.name
         config['output_act'] = self.output_act
+        if self.norm is not None:
+            config['norm'] = self.norm.get_config()
         return config
 
     def forward(self, x, lengths, return_intermediate=False, **kwargs):
+        if self.norm is not None:
+            x = self.norm(x,lengths)
         post_rnn = self.rnn(x, lengths)
         self.update_distribution(post_rnn, key=self.name)
         if self.rnn.dropout > 0 and self.training:
