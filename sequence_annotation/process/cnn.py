@@ -39,10 +39,12 @@ CNN_INIT_MODE = {
 
 
 def create_mask(x, lengths):
+    mask_ = get_seq_mask(lengths)
+    mask_ = mask_.to(x.dtype).unsqueeze(1)
     mask = torch.zeros(x.shape[0], 1, x.shape[2]).to(x.dtype)
     if x.is_cuda:
         mask = mask.cuda()
-    mask_ = get_seq_mask(lengths, to_cuda=x.is_cuda).to(x.dtype).unsqueeze(1)
+        mask_ = mask_.cuda()
     mask[:, :, :max(lengths)] += mask_
     return mask
 
@@ -113,7 +115,7 @@ class Conv1d(nn.Conv1d, BasicModel):
         # N,C,L
         if lengths is None:
             lengths = [x.shape[2]] * x.shape[0]
-        # if self.kernel_size[0] > 1:
+
         if mask is None:
             mask = create_mask(x, lengths)
         if self._padding_handle == 'same' or self.kernel_size[0] == 1:
@@ -208,11 +210,11 @@ class CANBlock(BasicModel):
         self.update_distribution(x, key='norm_{}'.format(self.name))
         return x
 
-    def forward(self, x, lengths, weights=None, mask=None):
+    def forward(self, x, lengths, **kwargs):
         # X shape : N,C,L
         if self.norm_mode == 'before_cnn':
             x = self._normalized(x, lengths)
-        x, lengths, weights, mask = self.cnn(x, lengths, weights, mask)
+        x, lengths, weights, mask = self.cnn(x, lengths, **kwargs)
         self.update_distribution(x, key='cnn_x_{}'.format(self.name))
         if self.norm_mode == 'after_cnn':
             x = self._normalized(x, lengths)
@@ -317,7 +319,7 @@ class ConcatCNN(StackCNN):
         self.concat = Concat(handle_length=self.length_change, dim=1)
         self.reset_parameters()
 
-    def forward(self, x, lengths, weights=None, mask=None):
+    def forward(self, x, lengths,**kwargs):
         # X shape : N,C,L
         for index in range(self.num_layers):
             pre_x = x
@@ -325,9 +327,7 @@ class ConcatCNN(StackCNN):
             if self.bottleneck_factor > 0:
                 bottleneck = self.bottlenecks[index]
                 x, lengths, _ = bottleneck(x, lengths)
-            x, lengths, weights, mask = cnn(x,
-                                            lengths=lengths,
-                                            weights=weights)
+            x, lengths, weights, mask = cnn(x,lengths=lengths,**kwargs)
             self.update_distribution(cnn.saved_distribution)
             x = self.concat([pre_x, x])
         self.update_distribution(x, key='cnn_result')
@@ -380,15 +380,12 @@ class ResCNN(StackCNN):
         self.reset_parameters()
         self.add = Add(handle_length=self.length_change)
 
-    def forward(self, x, lengths, weights=None, mask=None):
+    def forward(self, x, lengths,**kwargs):
         # X shape : N,C,L
         for index in range(self.num_layers):
             pre_x = x
             cnn = self.cnns[index]
-            x, lengths, weights, mask = cnn(x,
-                                            lengths=lengths,
-                                            weights=weights,
-                                            mask=mask)
+            x, lengths, weights, mask = cnn(x,lengths=lengths,**kwargs)
             self._distribution.update(cnn.saved_distribution)
             if index > 0:
                 x = self.add(pre_x, x)

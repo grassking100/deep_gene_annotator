@@ -7,7 +7,6 @@ import torch
 import numpy as np
 from abc import ABCMeta, abstractmethod
 from ..utils.utils import create_folder, print_progress, write_json, get_time_str
-from .data_generator import SeqGenerator
 from .callback import MeanRecorder, Callbacks, DataHolder
 from .warning import WorkerProtectedWarning
 from .checkpoint import build_checkpoint
@@ -43,8 +42,7 @@ def evaluate_per_batch(model, seq_data, executor, callbacks):
 def predict_per_batch(model, seq_data, executor, callbacks):
     torch.cuda.empty_cache()
     callbacks.on_batch_begin()
-    returned = executor.predict(model,seq_data.inputs,
-                                lengths=seq_data.lengths)
+    returned = executor.predict(model,seq_data)
     torch.cuda.empty_cache()
     with torch.no_grad():
         callbacks.on_batch_end(predicts=returned['predicts'],
@@ -94,10 +92,9 @@ class MessageRecorder:
 
 
 class Worker(metaclass=ABCMeta):
-    def __init__(self, model, data, executor, root=None):
+    def __init__(self, model, executor, root=None):
         super().__init__()
         self.model = model
-        self.data = data
         self.executor = executor
         self.result = {}
         self.is_verbose_visible = True
@@ -137,32 +134,18 @@ class Worker(metaclass=ABCMeta):
 
 class TrainWorker(Worker):
     """a worker which will train and evaluate the model"""
-    def __init__(self,model,data,executor,
-                 train_generator=None,val_generator=None,
-                 train_callbacks=None,val_callbacks=None,
-                 other_callbacks=None,writer=None,
-                 epoch=None,root=None,checkpoint_kwargs=None):
-        super().__init__(model, data, executor, root=root)
-        self._train_generator = train_generator
-        self._val_generator = val_generator
-        self._train_callbacks = train_callbacks
-        self._val_callbacks = val_callbacks
-        self._other_callbacks = other_callbacks
+    def __init__(self,model,executor,train_loader,val_loader,
+                 writer=None,epoch=None,root=None,
+                 checkpoint_kwargs=None):
+        super().__init__(model, executor, root=root)
+        self._train_loader = train_loader
+        self._val_loader = val_loader
+        self.train_callbacks = Callbacks()
+        self.val_callbacks = Callbacks()
+        self.other_callbacks = Callbacks()
         self.checkpoint_kwargs = checkpoint_kwargs or {}
         self._gradient_recorder = None
         self._gradient_warning_recorder = None
-
-        if train_generator is None:
-            self._train_generator = SeqGenerator()
-        if val_generator is None:
-            self._val_generator = SeqGenerator(shuffle=False)
-        if train_callbacks is None:
-            self._train_callbacks = Callbacks()
-        if val_callbacks is None:
-            self._val_callbacks = Callbacks()
-        if other_callbacks is None:
-            self._other_callbacks = Callbacks()
-
         self._writer = writer
         self._epoch = 1 if epoch is None else epoch
         self._current_epoch = None
@@ -170,8 +153,6 @@ class TrainWorker(Worker):
         self._best_result = None
         self._is_running = True
         self._checkpoint = None
-        self._train_loader = None
-        self._val_loader = None
 
     @property
     def best_result(self):
@@ -194,7 +175,7 @@ class TrainWorker(Worker):
     def _save_setting(self):
         if self.root is not None:
             for key in [
-                    '_train_callbacks', '_val_callbacks', '_other_callbacks',
+                    'train_callbacks', 'val_callbacks', 'other_callbacks',
                     'root', '_epoch', 'executor', 'checkpoint_kwargs'
             ]:
                 attr = getattr(self, key)
@@ -207,8 +188,6 @@ class TrainWorker(Worker):
             write_json(self._settings, path)
 
     def _before_work(self):
-        self._train_loader = self._train_generator(self.data['training'])
-        self._val_loader = self._val_generator(self.data['validation'])
         if self.root is not None:
             checkpoint_root = os.path.join(self.root, 'checkpoint')
             self._checkpoint = build_checkpoint(checkpoint_root,
@@ -220,8 +199,8 @@ class TrainWorker(Worker):
                 path=os.path.join(self.root, "message.txt"))
             self._gradient_recorder = MessageRecorder(
                 path=os.path.join(self.root, "gradient.txt"))
-        self._train_callbacks.add(MeanRecorder())
-        self._val_callbacks.add(DataHolder(prefix='val'))
+        self.train_callbacks.add(MeanRecorder())
+        self.val_callbacks.add(DataHolder(prefix='val'))
         self._is_running = True
         self._save_setting()
 
@@ -252,7 +231,7 @@ class TrainWorker(Worker):
         start = 1
         end = self._epoch + 1
         all_callbacks = Callbacks([
-            self._train_callbacks, self._val_callbacks, self._other_callbacks
+            self.train_callbacks, self.val_callbacks, self.other_callbacks
         ])
         if self._checkpoint is not None:
             all_callbacks.add(self._checkpoint)
@@ -283,7 +262,7 @@ class TrainWorker(Worker):
                 self.model.save_distribution = False
                 for index, seq_data in enumerate(self._train_loader):
                     train_per_batch(self.model, seq_data, self.executor,
-                                    self._train_callbacks)
+                                    self.train_callbacks)
                     status = 100 * index / len(self._train_loader)
                     self.print_verbose(batch_info.format(epoch, self._epoch,
                                                          'training',status), True)
@@ -293,15 +272,15 @@ class TrainWorker(Worker):
 
                 for index, seq_data in enumerate(self._val_loader):
                     evaluate_per_batch(self.model, seq_data, self.executor,
-                                       self._val_callbacks)
+                                       self.val_callbacks)
                     status = 100 * index / len(self._val_loader)
                     self.print_verbose(batch_info.format(epoch, self._epoch,
                                                          'validating',status),True)
                 
                 self.model.save_distribution = save_distribution
-                train_record = self._train_callbacks.get_data()
-                val_record = self._val_callbacks.get_data()
-                other_record = self._other_callbacks.get_data()
+                train_record = self.train_callbacks.get_data()
+                val_record = self.val_callbacks.get_data()
+                other_record = self.other_callbacks.get_data()
                 if str(train_record['loss']) == 'nan':
                     self._is_running = False
                 if 'val_loss' in val_record.keys() and str(
@@ -315,9 +294,9 @@ class TrainWorker(Worker):
 
                 # Executor's on_epoch_end must be called first
                 self.executor.on_epoch_end(epoch=epoch, metric=record)
-                self._train_callbacks.on_epoch_end(metric=train_record)
-                self._val_callbacks.on_epoch_end(metric=val_record)
-                self._other_callbacks.on_epoch_end(metric=record)
+                self.train_callbacks.on_epoch_end(metric=train_record)
+                self.val_callbacks.on_epoch_end(metric=val_record)
+                self.other_callbacks.on_epoch_end(metric=record)
                 if self._checkpoint is not None:
                     self._checkpoint.on_epoch_end(metric=record)
 
@@ -345,22 +324,15 @@ class TrainWorker(Worker):
 
 class TestWorker(Worker):
     """a worker which will evaluate the model"""
-    def __init__(self,model,data,executor,
-                 generator=None,callbacks=None,
-                 root=None):
-        super().__init__(model, data, executor, root=root)
-        self._generator = generator
-        self._callbacks = callbacks
+    def __init__(self,model,executor,data_loader,root=None):
+        super().__init__(model, executor, root=root)
+        self._loader = data_loader
+        self.callbacks = Callbacks()
         self._checkpoint = None
-
-        if generator is None:
-            self._generator = SeqGenerator(shuffle=False)
-        if callbacks is None:
-            self._callbacks = Callbacks()
 
     def _save_setting(self):
         if self.root is not None:
-            for key in ['_callbacks', 'executor', 'root']:
+            for key in ['callbacks', 'executor', 'root']:
                 attr = getattr(self, key)
                 if hasattr(attr, 'get_config'):
                     attr = attr.get_config()
@@ -371,18 +343,17 @@ class TestWorker(Worker):
             write_json(self._settings, path)
 
     def _before_work(self):
-        self._loader = self._generator(self.data['testing'])
         if self.root is not None:
             self._checkpoint = build_checkpoint(self.root,
                                                 only_recorder=True,
                                                 force_reset=True)
-        self._callbacks.add(DataHolder(prefix='test'))
+        self.callbacks.add(DataHolder(prefix='test'))
         self._save_setting()
 
     def _work(self):
         """Test model"""
         epoch_start = 1
-        callbacks = Callbacks(self._callbacks)
+        callbacks = Callbacks(self.callbacks)
         if self._checkpoint is not None:
             self._checkpoint.on_work_begin(worker=self)
         callbacks.on_work_begin(worker=self)
@@ -395,7 +366,7 @@ class TestWorker(Worker):
         self.model.save_distribution = False
         for index, seq_data in enumerate(self._loader):
             evaluate_per_batch(self.model, seq_data, self.executor,
-                               self._callbacks)
+                               self.callbacks)
             status = 100 * index / len(self._loader)
             self.print_verbose(batch_info.format(status), True)
 
@@ -418,21 +389,14 @@ class TestWorker(Worker):
                 
 class PredictWorker(Worker):
     """A worker which will predict"""
-    def __init__(self,model,data,executor,
-                 generator=None,callbacks=None,
-                 root=None):
-        super().__init__(model, data, executor, root=root)
-        self._generator = generator
-        self._callbacks = callbacks
-
-        if generator is None:
-            self._generator = SeqGenerator(shuffle=False)
-        if callbacks is None:
-            self._callbacks = Callbacks()
+    def __init__(self,model,executor,data_loader,root=None):
+        super().__init__(model, executor, root=root)
+        self._loader = data_loader
+        self.callbacks = Callbacks()
 
     def _save_setting(self):
         if self.root is not None:
-            for key in ['_callbacks', 'executor', 'root']:
+            for key in ['callbacks', 'executor', 'root']:
                 attr = getattr(self, key)
                 if hasattr(attr, 'get_config'):
                     attr = attr.get_config()
@@ -443,13 +407,12 @@ class PredictWorker(Worker):
             write_json(self._settings, path)
 
     def _before_work(self):
-        self._loader = self._generator(self.data['predicting'])
         self._save_setting()
 
     def _work(self):
         """Test model"""
         epoch_start = 1
-        callbacks = Callbacks(self._callbacks)
+        callbacks = Callbacks(self.callbacks)
         callbacks.on_work_begin(worker=self)
         self.executor.on_work_begin()
         callbacks.on_epoch_begin(counter=epoch_start)
@@ -458,7 +421,7 @@ class PredictWorker(Worker):
         self.model.save_distribution = False
         for index, seq_data in enumerate(self._loader):
             predict_per_batch(self.model, seq_data, self.executor,
-                              self._callbacks)
+                              self.callbacks)
             status = 100 * index / len(self._loader)
             self.print_verbose(batch_info.format(status), True)
         

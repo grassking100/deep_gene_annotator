@@ -82,6 +82,7 @@ class SeqAnnBuilder:
         self._set_norm_kwargs = None
         self._set_feature_block_kwargs = None
         self._set_relation_block_kwargs = None
+        self._use_rnn_norm = False
 
     def get_set_kwargs(self):
         config = {}
@@ -89,6 +90,7 @@ class SeqAnnBuilder:
         config['feature_block'] = dict(self._set_feature_block_kwargs)
         config['relation_block'] = dict(self._set_relation_block_kwargs)
         config['use_input_norm'] = self.use_input_norm
+        config['use_rnn_norm'] = self._use_rnn_norm
         for values in config.values():
             if 'self' in values:
                 del values['self']
@@ -132,6 +134,7 @@ class SeqAnnBuilder:
 
         if use_common_filter is not None:
             self._use_common_filter = use_common_filter
+
         self._relation_block_config.update(config)
 
     def build(self):
@@ -206,7 +209,7 @@ def get_model(config,
     model.save_distribution = save_distribution
 
     if model_weights_path is not None:
-        weight = torch.load(model_weights_path)
+        weight = torch.load(model_weights_path,map_location='cpu')
         model.load_state_dict(weight, strict=True)
 
     frozen_names = frozen_names or []

@@ -1,6 +1,7 @@
 import sys
 import os
 import pandas as pd
+pd.set_option('mode.chained_assignment', 'raise')
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.genome_handler.seq_info_parser import BedInfoParser

@@ -3,13 +3,11 @@ import sys
 import numpy as np
 import pandas as pd
 import torch
-from multiprocessing import Process
 from multiprocessing import Pool
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.postprocess.boundary_process import get_splicing_regex
 from sequence_annotation.postprocess.path_helper import PathHelper
-from sequence_annotation.postprocess.gff_reviser import main as gff_revise_main
 from sequence_annotation.process.seq_ann_engine import get_best_model_and_origin_executor, SeqAnnEngine, get_batch_size
 from sequence_annotation.preprocess.utils import get_data_names
 from sequence_annotation.process.performance import main as performance_main
@@ -299,7 +297,6 @@ class AutoReviseEvaluator:
         val_record.update({'loss': val_loss, 'target': 'train_val'})
         self._best_loss = val_loss
 
-        processes = []
         kwargs_list = []
         for std_num in self._std_nums:
             for other_coef in self._other_coefs:
@@ -369,7 +366,7 @@ def main(raw_data_root, processed_root, trained_project_root, saved_root):
     for usage in ['validation', 'testing']:
         for trained_name in data_usage.keys():
             print("Predicted by {} for {}".format(trained_name,usage))
-            trained_root = os.path.join(trained_project_root, trained_name)
+            os.path.join(trained_project_root, trained_name)
             result_root = os.path.join(predicted_root, trained_name, usage)
             torch.cuda.empty_cache()
             #test(trained_root, result_root, path_helper, trained_name, usage)

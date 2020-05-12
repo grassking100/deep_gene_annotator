@@ -1,6 +1,6 @@
-import re
 import pandas as pd
 from ..utils.exception import InvalidStrandType
+from ..utils.utils import find_substr
 from ..genome_handler.sequence import AnnSequence, PLUS
 from ..genome_handler.region_extractor import RegionExtractor
 
@@ -19,29 +19,6 @@ def get_splicing_regex(path, first_n=None):
     motifs = get_motifs(path, first_n)
     motif_regex = '|'.join(motifs)
     return motif_regex
-
-
-def find_substr(regex, string, shift_value=None):
-    """Find indice of matched text in string
-
-    Parameters:
-    ----------
-    regex : str
-        Regular expression
-    string : str
-        String to be searched
-    shift_value : int (default: 0)
-        Shift the index
-
-    Returns:
-    ----------
-    list (int)
-        List of indice
-    """
-    shift_value = shift_value or 0
-    iter_ = re.finditer(regex, string)
-    indice = [m.start() + shift_value for m in iter_]
-    return indice
 
 
 def find_closest_site(pred_site, ann_sites, dist):

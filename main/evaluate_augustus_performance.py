@@ -2,7 +2,7 @@ import os
 import sys
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__)+"/..")
-from sequence_annotation.utils.utils import read_gff,write_gff,get_gff_with_attribute
+from sequence_annotation.utils.utils import read_gff, write_gff
 from sequence_annotation.preprocess.utils import read_region_table
 from sequence_annotation.preprocess.create_gene_with_alt_status_gff import convert_from_gff_to_gene_with_alt_status_gff
 from sequence_annotation.preprocess.create_gene_from_exon_gff import create_gene_gff_from_gene_alt_status_gff

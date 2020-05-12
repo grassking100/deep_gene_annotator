@@ -3,7 +3,6 @@ import math
 import torch
 from collections import OrderedDict
 from torch.nn.init import _calculate_fan_in_and_fan_out, _no_grad_uniform_
-from ..utils.utils import CONSTANT_DICT
 
 
 def deep_copy(data):
@@ -29,13 +28,10 @@ def get_copied_state_dict(container):
     return weights
 
 
-def get_seq_mask(lengths, max_length=None, to_tensor=True, to_cuda=True):
+def get_seq_mask(lengths, max_length=None, to_tensor=True):
     max_length = max_length or max(lengths)
     if to_tensor:
-        mask = (torch.arange(max_length)[None, :] <
-                torch.LongTensor(lengths)[:, None]).float()
-        if to_cuda:
-            mask = mask.cuda()
+        mask = (torch.arange(max_length)[None, :] < torch.LongTensor(lengths)[:, None]).float()
     else:
         mask = np.zeros((len(lengths), max_length))
         for index, length in enumerate(lengths):

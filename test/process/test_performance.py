@@ -16,11 +16,7 @@ class TestPerformance(unittest.TestCase):
         predict_path = os.path.join(data_root, 'predict.gff3')
         answer_path = os.path.join(data_root, 'answer.gff3')
         region_table_path = os.path.join(data_root, 'region.tsv')
-        main(predict_path,
-             answer_path,
-             region_table_path,
-             saved_root,
-             chrom_target='new_id')
+        main(predict_path,answer_path,region_table_path,saved_root)
         result = read_json(os.path.join(saved_root, 'block_performance.json'))
         expect_result = read_json(
             os.path.join(data_root, 'expect_part_block_performance.json'))
@@ -28,11 +24,7 @@ class TestPerformance(unittest.TestCase):
             self.assertEqual(expect_val, result[key],
                              "Something is wrong at {}".format(key))
 
-        main(answer_path,
-             answer_path,
-             region_table_path,
-             saved_root,
-             chrom_target='new_id')
+        main(answer_path,answer_path,region_table_path,saved_root)
         result = read_json(os.path.join(saved_root, 'block_performance.json'))
         expect_result = read_json(
             os.path.join(

@@ -2,7 +2,6 @@ import os
 import sys
 import torch
 import pandas as pd
-import numpy as np
 import deepdish as dd
 from argparse import ArgumentParser
 from torch.nn.utils.rnn import pad_sequence
@@ -79,13 +78,12 @@ def build_ann_vec_gff_converter(channel_order=None, simply_map=None):
 def simple_output_to_vectors(outputs):
     """Convert vectors in dictionary to torch's tensors for each attributes"""
     data = {}
-    columns = ['lengths', 'outputs', 'chrom_ids']
     for key in ['lengths', 'chrom_ids']:
         data[key] = outputs[key]
     outputs = outputs['outputs'].transpose(1, 2)
     outputs = pad_sequence(outputs, batch_first=True)
     data['outputs'] = outputs.transpose(2, 1).cuda()
-    data['masks'] = get_seq_mask(data['lengths'], to_cuda=True)
+    data['masks'] = get_seq_mask(data['lengths']).cuda()
     return data
     
 

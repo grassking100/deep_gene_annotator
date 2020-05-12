@@ -7,28 +7,42 @@ from sequence_annotation.utils.utils import create_folder, read_fasta,read_json
 from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES
 from sequence_annotation.preprocess.gff2bed import main as gff2bed_main
 from sequence_annotation.process.seq_ann_engine import SeqAnnEngine,get_best_model_and_origin_executor,get_batch_size
+from sequence_annotation.process.callback import Callbacks
 from sequence_annotation.postprocess.gff_reviser import main as revised_main
 from main.utils import backend_deterministic
 
-def predict(saved_root,model,executor,fasta,**kwargs):
+def predict(saved_root,model,executor,seqs,region_table_path,
+            batch_size=None,**kwargs):
     engine = SeqAnnEngine(BASIC_GENE_ANN_TYPES)
+    engine.batch_size = batch_size
     engine.set_root(saved_root,with_train=False,with_val=False,
                     with_test=False,create_tensorboard=False,
                     with_predict=True)
-    worker = engine.predict(model,executor,fasta,**kwargs)
+    #Set callbacks
+    singal_handler = engine.get_signal_handler(saved_root,inference=executor.inference,
+                                               region_table_path=region_table_path)
+    callbacks = Callbacks()
+    callbacks.add(singal_handler)
+    #Set generator
+    generator = engine.create_basic_data_gen()
+    raw_data = {'prediction': {'inputs': seqs}}
+    data = engine.process_data(raw_data)
+    data_loader = generator(data['prediction'])
+    worker = engine.predict(model,executor,data_loader,callbacks=callbacks,**kwargs)
     return worker
 
 def main(trained_root,revised_root,output_root,fasta_path,fasta_double_strand_path,
          region_table_path,deterministic=False,batch_size=None,**kwargs):
-    predict_ps_gff_path = os.path.join(output_root,'predict','predict_plus_strand.gff3')
+    predict_root=os.path.join(output_root,'predict')
+    predict_ps_gff_path = os.path.join(predict_root,'predict_plus_strand.gff3')
     if not os.path.exists(predict_ps_gff_path):
         fasta = read_fasta(fasta_path)
-        create_folder(trained_root)
+        create_folder(predict_root)
         backend_deterministic(deterministic)
         batch_size = batch_size or get_batch_size(trained_root)
         best_model,origin_executor = get_best_model_and_origin_executor(trained_root)
-        predict(output_root,best_model,origin_executor,fasta,batch_size=batch_size,
-                region_table_path=region_table_path,**kwargs)
+        predict(predict_root,best_model,origin_executor,fasta,region_table_path,
+                batch_size=batch_size,**kwargs)
     
     revised_config_path = os.path.join(revised_root,'best_gff_reviser_config.json')
     revised_config = read_json(revised_config_path)

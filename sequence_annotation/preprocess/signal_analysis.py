@@ -11,7 +11,8 @@ def get_region_around_site(gff, feature_types, upstream_distance,
     blocks = gff[gff['feature'].isin(feature_types)]
     if len(set(blocks['strand']) - set(['+', '-'])) > 0:
         raise Exception("Invalid strand")
-    blocks = blocks[['chr', 'strand', 'start', 'end']].copy()
+    blocks = blocks[['chr', 'strand', 'start', 'end','parent']].copy()
+    blocks['transcript_source'] = blocks['parent']
     blocks['site'] = None
     blocks['id'] = '.'
     blocks['score'] = '.'
@@ -32,7 +33,8 @@ def get_region_around_site(gff, feature_types, upstream_distance,
                'end'] = blocks.loc[minus_index, 'site'] + upstream_distance
     blocks.loc[minus_index,
                'start'] = blocks.loc[minus_index, 'site'] - downstream_distance
-    blocks = blocks[blocks['start'] >= 0].drop_duplicates()
+    blocks = blocks[blocks['start'] >= 0]
+    blocks = blocks[~blocks[['chr', 'strand', 'start', 'end']].duplicated()]
     return blocks
 
 

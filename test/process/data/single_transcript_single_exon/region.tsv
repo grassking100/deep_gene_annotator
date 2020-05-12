@@ -1,2 +1,2 @@
-new_id	old_id	chr	strand	start	end
+ordinal_id_wo_strand	ordinal_id_with_strand	chr	strand	start	end
 region_0385	region_0385	1	+	0	1999

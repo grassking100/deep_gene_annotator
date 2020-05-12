@@ -145,13 +145,16 @@ class _Executor(IExecutor):
     def __init__(self):
         self.loss = CCELoss()
         self.inference = create_basic_inference(3)
+        self._optimizer = None
+        self.clip_grad_value = None
+        self.clip_grad_norm = None
+        self.grad_norm_type = 2
 
-    def get_config(self):
-        config = {}
-        if self.loss is not None:
-            config['loss_config'] = self.loss.get_config()
-        config['inference'] = self.inference.__name__
-        return config
+        self.lr_scheduler = None
+        self.lr_scheduler_target = 'val_loss'
+        self._has_fit = False
+        self._lr_history = {}
+       
 
     def predict(self, model, seq_data):
         model.reset()
@@ -172,21 +175,20 @@ class _Executor(IExecutor):
         model.reset()
         return returned
 
-
-class BasicExecutor(_Executor):
-    def __init__(self):
-        super().__init__()
-        self.clip_grad_value = None
-        self.clip_grad_norm = None
-        self.grad_norm_type = 2
-        self._optimizer = None
-        self.lr_scheduler = None
-        self.lr_scheduler_target = 'val_loss'
-        self._has_fit = False
-        self._lr_history = {}
-
     def on_work_begin(self):
         self._has_fit = False
+    
+    def on_epoch_end(self, epoch, metric):
+        self.loss.reset_accumulated_data()
+        if self._has_fit:
+            for index, group in enumerate(self.optimizer.param_groups):
+                if index not in self._lr_history:
+                    self._lr_history[index] = []
+                self._lr_history[index].append(group['lr'])
+
+            if self.lr_scheduler is not None:
+                self.lr_scheduler.step(metric[self.lr_scheduler_target],
+                                       epoch=epoch)
 
     @property
     def optimizer(self):
@@ -195,7 +197,7 @@ class BasicExecutor(_Executor):
     @optimizer.setter
     def optimizer(self, optimizer):
         self._optimizer = optimizer
-
+                
     def state_dict(self):
         state_dict = {}
         if self.optimizer is not None:
@@ -204,16 +206,19 @@ class BasicExecutor(_Executor):
         if self.lr_scheduler is not None:
             state_dict['lr_scheduler'] = self.lr_scheduler.state_dict()
         return state_dict
-
+      
     def load_state_dict(self, state_dicts):
         if self.optimizer is not None:
             self.optimizer.load_state_dict(state_dicts['optimizer'])
         self._lr_history = state_dicts['lr_history']
         if self.lr_scheduler is not None:
             self.lr_scheduler.load_state_dict(state_dicts['lr_scheduler'])
-
+      
     def get_config(self):
-        config = super().get_config()
+        config = {}
+        if self.loss is not None:
+            config['loss_config'] = self.loss.get_config()
+        config['inference'] = self.inference.__name__
         config['clip_grad_value'] = self.clip_grad_value
         config['clip_grad_norm'] = self.clip_grad_norm
         config['grad_norm_type'] = self.grad_norm_type
@@ -230,11 +235,12 @@ class BasicExecutor(_Executor):
             config['lr_scheduler'] = self.lr_scheduler.state_dict()
             config['lr_scheduler_target'] = self.lr_scheduler_target
         return config
-
+    
+class BasicExecutor(_Executor):
     def fit(self, model, seq_data, **kwargs):
         inputs = seq_data.inputs.cuda()
         labels = seq_data.answers.cuda()
-        lengths=seq_data.lengths
+        lengths = seq_data.lengths
         self._has_fit = True
         if self.optimizer is None:
             raise Exception("Exectutor must set optimizer for fitting")
@@ -252,8 +258,99 @@ class BasicExecutor(_Executor):
                                      self.grad_norm_type)
         self.optimizer.step()
         returned = {
+            'metric': {'loss': loss_.item()},
+            'predicts': predict_result,
+            'lengths': lengths,
+            'masks': masks,
+            'outputs': outputs
+        }
+        return returned
+
+EPSILON=1e-32
+    
+def calculate_signal_loss(model,signals,signal_loss_method=None):
+    donor = signals['donor']
+    acceptor = signals['acceptor']
+    fake_donor = signals['fake_donor']
+    fake_acceptor = signals['fake_acceptor']
+    signals = torch.cat([donor,acceptor,fake_donor,fake_acceptor]).cuda()
+    N,C,L = donor.shape
+    singal_lengths = [L]*N*4
+    if model.norm_input_block is not None:
+        signals = model.norm_input_block(signals,singal_lengths)
+
+    signals = model.feature_block(signals,singal_lengths)[0][:,4:]
+    donor_signals = signals[:N]
+    acceptor_signals = signals[N:2*N]
+    fake_donor_signals = signals[2*N:3*N]
+    fake_acceptor_signals = signals[3*N:4*N]
+    signal_loss_method = signal_loss_method or 'basic'
+    if signal_loss_method == 'basic':
+        #Ver 1
+        signal_loss = donor_signals.mean(0)-fake_donor_signals.mean(0)
+        signal_loss = signal_loss + acceptor_signals.mean(0)-fake_acceptor_signals.mean(0)
+        signal_loss = torch.pow(signal_loss,2)
+        signal_loss = signal_loss.mean() 
+    elif signal_loss_method == 'max':        
+        #Ver 2
+        middle = int((L-1)/2)
+        donor_diff = donor_signals[:,:,middle].mean(0) - fake_donor_signals[:,:,middle].mean(0)
+        acceptor_diff = acceptor_signals[:,:,middle].mean(0) - fake_acceptor_signals[:,:,middle].mean(0)
+        donor_loss = torch.log(torch.pow(donor_diff,2).max()+EPSILON)
+        acceptor_loss = torch.log(torch.pow(acceptor_diff,2).max()+EPSILON)
+        signal_loss = donor_loss+acceptor_loss
+    elif signal_loss_method == 'square':
+        #Ver 3
+        middle = int((L-1)/2)
+        donor_diff = donor_signals[:,:,middle].mean(0) - fake_donor_signals[:,:,middle].mean(0)
+        acceptor_diff = acceptor_signals[:,:,middle].mean(0) - fake_acceptor_signals[:,:,middle].mean(0)
+        donor_loss = torch.log(torch.pow(donor_diff,2).mean()+EPSILON)
+        acceptor_loss = torch.log(torch.pow(acceptor_diff,2).mean()+EPSILON)
+        signal_loss = donor_loss+acceptor_loss
+    else:
+        raise
+    return signal_loss
+        
+class AdvancedExecutor(_Executor):
+    def __init__(self,train_signal_loader,val_signal_loader,signal_loss_method):
+        super().__init__()
+        self.train_signal_loader = iter(train_signal_loader)
+        self.val_signal_loader = iter(val_signal_loader)
+        self.signal_loss_method = signal_loss_method
+        #self._accumalated_signal_loss = 0
+        #self._accumalated_counter = 0
+        
+    def fit(self, model, seq_data, **kwargs):
+        inputs = seq_data.inputs.cuda()
+        labels = seq_data.answers.cuda()
+        lengths = seq_data.lengths
+        self._has_fit = True
+        if self.optimizer is None:
+            raise Exception("Exectutor must set optimizer for fitting")
+        model.train()
+        self.optimizer.zero_grad()
+        #Get annotation loss
+        outputs, lengths = model(inputs, lengths=lengths, answers=labels)
+        masks = get_seq_mask(lengths).cuda()
+        predict_result = self.inference(outputs, masks)
+        label_loss = self.loss(outputs,labels,masks,seq_data=seq_data,**kwargs)
+        #Get similarity loss
+        signals = next(self.train_signal_loader)['signals']
+        signal_loss = calculate_signal_loss(model,signals,self.signal_loss_method)
+        #print(signal_loss)
+        total_loss = label_loss - signal_loss
+        total_loss.backward()
+        if self.clip_grad_value is not None:
+            nn.utils.clip_grad_value_(model.parameters(), self.clip_grad_value)
+        if self.clip_grad_norm is not None:
+            nn.utils.clip_grad_norm_(model.parameters(), self.clip_grad_norm,
+                                     self.grad_norm_type)
+        self.optimizer.step()
+        returned = {
             'metric': {
-                'loss': loss_.item()
+                'loss': label_loss.item(),
+                'total_loss': total_loss.item(),
+                'signal_loss':signal_loss.item()
             },
             'predicts': predict_result,
             'lengths': lengths,
@@ -262,22 +359,28 @@ class BasicExecutor(_Executor):
         }
         return returned
 
+    def evaluate(self, model,seq_data, **kwargs):
+        returned = super().evaluate(model,seq_data, **kwargs)
+        #if self.loss is not None:
+        #    self._accumalated_counter += 1
+        #    returned['metric']['label_loss'] = returned['metric']['loss']
+        #    model.reset()
+        #    signals = next(self.val_signal_loader)['signals']
+        #    signal_loss = calculate_signal_loss(model,signals).item()
+        #    model.reset()
+        #    self._accumalated_signal_loss += signal_loss
+        #    returned['metric']['signal_loss'] = self._accumalated_signal_loss/self._accumalated_counter
+        #    returned['metric']['loss'] = returned['metric']['label_loss'] - returned['metric']['signal_loss']
+        return returned
+    
     def on_epoch_end(self, epoch, metric):
-        self.loss.reset_accumulated_data()
-        if self._has_fit:
-            for index, group in enumerate(self.optimizer.param_groups):
-                if index not in self._lr_history:
-                    self._lr_history[index] = []
-                self._lr_history[index].append(group['lr'])
-
-            if self.lr_scheduler is not None:
-                self.lr_scheduler.step(metric[self.lr_scheduler_target],
-                                       epoch=epoch)
-
-
+        super().on_epoch_end(epoch, metric)
+        self._accumalated_signal_loss = 0
+        self._accumalated_counter = 0
+    
 class ExecutorBuilder:
-    def __init__(self, use_native=True):
-        self.use_native = use_native
+    def __init__(self):
+        self.use_native = True
         self._clip_grad_value = None
         self._clip_grad_norm = None
         self._grad_norm_type = 2
@@ -293,11 +396,10 @@ class ExecutorBuilder:
         self._patience = 10
         self._factor = 0.5
         self._optim_type = 'Adam'
-
-
         self._set_optimizer_kwargs = None
         self._set_loss_kwargs = None
         self._set_lr_scheduler_kwargs = None
+        self.executor_class = None
 
     def get_set_kwargs(self):
         config = {}
@@ -305,6 +407,7 @@ class ExecutorBuilder:
         config['loss_kwargs'] = dict(self._set_loss_kwargs)
         config['lr_scheduler_kwargs'] = dict(self._set_lr_scheduler_kwargs)
         config['use_native'] = self.use_native
+        config['executor_class'] = self.executor_class
         for values in config.values():
             if 'self' in values:
                 del values['self']
@@ -358,7 +461,11 @@ class ExecutorBuilder:
             self._inference = seq_ann_inference
             loss = SeqAnnLoss(intron_coef=self._intron_coef,
                               other_coef=self._other_coef)
-        exe = BasicExecutor()
+            
+        if self.executor_class is None:
+            exe = BasicExecutor()
+        else:
+            exe = self.executor_class()
         exe.loss = LabelLoss(loss)
         exe.loss.predict_inference = create_basic_inference(
             self._predict_label_num)
@@ -403,11 +510,16 @@ def get_params(model, target_weight_decay=None, weight_decay_name=None):
         )
 
 
-def get_executor(model, config, executor_weights_path=None):
-    if isinstance(config, str):
-        config = read_json(config)
+def get_executor(model, config_or_path, executor_weights_path=None):
+    if isinstance(config_or_path, str):
+        config = read_json(config_or_path)
+    else:
+        config = config_or_path
 
-    builder = ExecutorBuilder(config['use_native'])
+    builder = ExecutorBuilder()
+    builder.use_native = config['use_native']
+    if 'executor_class' in config:
+        builder.executor_class = config['executor_class']
     builder.set_optimizer(**config['optim_config'])
     builder.set_loss(**config['loss_config'])
     builder.set_lr_scheduler(**config['lr_scheduler_config'])

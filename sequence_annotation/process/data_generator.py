@@ -7,30 +7,55 @@ from torch.nn.utils.rnn import pad_sequence
 
 class SeqDataset(Dataset):
     def __init__(self, data):
-        self._ids = data['ids']
-        self._num = len(self._ids)
-        self._inputs = data['inputs']
+        self._ids = None
+        self._num = None
         self._has_gene_statuses = None
         self._answers = None
         self._seqs = None
-        self._lengths = data['lengths']
+        self._signals = None
+        self._inputs = None
+        self._lengths = None
+
+        if 'ids' in data:
+            self._ids = data['ids']
+            self._num = len(self._ids)
+
+        if 'inputs' in data:
+            self._inputs = data['inputs']
+            self._lengths = data['lengths']
+            self._num = len(self._inputs)
+            
+        if 'signals' in data:
+            self._signals = {}
+            self._num = 0
+            for key,seqs in data['signals'].items():
+                self._signals[key] = seqs['inputs']
+                self._num = max(self._num,len(seqs['inputs']))
+            
         if 'seqs' in data:
             self._seqs = data['seqs']
+            self._num = len(self._seqs)
+            
         if 'answers' in data:
             self._answers = data['answers']
             self._has_gene_statuses = data['has_gene_statuses']
-
+            self._num = len(self._answers)
+            
     @property
     def data(self):
         data = {}
         keys = [
             'ids', 'inputs', 'answers', 'lengths',
-            'seqs','has_gene_statuses'
+            'seqs','has_gene_statuses', 'signals'
         ]
         for key in keys:
             data[key] = getattr(self, "_" + key)
         return data
 
+    @property
+    def signals(self):
+        return self._signals
+    
     @property
     def ids(self):
         return self._ids
@@ -60,13 +85,18 @@ class SeqDataset(Dataset):
 
     def __getitem__(self, index):
         returned = {}
-        for key, list_ in self.data.items():
-            if list_ is not None:
-                returned[key] = list_[index]
-            else:
-                returned[key] = None
+        #print(index)
+        for key, item in self.data.items():
+            if item is not None:
+                if isinstance(item,dict):
+                    returned[key] = {}
+                    for item_id,elements in item.items():
+                        returned[key][item_id] = elements[index%len(elements)]
+                else:
+                    returned[key] = item[index]
+            #else:
+            #    returned[key] = None
         return returned
-
     
 def augment_seqs(inputs, answers,seqs, lengths, has_gene_statuses,
                  discard_ratio_min, discard_ratio_max, augment_up_max,
@@ -148,10 +178,16 @@ def concat_seq(ids,inputs,answers,lengths,seqs,has_gene_statuses):
 def _get_list(data):
     ids = [item['ids'] for item in data]
     inputs = [item['inputs'] for item in data]
-    answers = [item['answers'] for item in data]
+    if 'answers' in data[0]:
+        answers = [item['answers'] for item in data]
+        has_gene_statuses = [item['has_gene_statuses'] for item in data]
+    else:
+        answers = None
+        has_gene_statuses = None
+        
     lengths = [item['lengths'] for item in data]
     seqs = [item['seqs'] for item in data]
-    has_gene_statuses = [item['has_gene_statuses'] for item in data]
+   
     return ids,inputs,answers,lengths,seqs,has_gene_statuses
 
 def seq_collate_wrapper(discard_ratio_min=None,
@@ -170,7 +206,7 @@ def seq_collate_wrapper(discard_ratio_min=None,
         raise Exception("Invalid discard_ratio_max value")
 
     def seq_collate_fn(data):
-        answers = reordered_answers = None
+        reordered_has_gene_statuses = answers = reordered_answers = None
         data = _get_list(data)
         ids,inputs,answers,lengths,seqs,has_gene_statuses = data
         change = augment_up_max + augment_down_max + discard_ratio_min + discard_ratio_max 
@@ -185,26 +221,24 @@ def seq_collate_wrapper(discard_ratio_min=None,
             ids,inputs,answers,lengths,seqs,has_gene_statuses = _get_list(concat_result)
             
         inputs = pad_sequence(inputs, batch_first=True)
-        if answers[0] is not None:
-            answers = pad_sequence(answers, batch_first=True)
         length_order = np.flip(np.argsort(lengths), axis=0).copy()
         reordered_ids = order(ids, length_order)
         reordered_inputs = inputs[length_order].transpose(1, 2)
-        
-        if answers[0] is not None:
-            reordered_answers = answers[length_order].transpose(1, 2)
         reordered_lengths = order(lengths, length_order)
         reordered_seqs = order(seqs, length_order)
-        reordered_has_gene_statuses = order(has_gene_statuses, length_order)
-        data = {
+        returned = {
             'ids': reordered_ids,
             'inputs': reordered_inputs,
-            'answers': reordered_answers,
             'lengths': reordered_lengths,
-            'seqs': reordered_seqs,
-            'has_gene_statuses': reordered_has_gene_statuses
-        }
-        return SeqDataset(data)
+            'seqs': reordered_seqs
+        }        
+        
+        if answers is not None:
+            answers = pad_sequence(answers, batch_first=True)
+            returned['answers'] = answers[length_order].transpose(1, 2)
+            returned['has_gene_statuses'] = order(has_gene_statuses, length_order)
+
+        return SeqDataset(returned)
 
     return seq_collate_fn
 

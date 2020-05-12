@@ -1,10 +1,7 @@
 import os
 import torch
-import pandas as pd
-import deepdish as dd
-from ..utils.utils import read_gff,create_folder,write_bed,write_fasta,read_fasta
+from ..utils.utils import create_folder, read_fasta, write_bed, write_fasta
 from ..utils.translate import translate
-from ..preprocess.gff2bed import main as gff2bed_main
 from ..preprocess.gff2bed import gff2bed
 from .convert_signal_to_gff import simple_output_to_vectors
 
@@ -21,8 +18,8 @@ def gff_to_peptide(gff,genome_path,output_root):
     create_folder(output_root)
     bed_path = os.path.join(output_root,'data.bed')
     cDNA_path = os.path.join(output_root,'cDNA.fasta')
-    peptide_path = os.path.join(output_root,'peptide.fasta')
-    orf_indice_path = os.path.join(output_root,'orf_indice.json')
+    os.path.join(output_root,'peptide.fasta')
+    os.path.join(output_root,'orf_indice.json')
     bed = gff2bed(gff)
     write_bed(bed,bed_path)
     os.system("rm {}.fai".format(genome_path))

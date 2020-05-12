@@ -22,16 +22,15 @@ from .executor import get_executor
 
 
 class SeqAnnEngine(metaclass=abc.ABCMeta):
-    def __init__(self,channel_order,shuffle_train_data=True,
-                 is_verbose_visible=True):
+    def __init__(self,channel_order):
         self._settings = {}
         self._root = None
         self._writer = None
         self._train_writer = self._val_writer = self._test_writer = None
-        self.is_verbose_visible = is_verbose_visible
+        self.is_verbose_visible = True
         self._channel_order = channel_order
         self._ann_types = self._channel_order
-        self._shuffle_train_data = shuffle_train_data
+        self.batch_size = None
 
     def update_settings(self, key, params):
         if isinstance(params, dict):
@@ -157,7 +156,8 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
     def _update_common_setting(self):
         self.update_settings('setting', {
             'ann_types': self._ann_types,
-            'channel_order': self._channel_order
+            'channel_order': self._channel_order,
+            'batch_size': self.batch_size
         })
 
     def _update_ann_seqs_count(self, name, origin_count, filtered_count):
@@ -172,7 +172,7 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
             tensorboard.do_add_grad = add_grad
             callbacks.add(tensorboard)
 
-    def _process_data(self, raw_data):
+    def process_data(self, raw_data):
         keys = list(raw_data.keys())
         data = AnnSeqProcessor(self._channel_order).process(raw_data)
         for key in keys:
@@ -186,14 +186,14 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
                                      has_gene_statuses_count)
         return data
 
-    def _create_data_gen(self, batch_size, seq_collate_fn):
-        train_gen = SeqGenerator(batch_size=batch_size,
-                                 shuffle=self._shuffle_train_data,
-                                 seq_collate_fn=seq_collate_fn)
+    def create_data_gen(self,collate_fn=None,shuffle=True):
+        train_gen = SeqGenerator(batch_size=self.batch_size,
+                                 shuffle=shuffle,
+                                 seq_collate_fn=collate_fn)
         return train_gen
 
-    def _create_basic_data_gen(self, batch_size):
-        test_gen = SeqGenerator(batch_size=batch_size,
+    def create_basic_data_gen(self):
+        test_gen = SeqGenerator(batch_size=self.batch_size,
                                 shuffle=False)
         return test_gen
 
@@ -202,27 +202,18 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
                                                 simply_map=simply_map)
         return converter
 
-    def train(self,model,executor,train_data,val_data,
-              epoch=None,batch_size=None,other_callbacks=None,
-              add_grad=True,seq_collate_fn_kwargs=None,
-              checkpoint_kwargs=None,same_generator=False):
-        seq_collate_fn_kwargs = seq_collate_fn_kwargs or {}
+    def train(self,model,executor,train_loader,val_loader,
+              epoch=None,other_callbacks=None,
+              add_grad=True,checkpoint_kwargs=None):
         self._update_common_setting()
         other_callbacks = other_callbacks or Callbacks()
         epoch = epoch or 100
         self.update_settings(
             'train_setting', {
                 'epoch': epoch,
-                'batch_size': batch_size,
-                'seq_collate_fn_kwargs': seq_collate_fn_kwargs,
                 'add_grad': add_grad,
                 'checkpoint_kwargs': checkpoint_kwargs,
-                'same_generator':same_generator
             })
-        # Set data
-        train_seqs, train_ann_seqs = train_data
-        val_seqs, val_ann_seqs = val_data
-        
         # Set callbacks and writer
         train_callbacks, val_callbacks = self._create_default_train_callbacks()
         self._add_tensorboard_callback(self._train_writer,
@@ -233,34 +224,12 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
                                        add_grad=add_grad)
 
         # Create worker
-        collate_fn = seq_collate_wrapper(**seq_collate_fn_kwargs)
-        train_gen = self._create_data_gen(batch_size, collate_fn)
-        if same_generator:
-            val_gen = train_gen
-        else:
-            val_gen = self._create_basic_data_gen(batch_size)
-
-        # Process data
-        raw_data = {
-            'training': {
-                'inputs': train_seqs,
-                'answers': train_ann_seqs
-            }
-        }
-        raw_data['validation'] = {'inputs': val_seqs, 'answers': val_ann_seqs}
-        data = self._process_data(raw_data)
-
-        # Create worker
-        worker = TrainWorker(model,data,train_generator=train_gen,
-                             val_generator=val_gen,
-                             executor=executor,
-                             train_callbacks=train_callbacks,
-                             val_callbacks=val_callbacks,
-                             other_callbacks=other_callbacks,
-                             writer=self._writer,
-                             epoch=epoch,
-                             root=self._root,
+        worker = TrainWorker(model,executor,train_loader,val_loader,
+                             writer=self._writer,epoch=epoch,root=self._root,
                              checkpoint_kwargs=checkpoint_kwargs)
+        worker.train_callbacks = train_callbacks
+        worker.val_callbacks = val_callbacks
+        worker.other_callbacks = other_callbacks
         worker.is_verbose_visible = self.is_verbose_visible
         # Save setting
         if self._root is not None:
@@ -285,37 +254,19 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
             if not os.path.exists(model_component_path):
                 with open(model_component_path, "w") as fp:
                     fp.write(str(model))
-
         # Execute worker
         worker.work()
         return worker
 
-    def test(self,model,executor,data,batch_size=None,
-             region_table_path=None,answer_gff_path=None,
-             callbacks=None):
-
+    def test(self,model,executor,data_loader,callbacks=None):
         self._update_common_setting()
-        self.update_settings('test_setting', {'batch_size': batch_size})
         callbacks = callbacks or Callbacks()
         test_callbacks = self._create_default_test_callbacks()
         callbacks.add(test_callbacks)
         self._add_tensorboard_callback(self._test_writer, callbacks)
         root = os.path.join(self._root, 'test')
-        singal_handler = self.get_signal_handler(
-            root,'test',executor.inference,region_table_path,
-            answer_gff_path=answer_gff_path
-        )
-        callbacks.add(singal_handler)
-
-        generator = self._create_basic_data_gen(batch_size)
-        test_seqs, test_ann_seqs = data
-        raw_data = {'testing': {'inputs': test_seqs, 'answers': test_ann_seqs}}
-        data = self._process_data(raw_data)
-
-        worker = TestWorker(model,data,generator=generator,
-                            callbacks=callbacks,executor=executor,
-                            root=self._root)
-
+        worker = TestWorker(model,executor,data_loader,root=self._root)
+        worker.callbacks = callbacks
         if self._root is not None:
             root = os.path.join(self._root, 'settings')
             create_folder(root)
@@ -326,23 +277,11 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         worker.work()
         return worker
     
-    def predict(self,model,executor,seqs,batch_size=None,
-                region_table_path=None,callbacks=None):
-
+    def predict(self,model,executor,data_loader,callbacks=None):
         self._update_common_setting()
-        self.update_settings('predict_setting', {'batch_size': batch_size})
-        callbacks = callbacks or Callbacks()
         root = os.path.join(self._root, 'predict')
-        singal_handler = self.get_signal_handler(root,inference=executor.inference,
-                                                 region_table_path=region_table_path)
-        callbacks.add(singal_handler)
-        generator = self._create_basic_data_gen(batch_size)
-        raw_data = {'predicting': {'inputs': seqs}}
-        data = self._process_data(raw_data)
-        worker = PredictWorker(model,data,generator=generator,
-                            callbacks=callbacks,executor=executor,
-                            root=self._root)
-
+        worker = PredictWorker(model,executor,data_loader,root=self._root)
+        worker.callbacks = callbacks
         if self._root is not None:
             root = os.path.join(self._root, 'settings')
             create_folder(root)
@@ -353,7 +292,7 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         worker.work()
         return worker
 
-
+    
 def _get_first_large_data(data, batch_size):
     seqs, ann_container = data
     lengths = {key: len(seq) for key, seq in seqs.items()}
@@ -374,12 +313,24 @@ def check_max_memory_usgae(saved_root, model, executor, train_data, val_data,
     create_folder(saved_root)
     train_data = _get_first_large_data(train_data, batch_size)
     val_data = _get_first_large_data(val_data, batch_size)
-    engine = SeqAnnEngine(BASIC_GENE_ANN_TYPES, is_verbose_visible=False)
+    engine = SeqAnnEngine(BASIC_GENE_ANN_TYPES)
+    engine.is_verbose_visible=False
+    engine.batch_size=batch_size
+    
+    train_seqs, train_ann_seqs = train_data
+    val_seqs, val_ann_seqs = val_data
+    raw_data = {
+        'training': {'inputs': train_seqs,'answers': train_ann_seqs},
+        'validation':{'inputs': val_seqs, 'answers': val_ann_seqs}
+    }
+    data = engine.process_data(raw_data)
+    train_gen = engine.create_data_gen(seq_collate_wrapper(concat=concat))
+    val_gen = engine.create_basic_data_gen()
+    train_loader = train_gen(data['training'])
+    val_loader = val_gen(data['validation'])
     try:
         torch.cuda.reset_max_memory_cached()
-        engine.train(model,executor,train_data,val_data=val_data,
-                     batch_size=batch_size,epoch=1,
-                     seq_collate_fn_kwargs={'concat':concat})
+        engine.train(model,executor,train_loader,val_loader,epoch=1)
         max_memory = torch.cuda.max_memory_reserved()
         messenge = "Max memory allocated is {}\n".format(max_memory)
         print(messenge)
@@ -393,7 +344,7 @@ def check_max_memory_usgae(saved_root, model, executor, train_data, val_data,
         raise Exception("Memory is fulled")
 
 
-def get_model_executor(model_config_path,executor_config_path,
+def get_model_executor(model_config_path,executor_config_or_path,
                        model_weights_path=None,
                        executor_weights_path=None,
                        frozen_names=None,
@@ -404,8 +355,7 @@ def get_model_executor(model_config_path,executor_config_path,
                       frozen_names=frozen_names,
                       save_distribution=save_distribution)
     # Create executor
-    executor = get_executor(model,
-                            executor_config_path,
+    executor = get_executor(model,executor_config_or_path,
                             executor_weights_path=executor_weights_path)
     return model, executor
 

@@ -328,15 +328,15 @@ class ModelCheckpoint(_Checkpoint):
             _write_status(self.last_status_path, self._counter,
                           self.last_model_path)
 
-            print("Best " + str(self.target) + ": " + str(self._best_result))
-            if self.save_best_weights:
-                if self.restore_best_weights:
-                    print("Restore best weight of epoch {}".format(
-                        self._best_epoch))
-                    self._worker.model.load_state_dict(self._model_weights)
-                _save_best(self.best_model_path, self.best_status_path,
-                           self.best_epoch, self._best_result,
-                           self._model_weights, self.patient)
+        print("Best " + str(self.target) + ": " + str(self._best_result))
+        if self.save_best_weights:
+            if self.restore_best_weights:
+                print("Restore best weight of epoch {}".format(
+                    self._best_epoch))
+                self._worker.model.load_state_dict(self._model_weights)
+            _save_best(self.best_model_path, self.best_status_path,
+                       self.best_epoch, self._best_result,
+                       self._model_weights, self.patient)
 
 
 class ExecutorCheckpoint(_Checkpoint):

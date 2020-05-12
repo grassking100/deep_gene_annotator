@@ -1,4 +1,4 @@
-from abc import abstractmethod, ABCMeta, abstractproperty
+from abc import ABCMeta, abstractmethod
 import torch.nn as nn
 from torch.nn.functional import binary_cross_entropy as BCE
 from .inference import create_basic_inference

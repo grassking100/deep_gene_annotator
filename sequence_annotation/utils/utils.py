@@ -1,8 +1,6 @@
 import pytz
 import datetime
-from .exception import InvalidStrandType
-from pathlib import Path
-from Bio import SeqIO
+import re
 import sys
 import os
 import errno
@@ -10,6 +8,9 @@ import math
 import json
 import numpy as np
 import pandas as pd
+from pathlib import Path
+from Bio import SeqIO
+from .exception import InvalidStrandType
 pd.set_option('mode.chained_assignment', 'raise')
 
 
@@ -182,7 +183,7 @@ def read_bed(path):
     For more information, please visit https://tidyomics.com/blog/2018/12/09/2018-12-09-the-devil-0-and-1-coordinate-system-in-genomics
     """
     try:
-        bed = pd.read_csv(path, sep='\t', header=None, dtype={0: str})
+        bed = pd.read_csv(path, sep='\t', header=None, dtype={0: str,10:str,11:str})
     except BaseException:
         raise Exception("{} has incorrect format".format(path))
     bed.columns = BED_COLUMNS[:len(bed.columns)]
@@ -450,3 +451,26 @@ def batch_join(project_root, folder_names, path):
     for folder_name in folder_names:
         paths[folder_name] = os.path.join(project_root, folder_name, path)
     return paths
+
+
+def find_substr(regex, string, shift_value=None):
+    """Find indice of matched text in string
+
+    Parameters:
+    ----------
+    regex : str
+        Regular expression
+    string : str
+        String to be searched
+    shift_value : int (default: 0)
+        Shift the index
+
+    Returns:
+    ----------
+    list (int)
+        List of indice
+    """
+    shift_value = shift_value or 0
+    iter_ = re.finditer(regex, string)
+    indice = [m.start() + shift_value for m in iter_]
+    return indice
