@@ -267,6 +267,9 @@ class BasicExecutor(_Executor):
         return returned
 
 EPSILON=1e-32
+
+def l2_norm(tensor):
+    return torch.pow(torch.pow(tensor,2).sum(),0.5)
     
 def calculate_signal_loss(model,signals,signal_loss_method=None):
     donor = signals['donor']
@@ -299,13 +302,43 @@ def calculate_signal_loss(model,signals,signal_loss_method=None):
         donor_loss = torch.log(torch.pow(donor_diff,2).max()+EPSILON)
         acceptor_loss = torch.log(torch.pow(acceptor_diff,2).max()+EPSILON)
         signal_loss = donor_loss+acceptor_loss
-    elif signal_loss_method == 'square':
+    elif signal_loss_method == 'mean':#square
         #Ver 3
         middle = int((L-1)/2)
         donor_diff = donor_signals[:,:,middle].mean(0) - fake_donor_signals[:,:,middle].mean(0)
         acceptor_diff = acceptor_signals[:,:,middle].mean(0) - fake_acceptor_signals[:,:,middle].mean(0)
         donor_loss = torch.log(torch.pow(donor_diff,2).mean()+EPSILON)
         acceptor_loss = torch.log(torch.pow(acceptor_diff,2).mean()+EPSILON)
+        signal_loss = donor_loss+acceptor_loss
+    elif signal_loss_method == 'max_no_log':
+        #Ver 4
+        middle = int((L-1)/2)
+        donor_diff = donor_signals[:,:,middle].mean(0) - fake_donor_signals[:,:,middle].mean(0)
+        acceptor_diff = acceptor_signals[:,:,middle].mean(0) - fake_acceptor_signals[:,:,middle].mean(0)
+        donor_loss = torch.pow(donor_diff,2).max()
+        acceptor_loss = torch.pow(acceptor_diff,2).max()
+        signal_loss = donor_loss+acceptor_loss
+    elif signal_loss_method == 'mean_no_log':
+        #Ver 5
+        middle = int((L-1)/2)
+        donor_diff = donor_signals[:,:,middle].mean(0) - fake_donor_signals[:,:,middle].mean(0)
+        acceptor_diff = acceptor_signals[:,:,middle].mean(0) - fake_acceptor_signals[:,:,middle].mean(0)
+        donor_loss = torch.pow(donor_diff,2).mean()
+        acceptor_loss = torch.pow(acceptor_diff,2).mean()
+        signal_loss = donor_loss+acceptor_loss
+    elif signal_loss_method == 'region_square_mean':
+        #Ver 6
+        donor_diff = donor_signals.mean(0) - fake_donor_signals.mean(0)
+        acceptor_diff = acceptor_signals.mean(0) - fake_acceptor_signals.mean(0)
+        donor_loss = torch.pow(donor_diff,2).mean()
+        acceptor_loss = torch.pow(acceptor_diff,2).mean()
+        signal_loss = donor_loss+acceptor_loss
+    elif signal_loss_method == 'region_abs_max':
+        #Ver 7
+        donor_diff = donor_signals.mean(0) - fake_donor_signals.mean(0)
+        acceptor_diff = acceptor_signals.mean(0) - fake_acceptor_signals.mean(0)
+        donor_loss = donor_diff.abs().max()
+        acceptor_loss = acceptor_diff.abs().max()
         signal_loss = donor_loss+acceptor_loss
     else:
         raise
@@ -317,8 +350,6 @@ class AdvancedExecutor(_Executor):
         self.train_signal_loader = iter(train_signal_loader)
         self.val_signal_loader = iter(val_signal_loader)
         self.signal_loss_method = signal_loss_method
-        #self._accumalated_signal_loss = 0
-        #self._accumalated_counter = 0
         
     def fit(self, model, seq_data, **kwargs):
         inputs = seq_data.inputs.cuda()
@@ -357,20 +388,6 @@ class AdvancedExecutor(_Executor):
             'masks': masks,
             'outputs': outputs
         }
-        return returned
-
-    def evaluate(self, model,seq_data, **kwargs):
-        returned = super().evaluate(model,seq_data, **kwargs)
-        #if self.loss is not None:
-        #    self._accumalated_counter += 1
-        #    returned['metric']['label_loss'] = returned['metric']['loss']
-        #    model.reset()
-        #    signals = next(self.val_signal_loader)['signals']
-        #    signal_loss = calculate_signal_loss(model,signals).item()
-        #    model.reset()
-        #    self._accumalated_signal_loss += signal_loss
-        #    returned['metric']['signal_loss'] = self._accumalated_signal_loss/self._accumalated_counter
-        #    returned['metric']['loss'] = returned['metric']['label_loss'] - returned['metric']['signal_loss']
         return returned
     
     def on_epoch_end(self, epoch, metric):

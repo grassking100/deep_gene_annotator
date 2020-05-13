@@ -41,7 +41,7 @@ class SeqContainer(metaclass=ABCMeta):
             key = self._keys[self._index]
             self._index += 1
             return self._data[key]
-
+        
     def is_empty(self):
         return len(self) == 0
 
@@ -121,6 +121,9 @@ class SeqContainer(metaclass=ABCMeta):
     def __getitem__(self, id_):
         return self.get(id_)
 
+    def __delitem__(self,id_):
+        del self._data[id_]
+    
     def copy(self, with_seq=True):
         new_container = self.__class__()
         new_container.note = self.note

@@ -25,6 +25,15 @@ def _create_ann_seq(chrom, length, ann_types):
     return ann_seq
 
 
+def remove_block(dict_,block):
+    del dict_[block.start]
+    if block.end in dict_:
+        del dict_[block.end]
+    
+def set_block(dict_,block):
+    dict_[block.start] = block
+    dict_[block.end] = block
+
 class GFFReviser:
     def __init__(self, gene_info_extractor, donor_pattern=None, acceptor_pattern=None,
                  length_thresholds=None, donor_distance=None, acceptor_distance=None,
@@ -47,7 +56,6 @@ class GFFReviser:
         acceptor_index_shift : int (default : 1)
             Shift value of acceptor site index
         """
-        #self.kwargs = locals()
         self._gene_info_extractor = gene_info_extractor
         self._extractor = RegionExtractor()
         self.donor_pattern = donor_pattern or 'GT'
@@ -96,33 +104,94 @@ class GFFReviser:
         ann_seq.add_ann('other', other)
         return ann_seq
 
-    def _filter_ann(self, seq_info_container):
+    def _merge_current_to_previous(self,previous_block,current_block,block_table,fragment_lengths):
+        remove_block(block_table,current_block)
+        remove_block(block_table,previous_block)
+        previous_block.end = current_block.end
+        del fragment_lengths[current_block.start]
+        #If merged block is fragment, then update its length in fragment_lengths
+        if previous_block.length < self.length_thresholds[previous_block.ann_type]:
+            fragment_lengths[previous_block.start] = previous_block.length
+        #If merged block is not fragment and is in fragment_lengths, then delete it form fragment_lengths
+        elif previous_block.start in fragment_lengths:
+            del fragment_lengths[previous_block.start]
+        set_block(block_table,previous_block)
+            
+    def _merge_current_to_next(self,current_block,next_block,block_table,fragment_lengths):
+        remove_block(block_table,current_block)
+        remove_block(block_table,next_block)
+        next_block.start = current_block.start
+        del fragment_lengths[current_block.start]
+        #If merged block is fragment, then update its length in fragment_lengths
+        if next_block.length < self.length_thresholds[next_block.ann_type]:
+            fragment_lengths[next_block.start] = next_block.length
+        #If merged block is not fragment and is in fragment_lengths, then delete it form fragment_lengths
+        elif next_block.start in fragment_lengths:
+            del fragment_lengths[next_block.start]
+        set_block(block_table,next_block)
+
+    def _merge_blocks_to_previous(self,previous_block,current_block,next_block,block_table,fragment_lengths):
+        remove_block(block_table,current_block)
+        remove_block(block_table,previous_block)
+        remove_block(block_table,next_block)
+        previous_block.end = next_block.end
+        del fragment_lengths[current_block.start]
+        #If merged block is fragment, then update its length in fragment_lengths
+        if previous_block.length < self.length_thresholds[previous_block.ann_type]:
+            fragment_lengths[previous_block.start] = previous_block.length
+        #If merged block is not fragment and is in fragment_lengths, then delete it form fragment_lengths
+        elif previous_block.start in fragment_lengths:
+            del fragment_lengths[previous_block.start]
+        #If next block in fragment_lengths then delete it from fragment_lengths
+        if next_block.start in fragment_lengths:
+            del fragment_lengths[next_block.start]
+        set_block(block_table,previous_block)
+    
+    def _filter_ann_by_length(self, seq_info_container):
         if self.length_thresholds is None:
             return seq_info_container
-        dict_ = seq_info_container.to_dict()
-        seq_info_list = dict_['data']
-        blocks = []
-        starts = []
-        for seq_info in seq_info_list:
-            starts.append(seq_info['start'])
-
-        indice = np.argsort(starts)
-        for index in indice:
-            seq_info = seq_info_list[index]
-            # If it is fragment, handle it
-            length = seq_info['end'] - seq_info['start'] + 1
-            if length < self.length_thresholds[seq_info['ann_type']]:
-                if len(blocks)==0:
-                    seq_info['ann_type'] = 'other'
-                    blocks.append(seq_info)
+        block_table = {}
+        fragment_lengths = {}
+        for seq_info in seq_info_container:
+            block_table[seq_info.start] = seq_info
+            block_table[seq_info.end] = seq_info
+            if seq_info.length < self.length_thresholds[seq_info.ann_type]:
+                fragment_lengths[seq_info.start] = seq_info.length
+        
+        while len(fragment_lengths)>0:
+            starts = list(fragment_lengths.keys())
+            fragment_lengths_ = list(fragment_lengths.values())
+            index = np.argsort(fragment_lengths_)[0]
+            current_block = block_table[starts[index]]
+            previous_block = next_block = None
+            if current_block.start-1 in block_table:
+                previous_block = block_table[current_block.start-1]
+            if current_block.end+1 in block_table:
+                next_block = block_table[current_block.end+1]
+            if previous_block is not None and next_block is not None:
+                #If neighbors have same type, then merge three blocks to one blocks
+                if previous_block.ann_type == next_block.ann_type:
+                    self._merge_blocks_to_previous(previous_block,current_block,next_block,block_table,fragment_lengths)
                 else:
-                    blocks[-1]['end'] = seq_info['end']
+                    #Merge current block to larger block
+                    if previous_block.length >= next_block.length:
+                        self._merge_current_to_previous(previous_block,current_block,block_table,fragment_lengths)
+                    else:
+                        self._merge_current_to_next(current_block,next_block,block_table,fragment_lengths)
+            #Merge current block to previous block
+            elif previous_block is not None:
+                self._merge_current_to_previous(previous_block,current_block,block_table,fragment_lengths)
+            #Merge current block to previous next
             else:
-                blocks.append(seq_info)
+                self._merge_current_to_next(current_block,next_block,block_table,fragment_lengths)
 
-        blocks_ = SeqInfoContainer()
-        blocks_.from_dict({'data': blocks, 'note': dict_['note']})
-        return blocks_
+        returned = SeqInfoContainer()
+        returned.note = seq_info_container.note
+        for block in block_table.values():
+            if block.id not in returned.ids:
+                returned.add(block)
+        
+        return returned
 
     def _process_transcript(self, rna, splice_pair_statuses, ann_seq):
         rna_boundary = rna['start'], rna['end']
@@ -166,26 +235,26 @@ class GFFReviser:
         gff = self._preprocess_gff(chrom_id, length, gff)
         ann_seq = self._create_ann_seq(chrom_id, length, gff)
         blocks = self._extractor.extract(ann_seq)
-        gff = self._filter_ann(blocks).to_gff()
+        gff = self._filter_ann_by_length(blocks).to_gff()
         ann_seq = self._create_ann_seq(chrom_id, length, gff)
         filtered = self._gene_info_extractor.extract_per_seq(ann_seq)
         filtered_gff = None
         if len(filtered) > 0:
             filtered_gff = filtered.to_gff()
-            # Filter transcript
-            invalid_ids = []
-            filtered_gff = get_gff_with_attribute(filtered_gff)
-            transcripts = filtered_gff[filtered_gff['feature'].isin(
-                RNA_TYPES)].to_dict('record')
-            for transcript in transcripts:
-                length = transcript['end'] - transcript['start'] + 1
-                if self.length_thresholds is not None:
+            if self.length_thresholds is not None:
+                # Filter transcript
+                invalid_ids = []
+                filtered_gff = get_gff_with_attribute(filtered_gff)
+                transcripts = filtered_gff[filtered_gff['feature'].isin(
+                    RNA_TYPES)].to_dict('record')
+                for transcript in transcripts:
+                    length = transcript['end'] - transcript['start'] + 1
                     if length < self.length_thresholds['transcript']:
                         invalid_ids.append(transcript['parent'])
                         invalid_ids.append(transcript['id'])
 
-            filtered_gff = filtered_gff[(~filtered_gff['parent'].isin(
-                invalid_ids)) & (~filtered_gff['id'].isin(invalid_ids))]
+                filtered_gff = filtered_gff[(~filtered_gff['parent'].isin(
+                    invalid_ids)) & (~filtered_gff['id'].isin(invalid_ids))]
         return filtered_gff
 
     def fix_splicing_site(self, chrom_id, length, seq, gff):

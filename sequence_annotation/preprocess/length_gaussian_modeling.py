@@ -118,18 +118,11 @@ if __name__ == '__main__':
     parser = ArgumentParser(
         description="Create table about length statistic result about GFF data"
     )
-    parser.add_argument("-i",
-                        "--gff_path",
-                        help="The path of input GFF to be analysized",
-                        required=True)
-    parser.add_argument("-o",
-                        "--output_root",
-                        help="The root to save result file",
-                        required=True)
-    parser.add_argument("-n",
-                        "--component_num",
-                        help="The number of Gaussian mixture model to fit",
-                        type=int,
-                        default=1)
+    parser.add_argument("-i","--gff_path",required=True,
+                        help="The path of input GFF to be analysized")
+    parser.add_argument("-o","--output_root",required=True,
+                        help="The root to save result file")
+    parser.add_argument("-n","--component_num",type=int,default=1,
+                        help="The number of Gaussian mixture model to fit")
     args = parser.parse_args()
     main(**vars(args))

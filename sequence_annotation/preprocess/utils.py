@@ -260,13 +260,10 @@ def get_data_names(split_root):
 
 def read_region_table(path, calculate_length=True):
     """Get region table about regions"""
-    df = pd.read_csv(path,
-                     sep='\t',
-                     dtype={
-                         'chr': str,
-                         'start': int,
-                         'end': int
-                     })
+    df = pd.read_csv(path,sep='\t',
+                     dtype={'chr': str,
+                            'start': int,
+                            'end': int})
     if calculate_length:
         df['length'] = df['end'] - df['start'] + 1
     return df

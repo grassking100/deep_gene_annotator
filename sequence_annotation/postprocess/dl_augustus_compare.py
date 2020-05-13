@@ -90,8 +90,8 @@ def write_tsv(df,root,name,index=False):
 
 class Comparer:
     def __init__(self,lhs_root,rhs_root,lhs_names,rhs_names,
-                 lhs_rel_path,rhs_rel_path,lhs_source,rhs_source,
-                 output_root):
+                 lhs_rel_path,rhs_rel_path,
+                 lhs_source,rhs_source,output_root):
         self.lhs_root = lhs_root
         self.rhs_root = rhs_root
         self.lhs_names = lhs_names
@@ -103,19 +103,29 @@ class Comparer:
         self.output_root = output_root
 
     def _read_base_block(self,name):
+        lhs_name = rhs_name = name
+        if self.lhs_rel_path is not None:
+            lhs_name = os.path.join(self.lhs_rel_path ,name)
+        if self.rhs_rel_path is not None:
+            rhs_name = os.path.join(self.rhs_rel_path ,name)
         lhs_paths = batch_join(self.lhs_root, self.lhs_names,
-                               self.lhs_rel_path + '/'+name)
+                               lhs_name)
         rhs_paths = batch_join(self.rhs_root, self.rhs_names,
-                               self.rhs_rel_path + '/'+name)
+                               rhs_name)
         lhs_result = read_base_block_result(lhs_paths)
         rhs_result = read_base_block_result(rhs_paths)
         return lhs_result,rhs_result
     
     def _read_site_result(self,name):
+        lhs_name = rhs_name = name
+        if self.lhs_rel_path is not None:
+            lhs_name = os.path.join(self.lhs_rel_path ,name)
+        if self.rhs_rel_path is not None:
+            rhs_name = os.path.join(self.rhs_rel_path ,name)
         lhs_paths = batch_join(self.lhs_root, self.lhs_names,
-                               self.lhs_rel_path + '/'+name)
+                               lhs_name)
         rhs_paths = batch_join(self.rhs_root, self.rhs_names,
-                               self.rhs_rel_path + '/'+name)
+                               rhs_name)
         lhs_result = read_site_result(lhs_paths)
         rhs_result = read_site_result(rhs_paths)
         return lhs_result,rhs_result
@@ -171,20 +181,21 @@ def main(split_table_path, dl_root, aug_project_root,
     dl_folder_names = get_dl_folder_names(split_table)
     aug_folder_names = get_augustus_folder_names(aug_folder_prefix, len(split_table))
     aug_rel_path='test/evaluate'
-    dl_rel_path='testing/test'
+    raw_dl_rel_path='testing'
+    dl_rel_path=None
     raw_dl_root = os.path.join(dl_root,'predicted')
     revised_dl_root = os.path.join(dl_root,'revised_test')
 
     #Compare raw DL and revised DL
     comparer = Comparer(raw_dl_root,revised_dl_root,
                         dl_folder_names,dl_folder_names,
-                        dl_rel_path,dl_rel_path,
+                        raw_dl_rel_path,dl_rel_path,
                         'origin DL','revised DL',revised_to_raw)
     comparer.compare()
     #Compare Augustus and raw DL
     comparer = Comparer(aug_project_root,raw_dl_root,
                         aug_folder_names,dl_folder_names,
-                        aug_rel_path,dl_rel_path,
+                        aug_rel_path,raw_dl_rel_path,
                         'Augustus','origin DL',raw_to_augustus)
     comparer.compare()
     #Compare Augustus and revised DL
