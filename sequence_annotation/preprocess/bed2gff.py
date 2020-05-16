@@ -161,10 +161,8 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument("-i", "--bed_path", required=True)
     parser.add_argument("-o", "--gff_output", required=True)
-    parser.add_argument(
-        "-t",
-        "--id_table_path",
-        help="Id table about transcript and gene conversion")
+    parser.add_argument("-t","--id_table_path",
+                        help="Id table about transcript and gene conversion")
     parser.add_argument("--simple_mode", action='store_true')
     parser.add_argument("--feature", help='Set feature if it is simple mode')
     args = parser.parse_args()

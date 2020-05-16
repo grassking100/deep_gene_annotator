@@ -45,15 +45,11 @@ def main(trained_root,revised_root,output_root,fasta_path,fasta_double_strand_pa
                 batch_size=batch_size,**kwargs)
     
     revised_config_path = os.path.join(revised_root,'best_gff_reviser_config.json')
-    revised_config = read_json(revised_config_path)
-    del revised_config['class']
-    del revised_config['gene_info_extractor']
-    del revised_config['ann_types']
     revised_root = os.path.join(output_root,'revised')
     revised_ps_gff_path = os.path.join(revised_root,'revised_plus_strand.gff3')
     revised_ps_bed_path = os.path.join(revised_root,'revised_plus_strand.bed')
     revised_main(revised_root, predict_ps_gff_path, region_table_path, fasta_path,
-                 multiprocess=40,**revised_config)
+                 multiprocess=40,**revised_config_path)
     gff2bed_main(revised_ps_gff_path,revised_ps_bed_path,simple_mode=False)
     cDNA_fasta_path = os.path.join(revised_root,'predicted_transcript_cDNA.fasta')
     os.system("bedtools getfasta -fi {} -bed {} "

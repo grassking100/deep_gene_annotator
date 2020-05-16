@@ -360,7 +360,7 @@ def get_model_executor(model_config_path,executor_config_or_path,
     return model, executor
 
 
-def get_best_model_and_origin_executor(saved_root):
+def get_best_model_and_origin_executor(saved_root,latest=False):
     setting = read_json(os.path.join(saved_root, 'main_setting.json'))
     executor_config_path = os.path.join(
         saved_root, 'resource',
@@ -368,8 +368,12 @@ def get_best_model_and_origin_executor(saved_root):
     model_config_path = os.path.join(
         saved_root, 'resource',
         get_file_name(setting['model_config_path'], True))
-    model_weights_path = os.path.join(saved_root, 'checkpoint',
-                                      'best_model.pth')
+    if latest:
+        model_weights_path = os.path.join(saved_root, 'checkpoint',
+                                          'latest_model.pth')
+    else:
+        model_weights_path = os.path.join(saved_root, 'checkpoint',
+                                          'best_model.pth')
     model, executor = get_model_executor(model_config_path,
                                          executor_config_path,
                                          model_weights_path=model_weights_path)

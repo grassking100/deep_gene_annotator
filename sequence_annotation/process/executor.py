@@ -216,6 +216,7 @@ class _Executor(IExecutor):
       
     def get_config(self):
         config = {}
+        config['class'] = self.__class__.__name__
         if self.loss is not None:
             config['loss_config'] = self.loss.get_config()
         config['inference'] = self.inference.__name__
@@ -268,87 +269,60 @@ class BasicExecutor(_Executor):
 
 EPSILON=1e-32
 
-def l2_norm(tensor):
-    return torch.pow(torch.pow(tensor,2).sum(),0.5)
-    
-def calculate_signal_loss(model,signals,signal_loss_method=None):
+def get_signal(model,signals):
     donor = signals['donor']
     acceptor = signals['acceptor']
-    fake_donor = signals['fake_donor']
-    fake_acceptor = signals['fake_acceptor']
-    signals = torch.cat([donor,acceptor,fake_donor,fake_acceptor]).cuda()
+    #fake_donor = signals['fake_donor']
+    #fake_acceptor = signals['fake_acceptor']
+    #signals = torch.cat([donor,acceptor,fake_donor,fake_acceptor]).cuda()
+    signals = torch.cat([donor,acceptor]).cuda()
     N,C,L = donor.shape
-    singal_lengths = [L]*N*4
+    singal_lengths = [L]*N*2
     if model.norm_input_block is not None:
         signals = model.norm_input_block(signals,singal_lengths)
-
-    signals = model.feature_block(signals,singal_lengths)[0][:,4:]
+    signals = model.feature_block(signals,singal_lengths)[0]
+    signals = model.relation_block.rnn_1(signals,singal_lengths)
     donor_signals = signals[:N]
     acceptor_signals = signals[N:2*N]
-    fake_donor_signals = signals[2*N:3*N]
-    fake_acceptor_signals = signals[3*N:4*N]
-    signal_loss_method = signal_loss_method or 'basic'
-    if signal_loss_method == 'basic':
-        #Ver 1
-        signal_loss = donor_signals.mean(0)-fake_donor_signals.mean(0)
-        signal_loss = signal_loss + acceptor_signals.mean(0)-fake_acceptor_signals.mean(0)
-        signal_loss = torch.pow(signal_loss,2)
-        signal_loss = signal_loss.mean() 
-    elif signal_loss_method == 'max':        
-        #Ver 2
-        middle = int((L-1)/2)
-        donor_diff = donor_signals[:,:,middle].mean(0) - fake_donor_signals[:,:,middle].mean(0)
-        acceptor_diff = acceptor_signals[:,:,middle].mean(0) - fake_acceptor_signals[:,:,middle].mean(0)
-        donor_loss = torch.log(torch.pow(donor_diff,2).max()+EPSILON)
-        acceptor_loss = torch.log(torch.pow(acceptor_diff,2).max()+EPSILON)
-        signal_loss = donor_loss+acceptor_loss
-    elif signal_loss_method == 'mean':#square
-        #Ver 3
-        middle = int((L-1)/2)
-        donor_diff = donor_signals[:,:,middle].mean(0) - fake_donor_signals[:,:,middle].mean(0)
-        acceptor_diff = acceptor_signals[:,:,middle].mean(0) - fake_acceptor_signals[:,:,middle].mean(0)
-        donor_loss = torch.log(torch.pow(donor_diff,2).mean()+EPSILON)
-        acceptor_loss = torch.log(torch.pow(acceptor_diff,2).mean()+EPSILON)
-        signal_loss = donor_loss+acceptor_loss
-    elif signal_loss_method == 'max_no_log':
-        #Ver 4
-        middle = int((L-1)/2)
-        donor_diff = donor_signals[:,:,middle].mean(0) - fake_donor_signals[:,:,middle].mean(0)
-        acceptor_diff = acceptor_signals[:,:,middle].mean(0) - fake_acceptor_signals[:,:,middle].mean(0)
-        donor_loss = torch.pow(donor_diff,2).max()
-        acceptor_loss = torch.pow(acceptor_diff,2).max()
-        signal_loss = donor_loss+acceptor_loss
-    elif signal_loss_method == 'mean_no_log':
-        #Ver 5
-        middle = int((L-1)/2)
-        donor_diff = donor_signals[:,:,middle].mean(0) - fake_donor_signals[:,:,middle].mean(0)
-        acceptor_diff = acceptor_signals[:,:,middle].mean(0) - fake_acceptor_signals[:,:,middle].mean(0)
-        donor_loss = torch.pow(donor_diff,2).mean()
-        acceptor_loss = torch.pow(acceptor_diff,2).mean()
-        signal_loss = donor_loss+acceptor_loss
-    elif signal_loss_method == 'region_square_mean':
-        #Ver 6
-        donor_diff = donor_signals.mean(0) - fake_donor_signals.mean(0)
-        acceptor_diff = acceptor_signals.mean(0) - fake_acceptor_signals.mean(0)
-        donor_loss = torch.pow(donor_diff,2).mean()
-        acceptor_loss = torch.pow(acceptor_diff,2).mean()
-        signal_loss = donor_loss+acceptor_loss
-    elif signal_loss_method == 'region_abs_max':
-        #Ver 7
-        donor_diff = donor_signals.mean(0) - fake_donor_signals.mean(0)
-        acceptor_diff = acceptor_signals.mean(0) - fake_acceptor_signals.mean(0)
-        donor_loss = donor_diff.abs().max()
-        acceptor_loss = acceptor_diff.abs().max()
-        signal_loss = donor_loss+acceptor_loss
-    else:
-        raise
+    #fake_donor_signals = signals[2*N:3*N]
+    #fake_acceptor_signals = signals[3*N:4*N]
+    return donor_signals,acceptor_signals#,fake_donor_signals,fake_acceptor_signals
+    
+def _calculate_signal_loss(signals,signal_loss_method=None):
+    donor_signals,acceptor_signals,fake_donor_signals,fake_acceptor_signals = signals
+    donor_loss = -torch.log(donor_signals[:,:,160]+EPSILON).mean() - torch.log(1-fake_donor_signals[:,:,160]+EPSILON).mean()
+    acceptor_loss = -torch.log(acceptor_signals[:,:,160]+EPSILON).mean() - torch.log(1-fake_acceptor_signals[:,:,160]+EPSILON).mean()
+    signal_loss = donor_loss+acceptor_loss
     return signal_loss
+
+def calculate_signal_loss(signals,signal_loss_method=None):
+    #donor_signals,acceptor_signals,fake_donor_signals,fake_acceptor_signals = signals
+    donor_signals,acceptor_signals= signals
+    N,C,L = donor_signals.shape
+    if L%2==0:
+        middle = int(L/2)
+    else:
+        middle = int((L-1)/2)
+        
+    real_donor_loss = 1-(donor_signals[:,0,middle] - donor_signals[:,0,middle-1]).mean()
+    real_acceptor_loss = 1-(acceptor_signals[:,0,middle] - acceptor_signals[:,0,middle+1]).mean()
+    #fake_donor_loss = torch.pow(fake_donor_signals[:,0,middle] - fake_donor_signals[:,0,middle-1],2).mean()
+    #fake_acceptor_loss = torch.pow(fake_acceptor_signals[:,0,middle] - fake_acceptor_signals[:,0,middle+1],2).mean()
+    signal_loss = real_donor_loss+real_acceptor_loss#+fake_donor_loss+fake_acceptor_loss
+    return {
+        'loss':signal_loss,
+        'real_donor_loss':real_donor_loss,
+        'real_acceptor_loss':real_acceptor_loss,
+       # 'fake_donor_loss':fake_donor_loss,
+       # 'fake_acceptor_loss':fake_acceptor_loss
+    }
         
 class AdvancedExecutor(_Executor):
     def __init__(self,train_signal_loader,val_signal_loader,signal_loss_method):
         super().__init__()
-        self.train_signal_loader = iter(train_signal_loader)
-        self.val_signal_loader = iter(val_signal_loader)
+        self.train_signal_loader = train_signal_loader
+        self.train_signal_iterator = iter(self.train_signal_loader)
+        #self.val_signal_loader = iter(val_signal_loader)
         self.signal_loss_method = signal_loss_method
         
     def fit(self, model, seq_data, **kwargs):
@@ -366,10 +340,16 @@ class AdvancedExecutor(_Executor):
         predict_result = self.inference(outputs, masks)
         label_loss = self.loss(outputs,labels,masks,seq_data=seq_data,**kwargs)
         #Get similarity loss
-        signals = next(self.train_signal_loader)['signals']
-        signal_loss = calculate_signal_loss(model,signals,self.signal_loss_method)
-        #print(signal_loss)
-        total_loss = label_loss - signal_loss
+        try:
+            data = next(self.train_signal_iterator)['signals']
+        except StopIteration:
+            self.train_signal_iterator = iter(self.train_signal_loader)
+            data = next(self.train_signal_iterator)['signals']
+        
+        signals = get_signal(model,data)
+        signal_losses = calculate_signal_loss(signals,self.signal_loss_method)
+        signal_loss = signal_losses['loss']
+        total_loss = label_loss + signal_loss
         total_loss.backward()
         if self.clip_grad_value is not None:
             nn.utils.clip_grad_value_(model.parameters(), self.clip_grad_value)
@@ -381,7 +361,11 @@ class AdvancedExecutor(_Executor):
             'metric': {
                 'loss': label_loss.item(),
                 'total_loss': total_loss.item(),
-                'signal_loss':signal_loss.item()
+                'signal_loss':signal_loss.item(),
+                'real_donor_loss':signal_losses['real_donor_loss'].item(),
+                'real_acceptor_loss':signal_losses['real_acceptor_loss'].item(),
+               # 'fake_donor_loss':signal_losses['fake_donor_loss'].item(),
+               # 'fake_acceptor_loss':signal_losses['fake_acceptor_loss'].item(),
             },
             'predicts': predict_result,
             'lengths': lengths,
@@ -389,11 +373,7 @@ class AdvancedExecutor(_Executor):
             'outputs': outputs
         }
         return returned
-    
-    def on_epoch_end(self, epoch, metric):
-        super().on_epoch_end(epoch, metric)
-        self._accumalated_signal_loss = 0
-        self._accumalated_counter = 0
+
     
 class ExecutorBuilder:
     def __init__(self):

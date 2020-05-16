@@ -189,16 +189,20 @@ cdhit_canonical_fasta_path=$cdhit_result_root/cdhit_canonical_cDNA.fasta
 #bedtools getfasta -s -name -split -fi $genome_path -bed $cdhit_transcript_bed_path -fo $cdhit_transcript_fasta_path
 #bedtools getfasta -s -name -split -fi $genome_path -bed $cdhit_canonical_bed_path -fo $cdhit_canonical_fasta_path
 cd $cdhit_result_root
-/home/tools/cd-hit-v4.8.1-2019-0228/cd-hit-est-2d -i2 $cdhit_transcript_fasta_path -i $cdhit_canonical_fasta_path -o cdhit_canonical_result -T 0 -M 0 -g 1 -G 1 -s2 0 -c 0.8 -n 5
+#/home/tools/cd-hit-v4.8.1-2019-0228/cd-hit-est-2d -i2 $cdhit_transcript_fasta_path -i $cdhit_canonical_fasta_path -o cdhit_canonical_result -T 0 -M 0 -g 1 -G 1 -s2 0 -c 0.8 -n 5
 cd $result_root
-python3 $script_root/tools/analysize_cd_hit.py -i $cdhit_result_root/cdhit_canonical_result -o $cdhit_result_root/statistic
+#python3 $script_root/tools/analysize_cd_hit.py -i $cdhit_result_root/cdhit_canonical_result -o $cdhit_result_root/statistic
 
 
 echo "Step 8: Get redefined coordinate bed"
 redefined_transcript_bed_path=$result_root/transcript_double_strand.bed
 redefined_canonical_bed_path=$result_root/canonical_double_strand.bed
+redefined_transcript_gff_path=$result_root/transcript_double_strand.gff3
+redefined_canonical_gff_path=$result_root/canonical_double_strand.gff3
 #python3 $preprocess_main_root/redefine_coordinate.py -i $transcript_bed_path -t $region_table_path -o $redefined_transcript_bed_path --chrom_target 'ordinal_id_wo_strand'
 #python3 $preprocess_main_root/redefine_coordinate.py -i $canonical_bed_path -t $region_table_path -o $redefined_canonical_bed_path --chrom_target 'ordinal_id_wo_strand'
+#python3 $preprocess_main_root/bed2gff.py -i $redefined_transcript_bed_path -t $id_convert_path -o $redefined_transcript_gff_path
+python3 $preprocess_main_root/bed2gff.py -i $redefined_canonical_bed_path -t $canonical_id_table_path -o $redefined_canonical_gff_path
 
 echo "Step 9: Write statistic data"
 num_all_transcript=$(wc -l < $coord_bed_path )

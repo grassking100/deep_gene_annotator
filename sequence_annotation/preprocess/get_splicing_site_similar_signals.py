@@ -7,8 +7,26 @@ from sequence_annotation.preprocess.utils import INTRON_TYPES, RNA_TYPES
 from sequence_annotation.preprocess.gff2bed import simple_gff2bed
 from sequence_annotation.preprocess.signal_analysis import get_donor_site_region,get_acceptor_site_region
 
-def set_coord_id(bed):
-    bed['coord_id'] = bed['chr'] + "_" + bed['strand'] + "_" + bed['start'].astype(str) + "_" + bed['end'].astype(str)
+def get_bed_wtih_site_id(bed,is_donor=True):
+    plus_bed = bed[bed['strand']=='+'].copy()
+    minus_bed = bed[bed['strand']=='-'].copy()
+    plus_bed['coord'] = minus_bed['coord'] = None
+    plus_inron=plus_bed['start'].astype(str)
+    minus_inron=minus_bed['start'].astype(str)
+    
+    if is_donor:
+        plus_exon=(plus_bed['start']-1).astype(str)
+        minus_exon=(minus_bed['start']+1).astype(str)
+        plus_bed['coord'] = plus_bed['chr'] + "_" + plus_bed['strand'] + "_" + plus_exon+"_"+plus_inron
+        minus_bed['coord'] = bed['chr'] + "_" + bed['strand'] + "_" + minus_inron+"_"+minus_exon
+    else:
+        plus_exon=(plus_bed['start']+1).astype(str)
+        minus_exon=(minus_bed['start']-1).astype(str)
+        plus_bed['coord'] = bed['chr'] + "_" + bed['strand'] + "_" + plus_inron+"_"+plus_exon
+        minus_bed['coord'] = bed['chr'] + "_" + bed['strand'] + "_" + minus_exon+"_"+minus_inron
+
+    bed = pd.concat([plus_bed,minus_bed])
+    return bed
     
 def get_splicing_site_motifs(gff_path,fasta_path,dist,output_root):
     #Get transcript fasta
@@ -24,14 +42,14 @@ def get_splicing_site_motifs(gff_path,fasta_path,dist,output_root):
     fasta = read_fasta(transcript_fasta_path)
     #Get splicing site motif
     #print(gff.head()['parent'])
-    donor_bed = get_donor_site_region(gff, dist, dist)
-    acceptor_bed = get_acceptor_site_region(gff, dist, dist)
+    donor = get_donor_site_region(gff, dist, dist)
+    acceptor = get_acceptor_site_region(gff, dist, dist)
     transcript_group = transcript_bed.groupby('id')
     
-    donor_group = donor_bed.groupby('transcript_source')
-    acceptor_group = acceptor_bed.groupby('transcript_source')
-    potential_donor_bed = []
-    potential_acceptor_bed = []
+    donor_group = donor.groupby('transcript_source')
+    acceptor_group = acceptor.groupby('transcript_source')
+    potential_donor = []
+    potential_acceptor = []
     for region_id, seq in fasta.items():
         #Get splicing site potential motif
         strand = list(transcript_group.get_group(region_id)['strand'])[0]
@@ -52,46 +70,49 @@ def get_splicing_site_motifs(gff_path,fasta_path,dist,output_root):
         for index in potential_donor_indice:
             item = dict(template)
             item.update({'start':index-dist,'end':index+dist})
-            potential_donor_bed.append(item)
+            potential_donor.append(item)
         for index in potential_acceptor_indice:
             item = dict(template)
             item.update({'start':index-dist,'end':index+dist})
-            potential_acceptor_bed.append(item)
+            potential_acceptor.append(item)
 
-    potential_donor_bed = pd.DataFrame.from_dict(potential_donor_bed)
-    potential_acceptor_bed = pd.DataFrame.from_dict(potential_acceptor_bed)
+    potential_donor = pd.DataFrame.from_dict(potential_donor)
+    potential_acceptor = pd.DataFrame.from_dict(potential_acceptor)
     #Get splicing site like motif
-    set_coord_id(donor_bed)
-    set_coord_id(acceptor_bed)
-    set_coord_id(potential_donor_bed)
-    set_coord_id(potential_acceptor_bed)
-    donor_bed = donor_bed[donor_bed['start']>0]
-    acceptor_bed = acceptor_bed[acceptor_bed['start']>0]
-    potential_donor_bed = potential_donor_bed[potential_donor_bed['start']>0]
-    potential_acceptor_bed = potential_acceptor_bed[potential_acceptor_bed['start']>0]
+    donor = get_bed_wtih_site_id(donor)
+    acceptor = get_bed_wtih_site_id(acceptor,is_donor=False)
+    potential_donor = get_bed_wtih_site_id(potential_donor)
+    potential_acceptor = get_bed_wtih_site_id(potential_acceptor,is_donor=False)
 
-    fake_donor_bed = potential_donor_bed[~potential_donor_bed['coord_id'].isin(donor_bed['coord_id'])]
-    fake_acceptor_bed = potential_acceptor_bed[~potential_acceptor_bed['coord_id'].isin(acceptor_bed['coord_id'])]
+    donor = donor[donor['start']>0]
+    acceptor = acceptor[acceptor['start']>0]
+    potential_donor = potential_donor[potential_donor['start']>0]
+    potential_acceptor = potential_acceptor[potential_acceptor['start']>0]
+
+    real_coord = set(list(donor['coord'])+list(acceptor['coord']))
+    fake_donor = potential_donor[~potential_donor['coord'].isin(real_coord)]
+    fake_acceptor = potential_acceptor[~potential_acceptor['coord'].isin(real_coord)]
+    
     #Get fasta
-    fake_donor_bed_path = os.path.join(output_root,'fake_donor.bed')
+    fake_donor_path = os.path.join(output_root,'fake_donor.bed')
     fake_donor_fasta_path = os.path.join(output_root,'fake_donor.fasta')
-    write_bed(fake_donor_bed,fake_donor_bed_path)
-    os.system("bedtools getfasta -s -fi {} -bed {} -fo {}".format(fasta_path,fake_donor_bed_path,fake_donor_fasta_path))
+    write_bed(fake_donor,fake_donor_path)
+    os.system("bedtools getfasta -s -fi {} -bed {} -fo {}".format(fasta_path,fake_donor_path,fake_donor_fasta_path))
 
-    fake_acceptor_bed_path = os.path.join(output_root,'fake_acceptor.bed')
+    fake_acceptor_path = os.path.join(output_root,'fake_acceptor.bed')
     fake_acceptor_fasta_path = os.path.join(output_root,'fake_acceptor.fasta')
-    write_bed(fake_acceptor_bed,fake_acceptor_bed_path)
-    os.system("bedtools getfasta -s -fi {} -bed {} -fo {}".format(fasta_path,fake_acceptor_bed_path,fake_acceptor_fasta_path))
+    write_bed(fake_acceptor,fake_acceptor_path)
+    os.system("bedtools getfasta -s -fi {} -bed {} -fo {}".format(fasta_path,fake_acceptor_path,fake_acceptor_fasta_path))
 
-    donor_bed_path = os.path.join(output_root,'donor.bed')
+    donor_path = os.path.join(output_root,'donor.bed')
     donor_fasta_path = os.path.join(output_root,'donor.fasta')
-    write_bed(donor_bed,donor_bed_path)
-    os.system("bedtools getfasta -s -fi {} -bed {} -fo {}".format(fasta_path,donor_bed_path,donor_fasta_path))
+    write_bed(donor,donor_path)
+    os.system("bedtools getfasta -s -fi {} -bed {} -fo {}".format(fasta_path,donor_path,donor_fasta_path))
 
-    acceptor_bed_path = os.path.join(output_root,'acceptor.bed')
+    acceptor_path = os.path.join(output_root,'acceptor.bed')
     acceptor_fasta_path = os.path.join(output_root,'acceptor.fasta')
-    write_bed(acceptor_bed,acceptor_bed_path)
-    os.system("bedtools getfasta -s -fi {} -bed {} -fo {}".format(fasta_path,acceptor_bed_path,acceptor_fasta_path))
+    write_bed(acceptor,acceptor_path)
+    os.system("bedtools getfasta -s -fi {} -bed {} -fo {}".format(fasta_path,acceptor_path,acceptor_fasta_path))
 
 
 if __name__ == '__main__':

@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 from argparse import ArgumentParser
 from multiprocessing import Pool
-sys.path.append(os.path.dirname(__file__) + "/..")
+sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.utils.utils import BASIC_GENE_MAP, get_gff_with_attribute
 from sequence_annotation.utils.utils import create_folder, write_gff, write_json, read_json, read_gff, read_fasta,write_bed
 from sequence_annotation.genome_handler.ann_seq_processor import get_background
@@ -37,7 +37,7 @@ def set_block(dict_,block):
 class GFFReviser:
     def __init__(self, gene_info_extractor, donor_pattern=None, acceptor_pattern=None,
                  length_thresholds=None, donor_distance=None, acceptor_distance=None,
-                 donor_index_shift=None, acceptor_index_shift=None,methods=None):
+                 donor_index_shift=None, acceptor_index_shift=None,methods=None,**kwargs):
         """
         The reviser fixes annotatioin result by its DNA sequence information and length
         Parameters:
@@ -107,44 +107,41 @@ class GFFReviser:
     def _merge_current_to_previous(self,previous_block,current_block,block_table,fragment_lengths):
         remove_block(block_table,current_block)
         remove_block(block_table,previous_block)
-        previous_block.end = current_block.end
         del fragment_lengths[current_block.start]
+        if previous_block.start in fragment_lengths:
+            del fragment_lengths[previous_block.start]
+        previous_block.end = current_block.end
         #If merged block is fragment, then update its length in fragment_lengths
         if previous_block.length < self.length_thresholds[previous_block.ann_type]:
             fragment_lengths[previous_block.start] = previous_block.length
-        #If merged block is not fragment and is in fragment_lengths, then delete it form fragment_lengths
-        elif previous_block.start in fragment_lengths:
-            del fragment_lengths[previous_block.start]
         set_block(block_table,previous_block)
             
     def _merge_current_to_next(self,current_block,next_block,block_table,fragment_lengths):
         remove_block(block_table,current_block)
         remove_block(block_table,next_block)
-        next_block.start = current_block.start
         del fragment_lengths[current_block.start]
+        if next_block.start in fragment_lengths:
+            del fragment_lengths[next_block.start]
+        next_block.start = current_block.start
         #If merged block is fragment, then update its length in fragment_lengths
         if next_block.length < self.length_thresholds[next_block.ann_type]:
             fragment_lengths[next_block.start] = next_block.length
-        #If merged block is not fragment and is in fragment_lengths, then delete it form fragment_lengths
-        elif next_block.start in fragment_lengths:
-            del fragment_lengths[next_block.start]
         set_block(block_table,next_block)
 
     def _merge_blocks_to_previous(self,previous_block,current_block,next_block,block_table,fragment_lengths):
         remove_block(block_table,current_block)
         remove_block(block_table,previous_block)
         remove_block(block_table,next_block)
-        previous_block.end = next_block.end
         del fragment_lengths[current_block.start]
+        if next_block.start in fragment_lengths:
+            del fragment_lengths[next_block.start]
+        if previous_block.start in fragment_lengths:
+            del fragment_lengths[previous_block.start]
+        previous_block.end = next_block.end
         #If merged block is fragment, then update its length in fragment_lengths
         if previous_block.length < self.length_thresholds[previous_block.ann_type]:
             fragment_lengths[previous_block.start] = previous_block.length
         #If merged block is not fragment and is in fragment_lengths, then delete it form fragment_lengths
-        elif previous_block.start in fragment_lengths:
-            del fragment_lengths[previous_block.start]
-        #If next block in fragment_lengths then delete it from fragment_lengths
-        if next_block.start in fragment_lengths:
-            del fragment_lengths[next_block.start]
         set_block(block_table,previous_block)
     
     def _filter_ann_by_length(self, seq_info_container):
@@ -162,7 +159,8 @@ class GFFReviser:
             starts = list(fragment_lengths.keys())
             fragment_lengths_ = list(fragment_lengths.values())
             index = np.argsort(fragment_lengths_)[0]
-            current_block = block_table[starts[index]]
+            start = starts[index]
+            current_block = block_table[start]
             previous_block = next_block = None
             if current_block.start-1 in block_table:
                 previous_block = block_table[current_block.start-1]
@@ -358,16 +356,16 @@ def revise(plus_strand_gff, region_table, fasta, reviser,multiprocess=None):
     return gff
 
 def main(output_root, plus_strand_gff_path, region_table_path, fasta_path,
-         length_thresholds=None, length_threshold_path=None, methods=None,
-         multiprocess=None,**kwargs):
+         revised_config_path,multiprocess=None):
     create_folder(output_root)
-    if length_thresholds is None and length_threshold_path is not None:
-        length_thresholds = read_json(length_threshold_path)
+    revised_config = read_json(revised_config_path)
+    del revised_config['class']
+    del revised_config['gene_info_extractor']
+    
     region_table = read_region_table(region_table_path)
     plus_strand_gff = read_gff(plus_strand_gff_path)
     fasta = read_fasta(fasta_path)
-    reviser = build_gff_reviser(BASIC_GENE_MAP,methods=methods,
-                                length_thresholds=length_thresholds,**kwargs)
+    reviser = build_gff_reviser(BASIC_GENE_MAP,**revised_config)
     config = reviser.get_config()
     config_path = os.path.join(output_root, "reviser_config.json")
     write_json(config, config_path)
@@ -392,11 +390,7 @@ if __name__ == '__main__':
                         help="The path of fasta")
     parser.add_argument("-o","--output_root",required=True,
                         help="The root to save result")
-    parser.add_argument("--length_threshold_path", type=str, help="The path of "
-                        "length threshold for each type, written in JSON format")
-    parser.add_argument("--donor_distance", type=int, default=0)
-    parser.add_argument("--acceptor_distance", type=int, default=0)
-    parser.add_argument("--methods", type=lambda x:x.split(','))
+    parser.add_argument("-c","--revised_config_path",required=True)
     parser.add_argument("--multiprocess", type=int,default=None)
     args = parser.parse_args()
     kwargs = vars(args)

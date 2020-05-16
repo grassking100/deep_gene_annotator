@@ -53,7 +53,9 @@ def train(saved_root,epoch,model,executor,train_data,val_data,
     #Create loader
     collate_fn = seq_collate_wrapper(discard_ratio_min,discard_ratio_max,
                                      augment_up_max,augment_down_max,concat)
+    #
     train_gen = engine.create_data_gen(collate_fn,not deterministic)
+    #
     if same_generator:
         val_gen = train_gen
     else:
@@ -79,8 +81,8 @@ def create_signal_loader(root,ann_seq_processor,batch_size):
     raw_data = {
         'donor':{'inputs':donor},
         'acceptor':{'inputs':acceptor},
-        'fake_donor':{'inputs':fake_donor},
-        'fake_acceptor':{'inputs':fake_acceptor}
+        #'fake_donor':{'inputs':fake_donor},
+        #'fake_acceptor':{'inputs':fake_acceptor}
     }
     data = AnnSeqProcessor(BASIC_GENE_ANN_TYPES).process(raw_data)
     for key,items in data.items():
@@ -129,14 +131,14 @@ def main(saved_root,model_config_path,executor_config_path,
     if region_table_path is not None and not os.path.exists(region_table_path):
         raise Exception("{} is not exist".format(region_table_path))
     
-    temp_model,temp_executor = get_model_executor(model_config_path,executor_config,
-                                                  save_distribution=save_distribution)
+    #temp_model,temp_executor = get_model_executor(model_config_path,executor_config,
+    #                                              save_distribution=save_distribution)
     
-    print("Check memory")
-    check_max_memory_usgae(saved_root,temp_model,temp_executor,train_data,
-                           val_data,batch_size=batch_size,concat=concat)
-    del temp_model
-    del temp_executor
+    #print("Check memory")
+    #check_max_memory_usgae(saved_root,temp_model,temp_executor,train_data,
+    #                       val_data,batch_size=batch_size,concat=concat)
+    #del temp_model
+    #del temp_executor
     torch.cuda.empty_cache()
     print("Memory is available")
     

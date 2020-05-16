@@ -4,54 +4,60 @@ import numpy as np
 from scipy import stats
 from matplotlib import pyplot as plt
 from argparse import ArgumentParser
+from multiprocessing import Pool
 sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.utils.utils import create_folder, read_gff
 from sequence_annotation.utils.utils import get_gff_with_attribute
 from sequence_annotation.preprocess.utils import get_gff_with_intron,INTRON_TYPES
 
+def _get_site_diff(ref_sites,compare_sites,include_zero,absolute):
+    ref_sites = np.array(ref_sites,dtype=float)
+    compare_sites = np.array(compare_sites,dtype=float)
+    dist = ref_sites.reshape(-1,1).repeat(len(compare_sites.T),axis=1) - compare_sites.reshape(1,-1)
+    if not include_zero:
+        dist[np.where(dist == 0)] = np.nan
+    if absolute:
+        diff = np.abs(dist).min(1)
+    else:
+        diff = dist[np.arange(len(dist)),np.abs(dist).argmin(1)]
+    return diff.tolist()
+
 def get_site_diff(answer,predict,types,
                   is_start=True,absolute=True,
                   answer_as_ref=True,include_zero=True):
     site_type = 'start' if is_start else 'end'
-    answer = answer[answer['feature'].isin(types)]
-    predict = predict[predict['feature'].isin(types)]
+    answer = answer[answer['feature'].isin(types)].copy()
+    predict = predict[predict['feature'].isin(types)].copy()
     chroms = set(list(answer['chr'])).intersection(set(list(predict['chr'])))
-    site_diffs = []
+    answer['coord'] = answer['chr'] + "_" + answer['strand']
+    predict['coord'] = predict['chr'] + "_" + predict['strand']
+    answer = answer.groupby('coord')
+    predict = predict.groupby('coord')
+    kwarg_list = []
     for chrom in chroms:
         for strand in ['+', '-']:
-            answer_group = answer[(answer['chr'] == chrom)
-                                  & (answer['strand'] == strand)]
-            predict_group = predict[(predict['chr'] == chrom)
-                                    & (predict['strand'] == strand)]
+            coord = chrom + "_" + strand
+            if coord not in answer.groups or coord not in predict.groups:
+                continue
+            answer_group = answer.get_group(coord)
+            predict_group = predict.get_group(coord)
             answer_sites = list(answer_group[site_type])
             predict_sites = list(predict_group[site_type])
-            if len(answer_sites) > 0 and len(predict_sites) > 0:
-                #print(types,answer_sites,predict_sites)
-                if answer_as_ref:
-                    ref_sites = answer_sites
-                    compare_sites = predict_sites
-                else:
-                    ref_sites = predict_sites
-                    compare_sites = answer_sites
-                for ref_site in ref_sites:
-                    diffs = [
-                        compare_site - ref_site
-                        for compare_site in compare_sites
-                    ]
-                    
-                    if not include_zero:
-                        diffs = [diff for diff in diffs if diff != 0]
-                    if len(diffs) > 0:
-                        if absolute:
-                            diff = min([abs(diff) for diff in diffs])
-                        else:
-                            diffs = np.array(diffs)
-                            if strand == '-':
-                                diffs = -diffs
-                            index = abs(diffs).argmin()
-                            diff = diffs[index]
-                        site_diffs.append(diff)
-                #print(absolute,site_diffs)
+            if answer_as_ref:
+                ref_sites = answer_sites
+                compare_sites = predict_sites
+            else:
+                ref_sites = predict_sites
+                compare_sites = answer_sites
+            kwarg_list.append((ref_sites,compare_sites,include_zero,absolute))
+    
+    with Pool(processes=40) as pool:
+        results = pool.starmap(_get_site_diff, kwarg_list)
+        
+    site_diffs = []
+    for item in results:
+        site_diffs += item
+
     return site_diffs
 
 
@@ -76,26 +82,8 @@ def get_site_matched_ratio(answer,predict,types,
     site_type = 'start' if is_start else 'end'
     answer = answer[answer['feature'].isin(types)]
     predict = predict[predict['feature'].isin(types)]
-    chroms = set(list(answer['chr'])).intersection(set(list(predict['chr'])))
-    answer_sites = []
-    predict_sites = []
-    for chrom in chroms:
-        for strand in ['+', '-']:
-            answer_group = answer[(answer['chr'] == chrom)
-                                  & (answer['strand'] == strand)]
-            predict_group = predict[(predict['chr'] == chrom)
-                                    & (predict['strand'] == strand)]
-            answer_sites += [
-                "{}_{}_{}".format(chrom, strand, site)
-                for site in list(answer_group[site_type])
-            ]
-            predict_sites += [
-                "{}_{}_{}".format(chrom, strand, site)
-                for site in list(predict_group[site_type])
-            ]
-
-    answer_sites = set(answer_sites)
-    predict_sites = set(predict_sites)
+    answer_sites = set(answer['chr']+"_"+answer['strand']+"_"+answer[site_type].astype(str))
+    predict_sites = set(predict['chr']+"_"+predict['strand']+"_"+predict[site_type].astype(str))
     intersection_sites = answer_sites.intersection(predict_sites)
     ratio = 0
     if answer_denominator:
@@ -176,7 +164,7 @@ def get_all_site_diff(answer,predict,round_value=None,
     arrs = [start_diff, end_diff, donor_diff, acceptor_diff]
     for type_, arr in zip(types, arrs):
         if return_value:
-            site_diffs[type_] = list(arr)
+            site_diffs[type_] = arr
         else:
             if len(arr) > 0:
                 median_ = np.median(arr)

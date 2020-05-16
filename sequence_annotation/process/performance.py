@@ -1,7 +1,9 @@
 import os
 import sys
+import time
 import pandas as pd
 import numpy as np
+from multiprocessing import Pool
 from argparse import ArgumentParser
 from  matplotlib import pyplot as plt
 sys.path.append(os.path.dirname(__file__)+"/../..")
@@ -31,40 +33,38 @@ def _group_type_by_parent(gff,group_types):
     return groups
 
 def _set_has_intron_status(gff):
-    transcript_ids = set(gff[gff['feature'].isin(RNA_TYPES)]['id'])
-    gff_parent_groups = gff.groupby('parent')
-    gff_id_groups = gff.groupby('id')
-    for transcript_id in transcript_ids:
-        gff_group = gff_parent_groups.get_group(transcript_id)
-        items = gff_group[gff_group['feature'].isin(INTRON_TYPES)]
-        gff.loc[gff_id_groups.get_group(transcript_id).index,'has_intron'] = len(items)>0
+    has_intron_ids = set(gff[gff['feature'].isin(INTRON_TYPES)]['parent'])
+    transcripts = gff[gff['feature'].isin(RNA_TYPES)]
+    gff.loc[transcripts[transcripts['id'].isin(has_intron_ids)].index,'has_intron'] = True
 
 def _set_is_internal_exon_status(gff):
-    exon_groups = _group_type_by_parent(gff,EXON_TYPES)
-    gff_groups = gff.groupby('id')
-    for transcript_id,exon_group in exon_groups:
-        transcript = gff_groups.get_group(transcript_id).to_dict('record')[0]
-        index = exon_group[(exon_group['start']!=transcript['start']) & (exon_group['end']!=transcript['end'])].index
-        gff.loc[index,'is_internal_exon'] = True
+    transcripts = gff[gff['feature'].isin(RNA_TYPES)]
+    starts = dict(zip(transcripts['id'],transcripts['start']))
+    ends = dict(zip(transcripts['id'],transcripts['end']))
+    exons = gff[gff['feature'].isin(EXON_TYPES)]
+    parent_start = exons['parent'].map(starts)
+    parent_end = exons['parent'].map(ends)
+    index = exons[(exons['start']!=parent_start) & (exons['end']!=parent_end)].index
+    gff.loc[index,'is_internal_exon'] = True
 
 def _compare_exon_intron_block(predict,answer,predict_id_convert,answer_id_convert):
     types = EXON_TYPES+INTRON_TYPES
-    predict_exons = predict[predict['feature'].isin(types)]
-    answer_exons = answer[answer['feature'].isin(types)]
-    predict_feature_coord = set(predict_exons['feature_coord'])
-    answer_feature_coord = set(answer_exons['feature_coord'])
+    predict_blocks = predict[predict['feature'].isin(types)]
+    answer_blocks = answer[answer['feature'].isin(types)]
+    predict_feature_coord = set(predict_blocks['feature_coord'])
+    answer_feature_coord = set(answer_blocks['feature_coord'])
     TP_ids = list(answer_feature_coord.intersection(predict_feature_coord))
-    predict_groups = predict_exons.groupby('feature_coord')
-    answer_groups = answer_exons.groupby('feature_coord')
-    for id_ in TP_ids:
-        predict_group = predict_groups.get_group(id_)
-        answer_group = answer_groups.get_group(id_)
-        answer_partner_transcript = list(predict.loc[predict_group.index,'parent'])[0]
-        predict_partner_transcript = list(answer.loc[answer_group.index,'parent'])[0]
-        predict.loc[predict_group.index,'match'] = True
-        answer.loc[answer_group.index,'match'] = True
-        answer.loc[answer_group.index,'partner_gene'] = predict_id_convert[answer_partner_transcript]
-        predict.loc[predict_group.index,'partner_gene'] = answer_id_convert[predict_partner_transcript]
+    predict.loc[predict_blocks[predict_blocks['feature_coord'].isin(TP_ids)].index,'match'] = True
+    answer.loc[answer_blocks[answer_blocks['feature_coord'].isin(TP_ids)].index,'match'] = True
+    matched_predict = predict[(predict['match'])&(predict['feature'].isin(types))]
+    matched_answer = answer[(answer['match'])&(answer['feature'].isin(types))]
+    #Assume one freature coord with one block only
+    predict_id_table = dict(zip(predict['id'],predict['parent'])) 
+    answer_id_table = dict(zip(answer['id'],answer['parent'])) 
+    predict_parents = dict(zip(matched_predict['feature_coord'],matched_predict['parent'].map(predict_id_table)))
+    answer_parents = dict(zip(matched_answer['feature_coord'],matched_answer['parent'].map(answer_id_table)))
+    predict.loc[matched_predict.index,'partner_gene'] = matched_predict['feature_coord'].map(answer_parents)
+    answer.loc[matched_answer.index,'partner_gene'] = matched_answer['feature_coord'].map(predict_parents)
 
 def _compare_internal_exon(predict,answer):
     predict_feature_coord = set(predict[predict['is_internal_exon']]['feature_coord'])
@@ -201,6 +201,7 @@ def block_performance(predict,answer,round_value=None):
     _compare_internal_exon(predict,answer)
     _compare_chain_block(predict,answer,EXON_TYPES,'match',predict_id_convert,answer_id_convert)
     _compare_chain_block(predict,answer,INTRON_TYPES,'intron_chain_match',predict_id_convert,answer_id_convert)
+
     #Get introns
     predict_introns = predict[predict['feature'].isin(INTRON_TYPES)]
     answer_introns = answer[answer['feature'].isin(INTRON_TYPES)]
@@ -256,13 +257,13 @@ def _create_ann_seq(chrom,length,strand):
     ann_seq.id = '{}_{}'.format(chrom,strand)
     return ann_seq
 
-def _gene_gff2vec(gff,chrom_id,strand,length):
-    subgff = gff[(gff['chr']==chrom_id) & (gff['strand']==strand)]
+def _gene_gff2vec(gff,chrom,strand,length):
+    gff = gff[(gff['chr']==chrom) &( gff['strand']==strand)]
     strand = STRAND_CONVERT[strand]
-    ann_seq = _create_ann_seq(chrom_id,length,strand)
-    for block in subgff[subgff['feature']=='gene'].to_dict('record'):
+    ann_seq = _create_ann_seq(chrom,length,strand)
+    for block in gff[gff['feature']=='gene'].to_dict('record'):
         ann_seq.add_ann('gene',1,block['start']-1,block['end']-1)
-    for block in subgff[subgff['feature']=='exon'].to_dict('record'):
+    for block in gff[gff['feature']=='exon'].to_dict('record'):
         ann_seq.add_ann('exon',1,block['start']-1,block['end']-1)
     other = get_background(ann_seq,['gene'])
     ann_seq.set_ann('other',other)
@@ -270,6 +271,15 @@ def _gene_gff2vec(gff,chrom_id,strand,length):
     ann_seq = ann_seq.get_subseq(ann_types=BASIC_GENE_ANN_TYPES)
     vec = np.array([seq2vecs(ann_seq)]).transpose(0,2,1)
     return vec
+
+def _calculate_metric(predict,answer,chrom,strand,length):
+    predict_vec = _gene_gff2vec(predict,chrom,strand,length)
+    answer_vec = _gene_gff2vec(answer,chrom,strand,length)
+    mask = np.ones((1,length))
+    categorical_metric_ = categorical_metric(predict_vec,answer_vec,mask)
+    contagion_matrix_ = np.array(contagion_matrix(predict_vec,answer_vec,mask))
+    return categorical_metric_,contagion_matrix_
+    
 
 def gff_performance(predict,answer,region_table,round_value=None):
     """
@@ -302,22 +312,16 @@ def gff_performance(predict,answer,region_table,round_value=None):
         if answer_region not in table_regions:
             raise Exception(answer_region,sorted(list(table_regions)))
 
+    print("Get intron data")
+    pre_time = time.time()
     predict = predict[~predict['feature'].isin(INTRON_TYPES)]
     answer = answer[~answer['feature'].isin(INTRON_TYPES)]
     predict = get_gff_with_feature_coord(get_gff_with_intron(get_gff_with_attribute(predict)))
     answer = get_gff_with_feature_coord(get_gff_with_intron(get_gff_with_attribute(answer)))
+    new_time = time.time()
+    print("Time spend:{}".format(new_time-pre_time))
+    pre_time = new_time
     result = {}
-    result['block_performance'],result['error_status'],result['partners'] = block_performance(predict,answer,round_value=round_value)
-    result['p_a_abs_diff'] = get_all_site_diff(answer,predict,round_value=round_value)
-    result['a_p_abs_diff'] = get_all_site_diff(answer,predict,answer_as_ref=False,round_value=round_value)
-    
-    result['p_a_abs_diff_exclude_zero'] = get_all_site_diff(answer,predict,
-                                                            round_value=round_value,include_zero=False)
-    result['a_p_abs_diff_exclude_zero'] = get_all_site_diff(answer,predict,answer_as_ref=False,
-                                                            round_value=round_value,include_zero=False)
-    
-    result['site_matched'] = get_all_site_matched_ratio(answer,predict,round_value=round_value)
-    
     label_num=len(BASIC_GENE_ANN_TYPES)
     metric = {}
     for type_ in ['TPs','FPs','TNs','FNs']:
@@ -327,21 +331,55 @@ def gff_performance(predict,answer,region_table,round_value=None):
     for type_ in ['TPs','FPs','TNs','FNs']:
         metric[type_] = [0]*label_num
     result['contagion_matrix'] = np.array([[0]*label_num]*label_num)
-    for item in region_table.to_dict('record'):
-        chrom_id = item['ordinal_id_wo_strand']
-        length = item['length']
-        strand = item['strand']
-        predict_vec = _gene_gff2vec(predict,chrom_id,strand,length)
-        answer_vec = _gene_gff2vec(answer,chrom_id,strand,length)
-        mask = np.ones((1,length))
-        metric_ = categorical_metric(predict_vec,answer_vec,mask)
-        result['contagion_matrix'] += np.array(contagion_matrix(predict_vec,answer_vec,mask))
+    
+    ordinal_id_wo_strands = region_table['ordinal_id_wo_strand']
+    lengths = region_table['length']
+    strands = region_table['strand']
+    predict_coord = predict['chr'] + "_"+predict['strand']
+    answer_coord = answer['chr'] + "_"+answer['strand']
+    kwarg_list = []
+    for index in range(len(region_table)):
+        chrom = ordinal_id_wo_strands[index]
+        length = lengths[index]
+        strand = strands[index]
+        kwarg_list.append((predict,answer,chrom,strand,length))
+
+    with Pool(processes=40) as pool:
+        results = pool.starmap(_calculate_metric, kwarg_list)
+    
+    for item in results:
+        categorical_metric_,contagion_matrix_ = item
+        result['contagion_matrix'] += contagion_matrix_
         for type_ in ['TPs','FPs','TNs','FNs']:
             for index in range(label_num):
-                metric[type_][index] += metric_[type_][index]
-        metric['T'] += metric_['T']
-        metric['F'] += metric_['F']
+                metric[type_][index] += categorical_metric_[type_][index]
+        metric['T'] += categorical_metric_['T']
+        metric['F'] += categorical_metric_['F']
+    print("Calculate base performance")
     result['base_performance'] = calculate_metric(metric,label_names=BASIC_GENE_ANN_TYPES,round_value=round_value)
+    new_time = time.time()
+    print("Time spend:{}".format(new_time-pre_time))
+    pre_time = new_time
+
+    print("Calculate block performance")
+    result['block_performance'],result['error_status'],result['partners'] = block_performance(predict,answer,round_value=round_value)
+    new_time = time.time()
+    print("Time spend:{}".format(new_time-pre_time))
+    pre_time = new_time
+    print("Calculate site distance")
+    result['p_a_abs_diff'] = get_all_site_diff(answer,predict,round_value=round_value)
+    result['a_p_abs_diff'] = get_all_site_diff(answer,predict,answer_as_ref=False,round_value=round_value)
+    result['p_a_abs_diff_exclude_zero'] = get_all_site_diff(answer,predict,
+                                                            round_value=round_value,include_zero=False)
+    result['a_p_abs_diff_exclude_zero'] = get_all_site_diff(answer,predict,answer_as_ref=False,
+                                                            round_value=round_value,include_zero=False)
+    new_time = time.time()
+    print("Time spend:{}".format(new_time-pre_time))
+    pre_time = new_time
+    print("Calculate site matched ratio")
+    result['site_matched'] = get_all_site_matched_ratio(answer,predict,round_value=round_value)
+    new_time = time.time()
+    print("Time spend:{}".format(new_time-pre_time))
     return result
 
 def draw_contagion_matrix(contagion_matrix,round_number=None):
