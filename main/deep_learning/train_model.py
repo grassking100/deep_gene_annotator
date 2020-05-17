@@ -97,7 +97,7 @@ def main(saved_root,model_config_path,executor_config_path,
          batch_size=None,epoch=None,save_distribution=False,
          model_weights_path=None,executor_weights_path=None,
          deterministic=False,concat=False,splicing_root=None,
-         signal_loss_method=None,**kwargs):
+         signal_loss_method=None,val_data_for_test_path=None,**kwargs):
     setting = locals()
     kwargs = setting['kwargs']
     del setting['kwargs']
@@ -173,6 +173,8 @@ def main(saved_root,model_config_path,executor_config_path,
     data_list.append(train_data)
 
     test_paths.append('test_on_val')
+    if val_data_for_test_path is not None:
+        val_data = load_data(val_data_for_test_path)
     data_list.append(val_data)
 
     for path,data in zip(test_paths,data_list):
@@ -189,6 +191,7 @@ if __name__ == '__main__':
     parser.add_argument("-s","--saved_root",help="Root to save file",required=True)
     parser.add_argument("-t","--train_data_path",help="Path of training data",required=True)
     parser.add_argument("-v","--val_data_path",help="Path of validation data",required=True)
+    parser.add_argument("--val_data_for_test_path",help="Path of validation data for testing",required=True)
     parser.add_argument("--region_table_path",help="The path of region data table",required=True)
     parser.add_argument("-b","--batch_size",type=int,default=32)
     parser.add_argument("--augment_up_max",type=int,default=0)

@@ -9,8 +9,7 @@ from ..utils.utils import get_subdict
 
 
 class AnnSeqProcessor:
-    def __init__(self,
-                 channel_order,
+    def __init__(self,channel_order,
                  seq_converter=None,
                  validation_split=None):
         self._validation_split = validation_split or 0

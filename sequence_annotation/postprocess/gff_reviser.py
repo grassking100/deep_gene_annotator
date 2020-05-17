@@ -356,11 +356,16 @@ def revise(plus_strand_gff, region_table, fasta, reviser,multiprocess=None):
     return gff
 
 def main(output_root, plus_strand_gff_path, region_table_path, fasta_path,
-         revised_config_path,multiprocess=None):
+         revised_config_or_path,multiprocess=None):
     create_folder(output_root)
-    revised_config = read_json(revised_config_path)
-    del revised_config['class']
-    del revised_config['gene_info_extractor']
+    if isinstance(revised_config_or_path,str):
+        revised_config = read_json(revised_config_or_path)
+    else:
+        revised_config = revised_config_or_path
+    if 'class' in revised_config:
+        del revised_config['class']
+    if 'gene_info_extractor' in revised_config:
+        del revised_config['gene_info_extractor']
     
     region_table = read_region_table(region_table_path)
     plus_strand_gff = read_gff(plus_strand_gff_path)
@@ -390,7 +395,7 @@ if __name__ == '__main__':
                         help="The path of fasta")
     parser.add_argument("-o","--output_root",required=True,
                         help="The root to save result")
-    parser.add_argument("-c","--revised_config_path",required=True)
+    parser.add_argument("-c","--revised_config_or_path",required=True)
     parser.add_argument("--multiprocess", type=int,default=None)
     args = parser.parse_args()
     kwargs = vars(args)

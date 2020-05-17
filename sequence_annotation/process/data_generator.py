@@ -142,13 +142,14 @@ def order(data, indice):
     return [data[index] for index in indice]
 
 
-def concat_seq(ids,inputs,answers,lengths,seqs,has_gene_statuses):
+def concat_seq(ids,inputs,answers,lengths,seqs,has_gene_statuses,shuffle=True):
     indice = list(range(len(ids)))
     if len(indice)%3 == 1:
         indice += [None,None]
     elif len(indice)%3 == 2:
         indice += [None]
-    np.random.shuffle(indice)
+    if shuffle:
+        np.random.shuffle(indice)
     step = int(len(indice)/3)
     left = indice[:step]
     middle = indice[step:step*2]
@@ -190,11 +191,26 @@ def _get_list(data):
    
     return ids,inputs,answers,lengths,seqs,has_gene_statuses
 
+def aug_seq(data,discard_ratio_min=None,discard_ratio_max=None,
+            augment_up_max=None,augment_down_max=None,
+            concat=False,shuffle=True):
+    ids,inputs,answers,lengths,seqs,has_gene_statuses = data
+    change = augment_up_max + augment_down_max + discard_ratio_min + discard_ratio_max 
+    if change > 0:
+        result = augment_seqs(inputs, answers, seqs, lengths, has_gene_statuses,
+                              discard_ratio_min, discard_ratio_max,
+                              augment_up_max, augment_down_max)
+        inputs, answers,seqs, lengths = result
+    if concat:
+        concat_result = concat_seq(ids,inputs,answers,lengths,seqs,has_gene_statuses,shuffle)
+        ids,inputs,answers,lengths,seqs,has_gene_statuses = _get_list(concat_result)
+    return ids,inputs,answers,lengths,seqs,has_gene_statuses
+
 def seq_collate_wrapper(discard_ratio_min=None,
                         discard_ratio_max=None,
                         augment_up_max=None,
                         augment_down_max=None,
-                        concat=False):
+                        concat=False,shuffle=True):
     discard_ratio_min = discard_ratio_min or 0
     discard_ratio_max = discard_ratio_max or 0
     augment_up_max = augment_up_max or 0
@@ -208,18 +224,13 @@ def seq_collate_wrapper(discard_ratio_min=None,
     def seq_collate_fn(data):
         reordered_has_gene_statuses = answers = reordered_answers = None
         data = _get_list(data)
+        data = aug_seq(data,discard_ratio_min=discard_ratio_min,
+                       discard_ratio_max=discard_ratio_max,
+                       augment_up_max=augment_up_max,
+                       augment_down_max=augment_down_max,
+                       concat=concat,shuffle=shuffle
+                      )
         ids,inputs,answers,lengths,seqs,has_gene_statuses = data
-        change = augment_up_max + augment_down_max + discard_ratio_min + discard_ratio_max 
-        if change > 0:
-            result = augment_seqs(inputs, answers, seqs, lengths, has_gene_statuses,
-                                  discard_ratio_min, discard_ratio_max,
-                                  augment_up_max, augment_down_max)
-            inputs, answers,seqs, lengths = result
-
-        if concat:
-            concat_result = concat_seq(ids,inputs,answers,lengths,seqs,has_gene_statuses)
-            ids,inputs,answers,lengths,seqs,has_gene_statuses = _get_list(concat_result)
-            
         inputs = pad_sequence(inputs, batch_first=True)
         length_order = np.flip(np.argsort(lengths), axis=0).copy()
         reordered_ids = order(ids, length_order)

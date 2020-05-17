@@ -281,7 +281,7 @@ def _calculate_metric(predict,answer,chrom,strand,length):
     return categorical_metric_,contagion_matrix_
     
 
-def gff_performance(predict,answer,region_table,round_value=None):
+def gff_performance(predict,answer,region_table,round_value=None,multiprocess=None):
     """
     The method would compare data between prediction and answer, and return the performance result
     
@@ -344,8 +344,12 @@ def gff_performance(predict,answer,region_table,round_value=None):
         strand = strands[index]
         kwarg_list.append((predict,answer,chrom,strand,length))
 
-    with Pool(processes=40) as pool:
-        results = pool.starmap(_calculate_metric, kwarg_list)
+        
+    if multiprocess is None:
+        results = [_calculate_metric(*kwargs) for kwargs in kwarg_list]
+    else:
+        with Pool(processes=multiprocess) as pool:
+            results = pool.starmap(_calculate_metric, kwarg_list)
     
     for item in results:
         categorical_metric_,contagion_matrix_ = item
@@ -367,12 +371,14 @@ def gff_performance(predict,answer,region_table,round_value=None):
     print("Time spend:{}".format(new_time-pre_time))
     pre_time = new_time
     print("Calculate site distance")
-    result['p_a_abs_diff'] = get_all_site_diff(answer,predict,round_value=round_value)
-    result['a_p_abs_diff'] = get_all_site_diff(answer,predict,answer_as_ref=False,round_value=round_value)
-    result['p_a_abs_diff_exclude_zero'] = get_all_site_diff(answer,predict,
-                                                            round_value=round_value,include_zero=False)
+    result['p_a_abs_diff'] = get_all_site_diff(answer,predict,round_value=round_value,multiprocess=multiprocess)
+    result['a_p_abs_diff'] = get_all_site_diff(answer,predict,answer_as_ref=False,round_value=round_value,
+                                              multiprocess=multiprocess)
+    result['p_a_abs_diff_exclude_zero'] = get_all_site_diff(answer,predict,round_value=round_value,
+                                                            include_zero=False,multiprocess=multiprocess)
     result['a_p_abs_diff_exclude_zero'] = get_all_site_diff(answer,predict,answer_as_ref=False,
-                                                            round_value=round_value,include_zero=False)
+                                                            round_value=round_value,include_zero=False,
+                                                            multiprocess=multiprocess)
     new_time = time.time()
     print("Time spend:{}".format(new_time-pre_time))
     pre_time = new_time
@@ -455,9 +461,9 @@ def block_performance_table(roots,names):
     columns = ['name'] + columns
     return block_performance[columns],error_paths
 
-def compare_and_save(predict,answer,region_table,saved_root,round_value=None):
+def compare_and_save(predict,answer,region_table,saved_root,round_value=None,multiprocess=None):
     create_folder(saved_root)
-    result = gff_performance(predict,answer,region_table,round_value)
+    result = gff_performance(predict,answer,region_table,round_value,multiprocess=multiprocess)
     write_json(result['base_performance'],os.path.join(saved_root,'base_performance.json'))
     write_json(result['contagion_matrix'].tolist(),os.path.join(saved_root,'contagion_matrix.json'))
     write_json(result['block_performance'],os.path.join(saved_root,'block_performance.json'))
@@ -484,6 +490,8 @@ if __name__ == '__main__':
     parser.add_argument("-a","--answer_path",help='The path of answer result in GFF format',required=True)
     parser.add_argument("-r","--region_table_path",help='The path of region table',required=True)
     parser.add_argument("-s","--saved_root",help="Path to save result",required=True)
+    parser.add_argument("--multiprocess",type=int,default=None)
+    
     args = parser.parse_args()
 
     config_path = os.path.join(args.saved_root,'performance_setting.json')

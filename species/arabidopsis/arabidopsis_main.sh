@@ -83,7 +83,6 @@ echo "process_data_kwargs,$process_data_kwargs" >> $saved_root/main_kwargs.csv
 arabidopsis_util_root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 src_root=$arabidopsis_util_root/../..
 bash_root=$src_root/bash
-preprocess_main_root=$src_root/sequence_annotation/preprocess
 preprocessed_root=$saved_root/preprocessed
 id_convert_table_path=$preprocessed_root/id_convert.tsv
 preserved_bed_path=$preprocessed_root/consistent.bed
@@ -112,25 +111,24 @@ if [ "$process_data_kwargs" ]; then
 fi
 
 echo $command
-eval "bash $command"
+#eval "bash $command"
 
-processed_root=$saved_root/processed
-result_root=$processed_root/result
-mkdir $half_data_root
+preprocess_main_root=$src_root/sequence_annotation/preprocess
+genome_handler_root=$src_root/sequence_annotation/genome_handler
 
+result_root=$saved_root/processed/result
 fasta_path=$result_root/selected_region.fasta
 gff_path=$result_root/canonical.gff3
 ann_seqs_path=$result_root/canonical.h5
-train_id_path=$splitted_root/single_strand_data/split_with_strand/train_1_2_plus_3_5.txt
-val_id_path=$splitted_root/single_strand_data/split_with_strand/val_2_minus.txt
+split_table_path=$saved_root/split/single_strand_data/split_with_strand/split_table.csv
 half_data_root=$saved_root/half_data
-train_saved_path=$half_data_root/train_1_2_plus_3_5_small_len_ratio_f5.h5
-val_saved_path=$half_data_root/val_2_minus_small_len_ratio_f5.h5
-train_gff_path=$half_data_root/train_1_2_plus_3_5_small_len_ratio_f5.gff3
-val_gff_path=$half_data_root/val_2_minus_small_len_ratio_f5.gff3
+full_data_root=$saved_root/full_data
 
-python3 $preprocess_main_root/select_data.py -f $fasta_path -a $ann_seqs_path -s $train_saved_path -i $train_id_path --ratio 0.5 --select_each_type --input_gff_path $gff_path --saved_gff_path $train_gff_path
+mkdir -p $half_data_root
+mkdir -p $full_data_root
 
-python3 $preprocess_main_root/select_data.py -f $fasta_path -a $ann_seqs_path -s $val_saved_path -i $val_id_path --ratio 0.5 --select_each_type --input_gff_path $gff_path --saved_gff_path $val_gff_path
+python3 $genome_handler_root/select_data.py -f $fasta_path -a $ann_seqs_path -u $split_table_path -o $half_data_root  --dataset_name train_1_2_plus_3_5 --ratio 0.5 --select_each_type
 
+python3 $genome_handler_root/select_data.py -f $fasta_path -a $ann_seqs_path -u $split_table_path -o $half_data_root  --dataset_name val_2_minus --ratio 0.5 --select_each_type
 
+python3 $genome_handler_root/select_data.py -f $fasta_path -a $ann_seqs_path -u $split_table_path -o $full_data_root

@@ -10,6 +10,7 @@ sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES, create_folder
 from sequence_annotation.utils.utils import read_gff, read_json, write_gff, write_json
 from sequence_annotation.genome_handler.select_data import load_data
+from sequence_annotation.genome_handler.ann_genome_processor import simplify_genome
 from sequence_annotation.preprocess.utils import get_data_names,read_region_table
 from sequence_annotation.preprocess.length_gaussian_modeling import norm_fit_log10
 from sequence_annotation.preprocess.utils import get_gff_with_intergenic_region
@@ -99,14 +100,17 @@ def get_length_thresholds(length_gaussian_path, std_num):
 
 
 class Reviser:
-    def __init__(self, plust_strand_gff_path, fasta_path, region_table_path):
+    def __init__(self, plust_strand_gff_path, fasta_path, region_table_path,multiprocess=None):
         self._plus_strand_gff_path = plust_strand_gff_path
         self._fasta_path = fasta_path
         self._region_table_path = region_table_path
+        self.multiprocess = multiprocess
         
-    def revise(self, saved_root, **kwargs):
+    def revise(self, saved_root,**kwargs):
         gff_revise_main(saved_root, self._plus_strand_gff_path,
-                        self._region_table_path,self._fasta_path,**kwargs)
+                        self._region_table_path,self._fasta_path,
+                        revised_config_or_path=kwargs,
+                       multiprocess=self.multiprocess)
 
 class Evaluator:
     def __init__(self, answer_path, region_table_path):
@@ -124,31 +128,32 @@ class Evaluator:
 
 
 class ReviseEvaluator:
-    def __init__(self, path_helper, name,predicted_root, usage=None):
-        self._path_helper = path_helper
+    def __init__(self, path_helper, predicted_root,multiprocess=None):
+        self.path_helper = path_helper
+        self.predicted_root = predicted_root
+        self.plus_strand_gff_path = os.path.join(predicted_root, 'test_predict_plus_strand.gff3')
         self._region_table_path = path_helper.region_table_path
-        self._fasta_path = path_helper.get_fasta_path(name, usage)
-        self._plus_strand_gff_path = os.path.join(predicted_root, 'test_predict_plus_strand.gff3')
-        self._answer_path = path_helper.get_answer_path(name, usage)
+        self._fasta_path = path_helper.fasta_path
+        self._answer_path = path_helper.answer_path
+        self.multiprocess = multiprocess
         self.reviser = Reviser(
-            self._plus_strand_gff_path,
+            self.plus_strand_gff_path,
             self._fasta_path,
-            self._region_table_path)
+            self._region_table_path,
+            multiprocess=multiprocess)
         self.evaluator = Evaluator(self._answer_path, self._region_table_path)
 
     def process(self, revised_root, **kwargs):
         revised = os.path.join(revised_root, 'revised_double_strand.gff3')
-        #if not os.path.exists(revised):
         self.reviser.revise(revised_root, **kwargs)
-        #if not os.path.exists(revised):
         return self.evaluator.evaluate(revised, revised_root)
 
 
-def test(trained_root, test_result_root, path_helper, trained_id, usage=None):
+def test(trained_root, test_result_root, path_helper):
     loss_path = os.path.join(test_result_root, 'overall_loss.txt')
     if not os.path.exists(loss_path):
-        data_path = path_helper.get_processed_data_path(trained_id, usage)
-        answer_path = path_helper.get_answer_path(trained_id, usage)
+        data_path = path_helper.processed_data_path
+        answer_path = path_helper.answer_path
         create_folder(test_result_root)
         best_model, executor = get_best_model_and_origin_executor(trained_root)
         batch_size = get_batch_size(trained_root)
@@ -157,9 +162,10 @@ def test(trained_root, test_result_root, path_helper, trained_id, usage=None):
         engine.set_root(test_result_root,with_train=False,
                         with_val=False,with_test=False,
                         create_tensorboard=False)
+        region_table_path=path_helper.region_table_path
         singal_handler = engine.get_signal_handler(test_result_root,prefix='test',
                                                    inference=executor.inference,
-                                                   region_table_path=path_helper.region_table_path,
+                                                   region_table_path=region_table_path,
                                                    answer_gff_path=answer_path)
         callbacks = Callbacks()
         callbacks.add(singal_handler)
@@ -187,15 +193,12 @@ def get_intergenic_threshold(predicted_gff,region_table,chrom_id_source):
     threshold = math.pow(10,params['means'][index])
     return threshold
 
-class AutoReviseEvaluator:
-    def __init__(self, path_helper, predicted_root,
-                 merged_root,output_root):
+class RevierSpaceSearcher:
+    def __init__(self,revise_evaluator,output_root):
+        self._revise_evaluator = revise_evaluator
+        self._path_helper = self._revise_evaluator.path_helper
+        self._predicted_root = self._revise_evaluator.predicted_root
         self._output_root = output_root
-        self._merged_root = merged_root
-        self._path_helper = path_helper
-        self._predicted_root = predicted_root
-        self._best_hyperparams = None
-        self._best_loss = None
         self._records = None
         self._index = None
         self._std_num = None
@@ -203,28 +206,19 @@ class AutoReviseEvaluator:
         self._first_n_motif = None
         self._methods_1ist = None
         self._init_revised_space()
-        self._revise_evaluator = ReviseEvaluator(self._path_helper,
-                                                 self._path_helper.train_val_name,
-                                                 self._merged_root)
-        
 
     def _init_revised_space(self):
         self._std_num = 3
         self._distance_scales = [0,0.3,0.6,0.9]
         self._first_n_motif = 1
-        name = self._path_helper.train_val_name
-        length_gaussian_path = self._path_helper.get_length_log10_model_path(name)
-        gff_path = os.path.join(self._merged_root,'test_predict_plus_strand.gff3')
+        gff = read_gff(self._revise_evaluator.plus_strand_gff_path)
         region_table = read_region_table(self._path_helper.region_table_path)
-        gff = read_gff(gff_path)
-        intergenic_threshold = get_intergenic_threshold(gff,region_table,
-                                                        'ordinal_id_with_strand')
-        self._length_thresholds = get_length_thresholds(length_gaussian_path,self._std_num)
+        intergenic_threshold = get_intergenic_threshold(gff,region_table,'ordinal_id_with_strand')
+        self._length_thresholds = get_length_thresholds(self._path_helper.length_log10_model_path,self._std_num)
         self._length_thresholds['other'] = intergenic_threshold
         self._methods_1ist = [['length_threshold'],['distance_threshold'],
                               ['length_threshold', 'distance_threshold'],
                               ['distance_threshold', 'length_threshold']]
-
 
     def get_config(self):
         config = {}
@@ -237,14 +231,14 @@ class AutoReviseEvaluator:
 
     def _execute_revise_evaluator(self, target, methods, distances):
         print("Working on {}".format(target))
-        revised_root = os.path.join(self._output_root,'revised_val',target)
+        revised_root = os.path.join(self._output_root,target)
         splicing_kwargs = get_splicing_kwargs(self._path_helper,
                                               first_n=self._first_n_motif)
         self._revise_evaluator.process(revised_root, methods=methods,
-                                 length_thresholds=self._length_thresholds,
-                                 acceptor_distance=distances['acceptor_distance'],
-                                 donor_distance=distances['donor_distance'],
-                                 **splicing_kwargs)
+                                       length_thresholds=self._length_thresholds,
+                                       acceptor_distance=distances['acceptor_distance'],
+                                       donor_distance=distances['donor_distance'],
+                                       **splicing_kwargs)
         print("Finish working on {}".format(target))
 
     def _revise_and_evaluate_on_val(self, methods,distance_scale=None):
@@ -254,48 +248,24 @@ class AutoReviseEvaluator:
         hyperparams = {'distance_scale': distance_scale, 'methods': methods,'target': target}
         self._records.append(hyperparams)
         if distance_scale is not None:
-            distances = get_distances(self._merged_root,distance_scale)
+            distances = get_distances(self._predicted_root,distance_scale)
         else:
             distances = {'acceptor_distance': None, 'donor_distance': None}
         kwargs = (target,methods,distances)
         return kwargs
 
-    def _process_on_test(self, trained_name):
-        target = '{}_testing'.format(trained_name)
-        print("Working on {}".format(target))
-        distances = {'acceptor_distance': None, 'donor_distance': None}
-        methods = self._best_hyperparams['methods']
-        distance_scale = self._best_hyperparams['distance_scale']
-        splicing_kwargs = get_splicing_kwargs(
-            self._path_helper, first_n=self._first_n_motif)
-        if distance_scale is not None:
-            distances = get_distances(os.path.join(self._merged_root),
-                                      distance_scale)
-        predict_result_root = os.path.join(self._predicted_root, trained_name,'testing')
-        revised_root = os.path.join(self._output_root, 'revised_test',trained_name)
-        test_revise_evaluator = ReviseEvaluator(
-            self._path_helper, trained_name, predict_result_root, usage='testing')
-        loss = test_revise_evaluator.process(revised_root, methods=methods,
-                                             length_thresholds=self._length_thresholds,
-                                             acceptor_distance=distances['acceptor_distance'],
-                                             donor_distance=distances['donor_distance'],
-                                             multiprocess=40,
-                                             **splicing_kwargs)
-        print("Finish working on {}".format(target))
-        record = dict(self._best_hyperparams)
-        record.update({'loss': loss, 'target': target})
-        self._records.append(record)
-
-    def process(self):
-        self._best_hyperparams = {'distance_scale': None,'methods': None}
+    def search(self):
+        best_hyperparams = {'distance_scale': None,'methods': None}
         self._index = 0
         self._records = []
-        overall_loss_path = os.path.join(self._merged_root,'overall_loss.txt')
+        overall_loss_path = os.path.join(self._predicted_root,'overall_loss.txt')
         with open(overall_loss_path, "r") as fp:
             val_loss = float(fp.read())
-        val_record = dict(self._best_hyperparams)
-        val_record.update({'loss': val_loss, 'target': 'train_val'})
-        self._best_loss = val_loss
+        best_loss = val_loss
+        best_target = 'source'
+        best_hyperparams = {'distance_scale': None,'methods': None,'target':'source',
+                            'loss':val_loss}
+        self._records.append(best_hyperparams)
 
         kwargs_list = []
         for methods in self._methods_1ist:
@@ -308,92 +278,139 @@ class AutoReviseEvaluator:
                 kwargs = self._revise_and_evaluate_on_val(methods)
                 kwargs_list.append(kwargs)
 
-        with Pool(processes=40) as pool:
-            pool.starmap(self._execute_revise_evaluator, kwargs_list)
+        #with Pool(processes=40) as pool:
+        #    pool.starmap(self._execute_revise_evaluator, kwargs_list)
 
         for record in self._records:
-            overall_loss_path = os.path.join(self._output_root, 'revised_val',
-                                             record['target'],'overall_loss.txt')
+            if record['target'] != 'source':
+                overall_loss_path = os.path.join(self._output_root,record['target'],'overall_loss.txt')
             with open(overall_loss_path, "r") as fp:
                 loss = float(fp.read())
             record['loss'] = loss
-            if self._best_loss > loss:
-                self._best_hyperparams = record
-                self._best_loss = loss
-
-        self._records.append(val_record)
-        print("Working on test dataset")
-        data_usage = get_data_names(self._path_helper.split_root)
-        for trained_name in data_usage.keys():
-            self._process_on_test(trained_name)
+            if best_loss > loss:
+                best_hyperparams = record
+                best_loss = loss
+                best_target = record['target']
 
         record_path = os.path.join(self._output_root, 'record.tsv')
         record = pd.DataFrame.from_dict(self._records)
         record.to_csv(record_path,sep='\t',index=None)
-        write_json(self._best_hyperparams,os.path.join(self._output_root,'best_revised_config.json'))
-        gff_reviser_config_path = os.path.join(self._output_root,'revised_test',
-                                               list(data_usage.keys())[0],'reviser_config.json')
+        write_json(best_hyperparams,os.path.join(self._output_root,'best_revised_config.json'))
+        if best_target!='source':
+            gff_reviser_config_path = os.path.join(self._output_root,best_target,'reviser_config.json')
+        else:
+            gff_reviser_config_path = os.path.join(self._output_root,self._predicted_root,'reviser_config.json')
         gff_reviser_config = read_json(gff_reviser_config_path)
-        write_json(gff_reviser_config,os.path.join(self._output_root,
-                                                   'best_gff_reviser_config.json'))
+        write_json(gff_reviser_config,os.path.join(self._output_root,'best_gff_reviser_config.json'))
+        return gff_reviser_config
 
-
-def main(raw_data_root, processed_root, trained_project_root, output_root):
+def main(raw_data_root, trained_project_root, output_root,fold_name=None):
+    
+    processed_root = os.path.join(raw_data_root,'full_data')
     path_helper = PathHelper(raw_data_root, processed_root)
-    data_usage = get_data_names(path_helper.split_root)
-    predicted_root = os.path.join(output_root, 'predicted')
-    merged_root = os.path.join(output_root, 'merged_val')
-
-    for usage in ['validation', 'testing']:
-        for trained_name in data_usage.keys():
-            print("Predicted by {} for {}".format(trained_name,usage))
-            trained_root = os.path.join(trained_project_root, trained_name)
-            result_root = os.path.join(predicted_root, trained_name, usage)
-            torch.cuda.empty_cache()
-            test(trained_root, result_root, path_helper, trained_name, usage)
-            torch.cuda.empty_cache()
-
+    data_names = get_data_names(path_helper.split_root)
+    val_root = os.path.join(output_root, 'source')
     plus_gffs = []
     gffs = []
     
-    for trained_name in data_usage.keys():
-        result_root = os.path.join(predicted_root, trained_name, 'validation')
-        plus_gff = read_gff(os.path.join(result_root, 'test_predict_plus_strand.gff3'))
-        gff = read_gff(os.path.join(result_root, 'test_predict_double_strand.gff3'))
-        plus_gffs.append(plus_gff)
-        gffs.append(gff)
+    if fold_name is None:
+        predicted_root = os.path.join(output_root, 'predicted')
+        fold_names = list(data_names.keys())
+        for trained_name in fold_names:
+            for usage in ['validation', 'testing']:
+                print("Predicted by {} for {}".format(trained_name,usage))
+                trained_root = os.path.join(trained_project_root, trained_name)
+                result_root = os.path.join(predicted_root, trained_name, usage)
+                torch.cuda.empty_cache()
+                path_helper = PathHelper(raw_data_root, processed_root,trained_name,usage)
+                test(trained_root, result_root, path_helper)
+                torch.cuda.empty_cache()
+
+        for trained_name in fold_names:
+            result_root = os.path.join(predicted_root, trained_name, 'validation')
+            plus_gff = read_gff(os.path.join(result_root, 'test_predict_plus_strand.gff3'))
+            gff = read_gff(os.path.join(result_root, 'test_predict_double_strand.gff3'))
+            plus_gffs.append(plus_gff)
+            gffs.append(gff)
+
+        merged_plus_gff = pd.concat(plus_gffs)
+        merged_gff = pd.concat(gffs)
+        create_folder(val_root)
+        plus_predicted_path = os.path.join(val_root,'test_predict_plus_strand.gff3')
+        predicted_path = os.path.join(val_root,'test_predict_double_strand.gff3')
+        write_gff(merged_plus_gff, plus_predicted_path)
+        write_gff(merged_gff, predicted_path)
+
+        print("Evaluating the merged result")
+        path_helper = PathHelper(raw_data_root, processed_root)
+        evaluator = Evaluator(path_helper.answer_path,path_helper.region_table_path)
+        #evaluator.evaluate(predicted_path,val_root)
+        val_name = path_helper.train_val_name
         
-    merged_plus_gff = pd.concat(plus_gffs)
-    merged_gff = pd.concat(gffs)
-    create_folder(merged_root)
-    merged_plus_predicted_path = os.path.join(merged_root,'test_predict_plus_strand.gff3')
-    merged_predicted_path = os.path.join(merged_root,'test_predict_double_strand.gff3')
-    write_gff(merged_plus_gff, merged_plus_predicted_path)
-    write_gff(merged_gff, merged_predicted_path)
+    else:
+        gff = []
+        plus_gff = []
+        for usage in ['validation', 'testing']:
+            result_root = os.path.join(output_root, usage)
+            torch.cuda.empty_cache()
+            path_helper = PathHelper(raw_data_root, processed_root,fold_name,usage)
+            #test(trained_project_root, result_root, path_helper)
+            torch.cuda.empty_cache()
 
-    print("Evaluating the merged result")
-    train_val_answer_path = path_helper.get_answer_path(path_helper.train_val_name)
-    evaluator = Evaluator(train_val_answer_path, path_helper.region_table_path)
-    evaluator.evaluate(merged_predicted_path,merged_root)
+        result_root = os.path.join(output_root, 'validation')
+        plus_input_gff = read_gff(os.path.join(result_root,'test_predict_plus_strand.gff3'))
+        input_gff = read_gff(os.path.join(result_root,'test_predict_double_strand.gff3'))
 
-    processor = AutoReviseEvaluator(path_helper,predicted_root,
-                                    merged_root,output_root)
-    write_json(processor.get_config(),
-               os.path.join(output_root,'auto_revised_config.json'))
-    processor.process()
+        plus_predicted_path = os.path.join(val_root,'test_predict_plus_strand.gff3')
+        predicted_path = os.path.join(val_root,'test_predict_double_strand.gff3')
+        
+        write_gff(plus_input_gff, plus_predicted_path)
+        write_gff(input_gff, predicted_path)
+        
+        path_helper = PathHelper(raw_data_root, processed_root,fold_name,'validation')
+        evaluator = Evaluator(path_helper.answer_path, path_helper.region_table_path)
+        evaluator.evaluate(predicted_path,val_root)
+            
+    
+    revise_evaluator = ReviseEvaluator(path_helper,val_root)
+
+    revised_val_root = os.path.join(output_root,'revised_val')
+    space_searcher = RevierSpaceSearcher(revise_evaluator,revised_val_root)
+    best_reviser_config = space_searcher.search()
+    write_json(space_searcher.get_config(),os.path.join(revised_val_root,'auto_revised_config.json'))
+    
+    
+    if fold_name is None:
+        fold_names = list(data_names.keys())
+        for trained_name in fold_names:
+            path_helper = PathHelper(raw_data_root, processed_root,trained_name,'testing')
+            revised_root = os.path.join(output_root, 'revised_test',trained_name)
+            val_root = os.path.join(predicted_root, trained_name, 'testing')
+            revise_evaluator = ReviseEvaluator(path_helper,val_root,multiprocess=40)
+            torch.cuda.empty_cache()
+            loss = revise_evaluator.process(revised_root, **best_reviser_config)
+            torch.cuda.empty_cache()
+    else:
+        path_helper = PathHelper(raw_data_root, processed_root,fold_name,'testing')
+        revised_root = os.path.join(output_root, 'revised_test')
+        val_root = os.path.join(output_root, 'testing')
+        revise_evaluator = ReviseEvaluator(path_helper,val_root,multiprocess=40)
+        torch.cuda.empty_cache()
+        loss = revise_evaluator.process(revised_root, **best_reviser_config)
+        torch.cuda.empty_cache()
+
 
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument("-r", "--raw_data_root", required=True,
+    parser.add_argument("-d", "--raw_data_root", required=True,
                         help="Root of Arabidopsis processed data")
-    parser.add_argument("-p", "--processed_root", required=True,
-                        help='The root of processed data by select_data')
-    parser.add_argument("-t", "--trained_project_root", required=True,
+    parser.add_argument("-i", "--trained_project_root", required=True,
                         help='The root of trained project')
     parser.add_argument("-o", "--output_root", required=True,
                         help="The root to save result")
     parser.add_argument("-g", "--gpu_id", type=int,
                         default=0, help="GPU to used")
+    parser.add_argument("--fold_name")
     args = parser.parse_args()
     kwargs = dict(vars(args))
     del kwargs['gpu_id']

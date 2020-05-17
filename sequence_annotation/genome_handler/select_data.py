@@ -1,8 +1,17 @@
+import os
+import sys
 import deepdish as dd
-from ..utils.seq_converter import DNA_CODES
-from ..utils.utils import read_fasta, BASIC_GENE_ANN_TYPES
-from .seq_container import AnnSeqContainer
-from .ann_genome_processor import get_mixed_genome, simplify_genome, is_one_hot_genome
+import pandas as pd
+from argparse import ArgumentParser
+sys.path.append(os.path.dirname(__file__)+"/../..")
+from sequence_annotation.utils.seq_converter import DNA_CODES
+from sequence_annotation.utils.utils import read_fasta, BASIC_GENE_ANN_TYPES
+from sequence_annotation.utils.utils import read_gff,write_gff,create_folder,write_json
+from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
+from sequence_annotation.genome_handler.ann_genome_processor import get_mixed_genome
+from sequence_annotation.genome_handler.ann_genome_processor import simplify_genome
+from sequence_annotation.genome_handler.ann_genome_processor import is_one_hot_genome
+
 
 def select_data_by_length(fasta, ann_seqs, min_len=None,
                           max_len=None, ratio=None):
@@ -125,7 +134,7 @@ def _preprocess(ann_seqs, before_mix_simplify_map=None, simplify_map=None):
 def select_data(fasta_path, ann_seqs_path, chroms, before_mix_simplify_map=None,
                 simplify_map=None, select_func=None,
                 select_each_type=False, codes=None, **kwargs):
-    codes = codes or DNA_CODES
+    codes = set(codes or DNA_CODES)
     if select_func is None:
         if select_each_type:
             select_func = select_data_by_length_each_type
@@ -167,3 +176,88 @@ def load_data(path):
     data = data[0], AnnSeqContainer().from_dict(data[1])
     return data
 
+def _get_name(path, with_postfix=False):
+    rel_path = path.split('/')[-1]
+    if with_postfix:
+        return rel_path
+    else:
+        return rel_path.split('.')[0]
+
+
+def select_sinlge_data(saved_path,fasta_path,ann_seqs_path,id_path,
+         min_len,max_len,ratio,select_each_type,
+         input_gff_path=None,saved_gff_path=None):
+    print("Load and parse data")
+    if os.path.exists(saved_path):
+        data = dd.io.load(saved_path)
+        print("Data is existed, the program will be skipped")
+        print("Number of parsed data:{}".format(len(data[0])))
+    else:
+        ids = list(pd.read_csv(id_path,header=None)[0])
+        data = select_data(fasta_path,ann_seqs_path,ids,
+                           min_len=min_len,max_len=max_len,ratio=ratio,
+                           select_each_type=select_each_type)
+        print("Number of parsed data:{}".format(len(data[0])))
+        dd.io.save(saved_path,data)
+        print("Save file to {}".format(saved_path))
+        
+    if saved_gff_path is not None and not os.path.exists(saved_gff_path) and input_gff_path is not None:
+        region_ids = list(data[0].keys())
+        gff = read_gff(input_gff_path)
+        selected_gff = gff[gff['chr'].isin(region_ids)]
+        write_gff(selected_gff,saved_gff_path)
+
+
+def _get_data_by_name(name,usage_table_root,saved_root,**kwargs):
+    id_path = os.path.join(usage_table_root,"{}.txt".format(name))
+    saved_rel_path = '{}.h5'.format(_get_name(id_path))
+    saved_path = os.path.join(saved_root, saved_rel_path)
+    select_sinlge_data(id_path=id_path,saved_path=saved_path,**kwargs)
+            
+            
+def main(saved_root, usage_table_path=None,
+         dataset_name=None,**kwargs):
+    setting = locals()
+    create_folder(saved_root)
+    usage_table_root = '/'.join(usage_table_path.split('/')[:-1])
+
+    if dataset_name is None:
+        path = os.path.join(saved_root, "batch_select_data_config.json")
+        write_json(setting, path)
+        
+        usage_table = pd.read_csv(usage_table_path)
+        usage_table = usage_table.to_dict('record')
+        for dataset in usage_table:
+            for type_, path in dataset.items():
+                name = _get_name(path)
+                _get_data_by_name(name,usage_table_root,saved_root,**kwargs)
+    else:
+        path = os.path.join(saved_root, "select_data_{}_config.json".format(dataset_name))
+        write_json(setting, path)
+        _get_data_by_name(dataset_name,usage_table_root,saved_root,**kwargs)
+
+
+if __name__ == '__main__':
+    parser = ArgumentParser()
+    parser.add_argument("-f", "--fasta_path", required=True,
+                        help="Path of fasta")
+    parser.add_argument("-a", "--ann_seqs_path", required=True,
+                        help="Path of AnnSeqContainer")
+    parser.add_argument("-o", "--saved_root", required=True,
+                        help="Root to save file")
+    parser.add_argument("-u", "--usage_table_path", required=True,
+                        help="Usage table in csv format")
+    parser.add_argument("--max_len", type=int, default=None, help="Sequences' max length")
+    parser.add_argument("--min_len", type=int, default=0,
+                        help="Sequences' min length")
+    parser.add_argument("--ratio", type=float, default=1, help="Ratio of number to be chosen"
+                        "to train and validate, start chosen by increasing order)")
+    parser.add_argument("--select_each_type", action='store_true')
+    #parser.add_argument("--input_gff_path",help='The answer in gff format')
+    #parser.add_argument("--saved_gff_path",help="Path to save selected answer in GFF")
+    parser.add_argument("--dataset_name")
+
+    args = parser.parse_args()
+    setting = vars(args)
+
+    main(**setting)

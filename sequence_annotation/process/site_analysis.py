@@ -17,14 +17,15 @@ def _get_site_diff(ref_sites,compare_sites,include_zero,absolute):
     if not include_zero:
         dist[np.where(dist == 0)] = np.nan
     if absolute:
-        diff = np.abs(dist).min(1)
+        diff = np.nanmin(np.abs(dist),axis=1)
     else:
-        diff = dist[np.arange(len(dist)),np.abs(dist).argmin(1)]
+        diff = dist[np.arange(len(dist)),np.nanargmin(np.abs(dist),axis=1)]
     return diff.tolist()
 
 def get_site_diff(answer,predict,types,
                   is_start=True,absolute=True,
-                  answer_as_ref=True,include_zero=True):
+                  answer_as_ref=True,include_zero=True,
+                  multiprocess=None):
     site_type = 'start' if is_start else 'end'
     answer = answer[answer['feature'].isin(types)].copy()
     predict = predict[predict['feature'].isin(types)].copy()
@@ -51,8 +52,11 @@ def get_site_diff(answer,predict,types,
                 compare_sites = answer_sites
             kwarg_list.append((ref_sites,compare_sites,include_zero,absolute))
     
-    with Pool(processes=40) as pool:
-        results = pool.starmap(_get_site_diff, kwarg_list)
+    if multiprocess is None:
+        results = [_get_site_diff(*kwargs) for kwargs in kwarg_list]
+    else:
+        with Pool(processes=multiprocess) as pool:
+            results = pool.starmap(_get_site_diff, kwarg_list)
         
     site_diffs = []
     for item in results:
@@ -167,9 +171,9 @@ def get_all_site_diff(answer,predict,round_value=None,
             site_diffs[type_] = arr
         else:
             if len(arr) > 0:
-                median_ = np.median(arr)
-                mean_ = np.mean(arr)
-                mode = stats.mode(arr)[0][0]
+                median_ = np.nanmedian(arr)
+                mean_ = np.nanmean(arr)
+                mode = stats.mode(arr,nan_policy='omit')[0][0]
                 if round_value is not None:
                     mean_ = round(mean_, round_value)
                 site_diffs['median'][type_] = float(median_)

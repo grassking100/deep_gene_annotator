@@ -3,11 +3,12 @@ import abc
 import numpy as np
 import torch
 from ..utils.utils import create_folder, write_json, BASIC_GENE_ANN_TYPES, get_time_str
-from ..utils.utils import get_file_name, read_json,write_fasta
+from ..utils.utils import get_file_name, read_json,write_fasta,BASIC_SIMPLIFY_MAP
 from ..utils.seq_converter import SeqConverter
 from ..genome_handler.ann_genome_processor import class_count
 from ..genome_handler.ann_seq_processor import seq2vecs
 from ..genome_handler.seq_container import AnnSeqContainer
+from ..genome_handler.ann_genome_processor import simplify_genome
 from .data_processor import AnnSeqProcessor
 from .utils import param_num
 from .worker import TrainWorker, TestWorker,PredictWorker
@@ -30,7 +31,7 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
         self.is_verbose_visible = True
         self._channel_order = channel_order
         self._ann_types = self._channel_order
-        self.batch_size = None
+        self.batch_size = 1
 
     def update_settings(self, key, params):
         if isinstance(params, dict):
@@ -94,17 +95,19 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
             folder = os.path.join(self._root, "predict")
             create_folder(folder)
 
-    def _record_ann_count(self, name, ann_seqs):
-        if ann_seqs is not None:
-            if ann_seqs.is_empty():
-                raise Exception("The {} has no data inside".format(name))
-            count = class_count(ann_seqs)
-            self.print_verbose(len(ann_seqs), count)
-            for key, value in count.items():
-                if int(value) == 0:
-                    raise Exception(
-                        "The {} is missing in the dataset".format(key))
-            self.update_settings(name, count)
+    def _record_ann_count(self, name, ann_vecs):
+        count = {}
+        for type_ in self._channel_order:
+            count[type_] = 0
+        for vec in ann_vecs:
+            for index,item_count in enumerate(vec.sum(0)):
+                count[self._channel_order[index]] += item_count
+        self.print_verbose(len(ann_vecs), count)
+        for key, value in count.items():
+            if int(value) == 0:
+                raise Exception(
+                    "The {} is missing in the dataset".format(key))
+        self.update_settings(name, count)
 
     def get_signal_handler(self,root,prefix=None,inference=None,
                            region_table_path=None,
@@ -173,14 +176,19 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
             callbacks.add(tensorboard)
 
     def process_data(self, raw_data):
-        keys = list(raw_data.keys())
+        #simplify_map = simplify_map or BASIC_SIMPLIFY_MAP
+        #raw_data = dict(raw_data)
+        #for type_,dict_ in raw_data.items():
+        #    if 'answers' in dict_:
+        #        dict_['answers'] = simplify_genome(dict_['answers'], simplify_map)
         data = AnnSeqProcessor(self._channel_order).process(raw_data)
+        keys = list(data.keys())
         for key in keys:
-            if 'answers' in raw_data[key]:
+            if 'answers' in data[key]:
                 self._update_ann_seqs_count(key, len(raw_data[key]['answers'].ids),
                                             len(data[key]['ids']))
                 self._record_ann_count('{}_ann_counut'.format(key),
-                                       raw_data[key]['answers'])
+                                       data[key]['answers'])
                 has_gene_statuses_count = int(sum(data[key]['has_gene_statuses']))
                 self.update_settings('{}_has_gene_count'.format(key),
                                      has_gene_statuses_count)
