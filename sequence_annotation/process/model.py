@@ -209,6 +209,7 @@ def get_model(config,
     model.save_distribution = save_distribution
 
     if model_weights_path is not None:
+        print("Load model weights from {}".format(model_weights_path))
         weight = torch.load(model_weights_path,map_location='cpu')
         model.load_state_dict(weight, strict=True)
 

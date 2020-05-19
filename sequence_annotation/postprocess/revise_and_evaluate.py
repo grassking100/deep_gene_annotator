@@ -40,7 +40,7 @@ def get_distances(root, scale):
     a_p_abs_diff = read_json(
         os.path.join(
             root,
-            'a_p_abs_diff_exclude_zero.json'))
+            'a_p_abs_diff.json'))
     donor_distance = a_p_abs_diff['mean']['donor_site'] * scale
     acceptor_distance = a_p_abs_diff['mean']['acceptor_site'] * scale
     return {'donor_distance': donor_distance,
@@ -209,7 +209,7 @@ class RevierSpaceSearcher:
 
     def _init_revised_space(self):
         self._std_num = 3
-        self._distance_scales = [0,0.3,0.6,0.9]
+        self._distance_scales = [0,1,2,3]
         self._first_n_motif = 1
         gff = read_gff(self._revise_evaluator.plus_strand_gff_path)
         region_table = read_region_table(self._path_helper.region_table_path)
@@ -278,8 +278,8 @@ class RevierSpaceSearcher:
                 kwargs = self._revise_and_evaluate_on_val(methods)
                 kwargs_list.append(kwargs)
 
-        #with Pool(processes=40) as pool:
-        #    pool.starmap(self._execute_revise_evaluator, kwargs_list)
+        with Pool(processes=40) as pool:
+            pool.starmap(self._execute_revise_evaluator, kwargs_list)
 
         for record in self._records:
             if record['target'] != 'source':
@@ -312,7 +312,7 @@ def main(raw_data_root, trained_project_root, output_root,fold_name=None):
     val_root = os.path.join(output_root, 'source')
     plus_gffs = []
     gffs = []
-    
+    create_folder(val_root)
     if fold_name is None:
         predicted_root = os.path.join(output_root, 'predicted')
         fold_names = list(data_names.keys())
@@ -335,7 +335,7 @@ def main(raw_data_root, trained_project_root, output_root,fold_name=None):
 
         merged_plus_gff = pd.concat(plus_gffs)
         merged_gff = pd.concat(gffs)
-        create_folder(val_root)
+        
         plus_predicted_path = os.path.join(val_root,'test_predict_plus_strand.gff3')
         predicted_path = os.path.join(val_root,'test_predict_double_strand.gff3')
         write_gff(merged_plus_gff, plus_predicted_path)
@@ -344,7 +344,7 @@ def main(raw_data_root, trained_project_root, output_root,fold_name=None):
         print("Evaluating the merged result")
         path_helper = PathHelper(raw_data_root, processed_root)
         evaluator = Evaluator(path_helper.answer_path,path_helper.region_table_path)
-        #evaluator.evaluate(predicted_path,val_root)
+        evaluator.evaluate(predicted_path,val_root)
         val_name = path_helper.train_val_name
         
     else:
@@ -354,7 +354,7 @@ def main(raw_data_root, trained_project_root, output_root,fold_name=None):
             result_root = os.path.join(output_root, usage)
             torch.cuda.empty_cache()
             path_helper = PathHelper(raw_data_root, processed_root,fold_name,usage)
-            #test(trained_project_root, result_root, path_helper)
+            test(trained_project_root, result_root, path_helper)
             torch.cuda.empty_cache()
 
         result_root = os.path.join(output_root, 'validation')

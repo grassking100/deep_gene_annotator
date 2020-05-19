@@ -142,43 +142,21 @@ def get_valid_intron_boundary(rna_boundary, splice_pair_statuses):
             not_terminal_statuses.append(status)
 
     valid_introns = set()
-    valid_donor_introns = set()
-    valid_acceptor_introns = set()
+
     for status in not_terminal_statuses:
         is_donor_valid = status['donor']['valid']
         is_acceptor_valid = status['acceptor']['valid']
         donor = status['donor']['location']
         acceptor = status['acceptor']['location']
-        id_ = "{}_{}".format(donor, acceptor)
         if is_donor_valid and is_acceptor_valid:
-            valid_introns.add(id_)
-        if is_donor_valid:
-            valid_donor_introns.add(id_)
-        if is_acceptor_valid:
-            valid_acceptor_introns.add(id_)
-
-    for valid_donor_intron in valid_donor_introns:
-        valid_donor, valid_partner_acceptor = valid_donor_intron.split('_')
-        valid_donor = int(valid_donor)
-        valid_partner_acceptor = int(valid_partner_acceptor)
-        for valid_acceptor_intron in valid_acceptor_introns:
-            valid_partner_donor, valid_acceptor = valid_acceptor_intron.split(
-                '_')
-            valid_partner_donor = int(valid_partner_donor)
-            valid_acceptor = int(valid_acceptor)
-            # Merge intron
-            if (valid_acceptor - valid_donor + 1 >
-                    0) and ((valid_partner_donor - valid_partner_acceptor - 1) <= 0):
-                id_ = "{}_{}".format(valid_donor, valid_acceptor)
-                #print("Create merge inton {}".format(id_))
-                valid_introns.add(id_)
+            valid_introns.add((donor, acceptor))
 
     ann_seq = AnnSequence(['intron'], rna_length)
     ann_seq.strand = PLUS
     for valid_intron in valid_introns:
-        start, end = valid_intron.split('_')
-        start = int(start) - rna_start
-        end = int(end) - rna_start
+        start, end = valid_intron
+        start = start - rna_start
+        end = end - rna_start
         ann_seq.set_ann("intron", 1, start, end)
     blocks = RegionExtractor().extract(ann_seq)
     valid_intron_boundarys_ = []

@@ -50,12 +50,8 @@ def create_mask(x, lengths):
 
 
 class Conv1d(nn.Conv1d, BasicModel):
-    def __init__(self,
-                 padding_handle=None,
-                 padding_value=None,
-                 customized_init=None,
-                 *args,
-                 **kwargs):
+    def __init__(self,padding_handle=None,padding_value=None,
+                 customized_init=None,*args,**kwargs):
         if isinstance(customized_init, str):
             customized_init = CNN_INIT_MODE[customized_init]
         self.customized_init = customized_init
@@ -164,12 +160,8 @@ class Conv1d(nn.Conv1d, BasicModel):
 
 
 class CANBlock(BasicModel):
-    def __init__(self,
-                 in_channels,
-                 norm_mode=None,
-                 norm_class=None,
-                 activation_function=None,
-                 dropout=None,
+    def __init__(self,in_channels,norm_mode=None,norm_class=None,
+                 activation_function=None,dropout=None,dropout_mode=None,
                  **kwargs):
         super().__init__()
         self.name = ""
@@ -182,6 +174,15 @@ class CANBlock(BasicModel):
             raise Exception(
                 "The norm_mode should be \"before_cnn\", \"after_cnn\","
                 "None, or \"after_activation\", but got {}".format(norm_mode))
+            
+        dropout_mode = dropout_mode or "after_activation"
+        if dropout_mode in ["before_cnn", "after_activation"]:
+            self.dropout_mode = dropout_mode
+        else:
+            raise Exception(
+                "The norm_mode should be \"before_cnn\" and"
+                "\"after_activation\", but got {}".format(dropout_mode))
+            
         if activation_function is None:
             self.activation_function = NoisyReLU()
         elif isinstance(activation_function, str):
@@ -212,6 +213,9 @@ class CANBlock(BasicModel):
 
     def forward(self, x, lengths, **kwargs):
         # X shape : N,C,L
+        if self.dropout_mode == "before_cnn" and self.dropout is not None and self.training:
+            x = F.dropout(x, self.dropout, self.training)
+            
         if self.norm_mode == 'before_cnn':
             x = self._normalized(x, lengths)
         x, lengths, weights, mask = self.cnn(x, lengths, **kwargs)
@@ -222,7 +226,8 @@ class CANBlock(BasicModel):
         self.update_distribution(x, key='post_act_x_{}'.format(self.name))
         if self.norm_mode == 'after_activation':
             x = self._normalized(x, lengths)
-        if self.dropout is not None and self.training:
+
+        if self.dropout_mode == "after_activation" and self.dropout is not None and self.training:
             x = F.dropout(x, self.dropout, self.training)
         return x, lengths, weights, mask
 

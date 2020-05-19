@@ -114,6 +114,9 @@ def main(saved_root,model_config_path,executor_config_path,
         write_json(setting,setting_path)
     
     copied_paths = [model_config_path,executor_config_path,train_data_path,val_data_path]
+    if model_weights_path is not None:
+        copied_paths.append(model_weights_path)
+
     executor_config = read_json(executor_config_path)
     #Load, parse and save data
     
@@ -131,14 +134,14 @@ def main(saved_root,model_config_path,executor_config_path,
     if region_table_path is not None and not os.path.exists(region_table_path):
         raise Exception("{} is not exist".format(region_table_path))
     
-    #temp_model,temp_executor = get_model_executor(model_config_path,executor_config,
-    #                                              save_distribution=save_distribution)
+    temp_model,temp_executor = get_model_executor(model_config_path,executor_config,
+                                                  save_distribution=save_distribution)
     
-    #print("Check memory")
-    #check_max_memory_usgae(saved_root,temp_model,temp_executor,train_data,
-    #                       val_data,batch_size=batch_size,concat=concat)
-    #del temp_model
-    #del temp_executor
+    print("Check memory")
+    check_max_memory_usgae(saved_root,temp_model,temp_executor,train_data,
+                           val_data,batch_size=batch_size,concat=concat)
+    del temp_model
+    del temp_executor
     torch.cuda.empty_cache()
     print("Memory is available")
     
@@ -191,7 +194,7 @@ if __name__ == '__main__':
     parser.add_argument("-s","--saved_root",help="Root to save file",required=True)
     parser.add_argument("-t","--train_data_path",help="Path of training data",required=True)
     parser.add_argument("-v","--val_data_path",help="Path of validation data",required=True)
-    parser.add_argument("--val_data_for_test_path",help="Path of validation data for testing",required=True)
+    parser.add_argument("--val_data_for_test_path",help="Path of validation data for testing")
     parser.add_argument("--region_table_path",help="The path of region data table",required=True)
     parser.add_argument("-b","--batch_size",type=int,default=32)
     parser.add_argument("--augment_up_max",type=int,default=0)

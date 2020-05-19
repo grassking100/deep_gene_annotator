@@ -210,7 +210,7 @@ def select_sinlge_data(saved_path,fasta_path,ann_seqs_path,id_path,
 
 def _get_data_by_name(name,usage_table_root,saved_root,**kwargs):
     id_path = os.path.join(usage_table_root,"{}.txt".format(name))
-    saved_rel_path = '{}.h5'.format(_get_name(id_path))
+    saved_rel_path = '{}.h5'.format(name)
     saved_path = os.path.join(saved_root, saved_rel_path)
     select_sinlge_data(id_path=id_path,saved_path=saved_path,**kwargs)
             
@@ -227,10 +227,16 @@ def main(saved_root, usage_table_path=None,
         
         usage_table = pd.read_csv(usage_table_path)
         usage_table = usage_table.to_dict('record')
+        output_table = []
         for dataset in usage_table:
+            output_paths = {}
             for type_, path in dataset.items():
                 name = _get_name(path)
                 _get_data_by_name(name,usage_table_root,saved_root,**kwargs)
+                saved_rel_path = '{}.h5'.format(name)
+                output_paths[type_] = saved_rel_path
+            output_table.append(output_paths)
+        pd.DataFrame.from_dict(output_table).to_csv(os.path.join(saved_root,'split_table.csv'),index=None)
     else:
         path = os.path.join(saved_root, "select_data_{}_config.json".format(dataset_name))
         write_json(setting, path)

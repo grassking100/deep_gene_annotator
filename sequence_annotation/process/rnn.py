@@ -262,9 +262,11 @@ class LSTM(_RNN):
 class ProjectedRNN(BasicModel):
     def __init__(self,in_channels,out_channels,norm_class=None,
                  customized_cnn_init=None,customized_rnn_init=None,
-                 name=None,output_act=None,is_gru=True,**kwargs):
+                 name=None,output_act=None,is_gru=True,
+                 dropout_before_rnn=False,**kwargs):
         super().__init__()
         self.output_act = output_act
+        self.dropout_before_rnn = dropout_before_rnn
         if name is None or name == '':
             self.name = 'rnn'
         else:
@@ -293,15 +295,20 @@ class ProjectedRNN(BasicModel):
         config['project'] = self.project.get_config()
         config['name'] = self.name
         config['output_act'] = self.output_act
+        config['dropout_before_rnn'] = self.dropout_before_rnn
         if self.norm is not None:
             config['norm'] = self.norm.get_config()
         return config
 
     def forward(self, x, lengths, return_intermediate=False, **kwargs):
+        if self.dropout_before_rnn and self.rnn.dropout > 0 and self.training:
+            x = F.dropout(x, self.rnn.dropout, self.training)
+            
         if self.norm is not None:
             x = self.norm(x,lengths)
         post_rnn = self.rnn(x, lengths)
         self.update_distribution(post_rnn, key=self.name)
+
         if self.rnn.dropout > 0 and self.training:
             post_rnn = F.dropout(post_rnn, self.rnn.dropout, self.training)
         result, lengths, _, _ = self.project(post_rnn, lengths=lengths)
