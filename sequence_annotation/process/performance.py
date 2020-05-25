@@ -359,6 +359,7 @@ def gff_performance(predict,answer,region_table,round_value=None,multiprocess=No
                 metric[type_][index] += categorical_metric_[type_][index]
         metric['T'] += categorical_metric_['T']
         metric['F'] += categorical_metric_['F']
+    result['contagion_matrix'] = result['contagion_matrix'].tolist()
     print("Calculate base performance")
     result['base_performance'] = calculate_metric(metric,label_names=BASIC_GENE_ANN_TYPES,round_value=round_value)
     new_time = time.time()
@@ -379,6 +380,18 @@ def gff_performance(predict,answer,region_table,round_value=None,multiprocess=No
     result['a_p_abs_diff_exclude_zero'] = get_all_site_diff(answer,predict,answer_as_ref=False,
                                                             round_value=round_value,include_zero=False,
                                                             multiprocess=multiprocess)
+    result['abs_diff'] = {}
+    result['abs_diff_exclude_zero'] = {}
+    for method,dict_ in result['p_a_abs_diff'].items():
+        result['abs_diff'][method] = {}
+        for key,value in dict_.items():
+            result['abs_diff'][method][key] = (result['a_p_abs_diff'][method][key] + value)/2
+            
+    for method,dict_ in result['p_a_abs_diff_exclude_zero'].items():
+        result['abs_diff_exclude_zero'][method] = {}
+        for key,value in dict_.items():
+            result['abs_diff_exclude_zero'][method][key] = (result['a_p_abs_diff_exclude_zero'][method][key] + value)/2
+            
     new_time = time.time()
     print("Time spend:{}".format(new_time-pre_time))
     pre_time = new_time
@@ -408,73 +421,17 @@ def draw_contagion_matrix(contagion_matrix,round_number=None):
             plt.text(c_index,r_index, format_.format(cell), ha='center', va='center')
     plt.show()
 
-def site_diff_table(roots,names):
-    site_diff = []
-    error_paths = []
-    for root,name in zip(roots,names):
-        try:
-            p_a_abs_diff = read_json(os.path.join(root,'p_a_abs_diff.json'))
-            a_p_abs_diff = read_json(os.path.join(root,'a_p_abs_diff.json'))
-        except:
-            error_paths.append(root)
-            continue
-        for key,values in p_a_abs_diff.items():
-            for target,value in values.items():
-                site_diff_ = {}
-                site_diff_['method'] = '{}(abs(predict-answer))'.format(key)
-                site_diff_['target'] = target
-                site_diff_['value'] = value
-                site_diff_['name'] = name
-                site_diff.append(site_diff_)
-
-        for key,values in a_p_abs_diff.items():
-            for target,value in values.items():
-                site_diff_ = {}
-                site_diff_['method'] = '{}(abs(answer-predict))'.format(key)
-                site_diff_['target'] = target
-                site_diff_['value'] = value
-                site_diff_['name'] = name
-                site_diff.append(site_diff_)
-    site_diff = pd.DataFrame.from_dict(site_diff)[['name','target','method','value']]
-    return site_diff,error_paths
-
-def block_performance_table(roots,names):
-    block_performance = []
-    error_paths = []
-    for root,name in zip(roots,names):
-        try:
-            data = read_json(os.path.join(root,'block_performance.json'))
-        except:
-            error_paths.append(root)
-            continue
-            
-        for target,value in data.items():
-            block_performance_ = {}
-            block_performance_['target'] = target
-            block_performance_['value'] = value
-            block_performance_['name'] = name
-            block_performance.append(block_performance_)
-
-    block_performance = pd.DataFrame.from_dict(block_performance)
-    columns = list(block_performance.columns)
-    columns.remove('name')
-    columns = ['name'] + columns
-    return block_performance[columns],error_paths
-
 def compare_and_save(predict,answer,region_table,saved_root,round_value=None,multiprocess=None):
     create_folder(saved_root)
     result = gff_performance(predict,answer,region_table,round_value,multiprocess=multiprocess)
-    write_json(result['base_performance'],os.path.join(saved_root,'base_performance.json'))
-    write_json(result['contagion_matrix'].tolist(),os.path.join(saved_root,'contagion_matrix.json'))
-    write_json(result['block_performance'],os.path.join(saved_root,'block_performance.json'))
-    if not result['error_status'].empty:
-        write_gff(result['error_status'], os.path.join(saved_root,'error_status.gff'))
-    write_json(result['site_matched'],os.path.join(saved_root,'site_matched.json'))
-    write_json(result['p_a_abs_diff'],os.path.join(saved_root,'p_a_abs_diff.json'))
-    write_json(result['a_p_abs_diff'],os.path.join(saved_root,'a_p_abs_diff.json'))
-    write_json(result['p_a_abs_diff_exclude_zero'],os.path.join(saved_root,'p_a_abs_diff_exclude_zero.json'))
-    write_json(result['a_p_abs_diff_exclude_zero'],os.path.join(saved_root,'a_p_abs_diff_exclude_zero.json'))
-    result['partners'].to_csv(os.path.join(saved_root,'partners.csv'),index=None)
+    for key,data in result.items():
+        if key == 'error_status':
+            if not result['error_status'].empty:
+                write_gff(result['error_status'], os.path.join(saved_root,'error_status.gff'))
+        elif key == 'partners':
+            result['partners'].to_csv(os.path.join(saved_root,'partners.csv'),index=None)
+        else:
+            write_json(result[key],os.path.join(saved_root,'{}.json'.format(key)))
     plot_site_diff(predict,answer,saved_root)
     plot_site_diff(predict,answer,saved_root,answer_as_ref=False)
 

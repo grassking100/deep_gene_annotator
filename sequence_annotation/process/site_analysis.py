@@ -7,7 +7,7 @@ from argparse import ArgumentParser
 from multiprocessing import Pool
 sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.utils.utils import create_folder, read_gff
-from sequence_annotation.utils.utils import get_gff_with_attribute
+from sequence_annotation.utils.utils import get_gff_with_attribute,write_json
 from sequence_annotation.preprocess.utils import get_gff_with_intron,INTRON_TYPES
 
 def _get_site_diff(ref_sites,compare_sites,include_zero,absolute):
@@ -122,22 +122,22 @@ def get_all_site_matched_ratio(answer, predict, round_value=None):
     ratio = {'precision': {}, 'recall': {}, 'F1': {}}
     ratio['precision']['TSS'] = get_transcript_start_matched_ratio(
         answer, predict, answer_denominator=False)
-    ratio['precision']['CA'] = get_transcript_end_matched_ratio(
+    ratio['precision']['cleavage_site'] = get_transcript_end_matched_ratio(
         answer, predict, answer_denominator=False)
-    ratio['precision']['donor_site'] = get_donor_site_matched_ratio(
+    ratio['precision']['splicing_donor_site'] = get_donor_site_matched_ratio(
         answer, predict, answer_denominator=False)
-    ratio['precision']['acceptor_site'] = get_acceptor_site_matched_ratio(
+    ratio['precision']['splicing_acceptor_site'] = get_acceptor_site_matched_ratio(
         answer, predict, answer_denominator=False)
 
     ratio['recall']['TSS'] = get_transcript_start_matched_ratio(
         answer, predict)
-    ratio['recall']['CA'] = get_transcript_end_matched_ratio(answer, predict)
-    ratio['recall']['donor_site'] = get_donor_site_matched_ratio(
+    ratio['recall']['cleavage_site'] = get_transcript_end_matched_ratio(answer, predict)
+    ratio['recall']['splicing_donor_site'] = get_donor_site_matched_ratio(
         answer, predict)
-    ratio['recall']['acceptor_site'] = get_acceptor_site_matched_ratio(
+    ratio['recall']['splicing_acceptor_site'] = get_acceptor_site_matched_ratio(
         answer, predict)
 
-    for type_ in ['TSS', 'CA', 'donor_site', 'acceptor_site']:
+    for type_ in ['TSS', 'cleavage_site', 'splicing_donor_site', 'splicing_acceptor_site']:
         precision = ratio['precision'][type_]
         recall = ratio['recall'][type_]
         if precision + recall == 0:
@@ -164,7 +164,7 @@ def get_all_site_diff(answer,predict,round_value=None,
         site_diffs['median'] = {}
         site_diffs['mean'] = {}
         site_diffs['mode'] = {}
-    types = ['TSS', 'CA', 'donor_site', 'acceptor_site']
+    types = ['TSS', 'cleavage_site', 'splicing_donor_site', 'splicing_acceptor_site']
     arrs = [start_diff, end_diff, donor_diff, acceptor_diff]
     for type_, arr in zip(types, arrs):
         if return_value:
@@ -192,17 +192,20 @@ def plot_site_diff(predict,answer,saved_root,answer_as_ref=True):
                                    absolute=False,answer_as_ref=answer_as_ref)
     for type_, diffs in site_diffs.items():
         plt.clf()
+        site_txt = ' '.join(type_.split('_'))
         if answer_as_ref:
-            plt.title("The distance between nearest predict {} to real {}".format(type_, type_))
+            plt.title("The distance between closest predicted {} to answer {}".format(site_txt, site_txt))
         else:
-            plt.title("The distance between nearest real {} to predict {}".format(type_, type_))
+            plt.title("The distance between closest answer {} to predicted {}".format(site_txt, site_txt))
         plt.ylabel("Number")
         plt.xlabel("Distance")
         plt.hist(diffs, bins=100, log=True)
         if answer_as_ref:
             plt.savefig(os.path.join(saved_root, "{}_p_a_diff_distribution.png".format(type_)))
+            write_json(diffs,os.path.join(saved_root, "{}_p_a_diff.json".format(type_)))
         else:
             plt.savefig(os.path.join(saved_root, "{}_a_p_diff_distribution.png".format(type_)))
+            write_json(diffs,os.path.join(saved_root, "{}_a_p_diff.json".format(type_)))
     
 def main(predict_path, answer_path, saved_root):
     predict = read_gff(predict_path)

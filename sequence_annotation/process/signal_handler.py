@@ -2,7 +2,7 @@ import os
 import torch
 import pandas as pd
 import deepdish as dd
-from ..utils.utils import read_gff,create_folder
+from ..utils.utils import read_gff,create_folder,read_json,write_json
 from ..preprocess.utils import read_region_table
 from .callback import Callback, Callbacks, set_prefix
 from .convert_signal_to_gff import convert_output_to_gff
@@ -20,9 +20,15 @@ class _SignalSaver(Callback):
         self._answer_root = os.path.join(self._storage_root, '{}answer').format(self._prefix)
         self._output_root = os.path.join(self._storage_root, '{}output').format(self._prefix)
         self._region_id_path = os.path.join(self._saved_root, '{}region_ids.tsv').format(self._prefix)
+        self._output_list_path = os.path.join(self._saved_root, '{}output_path.json').format(self._prefix)
+        self._output_path_json = None
         self._has_finish = True
         self._index = None
-
+        
+    @property
+    def output_list_path(self):
+        return self._output_list_path
+        
     @property
     def storage_root(self):
         return self._storage_root
@@ -52,6 +58,7 @@ class _SignalSaver(Callback):
         self._raw_outputs = []
         self._raw_answers = []
         self._region_ids = []
+        self._output_path_json = []
         self._index = 0
         create_folder(self.storage_root)
         create_folder(self.answer_root)
@@ -61,6 +68,7 @@ class _SignalSaver(Callback):
     def on_batch_end(self, outputs, seq_data, **kwargs):
         if not self._has_finish:
             raw_output_path = os.path.join(self.output_root, '{}raw_output_{}.h5').format(self._prefix,self._index)
+            self._output_path_json.append(raw_output_path)
             raw_outputs = {
                 'outputs': torch.Tensor(outputs),
                 'chrom_ids': seq_data.ids,
@@ -89,12 +97,13 @@ class _SignalSaver(Callback):
         region_ids = {'region_id': self._region_ids}
         pd.DataFrame.from_dict(region_ids).to_csv(self.region_id_path,
                                                   index=None)
+        write_json(self._output_path_json,self.output_list_path)
 
         
 class _SignalGffConverter(Callback):
     def __init__(self,saved_root,region_table_path,
-                 signal_saver_output_root,inference,
-                 ann_vec_gff_converter,prefix=None):
+                 signal_saver_output_root,output_list_path,
+                 inference,ann_vec_gff_converter,prefix=None):
         """
         Parameters:
         ----------
@@ -122,6 +131,7 @@ class _SignalGffConverter(Callback):
         self._signal_saver_output_root = signal_saver_output_root
         self._ann_vec_gff_converter = ann_vec_gff_converter
         self._region_table = read_region_table(self._region_table_path)
+        self._output_list_path = output_list_path
         self._double_strand_gff_path = os.path.join(
             self._saved_root, "{}predict_double_strand.gff3".format(self._prefix))
         self._plus_strand_gff_path = os.path.join(
@@ -142,11 +152,10 @@ class _SignalGffConverter(Callback):
 
     def on_work_end(self, **kwargs):
         raw_predicts = []
-        for name in os.listdir(self._signal_saver_output_root):
-            if name.split('.')[-1] == 'h5':
-                path = os.path.join(self._signal_saver_output_root,name)
-                data = dd.io.load(path)
-                raw_predicts.append(data)
+        for path in read_json(self._output_list_path):
+            #path = os.path.join(self._signal_saver_output_root,path)
+            data = dd.io.load(path)
+            raw_predicts.append(data)
         convert_output_to_gff(raw_predicts, self._region_table,
                               self._plus_strand_gff_path,
                               self._double_strand_gff_path,
@@ -266,6 +275,7 @@ class SignalHandlerBuilder:
             converter = _SignalGffConverter(self.saved_root,
                                             self.region_table_path,
                                             signal_saver.output_root,
+                                            signal_saver.output_list_path,
                                             self.inference,
                                             self.ann_vec_gff_converter,
                                             prefix=self.prefix)

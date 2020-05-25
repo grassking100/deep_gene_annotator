@@ -41,45 +41,49 @@ def get_distances(root, scale):
         os.path.join(
             root,
             'a_p_abs_diff.json'))
-    donor_distance = a_p_abs_diff['mean']['donor_site'] * scale
-    acceptor_distance = a_p_abs_diff['mean']['acceptor_site'] * scale
+    donor_distance = a_p_abs_diff['mean']['splicing_donor_site'] * scale
+    acceptor_distance = a_p_abs_diff['mean']['splicing_acceptor_site'] * scale
     return {'donor_distance': donor_distance,
             'acceptor_distance': acceptor_distance}
 
 
 def get_overall_loss(root):
-    block_performance = read_json(
-        os.path.join(root,'block_performance.json'))
-    base_performance = read_json(
-        os.path.join(root,'base_performance.json'))
-    a_p_abs_diff = read_json(
-        os.path.join(root,'a_p_abs_diff.json'))
-    p_a_abs_diff = read_json(
-        os.path.join(root,'p_a_abs_diff.json'))
-    site_matched = read_json(
-        os.path.join(root,'site_matched.json'))
-    block_f1_keys = ['internal_exon_F1', 'exon_F1', 'intron_F1'] + ['gene_F1', 'intron_chain_F1']
-    base_loss = 1 - base_performance['macro_F1']
-    block_loss = 0
-    site_loss = 0
-    matched_loss = 0
-    for key, value in block_performance.items():
-        if key in block_f1_keys:
-            if str(value) == 'nan':
-                value = 0
-            block_loss += (1 - value)
+    block_performance = read_json(os.path.join(root,'block_performance.json'))
+    base_performance = read_json(os.path.join(root,'base_performance.json'))
+    abs_diff = read_json(os.path.join(root,'abs_diff.json'))
+    site_matched = read_json(os.path.join(root,'site_matched.json'))
+    block_f1_keys = ['internal_exon_F1', 'exon_F1', 'intron_F1']
+    block_chain_f1_keys = ['gene_F1', 'intron_chain_F1']
+    base_f1_keys = ['F1_exon', 'F1_intron', 'F1_other', 'macro_F1']
+    loss = 0
+    count = 0
+    for key in base_f1_keys:
+        value = base_performance[key]
+        loss += (1 - value)
+        count += 1
+    
+    for key in block_f1_keys:
+        value = block_performance[key]
+        loss += (1 - value)
+        count += 1
+            
+    for key in block_chain_f1_keys:
+        value = block_performance[key]
+        if str(value) == 'nan':
+            value = 0
+        loss += (1 - value)
+        count += 1
 
-    for value in a_p_abs_diff['mean'].values():
-        site_loss += np.log10(value + 1)
-    for value in p_a_abs_diff['mean'].values():
-        site_loss += np.log10(value + 1)
+    for value in abs_diff['mean'].values():
+        loss += (1-1/(value + 1))
+        #loss += np.log10(value + 1))
+        count += 1
+
     for value in site_matched['F1'].values():
-        matched_loss += (1 - value)
+        loss += (1 - value)
+        count += 1
 
-    block_loss /= len(block_f1_keys)
-    site_loss /= (len(a_p_abs_diff['mean']) + len(p_a_abs_diff['mean']))
-    matched_loss /= len(site_matched['F1'])
-    loss = base_loss + block_loss + site_loss + matched_loss
+    loss /= count
     return loss
 
 
@@ -151,7 +155,7 @@ class ReviseEvaluator:
 
 def test(trained_root, test_result_root, path_helper):
     loss_path = os.path.join(test_result_root, 'overall_loss.txt')
-    if not os.path.exists(loss_path):
+    if True:#not os.path.exists(loss_path):
         data_path = path_helper.processed_data_path
         answer_path = path_helper.answer_path
         create_folder(test_result_root)
