@@ -524,14 +524,12 @@ def _to_gff_item(item):
         
     return regions
 
-def convert_from_bed_to_gene_with_alt_status_gff(bed,id_table,select_site_by_election=False,allow_partial_gene=False):
-    """Return site-based data"""
-    #Read bed file from path
+def get_cluster_mRNA(bed,id_table):
+    parents = id_table.to_dict('list')
+    parents = dict(zip(parents['transcript_id'],parents['gene_id']))
     parser = BedInfoParser()
     #Convert to zero-base based data
     mRNAs = parser.parse(bed)
-    parents = id_table.to_dict('list')
-    parents = dict(zip(parents['transcript_id'],parents['gene_id']))
     #Cluster mRNAs to genes
     genes = {}
     for mRNA in mRNAs:
@@ -540,7 +538,11 @@ def convert_from_bed_to_gene_with_alt_status_gff(bed,id_table,select_site_by_ele
             genes[parent] = []
         mRNA['parent'] = parent
         genes[parent].append(mRNA)
+    return genes
 
+def convert_from_bed_to_gene_with_alt_status_gff(bed,id_table,select_site_by_election=False,allow_partial_gene=False):
+    """Return site-based data"""
+    genes = get_cluster_mRNA(bed,id_table)
     #Handle each cluster
     gene_info = []
     for gene_id,mRNAs in genes.items():

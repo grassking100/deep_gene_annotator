@@ -372,7 +372,9 @@ class OptunaTrainer:
             write_json(default_hyperparameters, space_config_path)
 
         print("Check max memory")
-        max_model, max_exec = self._creator.create_max()
+        max_result = self._creator.create_max()
+        max_model = max_result['model']
+        max_exec = max_result['executor']
         check_max_memory_usgae(self._saved_root, max_model, max_exec,
                                self._train_data, self._val_data, self._batch_size)
         del max_model

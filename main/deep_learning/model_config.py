@@ -11,7 +11,7 @@ if __name__ == '__main__':
     parser.add_argument("--not_norm_input",action='store_true')
     #CNN config
     parser.add_argument("--customized_cnn_init",default='xavier_uniform_cnn_init')
-    parser.add_argument("--cnn_act",default='NoisyReLU')
+    parser.add_argument("--cnn_act",default='ReLU')
     parser.add_argument("--cnn_out",type=int,default=16)
     parser.add_argument("--cnn_kernel",type=int,default=16)
     parser.add_argument("--cnn_num",type=int,default=4)

@@ -2,7 +2,7 @@ import os
 import sys
 import torch
 from argparse import ArgumentParser
-sys.path.append(os.path.abspath(os.path.dirname(__file__)+"/.."))
+sys.path.append(os.path.dirname(__file__)+"/../..")
 from sequence_annotation.utils.utils import read_json
 from sequence_annotation.process.optuna import OptunaTrainer
 from sequence_annotation.genome_handler.select_data import load_data

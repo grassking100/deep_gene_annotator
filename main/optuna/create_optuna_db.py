@@ -1,7 +1,7 @@
 import os
 import sys
 from argparse import ArgumentParser
-sys.path.append(os.path.dirname(__file__)+"/..")
+sys.path.append(os.path.dirname(__file__)+"/../..")
 from sequence_annotation.process.optuna import add_exist_trials,create_study
 
 def _create_study(output_root,is_maximize):

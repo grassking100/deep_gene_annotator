@@ -393,9 +393,9 @@ class ExecutorBuilder:
         self._patience = 10
         self._factor = 0.5
         self._optim_type = 'Adam'
-        self._set_optimizer_kwargs = None
-        self._set_loss_kwargs = None
-        self._set_lr_scheduler_kwargs = None
+        self._set_optimizer_kwargs = {}
+        self._set_loss_kwargs = {}
+        self._set_lr_scheduler_kwargs = {}
         self.executor_class = None
 
     def get_set_kwargs(self):
@@ -406,8 +406,9 @@ class ExecutorBuilder:
         config['use_native'] = self.use_native
         config['executor_class'] = self.executor_class
         for values in config.values():
-            if 'self' in values:
-                del values['self']
+            if values is not None:
+                if isinstance(values,dict) and 'self' in values:
+                    del values['self']
 
         return config
         

@@ -79,21 +79,22 @@ class SeqAnnBuilder:
             'momentum': 0.1,
             'affine': False
         }
-        self._set_norm_kwargs = None
-        self._set_feature_block_kwargs = None
-        self._set_relation_block_kwargs = None
+        self._set_norm_kwargs = {}
+        self._set_feature_block_kwargs = {}
+        self._set_relation_block_kwargs = {}
         self._use_rnn_norm = False
 
     def get_set_kwargs(self):
         config = {}
         config['norm_block'] = dict(self._set_norm_kwargs)
-        config['feature_block'] = dict(self._set_feature_block_kwargs)
-        config['relation_block'] = dict(self._set_relation_block_kwargs)
+        config['feature_block'] =  dict(self._set_feature_block_kwargs)
+        config['relation_block'] =  dict(self._set_relation_block_kwargs)
         config['use_input_norm'] = self.use_input_norm
         config['use_rnn_norm'] = self._use_rnn_norm
         for values in config.values():
-            if 'self' in values:
-                del values['self']
+            if values is not None:
+                if isinstance(values,dict) and 'self' in values:
+                    del values['self']
 
         return config
         

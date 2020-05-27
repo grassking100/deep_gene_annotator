@@ -2,11 +2,11 @@ import os
 import sys
 import torch
 from argparse import ArgumentParser
-sys.path.append(os.path.dirname(__file__) + "/..")
+sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.genome_handler.select_data import load_data
 from sequence_annotation.process.optuna import OptunaTrainer
 from sequence_annotation.utils.utils import write_json, copy_path, create_folder, read_json
-from main.model_executor_creator import ModelExecutorCreator
+from main.optuna.model_executor_creator import ModelExecutorCreator
 from main.utils import backend_deterministic
 from main.deep_learning.train_model import train
 
@@ -78,7 +78,10 @@ if __name__ == '__main__':
     parser.add_argument("--discard_ratio_min", type=float, default=0)
     parser.add_argument("--discard_ratio_max", type=float, default=0)
     parser.add_argument("--use_lr_scheduler", action='store_true')
-
+    parser.add_argument("--concat",action="store_true")
+    parser.add_argument("--patience",help="The epoch to stop traininig when val_loss "
+                        "is not improving. Dafault value is None, the model won't be "
+                        "stopped by early stopping",type=int,default=None)
     args = parser.parse_args()
     config = dict(vars(args))
     # Create folder

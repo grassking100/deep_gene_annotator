@@ -1,5 +1,5 @@
 """This submodule will handler character sequence and one-hot encoding seqeunce conversion"""
-from ..utils.exception import CodeException, SeqException
+from .exception import CodeException, SeqException
 import numpy as np
 from multiprocessing import Pool
 

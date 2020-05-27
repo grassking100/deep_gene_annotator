@@ -3,7 +3,7 @@ import sys
 import torch
 import pandas as pd
 from argparse import ArgumentParser
-sys.path.append(os.path.dirname(__file__)+"/..")
+sys.path.append(os.path.dirname(__file__)+"/../..")
 from sequence_annotation.utils.process import Process,process_schedule
    
 COMMAND = "python3 "+os.path.dirname(__file__)+"/train_existed_optuna.py -r {} -s {}"

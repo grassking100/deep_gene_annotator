@@ -118,10 +118,8 @@ if __name__ == '__main__':
                         help="Path of input gff file")
     parser.add_argument("-o","--bed_path",required=True,
                         help="Path of output bed file")
-    parser.add_argument("-m","--simple_mode",
-                        action='store_true',
-                        default=False,
-                        help="Use simple mode or not")
+    parser.add_argument("-m","--simple_mode",action='store_true',
+                        default=False,help="Use simple mode or not")
     args = parser.parse_args()
     kwargs = vars(args)
     main(**kwargs)

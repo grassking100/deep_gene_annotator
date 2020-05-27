@@ -6,11 +6,10 @@ import torch
 from torch import nn
 from torch.nn.init import zeros_
 from torch.nn import ReLU
-from .noisy_activation import NoisyReLU
 from .customized_layer import Concat, BasicModel, Add
 from .utils import xavier_uniform_extend_
 
-ACTIVATION_FUNC = {'NoisyReLU': NoisyReLU(), 'ReLU': ReLU()}
+ACTIVATION_FUNC = {'ReLU': ReLU()}
 PADDING_HANDLE = ['valid', 'same', 'partial']
 EPSILON = 1e-32
 
@@ -184,7 +183,7 @@ class CANBlock(BasicModel):
                 "\"after_activation\", but got {}".format(dropout_mode))
             
         if activation_function is None:
-            self.activation_function = NoisyReLU()
+            self.activation_function = ReLU()
         elif isinstance(activation_function, str):
             self.activation_function = ACTIVATION_FUNC[activation_function]
         else:

@@ -28,7 +28,7 @@ def _get_max_target_seqs(seqs,ann_seqs,seq_fig_target=None):
     return seqs[selected_id],ann_seqs[selected_id]
 
 def train(saved_root,epoch,model,executor,train_data,val_data,
-          batch_size=None,patient=None,period=None,
+          batch_size=None,patience=None,period=None,
           discard_ratio_min=None,discard_ratio_max=None,
           augment_up_max=None,augment_down_max=None,
           deterministic=False,other_callbacks=None,
@@ -63,7 +63,7 @@ def train(saved_root,epoch,model,executor,train_data,val_data,
     train_loader = train_gen(data['training'])
     val_loader = val_gen(data['validation'])
     #Train
-    checkpoint_kwargs={'patient':patient,'period':period}
+    checkpoint_kwargs={'patience':patience,'period':period}
     worker = engine.train(model,executor,train_loader,val_loader,
                           epoch=epoch,other_callbacks=other_callbacks,
                           checkpoint_kwargs=checkpoint_kwargs)
@@ -202,8 +202,8 @@ if __name__ == '__main__':
     parser.add_argument("--discard_ratio_min",type=float,default=0)
     parser.add_argument("--discard_ratio_max",type=float,default=0)
     parser.add_argument("-n","--epoch",type=int,default=100)
-    parser.add_argument("-p","--period",default=1,type=int)
-    parser.add_argument("--patient",help="The epoch to stop traininig when val_loss "
+    parser.add_argument("--period",default=1,type=int)
+    parser.add_argument("--patience",help="The epoch to stop traininig when val_loss "
                         "is not improving. Dafault value is None, the model won't be "
                         "stopped by early stopping",type=int,default=None)
     parser.add_argument("-g","--gpu_id",type=int,default=0,help="GPU to used")

@@ -176,7 +176,7 @@ class TrainWorker(Worker):
         if self.root is not None:
             for key in [
                     'train_callbacks', 'val_callbacks', 'other_callbacks',
-                    'root', '_epoch', 'executor', 'checkpoint_kwargs'
+                    'root', '_epoch', 'checkpoint_kwargs'
             ]:
                 attr = getattr(self, key)
                 if hasattr(attr, 'get_config'):
@@ -332,7 +332,7 @@ class TestWorker(Worker):
 
     def _save_setting(self):
         if self.root is not None:
-            for key in ['callbacks', 'executor', 'root']:
+            for key in ['callbacks', 'root']:
                 attr = getattr(self, key)
                 if hasattr(attr, 'get_config'):
                     attr = attr.get_config()
@@ -396,7 +396,7 @@ class PredictWorker(Worker):
 
     def _save_setting(self):
         if self.root is not None:
-            for key in ['callbacks', 'executor', 'root']:
+            for key in ['callbacks', 'root']:
                 attr = getattr(self, key)
                 if hasattr(attr, 'get_config'):
                     attr = attr.get_config()

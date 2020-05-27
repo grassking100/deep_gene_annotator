@@ -94,26 +94,26 @@ def _write_status(saved_path, epoch, weights_path):
 
 
 def _write_best_status(saved_path, best_epoch, best_target, weights_path,
-                       patient):
+                       patience):
     relative_path = weights_path.split('/')[-1]
     best_status = {
         'best_epoch': best_epoch,
         'relative_path': relative_path,
         "path": weights_path,
         'best_target': best_target,
-        'patient': patient,
-        'formula': '(self._counter-self.best_epoch) >= self.patient',
+        'patience': patience,
+        'formula': '(self._counter-self.best_epoch) >= self.patience',
         "record_time": get_time_str()
     }
     write_json(best_status, saved_path)
 
 
 def _save_best(model_path, status_path, best_epoch, best_target, model_weights,
-               patient):
+               patience):
     print("Save best model of epoch {} at {}".format(best_epoch, model_path))
     torch.save(model_weights, model_path)
     _write_best_status(status_path, best_epoch, best_target, model_path,
-                       patient)
+                       patience)
 
 
 class _Checkpoint(Callback):
@@ -146,7 +146,7 @@ class ModelCheckpoint(_Checkpoint):
                  root,
                  target=None,
                  optimize_min=True,
-                 patient=None,
+                 patience=None,
                  period=None,
                  save_best_weights=False,
                  restore_best_weights=False,
@@ -154,7 +154,7 @@ class ModelCheckpoint(_Checkpoint):
         super().__init__(root, period=period)
         self.target = target or 'val_loss'
         self.optimize_min = optimize_min
-        self.patient = patient
+        self.patience = patience
         self.save_best_weights = save_best_weights
         self.restore_best_weights = restore_best_weights
         self._counter = None
@@ -192,15 +192,15 @@ class ModelCheckpoint(_Checkpoint):
         return paths
 
     def should_stop(self):
-        if self.patient is not None:
-            return (self._counter - self.best_epoch) >= self.patient
+        if self.patience is not None:
+            return (self._counter - self.best_epoch) >= self.patience
         else:
             return False
 
     def _stop_worker(self):
         print("{} stop worker because {}-{}>={}".format(
             self.__class__.__name__, self._counter, self.best_epoch,
-            self.patient))
+            self.patience))
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=WorkerProtectedWarning)
             self._worker.is_running = False
@@ -259,7 +259,7 @@ class ModelCheckpoint(_Checkpoint):
         config = super().get_config(**kwargs)
         config['target'] = self.target
         config['optimize_min'] = self.optimize_min
-        config['patient'] = self.patient
+        config['patience'] = self.patience
         config['save_best_weights'] = self.save_best_weights
         config['restore_best_weights'] = self.restore_best_weights
         config['explicit_period'] = self.explicit_period
@@ -303,7 +303,7 @@ class ModelCheckpoint(_Checkpoint):
             if self.save_best_weights:
                 _save_best(self.best_model_path, self.best_status_path,
                            self.best_epoch, self._best_result,
-                           self._model_weights, self.patient)
+                           self._model_weights, self.patience)
 
         if self.should_stop():
             self._stop_worker()
@@ -336,7 +336,7 @@ class ModelCheckpoint(_Checkpoint):
                 self._worker.model.load_state_dict(self._model_weights)
             _save_best(self.best_model_path, self.best_status_path,
                        self.best_epoch, self._best_result,
-                       self._model_weights, self.patient)
+                       self._model_weights, self.patience)
 
 
 class ExecutorCheckpoint(_Checkpoint):
@@ -506,7 +506,7 @@ class Checkpoint(Callback):
 
         for path_dict in self.weights_status_paths:
             for dict_ in path_dict.values():
-                patient = None
+                patience = None
                 status_path = dict_['status']
                 weights_path = dict_['weights']
                 if os.path.exists(status_path):
@@ -515,8 +515,8 @@ class Checkpoint(Callback):
                     if is_best_related:
                         epoch = status['best_epoch']
                         best_target = status['best_target']
-                        if 'patient' in status:
-                            patient = status['patient']
+                        if 'patience' in status:
+                            patience = status['patience']
                     else:
                         epoch = status['epoch']
 
@@ -535,7 +535,7 @@ class Checkpoint(Callback):
                         if is_best_related:
                             _write_best_status(new_status_path, epoch,
                                                best_target, new_weights_path,
-                                               patient)
+                                               patience)
                         else:
                             _write_status(new_status_path, epoch,
                                           new_weights_path)
@@ -629,7 +629,7 @@ def build_checkpoint(root,
                      only_recorder=False,
                      force_reset=None,
                      monitor_target=None,
-                     patient=None,
+                     patience=None,
                      period=None,
                      is_train_mode=False):
     if is_train_mode:
@@ -643,7 +643,7 @@ def build_checkpoint(root,
     else:
         best_record_path = os.path.join(root, 'best_record.json')
         model_checkpoint = ModelCheckpoint(target=monitor_target,
-                                           patient=patient,
+                                           patience=patience,
                                            save_best_weights=True,
                                            restore_best_weights=True,
                                            root=root,
