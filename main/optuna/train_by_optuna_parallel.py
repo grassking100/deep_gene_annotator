@@ -17,10 +17,7 @@ def get_n_completed_trial(study):
     else:
         return sum(df['state'] == "COMPLETE")
     
-def _append_command(command,appended_command=None,is_maximize=False,by_grid_search=False):
-    if by_grid_search:
-        command += ' --by_grid_search'
-    
+def _append_command(command,appended_command=None,is_maximize=False):
     if is_maximize:
         command += ' --is_maximize'
 
@@ -31,7 +28,7 @@ def _append_command(command,appended_command=None,is_maximize=False,by_grid_sear
     
 def main(saved_root,train_data_path,val_data_path,epoch,batch_size,
          n_startup_trials,n_total,gpu_ids,
-         appended_command=None,is_maximize=False,by_grid_search=False):
+         appended_command=None,is_maximize=False):
 
     batch_status = None
     optimized_status = None
@@ -62,8 +59,7 @@ def main(saved_root,train_data_path,val_data_path,epoch,batch_size,
     command = COMMAND.format(saved_root,train_data_path,val_data_path,epoch,
                              batch_size,1,n_startup_trials)
     
-    command = _append_command(command,appended_command=appended_command,
-                              by_grid_search=by_grid_search,is_maximize=is_maximize)
+    command = _append_command(command,appended_command=appended_command,is_maximize=is_maximize)
     
     direction = 'maximize' if is_maximize else 'minimize'
     study = create_study(saved_root,direction=direction,load_if_exists=True)
@@ -117,7 +113,6 @@ if __name__ == '__main__':
     parser.add_argument("-i","--n_startup_trials",type=int,default=0)
     parser.add_argument("-g","--gpu_ids",type=lambda x: [int(item) for item in x.split(',')],
                         default=list(range(torch.cuda.device_count())),help="GPUs to used")
-    parser.add_argument("--by_grid_search",action='store_true')    
     parser.add_argument("--is_maximize",action='store_true')
     parser.add_argument("--appended_command",type=str,default=None)
 

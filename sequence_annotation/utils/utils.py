@@ -364,7 +364,8 @@ def read_fasta(path, check_unique_id=True):
     with open(path) as file:
         fasta_sequences = SeqIO.parse(file, 'fasta')
         for fasta in fasta_sequences:
-            name, seq = fasta.id, str(fasta.seq)
+            seq = str(fasta.seq)
+            name = fasta.description
             if check_unique_id and name in data:
                 raise Exception("Duplicate id {}".format(name))
             data[name] = seq
