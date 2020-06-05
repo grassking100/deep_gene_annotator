@@ -1,6 +1,6 @@
 import os
 import unittest
-from sequence_annotation.preprocess.convert_transcript_to_gene_with_alt_status_gff import main
+from sequence_annotation.preprocess.create_gene_with_alt_status_gff import main
 from sequence_annotation.utils.utils import read_gff
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -21,7 +21,6 @@ class TestAltStatusConverter(unittest.TestCase):
         answer = read_gff(answer_gff_path).sort_values(
             ['chr', 'strand', 'start', 'end',
              'feature']).reset_index(drop=True)
-
         self.assertTrue(answer.equals(output),
                         "Something wrong happen in {}".format(name))
         os.remove(output_gff_path)

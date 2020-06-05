@@ -193,7 +193,7 @@ splitted_root=$saved_root/split
 #fi
 
 #if [ ! -e "$splitted_root/single_strand_data/split_with_strand/count.csv" ]; then
-    echo "split ss"
+    #echo "split ss"
     bash $bash_root/region_select_split.sh -g $genome_path -t $id_convert_table_path -p $processed_root -o $splitted_root -s
 #fi
 

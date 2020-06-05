@@ -3,12 +3,10 @@ import abc
 import numpy as np
 import torch
 from ..utils.utils import create_folder, write_json, BASIC_GENE_ANN_TYPES, get_time_str
-from ..utils.utils import get_file_name, read_json,write_fasta,BASIC_SIMPLIFY_MAP
+from ..utils.utils import get_file_name, read_json
 from ..utils.seq_converter import SeqConverter
-from ..genome_handler.ann_genome_processor import class_count
 from ..genome_handler.ann_seq_processor import seq2vecs
 from ..genome_handler.seq_container import AnnSeqContainer
-from ..genome_handler.ann_genome_processor import simplify_genome
 from .data_processor import AnnSeqProcessor
 from .utils import param_num
 from .worker import TrainWorker, TestWorker,PredictWorker
@@ -16,7 +14,7 @@ from .tensorboard_writer import TensorboardWriter
 from .callback import CategoricalMetric, TensorboardCallback, LearningRateHolder
 from .callback import SeqFigCallback, Callbacks, ContagionMatrix
 from .signal_handler import SignalHandlerBuilder
-from .data_generator import SeqGenerator, seq_collate_wrapper
+from .data_generator import SeqGenerator, SeqCollateWrapper
 from .convert_signal_to_gff import build_ann_vec_gff_converter
 from .model import get_model
 from .executor import get_executor
@@ -332,7 +330,7 @@ def check_max_memory_usgae(saved_root, model, executor, train_data, val_data,
         'validation':{'inputs': val_seqs, 'answers': val_ann_seqs}
     }
     data = engine.process_data(raw_data)
-    train_gen = engine.create_data_gen(seq_collate_wrapper(concat=concat))
+    train_gen = engine.create_data_gen(SeqCollateWrapper(concat=concat))
     val_gen = engine.create_basic_data_gen()
     train_loader = train_gen(data['training'])
     val_loader = val_gen(data['validation'])

@@ -1,47 +1,44 @@
 import os,sys
 sys.path.append(os.path.dirname(__file__)+"/../..")
-import pandas as pd
 from argparse import ArgumentParser
-from sequence_annotation.utils.utils import read_bed
+from sequence_annotation.utils.utils import read_bed,write_json
+from sequence_annotation.preprocess.bed2gff import bed2gff
+from sequence_annotation.preprocess.site_analysis import get_transcript_start_diff,get_transcript_end_diff,get_stats
+from sequence_annotation.preprocess.get_id_table import get_id_convert_dict
 
-def main(compared_bed_path,comparing_bed_path,output_path):
-    compared_bed = read_bed(compared_bed_path)
-    comparing_bed = read_bed(comparing_bed_path)
-    compared_bed_group = compared_bed.groupby('id')
-    comparing_bed_group = comparing_bed.groupby('id')
-    strands = set(list(compared_bed['strand'])+list(comparing_bed['strand']))
-    if strands != set(['+','-']):
-        raise Exception()
+def coordinate_compare(answer,predict,round_value=None,**kwargs):
+    start_diff = get_transcript_start_diff(answer, predict, **kwargs)
+    end_diff = get_transcript_end_diff(answer, predict, **kwargs)
+    site_diffs = {}
+    site_diffs['TSS'] = get_stats(start_diff,round_value=round_value)
+    site_diffs['cleavage_site'] = get_stats(end_diff,round_value=round_value)
+    return site_diffs
 
-    result = []
-    for id_,compared_item in compared_bed_group:
-        if id_ not in comparing_bed_group.groups.keys():
-            result.append({'id':id_,'tss_diff':None,'cleavage_site_diff':None})
-        else:
-            comparing_item = comparing_bed_group.get_group(id_)
-            if len(compared_item)==1 and len(comparing_item)==1:
-                strand = list(compared_item['strand'])[0]
-                start_diff = list(comparing_item['start'])[0]-list(compared_item['start'])[0]
-                end_diff = list(comparing_item['end'])[0]-list(compared_item['end'])[0]
-                if strand == '+':
-                    tss_diff = start_diff
-                    cs_diff = end_diff
-                else:
-                    tss_diff = -end_diff
-                    cs_diff = -start_diff
-                result.append({'id':id_,'tss_diff':tss_diff,'cleavage_site_diff':cs_diff})
-            else:
-                raise Exception()
-    result = pd.DataFrame.from_dict(result)[['id','tss_diff','cleavage_site_diff']]
-    result.to_csv(output_path,sep='\t',index=None)
+def main(reference_bed_path,redefined_bed_path,output_path,id_table_path):
+    
+    id_table = get_id_convert_dict(id_table_path)
+    reference = read_bed(reference_bed_path)
+    redefined = read_bed(redefined_bed_path)
+    reference = bed2gff(reference,id_table)
+    redefined = bed2gff(redefined,id_table)
+    
+    result = {}
+    result['abs_reference_as_ref'] = coordinate_compare(reference,redefined)
+    result['abs_redefined_as_ref'] = coordinate_compare(reference,redefined,answer_as_ref=False)
+    result['reference_as_ref'] = coordinate_compare(reference,redefined,absolute=False)
+    result['redefined_as_ref'] = coordinate_compare(reference,redefined,absolute=False,answer_as_ref=False)
+    write_json(result,output_path)
 
 if __name__ == "__main__":
     #Reading arguments
     parser = ArgumentParser(description="This program will compare tss and cs between two files")
-    parser.add_argument("-r", "--compared_bed_path",help="Bed file to compared",required=True)
-    parser.add_argument("-c", "--comparing_bed_path",help="Bed file to comparing",required=True)
+    parser.add_argument("-r", "--reference_bed_path",help="Bed file to compared",required=True)
+    parser.add_argument("-c", "--redefined_bed_path",help="Bed file to comparing",required=True)
     parser.add_argument("-o", "--output_path",help="Path of compared result",required=True)
-
+    parser.add_argument("-t", "--id_table_path",required=True)
+    
     args = parser.parse_args()
-    main(args.compared_bed_path,args.comparing_bed_path,args.output_path)
+    kwargs = vars(args)
+    main(**kwargs)
+
     

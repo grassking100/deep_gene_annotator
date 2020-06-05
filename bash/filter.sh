@@ -103,6 +103,7 @@ bash_root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 script_root=$bash_root/..
 preprocess_main_root=$script_root/sequence_annotation/preprocess
 visual_main_root=$script_root/sequence_annotation/visual
+utils_root=$script_root/sequence_annotation/utils
 
 transcript_id_path=$saved_root/transcript_id.txt
 python3 $preprocess_main_root/get_id.py -i $transcript_bed_path -o $transcript_id_path
@@ -165,7 +166,7 @@ if [ "$preserved_gene_id_path" ]; then
     intersection_preserved_id_path=$saved_root/intersection_preserved_id.txt
     preserved_transcript_id_path=$saved_root/preserved_transcript_id.txt
     python3 $preprocess_main_root/get_transcript_id.py -i $preserved_gene_id_path -o $preserved_transcript_id_path -t $id_convert_table_path
-    python3 $preprocess_main_root/get_intersection_id.py -o $intersection_preserved_id_path -i $transcript_id_path,$preserved_transcript_id_path -n "All,$preserved_id_name"
+    python3 $utils_root/get_intersection_id.py -o $intersection_preserved_id_path -i $transcript_id_path,$preserved_transcript_id_path -n "All,$preserved_id_name"
 fi
 
 echo "Step 6: Get data which its gene passed filters"

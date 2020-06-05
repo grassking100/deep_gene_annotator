@@ -4,8 +4,6 @@ import numpy as np
 import deepdish as dd
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__)+"/../..")
-from sequence_annotation.utils.utils import read_fasta
-from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
 from sequence_annotation.genome_handler.sequence import AnnSequence
 from sequence_annotation.process.data_processor import AnnSeqProcessor

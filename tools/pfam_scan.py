@@ -3,7 +3,7 @@ import sys
 import pandas as pd
 from argparse import ArgumentParser
 from multiprocessing import Pool
-sys.path.append('sequence_annotation')
+sys.path.append(os.path.dirname(__file__) + "/..")
 from sequence_annotation.utils.utils import read_fasta,create_folder,write_fasta,write_json
 
 def pfam_scan(pfam_scan_path,fasta_path,db_root,output_path):
@@ -56,8 +56,7 @@ def main(fasta_path,db_root,output_root,hmmer_src_root,pfam_scan_root):
 
     with Pool(processes=40) as pool:
         results = pool.starmap(run_pfam_scan, kwargs)
-        
-    counts = [item[1] for item in results]
+
     result_df = pd.DataFrame.from_dict(results)
     result_df.columns=['id','count']
     result_df = result_df.sort_values('id')

@@ -10,7 +10,6 @@ sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES, create_folder
 from sequence_annotation.utils.utils import read_gff, read_json, write_gff, write_json
 from sequence_annotation.genome_handler.select_data import load_data
-from sequence_annotation.genome_handler.ann_genome_processor import simplify_genome
 from sequence_annotation.preprocess.utils import get_data_names,read_region_table
 from sequence_annotation.preprocess.length_gaussian_modeling import norm_fit_log10
 from sequence_annotation.preprocess.utils import get_gff_with_intergenic_region
@@ -349,7 +348,6 @@ def main(raw_data_root, trained_project_root, output_root,fold_name=None):
         path_helper = PathHelper(raw_data_root, processed_root)
         evaluator = Evaluator(path_helper.answer_path,path_helper.region_table_path)
         evaluator.evaluate(predicted_path,val_root)
-        val_name = path_helper.train_val_name
         
     else:
         gff = []
@@ -392,7 +390,7 @@ def main(raw_data_root, trained_project_root, output_root,fold_name=None):
             val_root = os.path.join(predicted_root, trained_name, 'testing')
             revise_evaluator = ReviseEvaluator(path_helper,val_root,multiprocess=40)
             torch.cuda.empty_cache()
-            loss = revise_evaluator.process(revised_root, **best_reviser_config)
+            revise_evaluator.process(revised_root, **best_reviser_config)
             torch.cuda.empty_cache()
     else:
         path_helper = PathHelper(raw_data_root, processed_root,fold_name,'testing')
@@ -400,7 +398,7 @@ def main(raw_data_root, trained_project_root, output_root,fold_name=None):
         val_root = os.path.join(output_root, 'testing')
         revise_evaluator = ReviseEvaluator(path_helper,val_root,multiprocess=40)
         torch.cuda.empty_cache()
-        loss = revise_evaluator.process(revised_root, **best_reviser_config)
+        revise_evaluator.process(revised_root, **best_reviser_config)
         torch.cuda.empty_cache()
 
 

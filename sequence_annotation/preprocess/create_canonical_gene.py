@@ -6,7 +6,7 @@ from sequence_annotation.utils.utils import write_bed, get_gff_with_attribute, r
 from sequence_annotation.preprocess.get_id_table import read_id_table
 from sequence_annotation.preprocess.gff2bed import gff_info2bed_info,gff2bed
 from sequence_annotation.preprocess.bed2gff import bed2gff
-from sequence_annotation.preprocess.utils import EXON_TYPES,RNA_TYPES
+from sequence_annotation.preprocess.utils import EXON_TYPES,RNA_TYPES,SUBEXON_TYPES
 from sequence_annotation.preprocess.get_id_table import get_id_table,convert_id_table_to_dict,write_id_table
 from sequence_annotation.preprocess.create_gene_with_alt_status_gff import convert_from_gff_to_gene_with_alt_status_gff
 from sequence_annotation.preprocess.create_gene_with_alt_status_gff import convert_from_bed_to_gene_with_alt_status_gff
@@ -34,12 +34,13 @@ def create_gene_gff_from_gene_alt_status_gff(gene_with_alt_status_gff):
     id_convert_dict = convert_id_table_to_dict(id_table)
     bed = create_gene_bed_from_exon_gff(gene_with_alt_status_gff)
     gff = bed2gff(bed,id_convert_dict)
+    gff = gff[~gff['feature'].isin(SUBEXON_TYPES)]
     return gff
 
 
-def main(input_path,output_status_path,
-         output_gff_path,output_bed_path,
-         output_id_table_path,id_table_path=None,**kwargs):
+def main(input_path,output_gff_path,
+         output_status_path=None,output_bed_path=None,
+         output_id_table_path=None,id_table_path=None,**kwargs):
     if 'bed' in input_path.split('.')[-1]:
         if id_table_path is None:
             raise Exception("If input data is bed format, then the id_table_path must be provided")
@@ -53,10 +54,14 @@ def main(input_path,output_status_path,
     gene_bed = gff2bed(gene_gff)
     gene_id_table = get_id_table(gene_gff)
     
-    write_gff(status_gff,output_status_path)
     write_gff(gene_gff,output_gff_path)
-    write_bed(gene_bed,args.output_bed_path)
-    write_id_table(gene_id_table,output_id_table_path)
+    
+    if output_status_path is not None:
+        write_gff(status_gff,output_status_path)
+    if output_bed_path is not None:
+        write_bed(gene_bed,args.output_bed_path)
+    if output_id_table_path is not None:
+        write_id_table(gene_id_table,output_id_table_path)
     
     
 if __name__ == "__main__":

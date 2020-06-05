@@ -29,15 +29,15 @@ class ModelExecutorCreator(IModelExecutorCreator):
         config = {}
         #CNN
         if self._has_cnn:
-            config['kernel_size'] = {'lb':257,'ub':513,'step':128,'value':None}#128*2+1~128*4+1
-            config['cnn_out'] = {'lb':8,'ub':16,'step':4,'value':None}
-            config['cnn_num'] = {'lb':8,'ub':16,'step':4,'value':None}
+            config['kernel_size'] = {'lb':513,'ub':2049,'step':512,'value':None}#128*2+1~128*4+1
+            config['cnn_out'] = {'lb':4,'ub':16,'step':4,'value':None}
+            config['cnn_num'] = {'lb':4,'ub':16,'step':4,'value':None}
         else:
             config['cnn_num'] = {'value':0}
         #RNN
         config['relation_type'] = {'options':['basic','basic_hier','hier'],'value':None}
-        config['rnn_num'] = {'lb':2,'ub':4,'value':None}
-        config['rnn_hidden'] = {'lb':96,'ub':160,'step':32,'value':None}
+        config['rnn_num'] = {'lb':1,'ub':4,'value':None}
+        config['rnn_hidden'] = {'lb':64,'ub':160,'step':32,'value':None}
         config['is_rnn_filter'] = {'value':False}
         config['rnn_type'] = {'value':'GRU'}
         #Executor
@@ -115,7 +115,7 @@ class ModelExecutorCreator(IModelExecutorCreator):
                 out_channels = 2
 
             model_builder.set_relation_block(rnn_type=rnn_type,is_gru=is_gru,
-                                                out_channels=out_channels,output_act=output_act)
+                                             out_channels=out_channels,output_act=output_act)
 
             executor_builder.use_native = relation_type == 'basic'
         else:

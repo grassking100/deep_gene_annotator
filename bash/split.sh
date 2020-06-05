@@ -82,6 +82,7 @@ fi
 bash_root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 script_root=$bash_root/..
 preprocess_main_root=$script_root/sequence_annotation/preprocess
+utils_root=$script_root/sequence_annotation/utils
 mkdir -p $saved_root
 
 result_num=$(wc -l < $processed_root/result/selected_region.fasta )
@@ -176,7 +177,7 @@ if  (( $result_num > 0 )) ; then
             -o $part_ds_canonical_gff_path --source ordinal_id_with_strand --target ordinal_id_wo_strand
         fi
 
-        python3 $preprocess_main_root/get_subfasta.py -i $output_region_fasta_root -d $source_id_path \
+        python3 $utils_root/get_subfasta.py -i $output_region_fasta_root -d $source_id_path \
         -o $fasta_root/$file_name.fasta
         samtools faidx $fasta_root/$file_name.fasta
         

@@ -15,10 +15,10 @@ class SeqAnnModel(BasicModel):
 
         if self.feature_block is not None:
             self.in_channels = self.feature_block.in_channels
+        else:
+            self.in_channels = self.relation_block.in_channels
 
         self.relation_block = relation_block
-        self.in_channels = self.relation_block.in_channels
-
         self.out_channels = self.relation_block.out_channels
         self.reset_parameters()
 

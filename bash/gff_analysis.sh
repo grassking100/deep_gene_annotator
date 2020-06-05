@@ -87,6 +87,7 @@ bash_root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 source_root=$bash_root/..
 preprocess_main_root=$source_root/sequence_annotation/preprocess
 visual_main_root=$source_root/sequence_annotation/visual
+utils_root=$source_root/sequence_annotation/utils
 
 bed_root=$output_root/bed
 signal_stats_root=$output_root/signal_stats
@@ -122,10 +123,10 @@ python3 $visual_main_root/plot_composition.py -i $fasta_root/$cs_path.fasta -s "
 python3 $visual_main_root/plot_composition.py -i $fasta_root/$donor_path.fasta -s "-$donor_radius" --title "Nucleotide composition around splicing donor site" -o $composition_root/$donor_path.png
 python3 $visual_main_root/plot_composition.py -i $fasta_root/$acceptor_path.fasta -s "-$acceptor_radius" --title "Nucleotide composition around splicing acceptor site" -o $composition_root/$acceptor_path.png
 
-python3 $preprocess_main_root/motif_count.py -i $fasta_root/$tss_signal_path.fasta -o $signal_stats_root/tss_signal_stats.tsv
-python3 $preprocess_main_root/motif_count.py -i $fasta_root/$cleavage_site_signal_path.fasta -o $signal_stats_root/cs_signal_stats.tsv
-python3 $preprocess_main_root/motif_count.py -i $fasta_root/$donor_signal_path.fasta -o $signal_stats_root/donor_signal_stats.tsv
-python3 $preprocess_main_root/motif_count.py -i $fasta_root/$acceptor_signal_path.fasta -o $signal_stats_root/acceptor_signal_stats.tsv
+python3 $utils_root/motif_count.py -i $fasta_root/$tss_signal_path.fasta -o $signal_stats_root/tss_signal_stats.tsv
+python3 $utils_root/motif_count.py -i $fasta_root/$cleavage_site_signal_path.fasta -o $signal_stats_root/cs_signal_stats.tsv
+python3 $utils_root/motif_count.py -i $fasta_root/$donor_signal_path.fasta -o $signal_stats_root/donor_signal_stats.tsv
+python3 $utils_root/motif_count.py -i $fasta_root/$acceptor_signal_path.fasta -o $signal_stats_root/acceptor_signal_stats.tsv
 
 python3 $preprocess_main_root/gff_feature_stats.py -i $gff_path -r $region_table_path -c $chrom_source -o $output_root/feature_stats
 

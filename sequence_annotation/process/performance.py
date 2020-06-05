@@ -14,8 +14,9 @@ from sequence_annotation.genome_handler.ann_seq_processor import get_background,
 from sequence_annotation.preprocess.utils import read_region_table,get_gff_with_intron
 from sequence_annotation.preprocess.utils import EXON_TYPES, RNA_TYPES,INTRON_TYPES,GENE_TYPES
 from sequence_annotation.preprocess.get_id_table import get_id_table,convert_id_table_to_dict
+from sequence_annotation.preprocess.site_analysis import get_all_site_diff,get_all_site_matched_ratio,plot_site_diff
 from sequence_annotation.process.metric import calculate_metric,contagion_matrix,categorical_metric
-from sequence_annotation.process.site_analysis import get_all_site_diff,get_all_site_matched_ratio,plot_site_diff
+
 
 pd.set_option('mode.chained_assignment', 'raise')
 
@@ -335,8 +336,6 @@ def gff_performance(predict,answer,region_table,round_value=None,multiprocess=No
     ordinal_id_wo_strands = region_table['ordinal_id_wo_strand']
     lengths = region_table['length']
     strands = region_table['strand']
-    predict_coord = predict['chr'] + "_"+predict['strand']
-    answer_coord = answer['chr'] + "_"+answer['strand']
     kwarg_list = []
     for index in range(len(region_table)):
         chrom = ordinal_id_wo_strands[index]

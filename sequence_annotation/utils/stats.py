@@ -1,8 +1,31 @@
 import numpy as np
 import pandas as pd
+from scipy import stats
 from scipy.stats import median_absolute_deviation
 from rpy2 import robjects
 from rpy2.robjects.packages import importr
+
+def get_stats(arr,round_value=None):
+    arr = np.array(arr)
+    median = np.nanmedian(arr)
+    mean = np.nanmean(arr)
+    mode = stats.mode(arr,nan_policy='omit')[0][0]
+    max_ = np.nanmax(arr)
+    min_ = np.nanmin(arr)
+    std = np.nanstd(arr)
+    stats_result = {}
+    if round_value is not None:
+        mean = round(mean, round_value)
+        std = round(std, round_value)
+    stats_result['median'] = float(median)
+    stats_result['mean'] = float(mean)
+    stats_result['mode'] = float(mode)
+    stats_result['max'] = float(max_)
+    stats_result['min'] = float(min_)
+    stats_result['std'] = float(std)
+    stats_result['num'] = len(arr)
+    stats_result['valid_num'] = len(arr[~np.isnan(arr)])
+    return stats_result
 
 
 def mad_threshold(values, coef=None):

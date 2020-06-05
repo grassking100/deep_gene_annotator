@@ -101,16 +101,17 @@ bash_root=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 script_root=$bash_root/..
 preprocess_main_root=$script_root/sequence_annotation/preprocess
 visual_main_root=$script_root/sequence_annotation/visual
+utils_root=$script_root/sequence_annotation/utils
 coordinate_consist_bed_path=$saved_root/coordinate_consist.bed
 
 echo "Step 1: Calculate distance between sites"
 if [ ! -e "$site_diff_root/site_diff.tsv" ]; then
     python3 $preprocess_main_root/calculate_distance_between_sites.py -b $transcript_bed_path -t $tss_path \
-    -c $cleavage_site_path -s $site_diff_root
+    -c $cleavage_site_path -o $site_diff_root
 fi
 
 echo "Step 2: Preprocess raw data"
-python3 $preprocess_main_root/get_external_UTR.py -b $transcript_bed_path -s $saved_root
+python3 $utils_root/get_external_UTR.py -b $transcript_bed_path -s $saved_root
 
 echo "Step 3: Classify TSS and CS data to belonging site"
 python3 $preprocess_main_root/classify_site.py -o $transcript_bed_path  -g $tss_path -c $cleavage_site_path \
@@ -139,32 +140,22 @@ python3 $preprocess_main_root/create_coordinate_data.py -g $saved_root/safe_tss.
 python3 $preprocess_main_root/create_coordinate_bed.py -i $transcript_bed_path \
 -c $saved_root/coordinate.gff3 -t $id_convert_table_path -o $coordinate_consist_bed_path
 
-python3 $preprocess_main_root/coordinate_compare.py -r $transcript_bed_path -c $coordinate_consist_bed_path \
--o $saved_root/coordinate_compared.tsv
+python3 $preprocess_main_root/coordinate_compare.py -r $transcript_bed_path -c $coordinate_consist_bed_path -t $id_convert_table_path \
+-o $saved_root/coordinate_compared.json
 
 coding_transcript_id_path=$saved_root/coding_transcript_id.txt
 safe_tss_transcript_id_path=$saved_root/safe_tss_transcript_id.txt
 safe_cs_transcript_id_path=$saved_root/safe_cs_transcript_id.txt
 venn_path=$saved_root/venn.png
 
-python3 $preprocess_main_root/get_coding_id.py -i $transcript_bed_path -o $coding_transcript_id_path
+python3 $utils_root/get_coding_id.py -i $transcript_bed_path -o $coding_transcript_id_path
 
-python3 $preprocess_main_root/get_intersection_id.py -v $venn_path -i $coding_transcript_id_path,$safe_tss_transcript_id_path,$safe_cs_transcript_id_path -n "Coding,including TSS,including CS"
+python3 $utils_root/get_intersection_id.py -v $venn_path -i $coding_transcript_id_path,$safe_tss_transcript_id_path,$safe_cs_transcript_id_path -n "Coding,including TSS,including CS"
 
 num_input=$(wc -l < $transcript_bed_path )
-num_raw_tss=$(sed "1d"  $tss_path | wc -l )
-num_raw_cs=$(sed "1d" $cleavage_site_path | wc -l)
-num_external_five_UTR_tss=$(sed "1d" $saved_root/external_five_UTR_tss.gff3 | wc -l)
-num_external_three_UTR_cleavage_site=$(sed "1d" $saved_root/external_three_UTR_cleavage_site.gff3 | wc -l)
-num_safe_tss=$(sed "1d" $saved_root/safe_tss.gff3 | wc -l)
-num_safe_cs=$(sed "1d" $saved_root/safe_cs.gff3 | wc -l)
 num_consist=$(wc -l < $coordinate_consist_bed_path )
    
 echo "Input mRNA count: $num_input" > $saved_root/preprocess.stats
-echo "Evidence TSS count: $num_raw_tss" >> $saved_root/preprocess.stats
-echo "Evidence CS count: $num_raw_cs" >> $saved_root/preprocess.stats
-echo "Evidence TSS located at external 5' UTR: $num_external_five_UTR_tss" >> $saved_root/preprocess.stats
-echo "Evidence CS located at external 3' UTR count: $num_external_three_UTR_cleavage_site" >> $saved_root/preprocess.stats
-echo "Evidence TSS located at external 5' UTR and is most significant signal: $num_safe_tss" >> $saved_root/preprocess.stats
-echo "Evidence CS located at external 3' UTR and is most significant signal: $num_safe_cs" >> $saved_root/preprocess.stats
 echo "The number of mRNAs with both TSSs and CSs site supported and are passed by filter: $num_consist" >> $saved_root/preprocess.stats
+
+python3 $preprocess_main_root/count_evidence.py -i $saved_root -o $saved_root/evidence_stats.json

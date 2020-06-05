@@ -67,16 +67,22 @@ def _config_to_frozen_trial(config):
     config = dict(config)
     config['datetime_start'] = from_time_str(
         config['datetime_start']).astimezone()
-    config['datetime_complete'] = from_time_str(
-        config['datetime_complete']).astimezone()
+    if 'datetime_complete' in config:
+        config['datetime_complete'] = from_time_str(
+            config['datetime_complete']).astimezone()
+    else:
+        config['datetime_complete'] = None
     distributions = dict(config['distributions'])
     config['distributions'] = {}
     for key, value in distributions.items():
         config['distributions'][key] = eval(
             "optuna.distributions.{}".format(value))
     config["state"] = TrialState.COMPLETE
+    if 'intermediate_values' not in config:
+        config['intermediate_values'] = {}
+    if 'value' not in config:
+        config['value'] = None
     return FrozenTrial(**config, trial_id=config['number'] + 1)
-
 
 def _shift_config_number(config, shift_number):
     config['number'] += shift_number
@@ -88,7 +94,11 @@ def add_exist_trial(study, folder_path, trial_start_number=None):
     trial_start_number = trial_start_number or 0
     folder_name = folder_path.split('/')[-1]
     path = os.path.join(folder_path, '{}_result.json'.format(folder_name))
-    config = _shift_config_number(read_json(path), trial_start_number)
+    if not os.path.exists(path):
+        path = os.path.join(folder_path, '{}_config.json'.format(folder_name))
+    print("Load result from {}".format(path))
+    config = read_json(path)
+    config = _shift_config_number(config, trial_start_number)
     trial = _config_to_frozen_trial(config)
     try:
         study._storage.create_new_trial(study.study_id, template_trial=trial)
@@ -100,22 +110,15 @@ def add_exist_trial(study, folder_path, trial_start_number=None):
 def add_exist_trials(study, trial_list_path, trial_start_number=None):
     trial_start_number = trial_start_number or 0
     trials_root = '/'.join(trial_list_path.split('/')[:-1])
-    print(trials_root)
-    df = pd.read_csv(
-        trial_list_path,
-        sep='\t',
-        index_col=False,
-        dtype={
-            'trial_number': int})
+    df = pd.read_csv(trial_list_path,sep='\t',index_col=False,
+                     dtype={'trial_number': int})
     df = df.drop_duplicates()
     df = df.sort_values(by=['trial_number'])['path']
     for path in list(df):
-        add_exist_trial(
-            study,
-            os.path.join(
-                trials_root,
-                path),
-            trial_start_number)
+        print("Add trial from {}".format(path))
+        trial_path=os.path.join(trials_root,path)
+        add_exist_trial(study,trial_path,
+                        trial_start_number)
 
 
 def get_discrete_uniform(trial, key, lb=None, ub=None, step=None, value=None):
@@ -186,9 +189,8 @@ def _get_status(study, id_):
 
 class OptunaTrainer:
     def __init__(self, train_method, saved_root, model_executor_creator,
-                 train_data, val_data, epoch, batch_size,
-                 is_minimize=True, monitor_target=None,
-                 by_grid_search=False, trial_start_number=None,
+                 train_data, val_data, epoch, batch_size, monitor_target,
+                 is_minimize=True, by_grid_search=False, trial_start_number=None,
                  save_distribution=False, **train_kwargs):
         if is_minimize:
             self._direction = 'minimize'
@@ -294,7 +296,7 @@ class OptunaTrainer:
                 trial.number + 1))
         return best_result
 
-    def _saved_trial_result(self, frozen_trial):
+    def _save_trial_result(self, frozen_trial):
         if not isinstance(frozen_trial, FrozenTrial):
             raise Exception("Result trail must be FrozenTrial")
         result_path = self._get_trial_result_path(frozen_trial)
@@ -303,7 +305,7 @@ class OptunaTrainer:
         write_json(config, result_path)
 
     def _callback(self, study, frozen_trial):
-        self._saved_trial_result(frozen_trial)
+        self._save_trial_result(frozen_trial)
 
     def _create_study(self, n_startup_trials=None):
         n_startup_trials = n_startup_trials or 0
@@ -323,10 +325,11 @@ class OptunaTrainer:
     def _get_resumed_trial(self, study, trial_number):
         trial_id = trial_number + 1 - self._trial_start_number
         session = study._storage.scoped_session()
-        recorded_trial = models.TrialModel.find_or_raise_by_id(
-            trial_id, session)
+        recorded_trial = models.TrialModel.find_or_raise_by_id(trial_id, session)
         recorded_trial.state = TrialState.RUNNING
+        recorded_trial.value = 0
         study._storage._commit_with_integrity_check(session)
+        print("Resume trial id {}".format(trial_id))
         trial = Trial(study, trial_id)
         record_path = os.path.join(
             self._get_trial_root(trial),
@@ -346,7 +349,7 @@ class OptunaTrainer:
         trial_id = trial_number + 1
         self._study = self._create_study()
         trial = self._study.get_trials()[trial_number]
-        if trial.state == TrialState.COMPLETE:
+        if trial.state == TrialState.COMPLETE and trial.value is not None:
             return
         trial = self._get_resumed_trial(self._study, trial_number)
         result = self._objective(trial, set_by_trial_config=True)
@@ -355,7 +358,7 @@ class OptunaTrainer:
         self._study._log_completed_trial(trial_number, result)
 
         frozen_trial = self._study.get_trials()[trial_number]
-        self._saved_trial_result(frozen_trial)
+        self._save_trial_result(frozen_trial)
 
     def optimize(self, n_startup_trials=None, n_trials=None):
         n_startup_trials = n_startup_trials or 0

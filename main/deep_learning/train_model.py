@@ -11,7 +11,7 @@ from sequence_annotation.genome_handler.select_data import load_data
 from sequence_annotation.process.data_processor import AnnSeqProcessor
 from sequence_annotation.process.seq_ann_engine import SeqAnnEngine,check_max_memory_usgae,get_model_executor
 from sequence_annotation.process.callback import Callbacks
-from sequence_annotation.process.data_generator import SeqDataset,seq_collate_wrapper
+from sequence_annotation.process.data_generator import SeqDataset,SeqCollateWrapper
 from sequence_annotation.process.executor import AdvancedExecutor
 from main.utils import backend_deterministic
 from main.deep_learning.test_model import test
@@ -51,8 +51,8 @@ def train(saved_root,epoch,model,executor,train_data,val_data,
     }
     data = engine.process_data(raw_data)
     #Create loader
-    collate_fn = seq_collate_wrapper(discard_ratio_min,discard_ratio_max,
-                                     augment_up_max,augment_down_max,concat)
+    collate_fn = SeqCollateWrapper(discard_ratio_min,discard_ratio_max,
+                                   augment_up_max,augment_down_max,concat)
     #
     train_gen = engine.create_data_gen(collate_fn,not deterministic)
     #
@@ -60,6 +60,12 @@ def train(saved_root,epoch,model,executor,train_data,val_data,
         val_gen = train_gen
     else:
         val_gen = engine.create_basic_data_gen()
+
+    setting_root = os.path.join(saved_root,'settings')
+    create_folder(setting_root)
+    write_json(train_gen.get_config(),os.path.join(setting_root,'train_gen.json'))
+    write_json(val_gen.get_config(),os.path.join(setting_root,'val_gen.json'))
+
     train_loader = train_gen(data['training'])
     val_loader = val_gen(data['validation'])
     #Train
@@ -81,8 +87,8 @@ def create_signal_loader(root,ann_seq_processor,batch_size):
     raw_data = {
         'donor':{'inputs':donor},
         'acceptor':{'inputs':acceptor},
-        #'fake_donor':{'inputs':fake_donor},
-        #'fake_acceptor':{'inputs':fake_acceptor}
+        'fake_donor':{'inputs':fake_donor},
+        'fake_acceptor':{'inputs':fake_acceptor}
     }
     data = AnnSeqProcessor(BASIC_GENE_ANN_TYPES).process(raw_data)
     for key,items in data.items():

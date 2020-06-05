@@ -3,7 +3,7 @@ import sys
 import torch
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__)+"/../..")
-from sequence_annotation.utils.utils import create_folder, read_fasta,read_json
+from sequence_annotation.utils.utils import create_folder, read_fasta
 from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES
 from sequence_annotation.preprocess.gff2bed import main as gff2bed_main
 from sequence_annotation.process.seq_ann_engine import SeqAnnEngine,get_best_model_and_origin_executor,get_batch_size

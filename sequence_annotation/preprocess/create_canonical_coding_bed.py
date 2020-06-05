@@ -2,10 +2,10 @@ import os, sys
 import pandas as pd
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__)+"/../..")
-from sequence_annotation.utils.utils import write_bed, read_bed,get_gff_with_attribute
-from sequence_annotation.preprocess.get_id_table import get_id_table,convert_id_table_to_dict,read_id_table
+from sequence_annotation.utils.utils import read_bed, write_bed
+from sequence_annotation.preprocess.get_id_table import convert_id_table_to_dict, read_id_table
 from sequence_annotation.preprocess.gff2bed import gff2bed
-from sequence_annotation.preprocess.utils import EXON_TYPES,RNA_TYPES
+from sequence_annotation.preprocess.utils import RNA_TYPES
 from sequence_annotation.preprocess.bed2gff import bed2gff
 from sequence_annotation.preprocess.create_gene_with_alt_status_gff import get_most_start_end_transcripts,get_cluster_mRNA
 

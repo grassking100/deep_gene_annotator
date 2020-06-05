@@ -3,7 +3,7 @@ import pandas as pd
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.utils.utils import read_gff, read_fasta,write_bed,create_folder,get_gff_with_attribute,find_substr
-from sequence_annotation.preprocess.utils import INTRON_TYPES, RNA_TYPES
+from sequence_annotation.preprocess.utils import RNA_TYPES
 from sequence_annotation.preprocess.gff2bed import simple_gff2bed
 from sequence_annotation.preprocess.signal_analysis import get_donor_site_region,get_acceptor_site_region
 
@@ -46,8 +46,6 @@ def get_splicing_site_motifs(gff_path,fasta_path,dist,output_root):
     acceptor = get_acceptor_site_region(gff, dist, dist)
     transcript_group = transcript_bed.groupby('id')
     
-    donor_group = donor.groupby('transcript_source')
-    acceptor_group = acceptor.groupby('transcript_source')
     potential_donor = []
     potential_acceptor = []
     for region_id, seq in fasta.items():

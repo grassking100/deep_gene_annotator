@@ -206,29 +206,46 @@ def aug_seq(data,discard_ratio_min=None,discard_ratio_max=None,
         ids,inputs,answers,lengths,seqs,has_gene_statuses = _get_list(concat_result)
     return ids,inputs,answers,lengths,seqs,has_gene_statuses
 
-def seq_collate_wrapper(discard_ratio_min=None,
-                        discard_ratio_max=None,
-                        augment_up_max=None,
-                        augment_down_max=None,
-                        concat=False,shuffle=True):
-    discard_ratio_min = discard_ratio_min or 0
-    discard_ratio_max = discard_ratio_max or 0
-    augment_up_max = augment_up_max or 0
-    augment_down_max = augment_down_max or 0
+class SeqCollateWrapper:
+    def __init__(self,discard_ratio_min=None,discard_ratio_max=None,
+                 augment_up_max=None,augment_down_max=None,
+                 concat=False,shuffle=True):
+        
+        self.discard_ratio_min = discard_ratio_min or 0
+        self.discard_ratio_max = discard_ratio_max or 0
+        self.augment_up_max = augment_up_max or 0
+        self.augment_down_max = augment_down_max or 0
+        self.concat = concat
+        self.shuffle = shuffle
+        
+        if self.discard_ratio_min < 0 or self.discard_ratio_min > 1:
+            raise Exception("Invalid discard_ratio_min value")
+        if self.discard_ratio_max < 0 or self.discard_ratio_max > 1:
+            raise Exception("Invalid discard_ratio_max value")
+        
 
-    if discard_ratio_min < 0 or discard_ratio_min > 1:
-        raise Exception("Invalid discard_ratio_min value")
-    if discard_ratio_max < 0 or discard_ratio_max > 1:
-        raise Exception("Invalid discard_ratio_max value")
 
-    def seq_collate_fn(data):
+
+    def get_config(self):
+        config = {}
+        config['class'] = self.__class__.__name__
+        config['discard_ratio_min'] = self.discard_ratio_min
+        config['discard_ratio_max'] = self.discard_ratio_max
+        config['augment_up_max'] = self.augment_up_max
+        config['augment_down_max'] = self.augment_down_max
+        config['concat'] = self.concat
+        config['shuffle'] = self.shuffle
+        return config
+
+
+    def __call__(self,data):
         reordered_has_gene_statuses = answers = reordered_answers = None
         data = _get_list(data)
-        data = aug_seq(data,discard_ratio_min=discard_ratio_min,
-                       discard_ratio_max=discard_ratio_max,
-                       augment_up_max=augment_up_max,
-                       augment_down_max=augment_down_max,
-                       concat=concat,shuffle=shuffle
+        data = aug_seq(data,discard_ratio_min=self.discard_ratio_min,
+                       discard_ratio_max=self.discard_ratio_max,
+                       augment_up_max=self.augment_up_max,
+                       augment_down_max=self.augment_down_max,
+                       concat=self.concat,shuffle=self.shuffle
                       )
         ids,inputs,answers,lengths,seqs,has_gene_statuses = data
         inputs = pad_sequence(inputs, batch_first=True)
@@ -251,14 +268,19 @@ def seq_collate_wrapper(discard_ratio_min=None,
 
         return SeqDataset(returned)
 
-    return seq_collate_fn
-
-
 class SeqGenerator:
     def __init__(self, seq_collate_fn=None,*args, **kwargs):
-        self.seq_collate_fn = seq_collate_fn or seq_collate_wrapper()
+        self.seq_collate_fn = seq_collate_fn or SeqCollateWrapper()
         self.args = args
         self.kwargs = kwargs
+        
+    def get_config(self):
+        config = {}
+        config['class'] = self.__class__.__name__
+        config['seq_collate_fn'] = self.seq_collate_fn.get_config()
+        config['args'] = list(self.args)
+        config['kwargs'] = dict(self.kwargs)
+        return config
 
     def __call__(self, dataset):
         dataset = SeqDataset(dataset)
