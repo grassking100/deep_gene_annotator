@@ -54,8 +54,11 @@ def exact_wilcox_rank_sum_compare(lhs_df, rhs_df, lhs_name, rhs_name, targets=No
     threshold = threshold or 0.05
     lhs_median_name = 'median({})'.format(lhs_name)
     rhs_median_name = 'median({})'.format(rhs_name)
-    if set(lhs_df.columns) != set(rhs_df.columns):
-        raise Exception("The columns of lhs_df and rhs_df are not the same")
+    lhs_columns = set(lhs_df.columns)
+    rhs_columns = set(rhs_df.columns)
+    if lhs_columns != rhs_columns:
+        diff = lhs_columns.symmetric_difference(rhs_columns)
+        raise Exception("The columns of lhs_df and rhs_df are not the same, got {}".format(diff))
     targets = set(lhs_df.columns)    
     lhs_dict = lhs_df.fillna(0).to_dict('list')
     rhs_dict = rhs_df.fillna(0).to_dict('list')

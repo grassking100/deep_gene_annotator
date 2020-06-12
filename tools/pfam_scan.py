@@ -2,7 +2,7 @@ import os
 import sys
 import pandas as pd
 from argparse import ArgumentParser
-from multiprocessing import Pool
+from multiprocessing import Pool,cpu_count
 sys.path.append(os.path.dirname(__file__) + "/..")
 from sequence_annotation.utils.utils import read_fasta,create_folder,write_fasta,write_json
 
@@ -54,7 +54,7 @@ def main(fasta_path,db_root,output_root,hmmer_src_root,pfam_scan_root):
         kwargs.append((pfam_scan_path,db_root,output_root,id_))
         write_fasta(fasta,path)
 
-    with Pool(processes=40) as pool:
+    with Pool(processes=cpu_count()) as pool:
         results = pool.starmap(run_pfam_scan, kwargs)
 
     result_df = pd.DataFrame.from_dict(results)

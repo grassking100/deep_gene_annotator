@@ -11,18 +11,18 @@ from sequence_annotation.utils.stats import exact_wilcox_rank_sum_compare as sta
 from sequence_annotation.visual.boxplot import plot_boxplots
 
 BASE_METRICS = ['F1_exon','F1_intron','F1_other','macro_F1']
-BASE_NAMES = ['Exon F1','Intron F1','Other F1','Macro F1']
-BLOCK_METRICS = ['exon_F1','internal_exon_F1','intron_F1']
-BLOCK_NAMES = ['Exon block F1','Internal exon block F1','Intron block F1']
+BASE_NAMES = ['Exon F1','Intron F1','Intergeneic region F1','Macro F1']
+BLOCK_METRICS = ['exon_F1','intron_F1']
+BLOCK_NAMES = ['Exon block F1','Intron block F1']
 BLOCK_CHAIN_METRICS = ['intron_chain_F1','gene_F1']
 BLOCK_CHAIN_NAMES = ['Chained introns F1','Gene F1']
 SITE_MATCHED_METRICS = ['F1_TSS','F1_cleavage_site','F1_splicing_donor_site','F1_splicing_acceptor_site']
 SITE_MATCHED_NAMES = ['TSS F1','Cleavage site F1','Donor site F1','Acceptor site F1']
 ABS_DIST_METRICS = ['mean_TSS','mean_cleavage_site','mean_splicing_donor_site','mean_splicing_acceptor_site']
-ABS_DIST_NAMES = ['Mean abs. distance\nof TSS',
-                  'Mean abs. distance\nof cleavage site',
-                  'Mean abs. distance\nof splicing donor site',
-                  'Mean abs. distance\nof splicing acceptor site']
+ABS_DIST_NAMES = ['Mean distance of TSS',
+                  'Mean distance of cleavage site',
+                  'Mean distance of splicing donor site',
+                  'Mean distance of splicing acceptor site']
 
 def plot_base_boxplots(lhs_result,rhs_result,lhs_name,rhs_name):
     plot_boxplots(lhs_result,rhs_result,lhs_name,
@@ -195,8 +195,8 @@ class Comparer:
         win_num += sum(pivot[pivot['type']!='Distance']['greater'])
         loss_num = sum(pivot[pivot['type']=='Distance']['greater'])
         loss_num += sum(pivot[pivot['type']!='Distance']['less'])
-        
-        write_json({'win':win_num,'loss':loss_num},
+        equal_num = len(targets) - win_num - loss_num
+        write_json({'win':win_num,'loss':loss_num,'equal':equal_num},
                    os.path.join(self.output_root,'compare_num.json'))
         
     

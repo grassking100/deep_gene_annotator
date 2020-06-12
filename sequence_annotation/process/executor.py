@@ -397,6 +397,7 @@ class ExecutorBuilder:
         self._set_loss_kwargs = {}
         self._set_lr_scheduler_kwargs = {}
         self.executor_class = None
+        self._lr_scheduler_target = 'val_loss'
 
     def get_set_kwargs(self):
         config = {}
@@ -405,6 +406,7 @@ class ExecutorBuilder:
         config['lr_scheduler_kwargs'] = dict(self._set_lr_scheduler_kwargs)
         config['use_native'] = self.use_native
         config['executor_class'] = self.executor_class
+        config['lr_scheduler_target'] = self._lr_scheduler_target
         for values in config.values():
             if values is not None:
                 if isinstance(values,dict) and 'self' in values:
@@ -412,13 +414,9 @@ class ExecutorBuilder:
 
         return config
         
-    def set_optimizer(self,
-                      optim_type,
-                      learning_rate=None,
-                      clip_grad_value=None,
-                      clip_grad_norm=None,
-                      grad_norm_type=None,
-                      **kwargs):
+    def set_optimizer(self,optim_type,learning_rate=None,
+                      clip_grad_value=None,clip_grad_norm=None,
+                      grad_norm_type=None,**kwargs):
         self._set_optimizer_kwargs = locals()
         self._optimizer_kwargs = kwargs
         self._optim_type = optim_type or self._optim_type
@@ -433,17 +431,15 @@ class ExecutorBuilder:
         self._intron_coef = intron_coef
         self._other_coef = other_coef
 
-    def set_lr_scheduler(self,
-                         patience=None,
-                         factor=None,
-                         threshold=None,
-                         use_lr_scheduler=None):
+    def set_lr_scheduler(self,patience=None,factor=None,threshold=None,
+                         use_lr_scheduler=None,target=None):
         self._set_lr_scheduler_kwargs = locals()
         if use_lr_scheduler is not None:
             self._use_lr_scheduler = use_lr_scheduler
         self._threshold = threshold or self._threshold
         self._patience = patience or self._patience
         self._factor = factor or self._factor
+        self._lr_scheduler_target = target or self._lr_scheduler_target
 
     def build(self, parameters, executor_weights_path=None):
         optimizer = optimizer_generator(self._optim_type,
@@ -474,6 +470,7 @@ class ExecutorBuilder:
         exe.grad_norm_type = self._grad_norm_type
         exe.inference = self._inference
         exe.optimizer = optimizer
+        exe.lr_scheduler_target = self._lr_scheduler_target
         if self._use_lr_scheduler:
             exe.lr_scheduler = ReduceLROnPlateau(optimizer,
                                                  verbose=True,

@@ -85,7 +85,6 @@ class SeqDataset(Dataset):
 
     def __getitem__(self, index):
         returned = {}
-        #print(index)
         for key, item in self.data.items():
             if item is not None:
                 if isinstance(item,dict):
@@ -94,8 +93,6 @@ class SeqDataset(Dataset):
                         returned[key][item_id] = elements[index%len(elements)]
                 else:
                     returned[key] = item[index]
-            #else:
-            #    returned[key] = None
         return returned
     
 def augment_seqs(inputs, answers,seqs, lengths, has_gene_statuses,
@@ -222,9 +219,6 @@ class SeqCollateWrapper:
             raise Exception("Invalid discard_ratio_min value")
         if self.discard_ratio_max < 0 or self.discard_ratio_max > 1:
             raise Exception("Invalid discard_ratio_max value")
-        
-
-
 
     def get_config(self):
         config = {}

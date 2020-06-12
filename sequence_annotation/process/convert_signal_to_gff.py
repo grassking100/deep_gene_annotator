@@ -5,7 +5,7 @@ import pandas as pd
 import deepdish as dd
 from argparse import ArgumentParser
 from torch.nn.utils.rnn import pad_sequence
-from multiprocessing import Pool
+from multiprocessing import Pool,cpu_count
 sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.utils.utils import create_folder, print_progress, write_gff, write_json
 from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES, BASIC_GENE_MAP
@@ -102,7 +102,7 @@ def convert_output_to_gff(raw_outputs,region_table,
     arg_list = []
     for onehot_vecs,output in zip(onehot_list,output_list):
         arg_list.append((output['chrom_ids'],output['lengths'], onehot_vecs))
-    with Pool(processes=40) as pool:
+    with Pool(processes=cpu_count()) as pool:
         gffs = pool.starmap(ann_vec_gff_converter.convert, arg_list)
     gff = pd.concat(gffs).sort_values(by=['chr','start','end','strand'])
     redefined_gff = flip_and_rename_gff(gff,region_table)

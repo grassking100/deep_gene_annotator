@@ -5,6 +5,7 @@ import torch
 import numpy as np
 import pandas as pd
 from multiprocessing import Pool
+from multiprocessing import cpu_count
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES, create_folder
@@ -51,7 +52,7 @@ def get_overall_loss(root):
     base_performance = read_json(os.path.join(root,'base_performance.json'))
     abs_diff = read_json(os.path.join(root,'abs_diff.json'))
     site_matched = read_json(os.path.join(root,'site_matched.json'))
-    block_f1_keys = ['internal_exon_F1', 'exon_F1', 'intron_F1']
+    block_f1_keys = ['exon_F1', 'intron_F1']
     block_chain_f1_keys = ['gene_F1', 'intron_chain_F1']
     base_f1_keys = ['F1_exon', 'F1_intron', 'F1_other', 'macro_F1']
     loss = 0
@@ -75,7 +76,6 @@ def get_overall_loss(root):
 
     for value in abs_diff['mean'].values():
         loss += (1-1/(value + 1))
-        #loss += np.log10(value + 1))
         count += 1
 
     for value in site_matched['F1'].values():
@@ -154,7 +154,8 @@ class ReviseEvaluator:
 
 def test(trained_root, test_result_root, path_helper):
     loss_path = os.path.join(test_result_root, 'overall_loss.txt')
-    if True:#not os.path.exists(loss_path):
+    result_gff_path=os.path.join(test_result_root,'test_predict_double_strand.gff3')
+    if not os.path.exists(result_gff_path):
         data_path = path_helper.processed_data_path
         answer_path = path_helper.answer_path
         create_folder(test_result_root)
@@ -178,6 +179,8 @@ def test(trained_root, test_result_root, path_helper):
         data = engine.process_data(raw_data)
         data_loader = engine.create_basic_data_gen()(data['testing'])
         engine.test(best_model, executor, data_loader,callbacks=callbacks)
+
+    if True:#not os.path.exists(loss_path):
         overall_loss = get_overall_loss(test_result_root)
         with open(loss_path, "w") as fp:
             fp.write("{}\n".format(overall_loss))
@@ -281,7 +284,7 @@ class RevierSpaceSearcher:
                 kwargs = self._revise_and_evaluate_on_val(methods)
                 kwargs_list.append(kwargs)
 
-        with Pool(processes=40) as pool:
+        with Pool(processes=cpu_count()) as pool:
             pool.starmap(self._execute_revise_evaluator, kwargs_list)
 
         for record in self._records:
@@ -318,7 +321,7 @@ def main(raw_data_root, trained_project_root, output_root,fold_name=None):
     create_folder(val_root)
     if fold_name is None:
         predicted_root = os.path.join(output_root, 'predicted')
-        fold_names = list(data_names.keys())
+        fold_names = sorted(list(data_names.keys()))
         for trained_name in fold_names:
             for usage in ['validation', 'testing']:
                 print("Predicted by {} for {}".format(trained_name,usage))

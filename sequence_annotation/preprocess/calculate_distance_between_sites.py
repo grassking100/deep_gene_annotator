@@ -29,18 +29,30 @@ def main(bed_path,id_table_path,tss_path,cs_path,output_root):
     ##
     reference_gff = bed2gff(reference_bed,id_dict)
     rna_gff = reference_gff[reference_gff['feature'].isin(RNA_TYPES)]
-    tss_site_e_to_r_diff = get_site_diff(rna_gff,tss_sites,multiprocess=40)
-    tss_site_r_to_e_diff = get_site_diff(rna_gff,tss_sites,answer_as_ref=False,multiprocess=40)
-    cleavage_site_e_to_r_diff = get_site_diff(rna_gff,cleavage_sites,five_end=False,multiprocess=40)
-    cleavage_site_r_to_e_diff = get_site_diff(rna_gff,cleavage_sites,five_end=False,
-                                              answer_as_ref=False,multiprocess=40)
-    stats_result = {}
-    stats_result['tss_site_r_to_e_diff'] = get_stats(np.abs(tss_site_r_to_e_diff))
-    stats_result['tss_site_e_to_r_diff'] = get_stats(np.abs(tss_site_e_to_r_diff))
-    stats_result['cleavage_site_r_to_e_diff'] = get_stats(np.abs(cleavage_site_r_to_e_diff))
-    stats_result['cleavage_site_e_to_r_diff'] = get_stats(np.abs(cleavage_site_e_to_r_diff))
+    abs_tss_site_e_to_r_diff = get_site_diff(rna_gff,tss_sites,multiprocess=40)
+    abs_tss_site_r_to_e_diff = get_site_diff(rna_gff,tss_sites,answer_as_ref=False,multiprocess=40)
+    abs_cleavage_site_e_to_r_diff = get_site_diff(rna_gff,cleavage_sites,five_end=False,multiprocess=40)
+    abs_cleavage_site_r_to_e_diff = get_site_diff(rna_gff,cleavage_sites,five_end=False,
+                                                  answer_as_ref=False,multiprocess=40)
     
-    siter_diff_path = os.path.join(output_root, "site_abs_diff.tsv")
+    tss_site_e_to_r_diff = get_site_diff(rna_gff,tss_sites,multiprocess=40,absolute=False)
+    tss_site_r_to_e_diff = get_site_diff(rna_gff,tss_sites,answer_as_ref=False,multiprocess=40,absolute=False)
+    cleavage_site_e_to_r_diff = get_site_diff(rna_gff,cleavage_sites,five_end=False,multiprocess=40,absolute=False)
+    cleavage_site_r_to_e_diff = get_site_diff(rna_gff,cleavage_sites,five_end=False,
+                                              answer_as_ref=False,multiprocess=40,absolute=False)
+    
+    
+    stats_result = {}
+    stats_result['tss_site_r_to_e_diff'] = get_stats(tss_site_r_to_e_diff)
+    stats_result['tss_site_e_to_r_diff'] = get_stats(tss_site_e_to_r_diff)
+    stats_result['cleavage_site_r_to_e_diff'] = get_stats(cleavage_site_r_to_e_diff)
+    stats_result['cleavage_site_e_to_r_diff'] = get_stats(cleavage_site_e_to_r_diff)
+    stats_result['abs_tss_site_r_to_e_diff'] = get_stats(abs_tss_site_r_to_e_diff)
+    stats_result['abs_tss_site_e_to_r_diff'] = get_stats(abs_tss_site_e_to_r_diff)
+    stats_result['abs_cleavage_site_r_to_e_diff'] = get_stats(abs_cleavage_site_r_to_e_diff)
+    stats_result['abs_cleavage_site_e_to_r_diff'] = get_stats(abs_cleavage_site_e_to_r_diff)
+    
+    siter_diff_path = os.path.join(output_root, "site_diff.tsv")
     pd.DataFrame.from_dict(stats_result).T.to_csv(siter_diff_path,index_label='stats',sep='\t')
 
     tss_title='The distance from the closest reference TSS to experimental TSS'

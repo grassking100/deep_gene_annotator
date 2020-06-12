@@ -1,7 +1,7 @@
 import sys,os
 import pandas as pd
 from argparse import ArgumentParser
-sys.path.append('/home/sequence_annotation')
+sys.path.append(os.path.dirname(__file__) + "/..")
 from sequence_annotation.utils.utils import read_fasta, write_json,create_folder
 
 def main(cdhit_result_path,output_root):

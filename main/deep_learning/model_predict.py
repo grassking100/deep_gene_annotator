@@ -2,6 +2,7 @@ import os
 import sys
 import torch
 from argparse import ArgumentParser
+from multiprocessing import cpu_count
 sys.path.append(os.path.dirname(__file__)+"/../..")
 from sequence_annotation.utils.utils import create_folder, read_fasta
 from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES
@@ -48,9 +49,10 @@ def main(trained_root,revised_root,output_root,fasta_path,fasta_double_strand_pa
     revised_root = os.path.join(output_root,'revised')
     revised_ps_gff_path = os.path.join(revised_root,'revised_plus_strand.gff3')
     revised_ps_bed_path = os.path.join(revised_root,'revised_plus_strand.bed')
-    revised_main(revised_root, predict_ps_gff_path, region_table_path, fasta_path,
-                 multiprocess=40,**revised_config_path)
-    gff2bed_main(revised_ps_gff_path,revised_ps_bed_path,simple_mode=False)
+    if not os.path.exists(revised_ps_bed_path):
+        revised_main(revised_root, predict_ps_gff_path, region_table_path, fasta_path,
+                     revised_config_path,multiprocess=cpu_count())
+        gff2bed_main(revised_ps_gff_path,revised_ps_bed_path,simple_mode=False)
     cDNA_fasta_path = os.path.join(revised_root,'predicted_transcript_cDNA.fasta')
     os.system("bedtools getfasta -fi {} -bed {} "
               "-fo {} -name -split".format(fasta_path,
@@ -67,7 +69,7 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument("-d","--trained_root",help="Root of saved deep learning model",required=True)
     parser.add_argument("-f","--fasta_path",help="Path of single-strand fasta",required=True)
-    parser.add_argument("-e","--fasta_double_strand_path",help="Path of double-strand fasta")
+    parser.add_argument("-e","--fasta_double_strand_path",help="Path of double-strand fasta",required=True)
     parser.add_argument("-o","--output_root",help="The path to save testing result",required=True)
     parser.add_argument("-r","--revised_root",help="The root of revised result",required=True)
     parser.add_argument("-t","--region_table_path",help="Path of region table",required=True)
