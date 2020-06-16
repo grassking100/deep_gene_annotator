@@ -8,11 +8,11 @@ from sequence_annotation.process.optuna import IModelExecutorCreator,get_discret
 
 class ModelExecutorCreator(IModelExecutorCreator):
     """Creator to create model and executor by trial parameters"""
-    def __init__(self,clip_grad_norm=None,has_cnn=True,grad_norm_type=None,use_lr_scheduler=False):
+    def __init__(self,clip_grad_norm=None,has_cnn=True,grad_norm_type=None,lr_scheduler_patience=None):
         self._grad_norm_type = grad_norm_type or 'inf'
         self._clip_grad_norm = clip_grad_norm
         self._has_cnn = has_cnn
-        self._use_lr_scheduler = use_lr_scheduler
+        self._lr_scheduler_patience = lr_scheduler_patience
         self._cnn_config_dict = {'cnn_num':'num_layers','cnn_out':'out_channels','kernel_size':'kernel_size'}
         self._rnn_config_dict = {'rnn_hidden':'hidden_size','rnn_num':'num_layers'}
         self._all_config_dict = dict(self._cnn_config_dict)
@@ -29,20 +29,20 @@ class ModelExecutorCreator(IModelExecutorCreator):
         config = {}
         #CNN
         if self._has_cnn:
-            config['kernel_size'] = {'lb':513,'ub':2049,'step':512,'value':None}#128*2+1~128*4+1
-            config['cnn_out'] = {'lb':4,'ub':16,'step':4,'value':None}
-            config['cnn_num'] = {'lb':4,'ub':16,'step':4,'value':None}
+            config['kernel_size'] = {'lb':129,'ub':257,'step':64,'value':None}#Num: 3
+            config['cnn_out'] = {'lb':4,'ub':8,'step':4,'value':None}#Num: 2
+            config['cnn_num'] = {'lb':4,'ub':8,'step':4,'value':None}#Num: 2
         else:
             config['cnn_num'] = {'value':0}
         #RNN
-        config['relation_type'] = {'options':['basic','basic_hier','hier'],'value':None}
-        config['rnn_num'] = {'lb':1,'ub':4,'value':None}
-        config['rnn_hidden'] = {'lb':64,'ub':160,'step':32,'value':None}
+        config['relation_type'] = {'options':['basic','basic_hier','hier'],'value':None}#Num: 3
+        config['rnn_num'] = {'lb':1,'ub':3,'value':None}#Num: 3
+        config['rnn_hidden'] = {'lb':32,'ub':96,'step':32,'value':None}#Num: 3
         config['is_rnn_filter'] = {'value':False}
         config['rnn_type'] = {'value':'GRU'}
         #Executor
         config['optimizer_type'] = {'value':'Adam'}
-        config['learning_rate'] = {'value':1e-3}
+        config['learning_rate'] = {'lb':5*1e-3,'ub':1e-2,'step':5*1e-3,'value':None}
         if self._clip_grad_norm is not None:
             config['clip_grad_norm'] = {'value':self._clip_grad_norm}
             config['grad_norm_type'] = {'value':float(self._grad_norm_type)}
@@ -54,16 +54,24 @@ class ModelExecutorCreator(IModelExecutorCreator):
 
     def _create_model_builder(self):
         model_builder = SeqAnnBuilder()
-        model_builder.set_feature_block(customized_init='kaiming_uniform_cnn_init',
-                                           padding_handle='same')
-        model_builder.set_relation_block(customized_cnn_init='xavier_uniform_cnn_init',
-                                            customized_rnn_init='in_xav_bias_zero_gru_init')
+        model_builder.set_feature_block(
+            customized_init='kaiming_uniform_cnn_init',
+            padding_handle='same',
+            dropout=0.5
+        )
+        model_builder.set_relation_block(
+            customized_cnn_init='xavier_uniform_cnn_init',
+            customized_rnn_init='in_xav_bias_zero_gru_init',
+            dropout=0.5
+        )
         return model_builder        
 
     def _create_executor_builder(self):
         builder = ExecutorBuilder()
-        builder.set_lr_scheduler(patience=10,threshold=0,factor=0.5,
-                                 use_lr_scheduler=self._use_lr_scheduler)
+        if self._lr_scheduler_patience is not None:
+            builder.set_lr_scheduler(patience=self._lr_scheduler_patience,
+                                     threshold=0,factor=0.5,
+                                     use_lr_scheduler=True)
         return builder
     
     def _set_hyperparameters_from_trial(self,trial,hyper):
@@ -98,8 +106,8 @@ class ModelExecutorCreator(IModelExecutorCreator):
         is_gru = rnn_type == 'GRU'
         if relation_type == 'hier':
             model_builder.set_relation_block(rnn_type='HierRNN',is_gru=is_gru,
-                                                use_first_filter=is_filter,
-                                                use_second_filter=is_filter)
+                                             use_first_filter=is_filter,
+                                             use_second_filter=is_filter)
             executor_builder.use_native = False
         elif relation_type=='basic' or relation_type=='basic_hier':
             if is_filter:
@@ -204,12 +212,7 @@ class ModelExecutorCreator(IModelExecutorCreator):
         self._set_builder(config,model_builder,executor_builder)
         model = model_builder.build().cuda()
         executor = executor_builder.build(model.parameters())
-        
-        model_set_kwargs = model_builder.get_set_kwargs()
-        executor_set_kwargs = executor_builder.get_set_kwargs()
         return {
-            'model_set_kwargs':model_set_kwargs,
-            'executor_set_kwargs':executor_set_kwargs,
             'model':model,'executor':executor
         }
         

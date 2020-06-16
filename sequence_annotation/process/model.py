@@ -79,35 +79,14 @@ class SeqAnnBuilder:
             'momentum': 0.1,
             'affine': False
         }
-        self._set_norm_kwargs = {}
-        self._set_feature_block_kwargs = {}
-        self._set_relation_block_kwargs = {}
         self._use_rnn_norm = False
-
-    def get_set_kwargs(self):
-        config = {}
-        config['norm_block'] = dict(self._set_norm_kwargs)
-        config['feature_block'] =  dict(self._set_feature_block_kwargs)
-        config['relation_block'] =  dict(self._set_relation_block_kwargs)
-        config['use_input_norm'] = self.use_input_norm
-        config['use_rnn_norm'] = self._use_rnn_norm
-        for values in config.values():
-            if values is not None:
-                if isinstance(values,dict) and 'self' in values:
-                    del values['self']
-
-        return config
         
     def set_norm_block(self, norm_class=None, affine=None, momentum=None):
-        self._set_norm_kwargs = locals()
-        self._norm_config[
-            'norm_class'] = norm_class or self._norm_config['norm_class']
+        self._norm_config['norm_class'] = norm_class or self._norm_config['norm_class']
         self._norm_config['affine'] = affine or self._norm_config['affine']
-        self._norm_config[
-            'momentum'] = momentum or self._norm_config['momentum']
+        self._norm_config['momentum'] = momentum or self._norm_config['momentum']
 
     def set_feature_block(self, stack_cnn_class=None, **config):
-        self._set_feature_block_kwargs = locals()
         self._feature_block_config.update(config)
         self._use_feature_block = self._feature_block_config['num_layers'] != 0
         self._stack_cnn_class = stack_cnn_class or self._stack_cnn_class
@@ -117,7 +96,6 @@ class SeqAnnBuilder:
                            use_first_filter=None,use_second_filter=None,
                            use_common_filter=None,output_act=None,
                            use_norm=None,**config):
-        self._set_relation_block_kwargs = locals()
         self._output_act = output_act or self._output_act
         self._rnn_type = rnn_type or self._rnn_type
         self._out_channels = out_channels or self._out_channels

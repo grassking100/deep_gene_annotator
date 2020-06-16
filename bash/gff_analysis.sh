@@ -130,9 +130,9 @@ python3 $utils_root/motif_count.py -i $fasta_root/$acceptor_signal_path.fasta -o
 
 python3 $preprocess_main_root/gff_feature_stats.py -i $gff_path -r $region_table_path -c $chrom_source -o $output_root/feature_stats
 
-if [ ! -e "$output_root/length_gaussian.tsv" ]; then
-    python3 $preprocess_main_root/length_gaussian_modeling.py -i $gff_path -o $output_root/length_gaussian -n 2
-fi
+#if [ ! -e "$output_root/length_gaussian.tsv" ]; then
+python3 $preprocess_main_root/length_gaussian_modeling.py -i $gff_path -o $output_root/length_gaussian -n 2
+#fi
 
 echo "The gff_analysis is finish" > $output_root/gff_analysis.log
 

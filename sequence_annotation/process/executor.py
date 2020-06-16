@@ -149,7 +149,7 @@ class _Executor(IExecutor):
         self.clip_grad_value = None
         self.clip_grad_norm = None
         self.grad_norm_type = 2
-
+        self.clip_grad_value_by_hook = None
         self.lr_scheduler = None
         self.lr_scheduler_target = 'val_loss'
         self._has_fit = False
@@ -251,13 +251,25 @@ class BasicExecutor(_Executor):
         masks = get_seq_mask(lengths).cuda()
         predict_result = self.inference(outputs, masks)
         loss_ = self.loss(outputs,labels,masks,seq_data=seq_data,**kwargs)
+        hooks []
+        if self.clip_grad_value_by_hook is not None:
+            for p in model.parameters():
+                h = p.register_hook(lambda grad: torch.clamp(grad, -clip_grad_value_by_hook, clip_grad_value_by_hook))
+                hooks.append(h)
+                
         loss_.backward()
+
         if self.clip_grad_value is not None:
             nn.utils.clip_grad_value_(model.parameters(), self.clip_grad_value)
-        if self.clip_grad_norm is not None:
+        elif self.clip_grad_norm is not None:
             nn.utils.clip_grad_norm_(model.parameters(), self.clip_grad_norm,
                                      self.grad_norm_type)
+
         self.optimizer.step()
+        
+        for h in hooks:
+            h.remove()
+        
         returned = {
             'metric': {'loss': loss_.item()},
             'predicts': predict_result,
@@ -381,6 +393,7 @@ class ExecutorBuilder:
         self._clip_grad_value = None
         self._clip_grad_norm = None
         self._grad_norm_type = 2
+        self._clip_grad_value_by_hook = None
         self._gamma = None
         self._intron_coef = None
         self._other_coef = None
@@ -393,47 +406,27 @@ class ExecutorBuilder:
         self._patience = 10
         self._factor = 0.5
         self._optim_type = 'Adam'
-        self._set_optimizer_kwargs = {}
-        self._set_loss_kwargs = {}
-        self._set_lr_scheduler_kwargs = {}
         self.executor_class = None
         self._lr_scheduler_target = 'val_loss'
-
-    def get_set_kwargs(self):
-        config = {}
-        config['optimizer_kwargs'] = dict(self._set_optimizer_kwargs)
-        config['loss_kwargs'] = dict(self._set_loss_kwargs)
-        config['lr_scheduler_kwargs'] = dict(self._set_lr_scheduler_kwargs)
-        config['use_native'] = self.use_native
-        config['executor_class'] = self.executor_class
-        config['lr_scheduler_target'] = self._lr_scheduler_target
-        for values in config.values():
-            if values is not None:
-                if isinstance(values,dict) and 'self' in values:
-                    del values['self']
-
-        return config
         
     def set_optimizer(self,optim_type,learning_rate=None,
                       clip_grad_value=None,clip_grad_norm=None,
                       grad_norm_type=None,**kwargs):
-        self._set_optimizer_kwargs = locals()
         self._optimizer_kwargs = kwargs
         self._optim_type = optim_type or self._optim_type
         self._learning_rate = learning_rate or self._learning_rate
         self._clip_grad_value = clip_grad_value or self._clip_grad_value
         self._clip_grad_norm = clip_grad_norm or self._clip_grad_norm
         self._grad_norm_type = grad_norm_type or self._grad_norm_type
+        self._clip_grad_value_by_hook = clip_grad_value_by_hook or self._clip_grad_value_by_hook
 
     def set_loss(self, gamma=None, intron_coef=None, other_coef=None):
-        self._set_loss_kwargs = locals()
         self._gamma = gamma
         self._intron_coef = intron_coef
         self._other_coef = other_coef
 
     def set_lr_scheduler(self,patience=None,factor=None,threshold=None,
                          use_lr_scheduler=None,target=None):
-        self._set_lr_scheduler_kwargs = locals()
         if use_lr_scheduler is not None:
             self._use_lr_scheduler = use_lr_scheduler
         self._threshold = threshold or self._threshold
@@ -468,6 +461,7 @@ class ExecutorBuilder:
         exe.clip_grad_value = self._clip_grad_value
         exe.clip_grad_norm = self._clip_grad_norm
         exe.grad_norm_type = self._grad_norm_type
+        exe.clip_grad_value_by_hook = self._clip_grad_value_by_hook
         exe.inference = self._inference
         exe.optimizer = optimizer
         exe.lr_scheduler_target = self._lr_scheduler_target

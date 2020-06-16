@@ -41,19 +41,25 @@ def plot_length(length_dict,saved_root):
     for feature,lengths in length_dict.items():
         plt.figure()
         plt.hist(lengths,100)
-        plt.title("The distribution of {}'s lengths".format(feature))
-        plt.xlabel("length")
-        plt.ylabel("number")
-        plt.savefig(os.path.join(saved_root,'{}_length.png'.format(feature)))
+        plt.title("The distribution of {}'s lengths (nt)".format(feature), fontsize=16)
+        plt.xlabel("length", fontsize=16)
+        plt.ylabel("number", fontsize=16)
+        plt.xticks(fontsize=16)
+        plt.yticks(fontsize=16)
+        plt.savefig(os.path.join(saved_root,'{}_length.png'.format(feature)),
+                   bbox_inches = 'tight',pad_inches = 0)
         
 def plot_log_length(length_dict,saved_root):
     for feature,lengths in length_dict.items():
         plt.figure()
         plt.hist(np.log10(lengths),100)
-        plt.title("The log distribution of {}'s lengths".format(feature))
-        plt.xlabel("log10(length)")
-        plt.ylabel("number")
-        plt.savefig(os.path.join(saved_root,'{}_log10_length.png'.format(feature)))
+        plt.title("The log distribution of {}'s lengths (nt)".format(feature), fontsize=16)
+        plt.xlabel("log10(length)", fontsize=16)
+        plt.ylabel("number", fontsize=16)
+        plt.xticks(fontsize=16)
+        plt.yticks(fontsize=16)
+        plt.savefig(os.path.join(saved_root,'{}_log10_length.png'.format(feature)),
+                    bbox_inches = 'tight',pad_inches = 0)
     
 def main(gff_path,region_table_path,saved_root,chrom_source):
     create_folder(saved_root)

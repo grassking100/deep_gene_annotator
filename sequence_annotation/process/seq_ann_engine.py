@@ -192,10 +192,10 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
                                      has_gene_statuses_count)
         return data
 
-    def create_data_gen(self,collate_fn=None,shuffle=True):
+    def create_data_gen(self,collate_fn=None,shuffle=True,*args, **kwargs):
         train_gen = SeqGenerator(batch_size=self.batch_size,
                                  shuffle=shuffle,
-                                 seq_collate_fn=collate_fn)
+                                 seq_collate_fn=collate_fn,*args, **kwargs)
         return train_gen
 
     def create_basic_data_gen(self):

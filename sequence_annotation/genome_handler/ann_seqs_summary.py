@@ -13,10 +13,13 @@ def plot_log10_length(length_dict,output_root):
     for feature,lengths in length_dict.items():
         plt.figure()
         plt.hist(np.log10(lengths),100)
-        plt.title("The length's log distribution of {}".format(feature))
-        plt.xlabel("log10(length)")
-        plt.ylabel("number")
-        plt.savefig(os.path.join(output_root,'{}_log10_length.png'.format(feature.replace(' ','_'))))
+        plt.title("The log distribution of length (nt) of\n{}".format(feature),fontsize=16)
+        plt.xlabel("log10(length)",fontsize=16)
+        plt.ylabel("number",fontsize=16)
+        plt.xticks(fontsize=16)
+        plt.yticks(fontsize=16)
+        plt_path=os.path.join(output_root,'{}_log10_length.png'.format(feature.replace(' ','_')))
+        plt.savefig(plt_path,bbox_inches = 'tight',pad_inches = 0)
 
 def main(input_path, output_root):
     create_folder(output_root)

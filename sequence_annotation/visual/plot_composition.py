@@ -52,12 +52,14 @@ def plot_composition(composition, output_path, title=None,
     for seq, label in zip(composition.T, list(codes)):
         if sum(seq) > 0:
             ax.plot(range_, seq, label=label, color=alphabet_color_map[label])
-    ax.set_title(title)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel("Ratio")
+    ax.set_title(title, fontsize=16)
+    ax.set_xlabel(xlabel, fontsize=16)
+    ax.set_ylabel("Ratio", fontsize=16)
+    plt.xticks(fontsize=16)
+    plt.yticks(fontsize=16)
     ax.xaxis.set_minor_locator(AutoMinorLocator())
-    ax.legend(loc="upper right")
-    fig.savefig(output_path)
+    ax.legend(loc="upper right",fontsize=16)
+    fig.savefig(output_path, bbox_inches = 'tight',pad_inches = 0)
 
 
 def main(input_path, output_path, truncated=None, **kwargs):

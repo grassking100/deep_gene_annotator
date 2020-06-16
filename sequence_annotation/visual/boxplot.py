@@ -3,9 +3,11 @@ from matplotlib import pyplot as plt
 
 def plot_boxplot(lhs_values,rhs_values,lhs_name,rhs_name,metric_name,ylabel):
     _=plt.boxplot(x=[lhs_values,rhs_values],labels=[lhs_name,rhs_name])
-    plt.xlabel('Method', fontsize=8)
-    plt.ylabel(ylabel, fontsize=8)
-    plt.title('{} boxplot'.format(metric_name), fontsize=8)
+    plt.xlabel('Method', fontsize=16)
+    plt.ylabel(ylabel, fontsize=16)
+    plt.title('{} boxplot'.format(metric_name), fontsize=16)
+    plt.xticks(fontsize=16)
+    plt.yticks(fontsize=16)
     
 def plot_boxplots(lhs_result,rhs_result,lhs_name,rhs_name,metrics,ylabel):
     plt.style.use('ggplot')

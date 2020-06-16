@@ -140,8 +140,8 @@ def get_bool_choices(trial, name, value=None):
     return get_choices(trial, name, [False, True], value)
 
 
-def create_study(saved_root, **kwargs):
-    storage_path = 'sqlite:///{}/trials.db'.format(saved_root)
+def create_study(output_root, **kwargs):
+    storage_path = 'sqlite:///{}/trials.db'.format(output_root)
     study = optuna.create_study(
         study_name='seq_ann',
         storage=storage_path,
@@ -188,18 +188,17 @@ def _get_status(study, id_):
 
 
 class OptunaTrainer:
-    def __init__(self, train_method, saved_root, model_executor_creator,
+    def __init__(self, train_method, output_root, model_executor_creator,
                  train_data, val_data, epoch, batch_size, monitor_target,
-                 is_minimize=True, by_grid_search=False, trial_start_number=None,
-                 save_distribution=False, **train_kwargs):
+                 is_minimize=True, by_grid_search=False,**train_kwargs):
         if is_minimize:
             self._direction = 'minimize'
         else:
             self._direction = 'maximize'
-        self._save_distribution = save_distribution
-        self._trial_start_number = trial_start_number or 0
+        self._save_distribution = False
+        self._trial_start_number = 0
         self._monitor_target = monitor_target
-        self._saved_root = saved_root
+        self._output_root = output_root
         self._train_method = train_method
         self._train_data = train_data
         self._val_data = val_data
@@ -207,7 +206,7 @@ class OptunaTrainer:
         self._batch_size = batch_size
         self._creator = model_executor_creator
         self._trial_list_path = os.path.join(
-            self._saved_root, "trial_list.tsv")
+            self._output_root, "trial_list.tsv")
         self._train_kwargs = train_kwargs
         self._by_grid_search = by_grid_search
         self._study = None
@@ -231,7 +230,7 @@ class OptunaTrainer:
                 fp.write("{}\t{}\n".format(self._get_trial_id(trial), name))
 
     def _get_trial_root(self, trial):
-        return os.path.join(self._saved_root, self._get_trial_name(trial))
+        return os.path.join(self._output_root, self._get_trial_name(trial))
 
     def _get_trial_config_path(self, trial):
         root = self._get_trial_root(trial)
@@ -254,12 +253,6 @@ class OptunaTrainer:
                                              set_by_grid_search=self._by_grid_search)
         temp_model = temp['model']
         temp_executor = temp['executor']
-        model_set_kwargs = temp['model_set_kwargs']
-        executor_set_kwargs = temp['executor_set_kwargs']
-        model_builder_set_kwarg_path =  os.path.join(trial_root,'model_builder_set_kwargs.json')
-        executor_builder_set_kwarg_path =  os.path.join(trial_root,'executor_builder_set_kwargs.json')
-        write_json(model_set_kwargs,model_builder_set_kwarg_path)
-        write_json(executor_set_kwargs,executor_builder_set_kwarg_path)
         check_max_memory_usgae(trial_root, temp_model, temp_executor,
                                self._train_data, self._val_data,
                                self._batch_size)
@@ -315,7 +308,7 @@ class OptunaTrainer:
         sampler = SkoptSampler(
             skopt_kwargs=skopt_kwargs,
             n_startup_trials=n_startup_trials)
-        study = create_study(self._saved_root, direction=self._direction, load_if_exists=True,
+        study = create_study(self._output_root, direction=self._direction, load_if_exists=True,
                              pruner=NopPruner(), sampler=sampler)
         if not os.path.exists(self._trial_list_path):
             with open(self._trial_list_path, "w") as fp:
@@ -344,18 +337,24 @@ class OptunaTrainer:
         trial.set_system_attr('fail_reason', float('nan'))
         return trial
 
-    def train_single_trial(self, existed_trial_config):
+    def train_single_trial(self, existed_trial_config,force=False):
         trial_number = existed_trial_config['number']
         trial_id = trial_number + 1
         self._study = self._create_study()
         trial = self._study.get_trials()[trial_number]
-        if trial.state == TrialState.COMPLETE and trial.value is not None:
-            return
+        if not force:
+            if trial.state == TrialState.COMPLETE and trial.value is not None:
+                return
         trial = self._get_resumed_trial(self._study, trial_number)
-        result = self._objective(trial, set_by_trial_config=True)
+        try:
+            result = self._objective(trial, set_by_trial_config=True)
+        except:
+            self._study._storage.set_trial_state(trial_id, TrialState.FAIL)
+            raise
+
         self._study._storage.set_trial_value(trial_id, result)
         self._study._storage.set_trial_state(trial_id, TrialState.COMPLETE)
-        self._study._log_completed_trial(trial_number, result)
+        self._study._log_completed_trial(trial, result)
 
         frozen_trial = self._study.get_trials()[trial_number]
         self._save_trial_result(frozen_trial)
@@ -363,8 +362,8 @@ class OptunaTrainer:
     def optimize(self, n_startup_trials=None, n_trials=None):
         n_startup_trials = n_startup_trials or 0
         n_trials = n_trials or self._creator.space_size
-        create_folder(self._saved_root)
-        space_config_path = os.path.join(self._saved_root, 'space_config.json')
+        create_folder(self._output_root)
+        space_config_path = os.path.join(self._output_root, 'space_config.json')
         default_hyperparameters = self._creator.create_default_hyperparameters()
         if os.path.exists(space_config_path):
             existed = read_json(space_config_path)
@@ -378,7 +377,7 @@ class OptunaTrainer:
         max_result = self._creator.create_max()
         max_model = max_result['model']
         max_exec = max_result['executor']
-        check_max_memory_usgae(self._saved_root, max_model, max_exec,
+        check_max_memory_usgae(self._output_root, max_model, max_exec,
                                self._train_data, self._val_data, self._batch_size)
         del max_model
         del max_exec

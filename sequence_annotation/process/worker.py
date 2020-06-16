@@ -248,7 +248,7 @@ class TrainWorker(Worker):
         if not self.is_running:
             self.print_verbose("Stop at {}".format(start))
         else:
-            time_messgae = "Start trainging at {}".format(get_time_str())
+            time_messgae = "Start training at {}".format(get_time_str())
             self.print_verbose(time_messgae)
             if self._message_recorder is not None:
                 self._message_recorder.notify(time_messgae)

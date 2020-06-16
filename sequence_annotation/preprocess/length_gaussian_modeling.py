@@ -37,8 +37,8 @@ def norm_fit_log10(data, component_num=None):
 
 def get_norm_pdf(params, range_, merge=True):
     weights = params['weights']
-    means = params['means']
-    stds = params['stds']
+    means = params['mean']
+    stds = params['std']
     pdfs = []
     for index in range(len(weights)):
         weight = weights[index]
@@ -65,15 +65,17 @@ def plot_log_hist(data, params, merge=False, title=None):
     plt.clf()
     range_ = get_range_of_log10(data)
     pdfs = get_norm_pdf(params, range_, merge)
-    plt.plot(range_, pdfs.sum(0), label='gaussian model summation')
-    plt.xlabel('log10(length)')
-    plt.ylabel('densitiy')
+    plt.plot(range_, pdfs.sum(0), label='model summation')
+    plt.xlabel('log10(length)', fontsize=16)
+    plt.ylabel('density', fontsize=16)
     if title is not None:
-        plt.title(title)
+        plt.title(title, fontsize=16)
     for index, pdf in enumerate(pdfs):
-        plt.plot(range_, pdf, label='gaussian model {}'.format(index + 1))
+        plt.plot(range_, pdf, label='model {}'.format(index + 1))
+    plt.xticks(fontsize=16)
+    plt.yticks(fontsize=16)
     plt.hist(np.log10(data), bins=100, density=True)
-    plt.legend()
+    plt.legend(fontsize=12)
 
 
 def main(gff_path, output_root, component_num=None):
@@ -83,35 +85,50 @@ def main(gff_path, output_root, component_num=None):
         'intron': INTRON_TYPES,
         'exon': EXON_TYPES
     }
+    gaussian_model_path = os.path.join(output_root,'length_log10_gaussian_model.tsv')
     gff = get_gff_with_attribute(read_gff(gff_path))
     gff = gff[gff['feature'] != 'intron']
     gff = get_gff_with_intron(gff)
-    gaussian_models = []
+    
+    type_lengths = {}
     for type_, features in data_types.items():
         lengths = get_length(gff, features)
-        params = norm_fit_log10(lengths, component_num)
-        for weight, mean, std in zip(params['weights'], params['means'],
-                                     params['stds']):
-            gaussian_models.append({
-                'weights': weight,
-                'mean': mean,
-                'std': std,
-                'type': type_
-            })
+        type_lengths[type_] = lengths
+    
+    if os.path.exists(gaussian_model_path):
+        gaussian_models = pd.read_csv(gaussian_model_path, sep='\t')
+        gaussian_model_groups = gaussian_models.groupby('type')
+        gaussian_params = {}
+        for type_ in list(gaussian_model_groups.groups):
+            gaussian_params[type_] = gaussian_model_groups.get_group(type_).to_dict('list')
+        
+    else:
+        gaussian_models = []
+        gaussian_params = {}
+        for type_ in data_types.keys():
+            lengths = type_lengths[type_]
+            params = norm_fit_log10(lengths, component_num)
+            gaussian_params[type_] = params
+            for weight, mean, std in zip(params['weights'], params['means'],
+                                         params['stds']):
+                gaussian_models.append({
+                    'weights': weight,
+                    'mean': mean,
+                    'std': std,
+                    'type': type_
+                })
 
-        title = 'The log10(length) distribution and gaussian model of {}'.format(
-            type_)
+        gaussian_models = pd.DataFrame.from_dict(gaussian_models)[['type', 'weights', 'mean', 'std']]
+        gaussian_models.to_csv(gaussian_model_path, sep='\t', index=None)
+
+    for type_ in data_types.keys():
+        lengths = type_lengths[type_]
+        params = gaussian_params[type_]
+        title = 'The log distribution and gaussian model of {}\'s length (nt)'.format(type_)
         plot_log_hist(lengths, params, title=title)
-        path = os.path.join(output_root,
-                            '{}_log10_length_gaussian_model'.format(type_))
-        plt.savefig(path)
+        path = os.path.join(output_root,'{}_log10_length_gaussian_model'.format(type_))
+        plt.savefig(path,bbox_inches = 'tight',pad_inches = 0)
 
-    gaussian_models = pd.DataFrame.from_dict(gaussian_models)[[
-        'type', 'weights', 'mean', 'std'
-    ]]
-    gaussian_model_path = os.path.join(output_root,
-                                       'length_log10_gaussian_model.tsv')
-    gaussian_models.to_csv(gaussian_model_path, sep='\t', index=None)
 
 
 if __name__ == '__main__':

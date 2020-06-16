@@ -11,7 +11,7 @@ from sequence_annotation.utils.stats import exact_wilcox_rank_sum_compare as sta
 from sequence_annotation.visual.boxplot import plot_boxplots
 
 BASE_METRICS = ['F1_exon','F1_intron','F1_other','macro_F1']
-BASE_NAMES = ['Exon F1','Intron F1','Intergeneic region F1','Macro F1']
+BASE_NAMES = ['Exon F1','Intron F1','Intergenic region F1','Macro F1']
 BLOCK_METRICS = ['exon_F1','intron_F1']
 BLOCK_NAMES = ['Exon block F1','Intron block F1']
 BLOCK_CHAIN_METRICS = ['intron_chain_F1','gene_F1']
@@ -133,7 +133,8 @@ class Comparer:
                            self.rhs_source,threshold=0.05)
         write_tsv(stats, self.output_root, '{}_stats.tsv'.format(name))
         plot_method(lhs_result,rhs_result,self.lhs_source,self.rhs_source)
-        plt.savefig(os.path.join(self.output_root, '{}_boxplot.png').format(name))
+        plt.savefig(os.path.join(self.output_root, '{}_boxplot.png').format(name),
+                    bbox_inches = 'tight',pad_inches = 0)
         comp = compare_df(lhs_result,rhs_result,self.lhs_source,self.rhs_source)
         write_tsv(comp, self.output_root, '{}_comp.tsv'.format(name),index=True)
         return stats

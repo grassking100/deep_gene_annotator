@@ -10,7 +10,7 @@ from main.utils import backend_deterministic
 from main.deep_learning.train_model import train
 from main.optuna.model_executor_creator import ModelExecutorCreator
 
-def main(optuna_root,trial_name):
+def main(optuna_root,trial_name,force=False):
     output_root = os.path.join(optuna_root,trial_name)
     config_path = os.path.join(output_root,'{}_config.json'.format(trial_name))
     print("Use existed config path, {}, to build trainer".format(config_path))
@@ -19,13 +19,13 @@ def main(optuna_root,trial_name):
     clip_grad_norm = optuna_settings['clip_grad_norm']
     grad_norm_type = optuna_settings['grad_norm_type']
     has_cnn = optuna_settings['has_cnn']
-    use_lr_scheduler = optuna_settings['use_lr_scheduler']
+    lr_scheduler_patience = optuna_settings['lr_scheduler_patience']
 
     backend_deterministic(False)
     creator = ModelExecutorCreator(clip_grad_norm=clip_grad_norm,
                                    grad_norm_type=grad_norm_type,
                                    has_cnn=has_cnn,
-                                   use_lr_scheduler=use_lr_scheduler)
+                                   lr_scheduler_patience=lr_scheduler_patience)
     #Load, parse and save data
     train_data_path = optuna_settings['train_data_path']
     val_data_path = optuna_settings['val_data_path']
@@ -46,11 +46,11 @@ def main(optuna_root,trial_name):
     del optuna_settings['clip_grad_norm']
     del optuna_settings['grad_norm_type']
     del optuna_settings['has_cnn']
-    del optuna_settings['use_lr_scheduler']
+    del optuna_settings['lr_scheduler_patience']
     del optuna_settings['epoch']
     del optuna_settings['batch_size']    
     del optuna_settings['is_maximize']
-    del optuna_settings['saved_root']
+    del optuna_settings['output_root']
     del optuna_settings['n_startup_trials']
     del optuna_settings['n_trials']
     del optuna_settings['gpu_id']
@@ -60,13 +60,14 @@ def main(optuna_root,trial_name):
                             val_data,epoch,batch_size,monitor_target,
                             is_minimize=not is_maximize,**optuna_settings)
 
-    trainer.train_single_trial(trial_settings)
+    trainer.train_single_trial(trial_settings,force=force)
 
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument("-i","--optuna_root",help="Root of optuna optimization files",required=True)
     parser.add_argument("-n","--trial_name",help="Name of trail to resume training",required=True)
     parser.add_argument("-g","--gpu_id",type=int,default=0,help="GPU to used")
+    parser.add_argument("-f","--force",action='store_true')
 
     args = parser.parse_args()
     config = dict(vars(args))

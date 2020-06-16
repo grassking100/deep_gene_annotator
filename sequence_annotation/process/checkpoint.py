@@ -548,6 +548,9 @@ class Checkpoint(Callback):
 
     def on_work_begin(self, worker, **kwargs):
         create_folder(self.checkpoint_root)
+        with open(os.path.join(self.checkpoint_root,'status.txt'),'w') as fp:
+            fp.write("")
+
         self._has_updated = False
         self._worker = worker
         self._best_result = None
@@ -597,6 +600,9 @@ class Checkpoint(Callback):
                     format(best_target_at_result,
                            self.model_checkpoint.best_result,
                            self.model_checkpoint.best_epoch))
+            else:
+                with open(os.path.join(self.checkpoint_root,'status.txt'),'w') as fp:
+                    fp.write("Finished")
             self._best_result = best_result
             self._best_epoch = self.model_checkpoint.best_epoch
             if self._has_updated and self.best_record_path is not None:

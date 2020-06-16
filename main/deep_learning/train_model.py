@@ -54,7 +54,7 @@ def train(saved_root,epoch,model,executor,train_data,val_data,
     collate_fn = SeqCollateWrapper(discard_ratio_min,discard_ratio_max,
                                    augment_up_max,augment_down_max,concat)
     #
-    train_gen = engine.create_data_gen(collate_fn,not deterministic)
+    train_gen = engine.create_data_gen(collate_fn,not deterministic,drop_last=True)
     #
     if same_generator:
         val_gen = train_gen
