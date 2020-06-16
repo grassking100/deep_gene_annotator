@@ -2,8 +2,11 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 from scipy.stats import median_absolute_deviation
-from rpy2 import robjects
-from rpy2.robjects.packages import importr
+try:
+    from rpy2 import robjects
+    from rpy2.robjects.packages import importr
+except:
+    pass
 
 def get_stats(arr,round_value=None):
     arr = np.array(arr)

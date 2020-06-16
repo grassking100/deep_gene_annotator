@@ -8,9 +8,11 @@ from sequence_annotation.process.optuna import IModelExecutorCreator,get_discret
 
 class ModelExecutorCreator(IModelExecutorCreator):
     """Creator to create model and executor by trial parameters"""
-    def __init__(self,clip_grad_norm=None,has_cnn=True,grad_norm_type=None,lr_scheduler_patience=None):
+    def __init__(self,clip_grad_norm=None,has_cnn=True,grad_norm_type=None,
+                 lr_scheduler_patience=None,clip_grad_value_by_hook=None):
         self._grad_norm_type = grad_norm_type or 'inf'
         self._clip_grad_norm = clip_grad_norm
+        self._clip_grad_value_by_hook = clip_grad_value_by_hook
         self._has_cnn = has_cnn
         self._lr_scheduler_patience = lr_scheduler_patience
         self._cnn_config_dict = {'cnn_num':'num_layers','cnn_out':'out_channels','kernel_size':'kernel_size'}
@@ -42,7 +44,7 @@ class ModelExecutorCreator(IModelExecutorCreator):
         config['rnn_type'] = {'value':'GRU'}
         #Executor
         config['optimizer_type'] = {'value':'Adam'}
-        config['learning_rate'] = {'lb':5*1e-3,'ub':1e-2,'step':5*1e-3,'value':None}
+        config['learning_rate'] = {'value':1e-2}
         if self._clip_grad_norm is not None:
             config['clip_grad_norm'] = {'value':self._clip_grad_norm}
             config['grad_norm_type'] = {'value':float(self._grad_norm_type)}
@@ -68,6 +70,7 @@ class ModelExecutorCreator(IModelExecutorCreator):
 
     def _create_executor_builder(self):
         builder = ExecutorBuilder()
+        builder.set_optimizer(clip_grad_value_by_hook=self._clip_grad_value_by_hook)
         if self._lr_scheduler_patience is not None:
             builder.set_lr_scheduler(patience=self._lr_scheduler_patience,
                                      threshold=0,factor=0.5,

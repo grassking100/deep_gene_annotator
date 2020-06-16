@@ -223,6 +223,7 @@ class _Executor(IExecutor):
         config['clip_grad_value'] = self.clip_grad_value
         config['clip_grad_norm'] = self.clip_grad_norm
         config['grad_norm_type'] = self.grad_norm_type
+        config['clip_grad_value_by_hook'] = self.clip_grad_value_by_hook
         if self.optimizer is not None:
             config['optimizer_name'] = self.optimizer.__class__.__name__
             param_groups = []
@@ -251,10 +252,10 @@ class BasicExecutor(_Executor):
         masks = get_seq_mask(lengths).cuda()
         predict_result = self.inference(outputs, masks)
         loss_ = self.loss(outputs,labels,masks,seq_data=seq_data,**kwargs)
-        hooks []
+        hooks = []
         if self.clip_grad_value_by_hook is not None:
             for p in model.parameters():
-                h = p.register_hook(lambda grad: torch.clamp(grad, -clip_grad_value_by_hook, clip_grad_value_by_hook))
+                h = p.register_hook(lambda grad: torch.clamp(grad, -self.clip_grad_value_by_hook, self.clip_grad_value_by_hook))
                 hooks.append(h)
                 
         loss_.backward()
@@ -409,9 +410,9 @@ class ExecutorBuilder:
         self.executor_class = None
         self._lr_scheduler_target = 'val_loss'
         
-    def set_optimizer(self,optim_type,learning_rate=None,
+    def set_optimizer(self,optim_type=None,learning_rate=None,
                       clip_grad_value=None,clip_grad_norm=None,
-                      grad_norm_type=None,**kwargs):
+                      grad_norm_type=None,clip_grad_value_by_hook=None,**kwargs):
         self._optimizer_kwargs = kwargs
         self._optim_type = optim_type or self._optim_type
         self._learning_rate = learning_rate or self._learning_rate

@@ -32,7 +32,7 @@ def train(saved_root,epoch,model,executor,train_data,val_data,
           discard_ratio_min=None,discard_ratio_max=None,
           augment_up_max=None,augment_down_max=None,
           deterministic=False,other_callbacks=None,
-          concat=False,same_generator=False):
+          concat=False,same_generator=False,drop_last=False):
     #Set engine
     engine = SeqAnnEngine(BASIC_GENE_ANN_TYPES)
     engine.batch_size = batch_size
@@ -54,7 +54,7 @@ def train(saved_root,epoch,model,executor,train_data,val_data,
     collate_fn = SeqCollateWrapper(discard_ratio_min,discard_ratio_max,
                                    augment_up_max,augment_down_max,concat)
     #
-    train_gen = engine.create_data_gen(collate_fn,not deterministic,drop_last=True)
+    train_gen = engine.create_data_gen(collate_fn,not deterministic,drop_last=drop_last)
     #
     if same_generator:
         val_gen = train_gen
@@ -221,6 +221,7 @@ if __name__ == '__main__':
     parser.add_argument("--model_weights_path")
     parser.add_argument("--executor_weights_path")
     parser.add_argument("--splicing_root")
+    parser.add_argument("--drop_last",action="store_true")
     parser.add_argument("--signal_loss_method",type=str)
     
     args = parser.parse_args()
