@@ -266,6 +266,17 @@ class ProjectedRNN(BasicModel):
                  dropout_before_rnn=False,**kwargs):
         super().__init__()
         self.output_act = output_act
+        self.output_act_func = None
+        if self.output_act is not None:
+            if not isinstance(self.output_act,str):
+                self.output_act_func = self.output_act
+            elif self.output_act == 'softmax':
+                self.output_act_func = lambda x: torch.softmax(x, 1)
+            elif self.output_act == 'sigmoid':
+                self.output_act_func = torch.sigmoid
+            else:
+                raise Exception("Wrong activation name, {}".format(self.output_act))
+        
         self.dropout_before_rnn = dropout_before_rnn
         if name is None or name == '':
             self.name = 'rnn'
@@ -313,14 +324,8 @@ class ProjectedRNN(BasicModel):
             post_rnn = F.dropout(post_rnn, self.rnn.dropout, self.training)
         result, lengths, _, _ = self.project(post_rnn, lengths=lengths)
 
-        if self.output_act is not None:
-            if self.output_act == 'softmax':
-                result = torch.softmax(result, 1)
-            elif self.output_act == 'sigmoid':
-                result = torch.sigmoid(result)
-            else:
-                raise Exception("Wrong activation name, {}".format(
-                    self.output_act))
+        if self.output_act_func is not None:
+            result = self.output_act_func(result)
 
         if return_intermediate:
             return result, post_rnn

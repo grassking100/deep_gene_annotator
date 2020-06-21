@@ -32,7 +32,8 @@ def train(saved_root,epoch,model,executor,train_data,val_data,
           discard_ratio_min=None,discard_ratio_max=None,
           augment_up_max=None,augment_down_max=None,
           deterministic=False,other_callbacks=None,
-          concat=False,same_generator=False,drop_last=False):
+          concat=False,same_generator=False,
+          drop_last=False,warmup_epoch=None):
     #Set engine
     engine = SeqAnnEngine(BASIC_GENE_ANN_TYPES)
     engine.batch_size = batch_size
@@ -69,7 +70,7 @@ def train(saved_root,epoch,model,executor,train_data,val_data,
     train_loader = train_gen(data['training'])
     val_loader = val_gen(data['validation'])
     #Train
-    checkpoint_kwargs={'patience':patience,'period':period}
+    checkpoint_kwargs={'patience':patience,'period':period,'warmup_epoch':warmup_epoch}
     worker = engine.train(model,executor,train_loader,val_loader,
                           epoch=epoch,other_callbacks=other_callbacks,
                           checkpoint_kwargs=checkpoint_kwargs)
@@ -103,7 +104,8 @@ def main(saved_root,model_config_path,executor_config_path,
          batch_size=None,epoch=None,save_distribution=False,
          model_weights_path=None,executor_weights_path=None,
          deterministic=False,concat=False,splicing_root=None,
-         signal_loss_method=None,val_data_for_test_path=None,**kwargs):
+         signal_loss_method=None,val_data_for_test_path=None,
+         warmup_epoch=None,**kwargs):
     setting = locals()
     kwargs = setting['kwargs']
     del setting['kwargs']
@@ -137,7 +139,7 @@ def main(saved_root,model_config_path,executor_config_path,
     backend_deterministic(deterministic)
     
     #Verify path exist
-    if region_table_path is not None and not os.path.exists(region_table_path):
+    if not os.path.exists(region_table_path):
         raise Exception("{} is not exist".format(region_table_path))
     
     temp_model,temp_executor = get_model_executor(model_config_path,executor_config,
@@ -166,13 +168,14 @@ def main(saved_root,model_config_path,executor_config_path,
                                         save_distribution=save_distribution,
                                         model_weights_path=model_weights_path,
                                         executor_weights_path=executor_weights_path)
+    executor.warmup_epoch = warmup_epoch or 0
     
     try:
         train(saved_root,epoch,model,executor,train_data,val_data,
               batch_size=batch_size,deterministic=deterministic,
-              concat=concat,**kwargs)     
+              concat=concat,warmup_epoch=warmup_epoch,**kwargs)     
     except RuntimeError:
-        raise Exception("Something wrong ocuurs in {}".format(saved_root))
+        raise Exception("Something wrong occurs in {}".format(saved_root))
         
     #Test
     test_paths = []

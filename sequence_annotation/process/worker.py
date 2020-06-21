@@ -174,10 +174,7 @@ class TrainWorker(Worker):
 
     def _save_setting(self):
         if self.root is not None:
-            for key in [
-                    'train_callbacks', 'val_callbacks', 'other_callbacks',
-                    'root', '_epoch', 'checkpoint_kwargs'
-            ]:
+            for key in ['train_callbacks', 'val_callbacks', 'other_callbacks','root', '_epoch', '_checkpoint']:
                 attr = getattr(self, key)
                 if hasattr(attr, 'get_config'):
                     attr = attr.get_config()
@@ -269,6 +266,7 @@ class TrainWorker(Worker):
                     validate_gradient(epoch, self.model,
                                       self._gradient_warning_recorder,
                                       self._gradient_recorder)
+                    #break
 
                 for index, seq_data in enumerate(self._val_loader):
                     evaluate_per_batch(self.model, seq_data, self.executor,
@@ -276,6 +274,7 @@ class TrainWorker(Worker):
                     status = 100 * index / len(self._val_loader)
                     self.print_verbose(batch_info.format(epoch, self._epoch,
                                                          'validating',status),True)
+                    #break
                 
                 self.model.save_distribution = save_distribution
                 train_record = self.train_callbacks.get_data()

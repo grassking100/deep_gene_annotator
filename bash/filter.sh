@@ -174,12 +174,12 @@ intersection_id_path=$saved_root/intersection_id.txt
 filtered_bed_path=$saved_root/filtered.bed
 ven_path=$saved_root/venn.png
 if [ "$preserved_gene_id_path" ]; then
-    python3 $preprocess_main_root/get_intersection_id.py -o $intersection_id_path -v $ven_path \
+    python3 $utils_root/get_intersection_id.py -o $intersection_id_path -v $ven_path \
 -i $passed_score_id_path,$nonoverlap_id_path,$no_alt_site_id_path,$all_coding_id_path,$intersection_preserved_id_path \
 -n "Passed score,Nonoverlapped with other gene,No-alternative splicing site,All-Coding,$preserved_id_name"
 
 else
-    python3 $preprocess_main_root/get_intersection_id.py -o $intersection_id_path -v $ven_path -i $passed_score_id_path,$nonoverlap_id_path,$no_alt_site_id_path,$all_coding_id_path -n "Passed score,Nonoverlapped with other gene,No-alternative splicing site,All-Coding"
+    python3 $utils_root/get_intersection_id.py -o $intersection_id_path -v $ven_path -i $passed_score_id_path,$nonoverlap_id_path,$no_alt_site_id_path,$all_coding_id_path -n "Passed score,Nonoverlapped with other gene,No-alternative splicing site,All-Coding"
 fi
 
 python3 $preprocess_main_root/get_subbed.py -i $transcript_bed_path -d $intersection_id_path -o $filtered_bed_path

@@ -111,7 +111,7 @@ if [ "$process_data_kwargs" ]; then
 fi
 
 echo $command
-#eval "bash $command"
+eval "bash $command"
 
 preprocess_main_root=$src_root/sequence_annotation/preprocess
 genome_handler_root=$src_root/sequence_annotation/genome_handler

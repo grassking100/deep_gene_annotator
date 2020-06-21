@@ -164,6 +164,22 @@ class AnnSequence(Sequence):
         if ann_types is not None and length is not None:
             self.init_space()
 
+    def flip(self):
+        flipped = self.copy()
+        if self.strand == 'plus':
+            flipped.strand='minus'
+        else:
+            flipped.strand='plus'
+        for ann_type in self.ANN_TYPES:
+            flipped.set_ann(ann_type,np.flip(self.get_ann(ann_type)))
+        return flipped
+    
+    def forward(self):
+        if self.strand == 'plus':
+            return self.copy()
+        else:
+            return self.flip()
+            
     @property
     def _checked_attr(self):
         return super()._checked_attr + ['_ANN_TYPES', '_length']

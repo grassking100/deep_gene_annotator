@@ -153,6 +153,7 @@ class _Executor(IExecutor):
         self.lr_scheduler = None
         self.lr_scheduler_target = 'val_loss'
         self._has_fit = False
+        self.warmup_epoch = 0
         self._lr_history = {}
        
 
@@ -180,7 +181,7 @@ class _Executor(IExecutor):
     
     def on_epoch_end(self, epoch, metric):
         self.loss.reset_accumulated_data()
-        if self._has_fit:
+        if self._has_fit and epoch > self.warmup_epoch:
             for index, group in enumerate(self.optimizer.param_groups):
                 if index not in self._lr_history:
                     self._lr_history[index] = []
@@ -224,6 +225,8 @@ class _Executor(IExecutor):
         config['clip_grad_norm'] = self.clip_grad_norm
         config['grad_norm_type'] = self.grad_norm_type
         config['clip_grad_value_by_hook'] = self.clip_grad_value_by_hook
+        config['warmup_epoch'] = self.warmup_epoch
+        
         if self.optimizer is not None:
             config['optimizer_name'] = self.optimizer.__class__.__name__
             param_groups = []

@@ -107,7 +107,7 @@ coordinate_consist_bed_path=$saved_root/coordinate_consist.bed
 echo "Step 1: Calculate distance between sites"
 if [ ! -e "$site_diff_root/site_diff.tsv" ]; then
     python3 $preprocess_main_root/calculate_distance_between_sites.py -b $transcript_bed_path -t $tss_path \
-    -c $cleavage_site_path -o $site_diff_root
+    -c $cleavage_site_path -o $site_diff_root -i $id_convert_table_path
 fi
 
 echo "Step 2: Preprocess raw data"

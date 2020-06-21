@@ -31,14 +31,20 @@ def test(output_root,model,executor,data,region_table_path=None,
     worker = engine.test(model,executor,data_loader,callbacks=callbacks,**kwargs)
     return worker
 
-def main(trained_root,output_root,data_path,
-         deterministic=False,**kwargs):
+def main(trained_root,output_root,data_path,deterministic=False,
+         #gene_threshold=None,intron_threshold=None,
+         **kwargs):
+    #gene_threshold = gene_threshold or 0.5
+    #intron_threshold = intron_threshold or 0.5
     create_folder(trained_root)
     backend_deterministic(deterministic)
     batch_size = get_batch_size(trained_root)
     best_model,origin_executor = get_best_model_and_origin_executor(trained_root)
     #if model_weights_path is not None:
     #    best_model.load_state_dict(torch.load(model_weights_path))
+    
+    #best_model.relation_block.rnn_0.output_act_func = lambda x: (torch.sigmoid(x)>=gene_threshold).float()
+    #best_model.relation_block.rnn_1.output_act_func = lambda x: (torch.sigmoid(x)>=intron_threshold).float()
         
     data = load_data(data_path)
     test(output_root,best_model,origin_executor,data,batch_size=batch_size,**kwargs)
@@ -54,6 +60,8 @@ if __name__ == '__main__':
     parser.add_argument("--answer_gff_path",help='The answer in gff format')
     parser.add_argument("--region_table_path",help="The path of region table")
     #parser.add_argument("--model_weights_path",help="The path model weights")
+    #parser.add_argument("--gene_threshold",type=float,default=0.5)
+    #parser.add_argument("--intron_threshold",type=float,default=0.5)
     
     args = parser.parse_args()
     setting = vars(args)

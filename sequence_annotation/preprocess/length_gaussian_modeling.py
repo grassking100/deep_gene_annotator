@@ -37,8 +37,8 @@ def norm_fit_log10(data, component_num=None):
 
 def get_norm_pdf(params, range_, merge=True):
     weights = params['weights']
-    means = params['mean']
-    stds = params['std']
+    means = params['means']
+    stds = params['stds']
     pdfs = []
     for index in range(len(weights)):
         weight = weights[index]
@@ -97,7 +97,7 @@ def main(gff_path, output_root, component_num=None):
     
     if os.path.exists(gaussian_model_path):
         gaussian_models = pd.read_csv(gaussian_model_path, sep='\t')
-        gaussian_model_groups = gaussian_models.groupby('type')
+        gaussian_model_groups = gaussian_models.groupby('types')
         gaussian_params = {}
         for type_ in list(gaussian_model_groups.groups):
             gaussian_params[type_] = gaussian_model_groups.get_group(type_).to_dict('list')
@@ -113,14 +113,14 @@ def main(gff_path, output_root, component_num=None):
                                          params['stds']):
                 gaussian_models.append({
                     'weights': weight,
-                    'mean': mean,
-                    'std': std,
-                    'type': type_
+                    'means': mean,
+                    'stds': std,
+                    'types': type_
                 })
 
-        gaussian_models = pd.DataFrame.from_dict(gaussian_models)[['type', 'weights', 'mean', 'std']]
+        gaussian_models = pd.DataFrame.from_dict(gaussian_models)[['types', 'weights', 'means', 'stds']]
         gaussian_models.to_csv(gaussian_model_path, sep='\t', index=None)
-
+        
     for type_ in data_types.keys():
         lengths = type_lengths[type_]
         params = gaussian_params[type_]

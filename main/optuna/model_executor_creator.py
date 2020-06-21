@@ -44,7 +44,7 @@ class ModelExecutorCreator(IModelExecutorCreator):
         config['rnn_type'] = {'value':'GRU'}
         #Executor
         config['optimizer_type'] = {'value':'Adam'}
-        config['learning_rate'] = {'value':1e-2}
+        config['learning_rate'] = {'value':1e-3}
         if self._clip_grad_norm is not None:
             config['clip_grad_norm'] = {'value':self._clip_grad_norm}
             config['grad_norm_type'] = {'value':float(self._grad_norm_type)}
