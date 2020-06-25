@@ -203,7 +203,7 @@ class CANBlock(BasicModel):
                 "after_activation": self.out_channels
             }
             self.norm = self.norm_class(in_channel[self.norm_mode])
-        self.dropout = dropout
+        self.dropout = dropout or 0
         self.reset_parameters()
 
     def _normalized(self, x, lengths):
@@ -213,7 +213,7 @@ class CANBlock(BasicModel):
 
     def forward(self, x, lengths, **kwargs):
         # X shape : N,C,L
-        if self.dropout_mode == "before_cnn" and self.dropout is not None and self.training:
+        if self.dropout > 0 and self.training and self.dropout_mode == "before_cnn":
             x = F.dropout(x, self.dropout, self.training)
             
         if self.norm_mode == 'before_cnn':
@@ -227,7 +227,7 @@ class CANBlock(BasicModel):
         if self.norm_mode == 'after_activation':
             x = self._normalized(x, lengths)
 
-        if self.dropout_mode == "after_activation" and self.dropout is not None and self.training:
+        if self.dropout > 0 and self.training and self.dropout_mode == "after_activation":
             x = F.dropout(x, self.dropout, self.training)
         return x, lengths, weights, mask
 

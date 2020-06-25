@@ -312,7 +312,7 @@ class ProjectedRNN(BasicModel):
         return config
 
     def forward(self, x, lengths, return_intermediate=False, **kwargs):
-        if self.dropout_before_rnn and self.rnn.dropout > 0 and self.training:
+        if self.rnn.dropout > 0 and self.training and self.dropout_before_rnn:
             x = F.dropout(x, self.rnn.dropout, self.training)
             
         if self.norm is not None:

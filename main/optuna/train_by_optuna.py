@@ -81,7 +81,7 @@ if __name__ == '__main__':
     parser.add_argument("--discard_ratio_min", type=float, default=0)
     parser.add_argument("--discard_ratio_max", type=float, default=0)
     parser.add_argument("--both_discard_order",action="store_true")
-    parser.add_argument("--dropout",type=float, default=None)
+    parser.add_argument("--dropout",type=float, default=0)
     parser.add_argument("--concat",action="store_true")
     parser.add_argument("--drop_last",action="store_true")
     parser.add_argument("--patience",help="The epoch to stop traininig when val_loss "
