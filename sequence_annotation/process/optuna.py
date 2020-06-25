@@ -344,6 +344,7 @@ class OptunaTrainer:
         trial = self._study.get_trials()[trial_number]
         if not force:
             if trial.state == TrialState.COMPLETE and trial.value is not None:
+                print("Complete")
                 return
         trial = self._get_resumed_trial(self._study, trial_number)
         try:

@@ -16,16 +16,13 @@ def main(optuna_root,trial_name,force=False):
     print("Use existed config path, {}, to build trainer".format(config_path))
     trial_settings = read_json(config_path)
     optuna_settings = read_json(os.path.join(optuna_root,'optuna_setting.json'))
-    clip_grad_norm = optuna_settings['clip_grad_norm']
-    grad_norm_type = optuna_settings['grad_norm_type']
-    has_cnn = optuna_settings['has_cnn']
-    lr_scheduler_patience = optuna_settings['lr_scheduler_patience']
+    #clip_grad_norm = optuna_settings['clip_grad_norm']
+    #grad_norm_type = optuna_settings['grad_norm_type']
+    #has_cnn = optuna_settings['has_cnn']
+    #lr_scheduler_patience = optuna_settings['lr_scheduler_patience']
 
     backend_deterministic(False)
-    creator = ModelExecutorCreator(clip_grad_norm=clip_grad_norm,
-                                   grad_norm_type=grad_norm_type,
-                                   has_cnn=has_cnn,
-                                   lr_scheduler_patience=lr_scheduler_patience)
+    creator = ModelExecutorCreator(**optuna_settings)
     #Load, parse and save data
     train_data_path = optuna_settings['train_data_path']
     val_data_path = optuna_settings['val_data_path']

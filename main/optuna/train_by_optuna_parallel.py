@@ -120,7 +120,7 @@ def main(output_root,train_data_path,val_data_path,epoch,batch_size,
                     optimized_status = status
                 else:
                     optimized_status = optimized_status.append(status)
-                if len(study.trials) == study.best_trial.number:
+                if len(study.trials)-1 == study.best_trial.number:
                     waited_num = 0
                 else:
                     waited_num += 1

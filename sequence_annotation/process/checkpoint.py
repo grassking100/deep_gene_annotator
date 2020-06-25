@@ -564,6 +564,7 @@ class Checkpoint(Callback):
         self._best_epoch = 0
         self._model_weights = None
 
+        """"""
         if self.model_checkpoint.save_best_weights:
             if os.path.exists(
                     self.model_checkpoint.best_status_path) and os.path.exists(

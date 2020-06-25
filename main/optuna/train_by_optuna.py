@@ -15,14 +15,15 @@ def main(output_root, train_data_path, val_data_path,
          epoch, batch_size, n_startup_trials, n_trials, is_maximize,
          clip_grad_norm=None, has_cnn=False, grad_norm_type=None,
          lr_scheduler_patience=None,clip_grad_value_by_hook=None,
-         **kwargs):
+         dropout=None,**kwargs):
 
     backend_deterministic(False)
     creator = ModelExecutorCreator(clip_grad_norm=clip_grad_norm,
                                    grad_norm_type=grad_norm_type,
                                    has_cnn=has_cnn,
                                    clip_grad_value_by_hook=clip_grad_value_by_hook,
-                                   lr_scheduler_patience=lr_scheduler_patience)
+                                   lr_scheduler_patience=lr_scheduler_patience,
+                                   dropout=dropout)
 
     space_size_path = os.path.join(output_root, 'space_size.json')
     space_size = {'space size': creator.space_size}
@@ -79,6 +80,8 @@ if __name__ == '__main__':
     parser.add_argument("--lr_scheduler_patience", type=float, default=None)
     parser.add_argument("--discard_ratio_min", type=float, default=0)
     parser.add_argument("--discard_ratio_max", type=float, default=0)
+    parser.add_argument("--both_discard_order",action="store_true")
+    parser.add_argument("--dropout",type=float, default=None)
     parser.add_argument("--concat",action="store_true")
     parser.add_argument("--drop_last",action="store_true")
     parser.add_argument("--patience",help="The epoch to stop traininig when val_loss "

@@ -9,7 +9,8 @@ from sequence_annotation.process.optuna import IModelExecutorCreator,get_discret
 class ModelExecutorCreator(IModelExecutorCreator):
     """Creator to create model and executor by trial parameters"""
     def __init__(self,clip_grad_norm=None,has_cnn=True,grad_norm_type=None,
-                 lr_scheduler_patience=None,clip_grad_value_by_hook=None):
+                 lr_scheduler_patience=None,clip_grad_value_by_hook=None,dropout=None,**kwargs):
+        self._dropout = dropout
         self._grad_norm_type = grad_norm_type or 'inf'
         self._clip_grad_norm = clip_grad_norm
         self._clip_grad_value_by_hook = clip_grad_value_by_hook
@@ -31,15 +32,15 @@ class ModelExecutorCreator(IModelExecutorCreator):
         config = {}
         #CNN
         if self._has_cnn:
-            config['kernel_size'] = {'lb':129,'ub':257,'step':64,'value':None}#Num: 3
-            config['cnn_out'] = {'lb':4,'ub':8,'step':4,'value':None}#Num: 2
-            config['cnn_num'] = {'lb':4,'ub':8,'step':4,'value':None}#Num: 2
+            config['kernel_size'] = {'lb':65,'ub':321,'step':128,'value':None}#Num: 3
+            config['cnn_out'] = {'lb':8,'ub':16,'step':4,'value':None}#Num: 3
+            config['cnn_num'] = {'lb':8,'ub':16,'step':4,'value':None}#Num: 3
         else:
             config['cnn_num'] = {'value':0}
         #RNN
         config['relation_type'] = {'options':['basic','basic_hier','hier'],'value':None}#Num: 3
         config['rnn_num'] = {'lb':1,'ub':3,'value':None}#Num: 3
-        config['rnn_hidden'] = {'lb':32,'ub':96,'step':32,'value':None}#Num: 3
+        config['rnn_hidden'] = {'lb':64,'ub':128,'step':32,'value':None}#Num: 3
         config['is_rnn_filter'] = {'value':False}
         config['rnn_type'] = {'value':'GRU'}
         #Executor
@@ -59,12 +60,12 @@ class ModelExecutorCreator(IModelExecutorCreator):
         model_builder.set_feature_block(
             customized_init='kaiming_uniform_cnn_init',
             padding_handle='same',
-            dropout=0.5
+            dropout=self._dropout
         )
         model_builder.set_relation_block(
             customized_cnn_init='xavier_uniform_cnn_init',
             customized_rnn_init='in_xav_bias_zero_gru_init',
-            dropout=0.5
+            dropout=self._dropout
         )
         return model_builder        
 

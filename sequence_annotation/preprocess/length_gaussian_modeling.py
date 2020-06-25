@@ -61,20 +61,21 @@ def get_range_of_log10(data, step=None):
     return range_
 
 
-def plot_log_hist(data, params, merge=False, title=None):
+def plot_log_hist(data, params=None, merge=False, title=None,density=True):
     plt.clf()
     range_ = get_range_of_log10(data)
-    pdfs = get_norm_pdf(params, range_, merge)
-    plt.plot(range_, pdfs.sum(0), label='model summation')
+    if params is not None:
+        pdfs = get_norm_pdf(params, range_, merge)
+        plt.plot(range_, pdfs.sum(0), label='model summation')
+        for index, pdf in enumerate(pdfs):
+            plt.plot(range_, pdf, label='model {}'.format(index + 1))
+    plt.xticks(fontsize=16)
+    plt.yticks(fontsize=16)
+    plt.hist(np.log10(data), bins=100, density=density)
     plt.xlabel('log10(length)', fontsize=16)
     plt.ylabel('density', fontsize=16)
     if title is not None:
         plt.title(title, fontsize=16)
-    for index, pdf in enumerate(pdfs):
-        plt.plot(range_, pdf, label='model {}'.format(index + 1))
-    plt.xticks(fontsize=16)
-    plt.yticks(fontsize=16)
-    plt.hist(np.log10(data), bins=100, density=True)
     plt.legend(fontsize=12)
 
 
@@ -124,7 +125,7 @@ def main(gff_path, output_root, component_num=None):
     for type_ in data_types.keys():
         lengths = type_lengths[type_]
         params = gaussian_params[type_]
-        title = 'The log distribution and gaussian model of {}\'s length (nt)'.format(type_)
+        title = 'The log distribution and Gaussian model of {}\'s length (nt)'.format(type_)
         plot_log_hist(lengths, params, title=title)
         path = os.path.join(output_root,'{}_log10_length_gaussian_model'.format(type_))
         plt.savefig(path,bbox_inches = 'tight',pad_inches = 0)

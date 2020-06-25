@@ -251,8 +251,8 @@ class SeqAnnEngine(metaclass=abc.ABCMeta):
             model_config_path = os.path.join(root, "model_config.json")
             model_component_path = os.path.join(root, "model_component.txt")
             exec_config_path = os.path.join(root, "executor_config.json")
-            if not os.path.exists(setting_path):
-                write_json(self._settings, setting_path)
+            #if not os.path.exists(setting_path):
+            write_json(self._settings, setting_path)
             if not os.path.exists(model_config_path):
                 write_json(model.get_config(), model_config_path)
             if not os.path.exists(exec_config_path):

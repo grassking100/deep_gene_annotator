@@ -33,7 +33,9 @@ def train(saved_root,epoch,model,executor,train_data,val_data,
           augment_up_max=None,augment_down_max=None,
           deterministic=False,other_callbacks=None,
           concat=False,same_generator=False,
-          drop_last=False,warmup_epoch=None):
+          drop_last=False,warmup_epoch=None,
+          both_discard_order=False,**kwargs):
+    print("The following parameter would not be used for train: {}".format(kwargs))
     #Set engine
     engine = SeqAnnEngine(BASIC_GENE_ANN_TYPES)
     engine.batch_size = batch_size
@@ -53,7 +55,8 @@ def train(saved_root,epoch,model,executor,train_data,val_data,
     data = engine.process_data(raw_data)
     #Create loader
     collate_fn = SeqCollateWrapper(discard_ratio_min,discard_ratio_max,
-                                   augment_up_max,augment_down_max,concat)
+                                   augment_up_max,augment_down_max,concat,
+                                   native_discard_order=not both_discard_order)
     #
     train_gen = engine.create_data_gen(collate_fn,not deterministic,drop_last=drop_last)
     #
@@ -118,8 +121,7 @@ def main(saved_root,model_config_path,executor_config_path,
         existed = read_json(setting_path)
         if setting != existed:
             raise Exception("The {} is not same as previous one".format(setting_path))
-    else:
-        write_json(setting,setting_path)
+    write_json(setting,setting_path)
     
     copied_paths = [model_config_path,executor_config_path,train_data_path,val_data_path]
     if model_weights_path is not None:
@@ -210,6 +212,7 @@ if __name__ == '__main__':
     parser.add_argument("--augment_down_max",type=int,default=0)
     parser.add_argument("--discard_ratio_min",type=float,default=0)
     parser.add_argument("--discard_ratio_max",type=float,default=0)
+    parser.add_argument("--both_discard_order",action="store_true")
     parser.add_argument("-n","--epoch",type=int,default=100)
     parser.add_argument("--period",default=1,type=int)
     parser.add_argument("--patience",help="The epoch to stop traininig when val_loss "

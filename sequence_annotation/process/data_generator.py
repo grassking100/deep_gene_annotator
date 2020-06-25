@@ -97,7 +97,7 @@ class SeqDataset(Dataset):
     
 def augment_seqs(inputs, answers,seqs, lengths, has_gene_statuses,
                  discard_ratio_min, discard_ratio_max, augment_up_max,
-                 augment_down_max):
+                 augment_down_max,native_discard_order=True):
     inputs_ = []
     answers_ = []
     seqs_ = []
@@ -105,11 +105,11 @@ def augment_seqs(inputs, answers,seqs, lengths, has_gene_statuses,
     num = len(lengths)
     start_diff_list = np.random.randint(0, augment_up_max + 1, size=num)
     end_diff_list = np.random.randint(0, augment_down_max + 1, size=num)
+    discard_order_from_starts = np.random.randint(0, 2, size=num)==0
     discard_diff = discard_ratio_max - discard_ratio_min
-    discard_left_ratio_list = np.random.random_sample(
-        size=num) * discard_diff + discard_ratio_min
-    discard_right_ratio_list = np.random.random_sample(
-        size=num) * discard_diff + discard_ratio_min
+    discard_left_ratio_list = np.random.random_sample(size=num) * discard_diff + discard_ratio_min
+    discard_right_ratio_list = np.random.random_sample(size=num) * discard_diff + discard_ratio_min
+    
     for index, (input_, answer,seq, length, has_gene_status) in enumerate(
             zip(inputs, answers,seqs, lengths, has_gene_statuses)):
         if has_gene_status:
@@ -119,11 +119,17 @@ def augment_seqs(inputs, answers,seqs, lengths, has_gene_statuses,
         else:
             discard_left_ratio = discard_left_ratio_list[index]
             discard_right_ratio = discard_right_ratio_list[index]
-            new_start_index = int(np.round(length * discard_left_ratio))
-            new_length = length - new_start_index
-            new_end_index = int(
-                np.round(new_length *
-                         (1 - discard_right_ratio))) + new_start_index
+            discard_order_from_start = discard_order_from_starts[index]
+            if native_discard_order or discard_order_from_start:
+                new_start_index = int(np.round(length * discard_left_ratio))
+                length_temp = length - new_start_index
+                new_end_index = int(np.round(length_temp *(1 - discard_right_ratio))) + new_start_index
+            else:
+                new_end_index = int(np.round(length * (1-discard_right_ratio)))
+                length_temp = new_end_index
+                new_start_index = int(np.round(length_temp *discard_left_ratio))
+            
+            
         input_ = input_[new_start_index:new_end_index]
         answer = answer[new_start_index:new_end_index]
         seq = seq[new_start_index:new_end_index]
@@ -190,13 +196,14 @@ def _get_list(data):
 
 def aug_seq(data,discard_ratio_min=None,discard_ratio_max=None,
             augment_up_max=None,augment_down_max=None,
-            concat=False,shuffle=True):
+            concat=False,shuffle=True,native_discard_order=True):
     ids,inputs,answers,lengths,seqs,has_gene_statuses = data
     change = augment_up_max + augment_down_max + discard_ratio_min + discard_ratio_max 
     if change > 0:
         result = augment_seqs(inputs, answers, seqs, lengths, has_gene_statuses,
                               discard_ratio_min, discard_ratio_max,
-                              augment_up_max, augment_down_max)
+                              augment_up_max, augment_down_max,
+                              native_discard_order=native_discard_order)
         inputs, answers,seqs, lengths = result
     if concat:
         concat_result = concat_seq(ids,inputs,answers,lengths,seqs,has_gene_statuses,shuffle)
@@ -206,12 +213,13 @@ def aug_seq(data,discard_ratio_min=None,discard_ratio_max=None,
 class SeqCollateWrapper:
     def __init__(self,discard_ratio_min=None,discard_ratio_max=None,
                  augment_up_max=None,augment_down_max=None,
-                 concat=False,shuffle=True):
+                 concat=False,shuffle=True,native_discard_order=True):
         
         self.discard_ratio_min = discard_ratio_min or 0
         self.discard_ratio_max = discard_ratio_max or 0
         self.augment_up_max = augment_up_max or 0
         self.augment_down_max = augment_down_max or 0
+        self.native_discard_order = native_discard_order
         self.concat = concat
         self.shuffle = shuffle
         
@@ -227,6 +235,7 @@ class SeqCollateWrapper:
         config['discard_ratio_max'] = self.discard_ratio_max
         config['augment_up_max'] = self.augment_up_max
         config['augment_down_max'] = self.augment_down_max
+        config['native_discard_order'] = self.native_discard_order
         config['concat'] = self.concat
         config['shuffle'] = self.shuffle
         return config
@@ -239,8 +248,8 @@ class SeqCollateWrapper:
                        discard_ratio_max=self.discard_ratio_max,
                        augment_up_max=self.augment_up_max,
                        augment_down_max=self.augment_down_max,
-                       concat=self.concat,shuffle=self.shuffle
-                      )
+                       concat=self.concat,shuffle=self.shuffle,
+                       native_discard_order=self.native_discard_order)
         ids,inputs,answers,lengths,seqs,has_gene_statuses = data
         inputs = pad_sequence(inputs, batch_first=True)
         length_order = np.flip(np.argsort(lengths), axis=0).copy()
