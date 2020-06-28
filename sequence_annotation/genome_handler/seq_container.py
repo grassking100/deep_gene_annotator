@@ -149,7 +149,7 @@ class SeqInfoContainer(SeqContainer):
 
     def to_gff(self):
         if self.is_empty():
-            raise EmptyContainerException()
+            return pd.DataFrame(columns=GFF_COLUMNS)
         df = self.to_data_frame()
         selected_df = df[['id', 'source', 'strand']].copy()
         selected_df['source'] = selected_df['source'].str.replace("", '.')

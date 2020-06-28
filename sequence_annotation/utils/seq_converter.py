@@ -1,7 +1,7 @@
 """This submodule will handler character sequence and one-hot encoding seqeunce conversion"""
 from .exception import CodeException, SeqException
 import numpy as np
-from multiprocessing import Pool
+from multiprocessing import Pool,cpu_count
 
 DNA_CODES = 'ATCG'
 AA_CODES = 'ARNDCQEGHILKMFPSTWYV'
@@ -118,7 +118,7 @@ class SeqConverter:
         
     def seqs2dict_vec(self, seqs):
         """convert dictionary of seqeucnces to dictionary of one-hot encoding vectors"""
-        multiprocess = 40
+        multiprocess = cpu_count()
         kwarg_list = []
         for name, seq in seqs.items():
             kwarg_list.append((name,seq))

@@ -102,8 +102,13 @@ def convert_output_to_gff(raw_outputs,region_table,
     arg_list = []
     for onehot_vecs,output in zip(onehot_list,output_list):
         arg_list.append((output['chrom_ids'],output['lengths'], onehot_vecs))
+            
     with Pool(processes=cpu_count()) as pool:
         gffs = pool.starmap(ann_vec_gff_converter.convert, arg_list)
+    #gffs = []
+    #for arg in arg_list:
+    #    gffs.append(ann_vec_gff_converter.convert(*arg))
+    
     gff = pd.concat(gffs).sort_values(by=['chr','start','end','strand'])
     redefined_gff = flip_and_rename_gff(gff,region_table)
     write_gff(gff, raw_plus_gff_path)
