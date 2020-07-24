@@ -130,17 +130,19 @@ $saved_root/external_five_UTR_tss.gff3 \
 if $remove_transcript_external_UTR_conflict; then
     command="${command} --remove_transcript_external_UTR_conflict"
 fi
-
 python3 $command
 
+command="python3 $preprocess_main_root/get_location_count.py -u $saved_root/external_five_UTR_tss.gff3 -l $saved_root/long_dist_tss.gff3 -t $saved_root/transcript_tss.gff3 -o $saved_root/tss_location_count.csv"
 if $remove_transcript_external_UTR_conflict; then
-    python3 $preprocess_main_root/consist_site.py -u $saved_root/external_five_UTR_tss.gff3 -l $saved_root/long_dist_tss.gff3 -t $saved_root/transcript_tss.gff3 --remove_transcript_external_UTR_conflict -o $saved_root/tss_location_count.csv
-    python3 $preprocess_main_root/consist_site.py -u $saved_root/external_three_UTR_cleavage_site.gff3 -l $saved_root/long_dist_cs_path.gff3 -t $saved_root/transcript_cs_path.gff3 --remove_transcript_external_UTR_conflict -o $saved_root/cs_location_count.csv
-else
-    python3 $preprocess_main_root/consist_site.py -u $saved_root/external_five_UTR_tss.gff3 -l $saved_root/long_dist_tss.gff3 -t $saved_root/transcript_tss.gff3 -o $saved_root/tss_location_count.csv
-    python3 $preprocess_main_root/consist_site.py -u $saved_root/external_three_UTR_cleavage_site.gff3 -l $saved_root/long_dist_cs_path.gff3 -t $saved_root/transcript_cs_path.gff3 -o $saved_root/cs_location_count.csv
+    command="${command} --remove_transcript_external_UTR_conflict"
 fi
+python3 $command
 
+command="python3 $preprocess_main_root/get_location_count.py -u $saved_root/external_three_UTR_cleavage_site.gff3 -l $saved_root/long_dist_cs_path.gff3 -t $saved_root/transcript_cs_path.gff3 -o $saved_root/cs_location_count.csv"
+if $remove_transcript_external_UTR_conflict; then
+    command="${command} --remove_transcript_external_UTR_conflict"
+fi
+python3 $command
 
 echo "Step 5: Create coordiante data based on origin data and site data"
 python3 $preprocess_main_root/create_coordinate_data.py -g $saved_root/safe_tss.gff3 -c $saved_root/safe_cs.gff3 \
