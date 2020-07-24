@@ -80,7 +80,7 @@ def process_schedule(processes_list,resource_ids=None,
         resource_ids = resource_ids or list(range(40))
     else:
         resource_ids = resource_ids or list(range(torch.cuda.device_count()))
-        mem_used_percent_threshold = mem_used_percent_threshold or 1
+        mem_used_percent_threshold = mem_used_percent_threshold or 5
         if len(set(resource_ids)) != len(resource_ids):
             raise Exception("Duplicated gpu id")
     print("Use resources {} to run {} processes".format(resource_ids,len(processes_list)))

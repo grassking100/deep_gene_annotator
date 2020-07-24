@@ -26,7 +26,7 @@ def norm_fit_log10(data, component_num=None):
     else:
         clf = mixture.GaussianMixture(n_components=component_num,
                                       covariance_type='spherical',
-                                      max_iter=1000)
+                                      max_iter=1000,random_state=0)
         clf.fit(data.reshape(-1, 1))
         weights = clf.weights_
         means = clf.means_.flatten()
@@ -61,22 +61,26 @@ def get_range_of_log10(data, step=None):
     return range_
 
 
-def plot_log_hist(data, params=None, merge=False, title=None,density=True):
+def plot_log_hist(data, params=None, merge=False, title=None,density=True,show_legend=True):
     plt.clf()
+    plt.locator_params(axis='x', nbins=5)
+    font_size=16
     range_ = get_range_of_log10(data)
     if params is not None:
         pdfs = get_norm_pdf(params, range_, merge)
+        #if show_sum:
         plt.plot(range_, pdfs.sum(0), label='model summation')
         for index, pdf in enumerate(pdfs):
             plt.plot(range_, pdf, label='model {}'.format(index + 1))
-    plt.xticks(fontsize=16)
-    plt.yticks(fontsize=16)
+    plt.xticks(fontsize=font_size)
+    plt.yticks(fontsize=font_size)
     plt.hist(np.log10(data), bins=100, density=density)
-    plt.xlabel('log10(length)', fontsize=16)
-    plt.ylabel('density', fontsize=16)
+    plt.xlabel('log10(length)', fontsize=font_size)
+    plt.ylabel('density', fontsize=font_size)
     if title is not None:
-        plt.title(title, fontsize=16)
-    plt.legend(fontsize=12)
+        plt.title(title, fontsize=font_size)
+    if show_legend:
+        plt.legend(fontsize=font_size)
 
 
 def main(gff_path, output_root, component_num=None):
@@ -96,9 +100,14 @@ def main(gff_path, output_root, component_num=None):
         lengths = get_length(gff, features)
         type_lengths[type_] = lengths
     
-    if os.path.exists(gaussian_model_path):
+    if False:#os.path.exists(gaussian_model_path):
         gaussian_models = pd.read_csv(gaussian_model_path, sep='\t')
-        gaussian_model_groups = gaussian_models.groupby('types')
+        gaussian_models.columns = ['types','weights','means','stds']
+        try:
+            gaussian_model_groups = gaussian_models.groupby('types')
+        except:            
+            print(gaussian_model_path)
+            raise
         gaussian_params = {}
         for type_ in list(gaussian_model_groups.groups):
             gaussian_params[type_] = gaussian_model_groups.get_group(type_).to_dict('list')
@@ -125,7 +134,7 @@ def main(gff_path, output_root, component_num=None):
     for type_ in data_types.keys():
         lengths = type_lengths[type_]
         params = gaussian_params[type_]
-        title = 'The log distribution and Gaussian model of {}\'s length (nt)'.format(type_)
+        title = 'The distribution and Gaussian model of {}\'s log-length (nt)'.format(type_)
         plot_log_hist(lengths, params, title=title)
         path = os.path.join(output_root,'{}_log10_length_gaussian_model'.format(type_))
         plt.savefig(path,bbox_inches = 'tight',pad_inches = 0)
@@ -133,9 +142,7 @@ def main(gff_path, output_root, component_num=None):
 
 
 if __name__ == '__main__':
-    parser = ArgumentParser(
-        description="Create table about length statistic result about GFF data"
-    )
+    parser = ArgumentParser(description="Create table about length statistic result about GFF data")
     parser.add_argument("-i","--gff_path",required=True,
                         help="The path of input GFF to be analysized")
     parser.add_argument("-o","--output_root",required=True,

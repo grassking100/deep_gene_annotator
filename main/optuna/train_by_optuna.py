@@ -84,6 +84,7 @@ if __name__ == '__main__':
     parser.add_argument("--dropout",type=float, default=0)
     parser.add_argument("--concat",action="store_true")
     parser.add_argument("--drop_last",action="store_true")
+    parser.add_argument("--acq_func",type=str,default=None)
     parser.add_argument("--patience",help="The epoch to stop traininig when val_loss "
                         "is not improving. Dafault value is None, the model won't be "
                         "stopped by early stopping",type=int,default=None)

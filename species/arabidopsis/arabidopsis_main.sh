@@ -127,8 +127,8 @@ full_data_root=$saved_root/full_data
 mkdir -p $half_data_root
 mkdir -p $full_data_root
 
-python3 $genome_handler_root/select_data.py -f $fasta_path -a $ann_seqs_path -u $split_table_path -o $half_data_root  --dataset_name train_1_2_plus_3_5 --ratio 0.5 --select_each_type
+#python3 $genome_handler_root/select_data.py -f $fasta_path -a $ann_seqs_path -u $split_table_path -o $half_data_root  --dataset_name train_1_2_plus_3_5 --ratio 0.5 --select_each_type
 
-python3 $genome_handler_root/select_data.py -f $fasta_path -a $ann_seqs_path -u $split_table_path -o $half_data_root  --dataset_name val_2_minus --ratio 0.5 --select_each_type
+#python3 $genome_handler_root/select_data.py -f $fasta_path -a $ann_seqs_path -u $split_table_path -o $half_data_root  --dataset_name val_2_minus --ratio 0.5 --select_each_type
 
-python3 $genome_handler_root/select_data.py -f $fasta_path -a $ann_seqs_path -u $split_table_path -o $full_data_root
+#python3 $genome_handler_root/select_data.py -f $fasta_path -a $ann_seqs_path -u $split_table_path -o $full_data_root

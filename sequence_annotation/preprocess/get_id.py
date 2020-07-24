@@ -4,14 +4,15 @@ from argparse import ArgumentParser
 from sequence_annotation.utils.utils import read_bed,read_gff,get_gff_with_attribute
 from sequence_annotation.preprocess.get_id_table import get_id_convert_dict
 
-def main(input_path,output_path,id_table_path=None):
+def main(input_path,output_path,id_table_path=None,id_name=None):
+    id_name = id_name or 'id'
     file_format = input_path.split('.')[-1]
     if file_format in ['bed','bed12']:
         bed = read_bed(input_path)
-        ids = set(bed['id'])
+        ids = set(bed[id_name])
     elif file_format in ['gff','gff3']:
         gff = get_gff_with_attribute(read_gff(input_path))
-        ids = set(gff['id'])
+        ids = set(gff[id_name])
     else:
         raise Exception("Unknown file format {}".format(file_format))
     
@@ -32,6 +33,7 @@ if __name__ == "__main__":
     parser = ArgumentParser(description="This program will output GFF id or BED id")
     parser.add_argument("-i", "--input_path",help="Input file",required=True)
     parser.add_argument("-o", "--output_path",help="Output id file",required=True)
+    parser.add_argument("-n", "--id_name")
     parser.add_argument("-t", "--id_table_path",help="Table about id conversion, "
                         "if it provided then the id would be converted by table")
     args = parser.parse_args()

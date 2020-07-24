@@ -115,7 +115,7 @@ for path in $(find $bed_root/* -name '*.bed');
 do
     file_name=$(basename $path)
     file_name="${file_name%.*}"
-    bedtools getfasta -s -fi $genome_path -bed $bed_root/$file_name.bed -fo $fasta_root/$file_name.fasta
+    bedtools getfasta -s -name -fi $genome_path -bed $bed_root/$file_name.bed -fo $fasta_root/$file_name.fasta
 done
 
 python3 $visual_main_root/plot_composition.py -i $fasta_root/$tss_path.fasta -s "-$tss_radius" --title "Nucleotide composition around TSS" -o $composition_root/$tss_path.png
@@ -129,6 +129,10 @@ python3 $utils_root/motif_count.py -i $fasta_root/$donor_signal_path.fasta -o $s
 python3 $utils_root/motif_count.py -i $fasta_root/$acceptor_signal_path.fasta -o $signal_stats_root/acceptor_signal_stats.tsv
 
 python3 $preprocess_main_root/gff_feature_stats.py -i $gff_path -r $region_table_path -c $chrom_source -o $output_root/feature_stats
+
+rm -r $output_root/feature_stats_with_gaussian
+
+python3 $preprocess_main_root/gff_feature_stats.py -i $gff_path -r $region_table_path -c $chrom_source -o $output_root/feature_stats_with_gaussian --with_gaussian
 
 #if [ ! -e "$output_root/length_gaussian.tsv" ]; then
 python3 $preprocess_main_root/length_gaussian_modeling.py -i $gff_path -o $output_root/length_gaussian -n 2

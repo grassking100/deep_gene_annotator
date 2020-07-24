@@ -12,7 +12,7 @@ from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES, create_folder
 from sequence_annotation.utils.utils import read_gff, read_json, write_gff, write_json
 from sequence_annotation.genome_handler.select_data import load_data
 from sequence_annotation.preprocess.utils import get_data_names,read_region_table
-from sequence_annotation.preprocess.length_gaussian_modeling import norm_fit_log10
+from sequence_annotation.preprocess.gff_feature_stats import main as gff_feature_stats_main
 from sequence_annotation.preprocess.utils import get_gff_with_intergenic_region
 from sequence_annotation.process.seq_ann_engine import get_best_model_and_origin_executor
 from sequence_annotation.process.seq_ann_engine import SeqAnnEngine, get_batch_size
@@ -36,13 +36,11 @@ def get_splicing_kwargs(path_helper, first_n=None):
     return kwargs
 
 
-def get_distances(root, scale):
-    a_p_abs_diff = read_json(
-        os.path.join(
-            root,
-            'a_p_abs_diff.json'))
-    donor_distance = a_p_abs_diff['mean']['splicing_donor_site'] * scale
-    acceptor_distance = a_p_abs_diff['mean']['splicing_acceptor_site'] * scale
+def get_distances(root, scale,source=None):
+    source = source or 'a_p_abs_diff.json'
+    abs_diff = read_json(os.path.join(root,source))
+    donor_distance = abs_diff['mean']['splicing_donor_site'] * scale
+    acceptor_distance = abs_diff['mean']['splicing_acceptor_site'] * scale
     return {'donor_distance': donor_distance,
             'acceptor_distance': acceptor_distance}
 
@@ -86,21 +84,49 @@ def get_overall_loss(root):
     return loss
 
 
-def get_length_thresholds(length_gaussian_path, std_num):
-    length_model = pd.read_csv(length_gaussian_path, sep='\t')
-    length_thresholdss = {}
-    length_model['threshold'] = length_model['mean'] - \
-        length_model['std'] * std_num
-    for type_, group in length_model.groupby('type'):
+def get_length_thresholds_v1(real_gaussian_path,predicted_gaussian_root, std_num):
+    length_thresholds = {}
+    interenic_gaussian_path = os.path.join(predicted_gaussian_root,'intergenic_region_models.tsv')
+    intergenic_param = pd.read_csv(interenic_gaussian_path, sep='\t').to_dict('list')
+    intergenic_threshold = math.pow(10,min(intergenic_param['means']))
+    length_thresholds['other'] = intergenic_threshold
+    length_model = pd.read_csv(real_gaussian_path, sep='\t')
+
+    length_model['threshold'] = length_model['means'] - length_model['stds'] * std_num
+    for type_, group in length_model.groupby('types'):
         threshold = min(group['threshold'])
-        if threshold < 0:
-            threshold = 0
         if type_ == 'gene':
             type_ = 'transcript'
-        length_thresholdss[type_] = pow(10, threshold)
-    length_thresholdss['other'] = 0
-    return length_thresholdss
+        length_thresholds[type_] = pow(10, threshold)
+    return length_thresholds
 
+def get_length_thresholds_v2(real_gaussian_path,predicted_gaussian_root, std_num):
+    length_thresholds = {}
+    types = ['exon','intron','transcript','other']
+    names = ['exon_models.tsv','intron_models.tsv',
+             'mRNA_models.tsv','intergenic_region_models.tsv']
+    real_length_model = pd.read_csv(real_gaussian_path, sep='\t')
+    real_length_model['threshold'] = real_length_model['means'] - real_length_model['stds'] * std_num
+    #print(length_model)
+    real_region_thresholds = real_length_model.groupby('types')
+    for type_,name in zip(types,names):
+        path = os.path.join(predicted_gaussian_root,name)
+        predicted_length_model = pd.read_csv(path, sep='\t')
+        mean_values = np.array(predicted_length_model['means'])
+        std_values = np.array(predicted_length_model['stds'])
+        fragment_index = np.argmin(mean_values)
+        fragment_threshold = mean_values[fragment_index] + std_values[fragment_index]*std_num
+        if type_ == 'other':
+            other_indice = list(range(len(predicted_length_model)))
+            other_indice.remove(fragment_index)
+            region_threshold = min(mean_values[other_indice] - std_values[other_indice]*std_num)
+        elif type_ == 'transcript':
+            region_threshold = min(real_region_thresholds.get_group('gene')['threshold'])
+        else:
+            region_threshold = min(real_region_thresholds.get_group(type_)['threshold'])
+        thresholds = min([region_threshold,fragment_threshold])
+        length_thresholds[type_] = pow(10, thresholds)
+    return length_thresholds
 
 class Reviser:
     def __init__(self, plust_strand_gff_path, fasta_path, region_table_path,multiprocess=None):
@@ -190,17 +216,10 @@ def test(trained_root, test_result_root, path_helper):
     return overall_loss
 
 
-def get_intergenic_threshold(predicted_gff,region_table,chrom_id_source):
-    gff = get_gff_with_intergenic_region(predicted_gff,region_table,chrom_id_source)
-    intergenic_region = gff[gff['feature']=='intergenic region']
-    lengths = list(intergenic_region['end']-intergenic_region['start']+1)
-    params = norm_fit_log10(lengths, component_num=4)
-    index = np.argmin(params['means'])
-    threshold = math.pow(10,params['means'][index])
-    return threshold
-
 class RevierSpaceSearcher:
-    def __init__(self,revise_evaluator,output_root):
+    def __init__(self,revise_evaluator,output_root,threshold_method=None,distance_source=None):
+        self._threshold_method = threshold_method or 'v1'
+        self._distance_source = distance_source or 'a_p_abs_diff.json'
         self._revise_evaluator = revise_evaluator
         self._path_helper = self._revise_evaluator.path_helper
         self._predicted_root = self._revise_evaluator.predicted_root
@@ -217,11 +236,19 @@ class RevierSpaceSearcher:
         self._std_num = 3
         self._distance_scales = [0,1,2,3]
         self._first_n_motif = 1
-        gff = read_gff(self._revise_evaluator.plus_strand_gff_path)
-        region_table = read_region_table(self._path_helper.region_table_path)
-        intergenic_threshold = get_intergenic_threshold(gff,region_table,'ordinal_id_with_strand')
-        self._length_thresholds = get_length_thresholds(self._path_helper.length_log10_model_path,self._std_num)
-        self._length_thresholds['other'] = intergenic_threshold
+        predicted_length_model_root = os.path.join(self._output_root,'length_model')
+        gff_feature_stats_main(self._revise_evaluator.plus_strand_gff_path,
+                               self._path_helper.region_table_path,
+                               predicted_length_model_root,
+                               'ordinal_id_with_strand',with_gaussian=True,predicted_mode=True)
+        if self._threshold_method == 'v1':
+            get_length_thresholds = get_length_thresholds_v1
+        else:
+            get_length_thresholds = get_length_thresholds_v2
+        self._length_thresholds = get_length_thresholds(self._path_helper.length_log10_model_path,
+                                                        predicted_length_model_root,self._std_num)
+        for key,value in self._length_thresholds.items():
+            self._length_thresholds[key] = round(value,1)
         self._methods_1ist = [['length_threshold'],['distance_threshold'],
                               ['length_threshold', 'distance_threshold'],
                               ['distance_threshold', 'length_threshold']]
@@ -233,6 +260,8 @@ class RevierSpaceSearcher:
         config['distance_scales'] = self._distance_scales
         config['first_n_motif'] = self._first_n_motif
         config['methods_1ist'] = self._methods_1ist
+        config['threshold_source'] = self._threshold_method
+        config['distance_source'] = self._distance_source
         return config
 
     def _execute_revise_evaluator(self, target, methods, distances):
@@ -254,7 +283,7 @@ class RevierSpaceSearcher:
         hyperparams = {'distance_scale': distance_scale, 'methods': methods,'target': target}
         self._records.append(hyperparams)
         if distance_scale is not None:
-            distances = get_distances(self._predicted_root,distance_scale)
+            distances = get_distances(self._predicted_root,distance_scale,self._distance_source)
         else:
             distances = {'acceptor_distance': None, 'donor_distance': None}
         kwargs = (target,methods,distances)
@@ -310,7 +339,8 @@ class RevierSpaceSearcher:
         write_json(gff_reviser_config,os.path.join(self._output_root,'best_gff_reviser_config.json'))
         return gff_reviser_config
 
-def main(raw_data_root, trained_project_root, output_root,fold_name=None):
+def main(raw_data_root, trained_project_root, output_root,
+         fold_name=None,threshold_method=None,distance_source=None):
     
     processed_root = os.path.join(raw_data_root,'full_data')
     path_helper = PathHelper(raw_data_root, processed_root)
@@ -378,9 +408,10 @@ def main(raw_data_root, trained_project_root, output_root,fold_name=None):
             
     
     revise_evaluator = ReviseEvaluator(path_helper,val_root)
-
     revised_val_root = os.path.join(output_root,'revised_val')
-    space_searcher = RevierSpaceSearcher(revise_evaluator,revised_val_root)
+    space_searcher = RevierSpaceSearcher(revise_evaluator,revised_val_root,
+                                         threshold_method=threshold_method,
+                                         distance_source=distance_source)
     best_reviser_config = space_searcher.search()
     write_json(space_searcher.get_config(),os.path.join(revised_val_root,'auto_revised_config.json'))
     
@@ -416,6 +447,9 @@ if __name__ == '__main__':
     parser.add_argument("-g", "--gpu_id", type=int,
                         default=0, help="GPU to used")
     parser.add_argument("--fold_name")
+    parser.add_argument("--threshold_method")
+    parser.add_argument("--distance_source")
+    
     args = parser.parse_args()
     kwargs = dict(vars(args))
     del kwargs['gpu_id']

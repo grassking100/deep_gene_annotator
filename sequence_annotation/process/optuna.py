@@ -190,7 +190,8 @@ def _get_status(study, id_):
 class OptunaTrainer:
     def __init__(self, train_method, output_root, model_executor_creator,
                  train_data, val_data, epoch, batch_size, monitor_target,
-                 is_minimize=True, by_grid_search=False,**train_kwargs):
+                 is_minimize=True, by_grid_search=False, acq_func=None,
+                 **train_kwargs):
         if is_minimize:
             self._direction = 'minimize'
         else:
@@ -205,11 +206,11 @@ class OptunaTrainer:
         self._epoch = epoch
         self._batch_size = batch_size
         self._creator = model_executor_creator
-        self._trial_list_path = os.path.join(
-            self._output_root, "trial_list.tsv")
+        self._trial_list_path = os.path.join(self._output_root, "trial_list.tsv")
         self._train_kwargs = train_kwargs
         self._by_grid_search = by_grid_search
         self._study = None
+        self._acq_func = acq_func or 'gp_hedge'
 
     def _get_trial_id(self, trial):
         return self._trial_start_number + trial.number
@@ -302,7 +303,7 @@ class OptunaTrainer:
 
     def _create_study(self, n_startup_trials=None):
         n_startup_trials = n_startup_trials or 0
-        skopt_kwargs = {'n_initial_points': 0}
+        skopt_kwargs = {'n_initial_points': 0, 'acq_func':self._acq_func}
         warnings.warn(
             "The n_initial_points in skopt_kwargs is set to 0, PLEASE MAKE SURE the optuna version is >=1.2.0\n\n")
         sampler = SkoptSampler(
@@ -353,10 +354,11 @@ class OptunaTrainer:
             self._study._storage.set_trial_state(trial_id, TrialState.FAIL)
             raise
 
+        session = self._study._storage.scoped_session()
         self._study._storage.set_trial_value(trial_id, result)
         self._study._storage.set_trial_state(trial_id, TrialState.COMPLETE)
         self._study._log_completed_trial(trial, result)
-
+        self._study._storage._commit_with_integrity_check(session)
         frozen_trial = self._study.get_trials()[trial_number]
         self._save_trial_result(frozen_trial)
 

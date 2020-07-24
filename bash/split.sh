@@ -193,16 +193,29 @@ if  (( $result_num > 0 )) ; then
         fi
         
         #if [ ! -e "$saved_root/canonical_stats/$file_name/gff_analysis.log" ]; then
-            echo "gene"
-            #echo $ds_region_fasta_path
-            bash $bash_root/gff_analysis.sh -i $part_ds_canonical_gff_path -f $ds_region_fasta_path \
-            -o $saved_root/canonical_stats/$file_name -s ordinal_id_wo_strand -r $part_region_table_path
+        echo "gene"
+        #echo $ds_region_fasta_path
+        bash $bash_root/gff_analysis.sh -i $part_ds_canonical_gff_path -f $ds_region_fasta_path \
+        -o $saved_root/canonical_stats/$file_name -s ordinal_id_wo_strand -r $part_region_table_path
         #fi
         
         #if [ ! -e "$saved_root/rna_stats/$file_name/gff_analysis.log" ]; then
-            echo "rna"
-            bash $bash_root/gff_analysis.sh -i $part_ds_gff_path -f $ds_region_fasta_path \
-            -o $saved_root/rna_stats/$file_name -s ordinal_id_wo_strand -r $part_region_table_path
+        echo "rna"
+        bash $bash_root/gff_analysis.sh -i $part_ds_gff_path -f $ds_region_fasta_path \
+        -o $saved_root/rna_stats/$file_name -s ordinal_id_wo_strand -r $part_region_table_path
+        #fi
+        
+        #if [ ! -e "$saved_root/canonical_stats/$file_name/gff_analysis.log" ]; then
+        echo "gene"
+        #echo $ds_region_fasta_path
+        bash $bash_root/gff_analysis.sh -i $part_canonical_gff_path -f $region_fasta_path \
+        -o $saved_root/with_strand_canonical_stats/$file_name -s ordinal_id_with_strand -r $part_region_table_path
+        #fi
+        
+        #if [ ! -e "$saved_root/rna_stats/$file_name/gff_analysis.log" ]; then
+        echo "rna"
+        bash $bash_root/gff_analysis.sh -i $part_gff_path -f $region_fasta_path \
+        -o $saved_root/with_strand_rna_stats/$file_name -s ordinal_id_with_strand -r $part_region_table_path
         #fi
 
     done

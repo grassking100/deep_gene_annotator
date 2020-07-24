@@ -191,7 +191,9 @@ samtools faidx $region_fasta_path
 
 echo "Step 7: Redefine coordinate based on region data (Note: the strand is not considered)"
 rna_bed_path=$result_root/rna.bed
+rna_gff_path=$result_root/rna.gff3
 python3 $preprocess_main_root/redefine_coordinate.py -i $origin_rna_bed_path -t $region_table_path -o $rna_bed_path 
+python3 $preprocess_main_root/bed2gff.py -i $rna_bed_path -o $rna_gff_path -t $id_convert_table_path
 
 echo "Step 8: Create data about gene structure and alternative status"
 canonical_bed_path=$result_root/canonical.bed

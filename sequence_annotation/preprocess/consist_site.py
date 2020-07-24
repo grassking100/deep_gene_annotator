@@ -40,7 +40,7 @@ def consist(data, by, ref_value, drop_duplicated):
     return df
 
 
-def _read(path):
+def preprocess(path):
     gff = get_gff_with_attribute(read_gff(path))
     coord_ref_id = gff['chr'].astype(str) + "_" + gff['strand'].astype(
         str) + "_" + gff['start'].astype(str) + "_" + gff['ref_name'].astype(
@@ -70,23 +70,22 @@ def preserved_max_by_coord_ref_id(gff, group_by, max_name):
     return gff.loc[index_list].copy()
 
 
-def get_consist_site(on_external_UTR, on_long_dist, on_transcript, UTR_target,
-                     remove_conflict):
+def get_consist_site(on_external_UTR, on_long_dist, on_transcript, 
+                     UTR_target=None,remove_conflict=True):
     #Create orhpan data
     on_orphan = get_ophan_on_ld_data(on_long_dist, on_external_UTR)
     data = [on_external_UTR, on_orphan]
     if remove_conflict:
         #Add signal in transcript but not in external UTR to "other"
-        other = get_not_same_coord_ref_id_data(on_transcript, on_external_UTR)
+        other = get_not_same_coord_ref_id_data(on_transcript, on_external_UTR).copy()
+        other['feature'] = 'other'
         data.append(other)
 
     data = pd.concat(data, sort=False).reset_index(drop=True)
     #Get consist site of every transcript
-    data = consist(data,
-                   'ref_name',
-                   'experimental_score',
-                   drop_duplicated=True)
-    consist_site = data[data['feature'].isin([UTR_target])]
+    consist_site = consist(data,'ref_name','experimental_score',drop_duplicated=True)
+    if UTR_target is not None:
+        consist_site = consist_site[consist_site['feature'].isin([UTR_target])]
     return consist_site
 
 
@@ -113,12 +112,12 @@ if __name__ == "__main__":
         print("Result files are already exist, procedure will be skipped.")
     else:
         ###Read file###
-        external_five_UTR_tss = _read(args.external_five_UTR_tss_path)
-        external_three_UTR_cs = _read(args.external_three_UTR_cs_path)
-        ld_tss = _read(args.long_dist_tss_path)
-        ld_cs = _read(args.long_dist_cs_path)
-        transcript_tss = _read(args.transcript_tss_path)
-        transcript_cs = _read(args.transcript_cs_path)
+        external_five_UTR_tss = preprocess(args.external_five_UTR_tss_path)
+        external_three_UTR_cs = preprocess(args.external_three_UTR_cs_path)
+        ld_tss = preprocess(args.long_dist_tss_path)
+        ld_cs = preprocess(args.long_dist_cs_path)
+        transcript_tss = preprocess(args.transcript_tss_path)
+        transcript_cs = preprocess(args.transcript_cs_path)
 
         consist_tss_site = get_consist_site(
             external_five_UTR_tss, ld_tss, transcript_tss,

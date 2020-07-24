@@ -8,9 +8,10 @@ from torch.nn.init import zeros_
 from torch.nn import ReLU
 from .customized_layer import Concat, BasicModel, Add
 from .utils import xavier_uniform_extend_
-from .noisy_activation import SimpleHalfNoisyReLU
+from .noisy_activation import SimpleHalfNoisyReLU,NoisyReLU,SimpleNoisyReLU
 
-ACTIVATION_FUNC = {'ReLU': ReLU(),'SimpleHalfNoisyReLU':SimpleHalfNoisyReLU()}
+ACTIVATION_FUNC = {'ReLU': ReLU(),'SimpleHalfNoisyReLU':SimpleHalfNoisyReLU(),
+                   'NoisyReLU':NoisyReLU(),'SimpleNoisyReLU':SimpleNoisyReLU()}
 PADDING_HANDLE = ['valid', 'same', 'partial']
 EPSILON = 1e-32
 
