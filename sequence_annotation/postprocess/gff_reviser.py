@@ -1,5 +1,6 @@
 import os
 import sys
+import warning
 import pandas as pd
 import numpy as np
 from argparse import ArgumentParser
@@ -147,6 +148,7 @@ class GFFReviser:
     def _filter_ann_by_length(self, seq_info_container):
         if self.length_thresholds is None:
             return seq_info_container
+        warning.warn("When there are multiple fragments, the most upstram one is chosen first.")
         block_table = {}
         fragment_lengths = {}
         for seq_info in seq_info_container:
@@ -158,8 +160,17 @@ class GFFReviser:
         while len(fragment_lengths)>0:
             starts = list(fragment_lengths.keys())
             fragment_lengths_ = list(fragment_lengths.values())
-            index = np.argsort(fragment_lengths_)[0]
-            start = starts[index]
+            #index = np.argsort(fragment_lengths_)[0]
+            #start = starts[index]
+            #if len(fragment_lengths_) != len(set(fragment_lengths_)):
+            min_len = min(fragment_lengths_)
+            for start_ in sorted(starts):
+                if fragment_lengths[start_] == min_len:
+                    break
+                #if start_ != start:
+                #    raise Exception("{} --> {}".format(start_,start))
+            start = start_
+                
             current_block = block_table[start]
             previous_block = next_block = None
             if current_block.start-1 in block_table:
