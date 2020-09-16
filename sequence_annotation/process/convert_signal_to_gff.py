@@ -16,7 +16,7 @@ from sequence_annotation.genome_handler.ann_seq_processor import vecs2seq
 from sequence_annotation.preprocess.utils import read_region_table
 from sequence_annotation.process.flip_and_rename_coordinate import flip_and_rename_gff
 from sequence_annotation.process.utils import get_seq_mask
-from sequence_annotation.process.inference import create_basic_inference, seq_ann_inference, ann_vec2one_hot_vec
+from sequence_annotation.process.inference import BasicInference, SeqAnnInference, ann2one_hot
 
 
 def ann_vecs2gene_info(channel_order, gene_info_extractor,
@@ -24,7 +24,7 @@ def ann_vecs2gene_info(channel_order, gene_info_extractor,
     """Convert annotation vectors to dictionay of SeqInformation of region data"""
     gene_info = {}
     for chrom_id, length, ann_vec in zip(chrom_ids, lengths, ann_vecs):
-        one_hot_vec = ann_vec2one_hot_vec(ann_vec, length)
+        one_hot_vec = ann2one_hot(ann_vec, length)
         ann_seq = vecs2seq(one_hot_vec, chrom_id, PLUS, channel_order)
         info = gene_info_extractor.extract_per_seq(ann_seq)
         gene_info[chrom_id] = info
@@ -91,23 +91,20 @@ def convert_output_to_gff(raw_outputs,region_table,
                           raw_plus_gff_path,gff_path,
                           inference,ann_vec_gff_converter):
     onehot_list = []
-    output_list = []
+    output_vec_list = []
     for index,raw_output in enumerate(raw_outputs):
         print_progress("{}% of data have been processed".format(int(100 * index / len(raw_outputs))))
         output = simple_output_to_vectors(raw_output)
         onehot_vecs = inference(output['outputs'],output['masks'])
         onehot_vecs = onehot_vecs.cpu().numpy()
         output_list.append(output)
-        onehot_list.append(onehot_vecs)
+        output_vec_list.append(onehot_vecs)
     arg_list = []
-    for onehot_vecs,output in zip(onehot_list,output_list):
+    for onehot_vecs,output in zip(output_vec_list,output_list):
         arg_list.append((output['chrom_ids'],output['lengths'], onehot_vecs))
             
     with Pool(processes=cpu_count()) as pool:
         gffs = pool.starmap(ann_vec_gff_converter.convert, arg_list)
-    #gffs = []
-    #for arg in arg_list:
-    #    gffs.append(ann_vec_gff_converter.convert(*arg))
     
     gff = pd.concat(gffs).sort_values(by=['chr','start','end','strand'])
     redefined_gff = flip_and_rename_gff(gff,region_table)
@@ -123,9 +120,9 @@ def main(saved_root,raw_signal_path,region_table_path,
     gff_path = os.path.join(saved_root, 'converted.gff')
     converter = build_ann_vec_gff_converter()
     if use_native:
-        inference_ = create_basic_inference()
+        inference_ = BasicInference([0,1,2])
     else:
-        inference_ = seq_ann_inference
+        inference_ = SeqAnnInference()
     raw_plus_gff_path = '.'.join(gff_path.split('.')[:-1]) + "_raw_plus.gff3"
     config = converter.get_config()
     write_json(config, config_path)

@@ -2,7 +2,7 @@ import os
 import sys
 sys.path.append(os.path.dirname(__file__)+"/..")
 from ..utils.utils import read_json,get_file_name
-from ..preprocess.utils import get_data_names
+from ..postprocess.utils import get_data_names
 
 class PathHelper:
     def __init__(self,raw_data_root,processed_root,trained_id=None,usage=None):

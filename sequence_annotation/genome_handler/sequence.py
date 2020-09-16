@@ -1,15 +1,17 @@
+import numpy as np
 from abc import ABCMeta, abstractproperty
 from copy import deepcopy
-import numpy as np
-from ..utils.utils import get_protected_attrs_names, logical_not, CONSTANT_LIST
-from ..utils.exception import UninitializedException, NegativeNumberException, InvalidStrandType
+from ..utils.utils import get_protected_attrs_names, logical_not
+from ..utils.exception import NegativeNumberException
 from ..utils.exception import ChangeConstValException, ValueOutOfRange
+from ..file_process.utils import InvalidStrandType,STRANDS
 from .exception import InvalidAnnotation
 
-PLUS = 'plus'
-MINUS = 'minus'
-STRANDS = CONSTANT_LIST([PLUS, MINUS])
-
+class UninitializedException(Exception):
+    def __init__(self, class_name, solution):
+        msg = class_name + " has not be initialized"
+        msg += ("," + str(solution))
+        super().__init__(msg)
 
 class Sequence(metaclass=ABCMeta):
     def __init__(self):

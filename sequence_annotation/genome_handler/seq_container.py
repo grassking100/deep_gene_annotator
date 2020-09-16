@@ -2,10 +2,10 @@ from abc import ABCMeta
 from abc import abstractmethod
 import pandas as pd
 from ..utils.exception import IdNotFoundException, DuplicateIdException, AttrIsNoneException
-from ..utils.exception import ChangeConstValException, InvalidStrandType
-from ..utils.utils import GFF_COLUMNS
+from ..utils.exception import ChangeConstValException
+from ..file_process.utils import GFF_COLUMNS, PLUS,MINUS, InvalidStrandType
 from .exception import InvalidAnnotation
-from .sequence import AnnSequence, SeqInformation, PLUS, MINUS
+from .sequence import AnnSequence, SeqInformation
 
 
 class EmptyContainerException(Exception):

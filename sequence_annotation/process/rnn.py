@@ -1,5 +1,4 @@
 from abc import abstractmethod
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -19,12 +18,10 @@ def separate_xav_rnn_init(rnn, mode=None, chunk_size=None):
     for index in range(rnn.num_layers):
         for suffix in suffice:
             weights = []
-            weight_ih = getattr(rnn,
-                                'weight_ih_l{}{}'.format(index, suffix)).chunk(
-                                    chunk_size, 0)
-            weight_hh = getattr(rnn,
-                                'weight_hh_l{}{}'.format(index, suffix)).chunk(
-                                    chunk_size, 0)
+            weight_ih_name = 'weight_ih_l{}{}'.format(index, suffix)
+            weight_hh_name = 'weight_hh_l{}{}'.format(index, suffix)
+            weight_ih = getattr(rnn,weight_ih_name).chunk(chunk_size, 0)
+            weight_hh = getattr(rnn,weight_hh_name).chunk(chunk_size, 0)
             weights += weight_ih
             weights += weight_hh
             for var in weights:
@@ -40,12 +37,10 @@ def xav_rnn_init(rnn, mode=None, chunk_size=None):
     for index in range(rnn.num_layers):
         for suffix in suffice:
             weights = []
-            weight_ih = getattr(rnn,
-                                'weight_ih_l{}{}'.format(index, suffix)).chunk(
-                                    chunk_size, 0)
-            weight_hh = getattr(rnn,
-                                'weight_hh_l{}{}'.format(index, suffix)).chunk(
-                                    chunk_size, 0)
+            weight_ih_name = 'weight_ih_l{}{}'.format(index, suffix)
+            weight_hh_name = 'weight_hh_l{}{}'.format(index, suffix)
+            weight_ih = getattr(rnn,weight_ih_name).chunk(chunk_size, 0)
+            weight_hh = getattr(rnn,weight_hh_name).chunk(chunk_size, 0)
             weights += weight_ih
             weights += weight_hh
             i_o, i_i = weight_ih[0].shape
@@ -72,12 +67,10 @@ def bias_zero_rnn_init(rnn, chunk_size=None):
     for index in range(rnn.num_layers):
         for suffix in suffice:
             weights = []
-            weights += getattr(rnn, 'bias_ih_l{}{}'.format(index,
-                                                           suffix)).chunk(
-                                                               chunk_size, 0)
-            weights += getattr(rnn, 'bias_hh_l{}{}'.format(index,
-                                                           suffix)).chunk(
-                                                               chunk_size, 0)
+            weight_ih_name = 'weight_ih_l{}{}'.format(index, suffix)
+            weight_hh_name = 'weight_hh_l{}{}'.format(index, suffix)
+            weights += getattr(rnn, weight_ih_name).chunk(chunk_size, 0)
+            weights += getattr(rnn, weight_hh_name).chunk(chunk_size, 0)
             for var in weights:
                 zeros_(var)
 
@@ -140,192 +133,126 @@ def _forward(rnn, x, lengths, state=None, batch_first=True):
 
 
 class _RNN(BasicModel):
-    def __init__(self, in_channels, customized_init=None,use_previous_state=False,**kwargs):
+    def __init__(self, in_channels, hidden_size, customized_init=None,
+                 bidirectional=True,batch_first=True,**kwargs):
         super().__init__()
         if isinstance(customized_init, str):
             customized_init = RNN_INIT_MODE[customized_init]
-        self.customized_init = customized_init
-        self.rnn = self._create_rnn(in_channels, **kwargs)
-        self.kwargs = kwargs
-        self.in_channels = in_channels
-        self.out_channels = self.rnn.hidden_size
-        self.use_previous_state = use_previous_state
-        if self.rnn.bidirectional:
-            self.out_channels *= 2
-        self.batch_first = True
-        if hasattr(self.rnn, 'batch_first'):
-            self.batch_first = self.rnn.batch_first 
-        
-        if self.use_previous_state:
-            C = self.rnn.hidden_size
-            num_layers = self.rnn.num_layers
-            if self.rnn.bidirectional:
-                forward_state = torch.zeros(num_layers,1,C).cuda()
-                backward_state = torch.zeros(num_layers,1,C).cuda()
-                self.register_buffer('forward_state', forward_state)
-                self.register_buffer('backward_state', backward_state)
-            else:
-                state = torch.zeros(num_layers,1,C).cuda()
-                self.register_buffer('state', state)
+        self._customized_init = customized_init or RNN_INIT_MODE['in_xav_bias_zero_gru_init']
+        self._rnn = self._create_rnn(in_channels, hidden_size,
+                                     bidirectional=bidirectional,
+                                     batch_first=batch_first,**kwargs)
+        self._kwargs = kwargs
+        self._in_channels = in_channels
+        self._out_channels = self._rnn.hidden_size
+        self._hidden_size = hidden_size
+        if self._rnn.bidirectional:
+            self._out_channels *= 2
+        self._dropout = self._rnn.dropout
         self.reset_parameters()
-            
-    def reset(self):
-        if self.use_previous_state:
-            C = self.rnn.hidden_size
-            num_layers = self.rnn.num_layers
-            if self.rnn.bidirectional:
-                self.forward_state = torch.zeros(num_layers,1,C).cuda()
-                self.backward_state = torch.zeros(num_layers,1,C).cuda()
-            else:
-                self.state = torch.zeros(num_layers,1,C).cuda()
-
+        
     @property
     def dropout(self):
-        return self.rnn.dropout
-
+        return self._dropout
+        
     @abstractmethod
-    def _create_rnn(self, in_channels, **kwargs):
+    def _create_rnn(self, in_channels, hidden_size, **kwargs):
         pass
 
     def get_config(self):
         config = super().get_config()
-        config['setting'] = self.kwargs
-        config['customized_init'] = str(self.customized_init)
-        config['use_previous_state'] = self.use_previous_state
+        config['kwargs'] = self._kwargs
+        config['hidden_size'] = self._hidden_size
+        config['customized_init'] = str(self._customized_init)
+        config['bidirectional'] = self._rnn.bidirectional
+        config['batch_first'] = self._rnn.batch_first
         return config
 
     def reset_parameters(self):
         super().reset_parameters()
-        if self.customized_init is not None:
-            self.customized_init(self.rnn)
+        if self._customized_init is not None:
+            self._customized_init(self._rnn)
 
 
 class GRU(_RNN):
-    def _create_rnn(self, in_channels, **kwargs):
-        return nn.GRU(in_channels, **kwargs)
+    def _create_rnn(self, in_channels, hidden_size,**kwargs):
+        return nn.GRU(in_channels, hidden_size,**kwargs)
 
     def forward(self, x, lengths, **kwargs):
-        N = len(x)
-        C = self.rnn.hidden_size
-        num_layers = self.rnn.num_layers
-        state = None
-        if self.use_previous_state:
-            if self.rnn.bidirectional:
-                forward_state = torch.zeros(num_layers,N,C).cuda()
-                backward_state = torch.zeros(num_layers,N,C).cuda()
-                if self.forward_state is not None:
-                    previous_num = self.forward_state.shape[1]
-                    indice = list(range(previous_num))
-                    np.random.shuffle(indice)
-                    if previous_num > N:
-                        indice = indice[:N]
-                        forward_state = self.forward_state[:,indice]
-                        backward_state = self.backward_state[:,indice]
-                    else:
-                        forward_state[:,indice] += self.forward_state[:,indice]
-                        backward_state[:,indice] += self.backward_state[:,indice]
-                state = torch.cat([forward_state,backward_state],0)
-            else:
-                state = torch.zeros(num_layers,N,C).cuda()
-                if self.state is not None:
-                    previous_num = self.state.shape[1]
-                    indice = list(range(previous_num))
-                    np.random.shuffle(indice)
-                    if previous_num > N:
-                        indice = indice[:N]
-                        state = self.state[:,indice]
-                    else:
-                        state[:,indice] += self.state[:,indice]
-        #print(state)
-        x,hidden_states = _forward(self.rnn, x, lengths, state, self.batch_first)        
-        if self.use_previous_state:
-            #Get state with shape (num_layers,N,H)
-            if self.rnn.bidirectional:
-                self.forward_state = hidden_states[:,0].detach()
-                self.backward_state = hidden_states[:,1].detach()
-            else:
-                self.state = hidden_states[:,0].detach()
+        x,hidden_states = _forward(self._rnn, x, lengths, batch_first=self._rnn.batch_first)        
         return x
 
 
 class LSTM(_RNN):
-    def _create_rnn(self, in_channels, **kwargs):
-        return nn.LSTM(in_channels, **kwargs)
+    def _create_rnn(self, in_channels, hidden_size,**kwargs):
+        return nn.LSTM(in_channels, hidden_size,**kwargs)
 
-    def forward(self, x, lengths, state=None, **kwargs):
-        if self.use_previous_state:
-            raise
-        x = _forward(self.rnn, x, lengths, state, self.batch_first)
+    def forward(self, x, lengths, **kwargs):
+        x = _forward(self._rnn, x, lengths, batch_first=self._rnn.batch_first)
         return x
 
 
 class ProjectedRNN(BasicModel):
-    def __init__(self,in_channels,out_channels,norm_class=None,
+    def __init__(self,in_channels,hidden_size, out_channels,norm_class=None,
                  customized_cnn_init=None,customized_rnn_init=None,
-                 name=None,output_act=None,is_gru=True,
+                 name=None,output_act=None,rnn_class=None,
                  dropout_before_rnn=False,**kwargs):
         super().__init__()
-        self.output_act = output_act
-        self.output_act_func = None
-        if self.output_act is not None:
-            if not isinstance(self.output_act,str):
-                self.output_act_func = self.output_act
-            elif self.output_act == 'softmax':
-                self.output_act_func = lambda x: torch.softmax(x, 1)
-            elif self.output_act == 'sigmoid':
-                self.output_act_func = torch.sigmoid
+        self._output_act = None
+        if output_act is not None:
+            if not isinstance(output_act,str):
+                self._output_act = output_act
+            elif output_act == 'softmax':
+                self._output_act = torch.nn.Softmax(dim=1)
+            elif output_act == 'sigmoid':
+                self._output_act = torch.nn.Sigmoid()
             else:
-                raise Exception("Wrong activation name, {}".format(self.output_act))
+                raise Exception("Wrong activation name, {}".format(output_act))
         
-        self.dropout_before_rnn = dropout_before_rnn
+        self._dropout_before_rnn = dropout_before_rnn
         if name is None or name == '':
-            self.name = 'rnn'
+            self._name = 'rnn'
         else:
-            self.name = "{}_rnn".format(name)
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        if is_gru:
-            rnn_class = GRU
-        else:
-            rnn_class = LSTM
-        self.rnn = rnn_class(in_channels=self.in_channels,
-                             customized_init=customized_rnn_init,
-                             **kwargs)
-        self.project = Conv1d(in_channels=self.rnn.out_channels,
-                              out_channels=self.out_channels,
-                              kernel_size=1,
+            self._name = "{}_rnn".format(name)
+        self._in_channels = in_channels
+        self._out_channels = out_channels
+        self._rnn_class = rnn_class or GRU
+        self._rnn = self._rnn_class(self.in_channels,hidden_size,
+                                    customized_init=customized_rnn_init,**kwargs)
+        self._project = Conv1d(self._rnn.out_channels,self.out_channels,1,
                               customized_init=customized_cnn_init)
-        self.norm = None
+        self._norm = None
         if norm_class is not None:
-            self.norm = norm_class(in_channels)
+            self._norm = norm_class(in_channels)
         self.reset_parameters()
 
     def get_config(self):
         config = super().get_config()
-        config['rnn'] = self.rnn.get_config()
-        config['project'] = self.project.get_config()
-        config['name'] = self.name
-        config['output_act'] = self.output_act
-        config['dropout_before_rnn'] = self.dropout_before_rnn
-        if self.norm is not None:
-            config['norm'] = self.norm.get_config()
+        config['rnn_class'] = self._rnn_class.__name__
+        config['rnn'] = self._rnn.get_config()
+        config['project'] = self._project.get_config()
+        config['name'] = self._name
+        config['output_act'] = str(self._output_act)
+        config['dropout_before_rnn'] = self._dropout_before_rnn
+        if self._norm is not None:
+            config['norm'] = self._norm.get_config()
         return config
 
     def forward(self, x, lengths, return_intermediate=False, **kwargs):
-        if self.rnn.dropout > 0 and self.training and self.dropout_before_rnn:
-            x = F.dropout(x, self.rnn.dropout, self.training)
+        if self._rnn.dropout > 0 and self.training and self._dropout_before_rnn:
+            x = F.dropout(x, self._dropout, self.training)
             
-        if self.norm is not None:
-            x = self.norm(x,lengths)
-        post_rnn = self.rnn(x, lengths)
-        self.update_distribution(post_rnn, key=self.name)
+        if self._norm is not None:
+            x = self._norm(x,lengths)
+        post_rnn = self._rnn(x, lengths)
+        self._update_distribution(post_rnn, key=self._name)
 
-        if self.rnn.dropout > 0 and self.training:
-            post_rnn = F.dropout(post_rnn, self.rnn.dropout, self.training)
-        result, lengths, _, _ = self.project(post_rnn, lengths=lengths)
+        if self._rnn.dropout > 0 and self.training:
+            post_rnn = F.dropout(post_rnn, self._dropout, self.training)
+        result, lengths = self._project(post_rnn, lengths=lengths)[:2]
 
-        if self.output_act_func is not None:
-            result = self.output_act_func(result)
+        if self._output_act is not None:
+            result = self._output_act(result)
 
         if return_intermediate:
             return result, post_rnn
@@ -333,4 +260,4 @@ class ProjectedRNN(BasicModel):
             return result
 
 
-RNN_TYPES = {'GRU': GRU, 'LSTM': LSTM, 'ProjectedRNN': ProjectedRNN}
+RNN_CLASSES = {'GRU': GRU, 'LSTM': LSTM, 'ProjectedRNN': ProjectedRNN}

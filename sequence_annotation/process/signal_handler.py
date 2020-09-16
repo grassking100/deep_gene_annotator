@@ -4,23 +4,20 @@ import pandas as pd
 import deepdish as dd
 from ..utils.utils import read_gff,create_folder,read_json,write_json
 from ..preprocess.utils import read_region_table
-from .callback import Callback, Callbacks, set_prefix
+from .callback import Callback, Callbacks, get_prefix
 from .convert_signal_to_gff import convert_output_to_gff
 from .performance import compare_and_save
-
+from .convert_signal_to_gff import build_ann_vec_gff_converter
 
 class _SignalSaver(Callback):
     def __init__(self, saved_root, prefix=None):
-        set_prefix(self, prefix)
+        self._prefix = get_prefix(prefix)
         self._saved_root = saved_root
-        self._raw_outputs = None
-        self._raw_answers = None
         self._region_ids = None
         self._storage_root = os.path.join(self._saved_root,'signal_saver_storage')
-        self._answer_root = os.path.join(self._storage_root, '{}answer').format(self._prefix)
         self._output_root = os.path.join(self._storage_root, '{}output').format(self._prefix)
-        self._region_id_path = os.path.join(self._saved_root, '{}region_ids.tsv').format(self._prefix)
-        self._output_list_path = os.path.join(self._saved_root, '{}output_path.json').format(self._prefix)
+        self._region_id_path = os.path.join(self._storage_root, '{}region_ids.tsv').format(self._prefix)
+        self._output_list_path = os.path.join(self._storage_root, '{}output_path.json').format(self._prefix)
         self._output_path_json = None
         self._has_finish = True
         self._index = None
@@ -28,18 +25,6 @@ class _SignalSaver(Callback):
     @property
     def output_list_path(self):
         return self._output_list_path
-        
-    @property
-    def storage_root(self):
-        return self._storage_root
-    
-    @property
-    def answer_root(self):
-        return self._answer_root
-
-    @property
-    def output_root(self):
-        return self._output_root
 
     @property
     def region_id_path(self):
@@ -47,6 +32,7 @@ class _SignalSaver(Callback):
 
     def get_config(self):
         config = super().get_config()
+        config['prefix'] = self._prefix
         config['path'] = self._saved_root
         return config
 
@@ -55,39 +41,24 @@ class _SignalSaver(Callback):
         self._has_finish = False
 
     def on_epoch_begin(self, **kwargs):
-        self._raw_outputs = []
-        self._raw_answers = []
         self._region_ids = []
         self._output_path_json = []
         self._index = 0
-        create_folder(self.storage_root)
-        create_folder(self.answer_root)
-        create_folder(self.output_root)
+        create_folder(self._storage_root)
+        create_folder(self._output_root)
         
 
     def on_batch_end(self, outputs, seq_data, **kwargs):
         if not self._has_finish:
-            raw_output_path = os.path.join(self.output_root, '{}raw_output_{}.h5').format(self._prefix,self._index)
+            raw_output_path = os.path.join(self._output_root, '{}raw_output_{}.h5').format(self._prefix,self._index)
             self._output_path_json.append(raw_output_path)
             raw_outputs = {
                 'outputs': torch.Tensor(outputs),
-                'chrom_ids': seq_data.ids,
-                'lengths': seq_data.lengths
+                'chrom_ids': seq_data.get('ids'),
+                'lengths': seq_data.get('lengths')
             }
-            self._raw_outputs.append(raw_outputs)
             dd.io.save(raw_output_path, raw_outputs)
-            
-            if seq_data.answers is not None:
-                raw_answer_path = os.path.join(self.answer_root, '{}raw_answer_{}.h5').format(self._prefix,self._index)
-                answers = seq_data.answers.cpu()
-                raw_answers = {
-                    'outputs': answers,
-                    'chrom_ids': seq_data.ids,
-                    'lengths': seq_data.lengths
-                }
-                self._raw_answers.append(raw_answers)
-                dd.io.save(raw_answer_path, raw_answers)
-            self._region_ids += seq_data.ids
+            self._region_ids += seq_data.get('ids')
             self._index += 1
 
     def on_epoch_end(self, **kwargs):
@@ -95,15 +66,13 @@ class _SignalSaver(Callback):
 
     def on_work_end(self, **kwargs):
         region_ids = {'region_id': self._region_ids}
-        pd.DataFrame.from_dict(region_ids).to_csv(self.region_id_path,
-                                                  index=None)
+        pd.DataFrame.from_dict(region_ids).to_csv(self.region_id_path,index=None)
         write_json(self._output_path_json,self.output_list_path)
 
         
 class _SignalGffConverter(Callback):
-    def __init__(self,saved_root,region_table_path,
-                 signal_saver_output_root,output_list_path,
-                 inference,ann_vec_gff_converter,prefix=None):
+    def __init__(self,saved_root,region_table_path,output_list_path,
+                 ann_vec_gff_converter,prefix=None):
         """
         Parameters:
         ----------
@@ -117,18 +86,8 @@ class _SignalGffConverter(Callback):
             The Converter which convert annotation vectors to GFF
         """
         set_prefix(self, prefix)
-        variables = [
-            saved_root, region_table_path, signal_saver_output_root,
-            ann_vec_gff_converter
-        ]
-        names = [
-            'saved_root', 'region_table_path', 'signal_saver_output_root',
-            'ann_vec_gff_converter'
-        ]
-        self._inference = inference
         self._saved_root = saved_root
         self._region_table_path = region_table_path
-        self._signal_saver_output_root = signal_saver_output_root
         self._ann_vec_gff_converter = ann_vec_gff_converter
         self._region_table = read_region_table(self._region_table_path)
         self._output_list_path = output_list_path
@@ -144,16 +103,16 @@ class _SignalGffConverter(Callback):
     def get_config(self):
         config = super().get_config()
         config['saved_root'] = self._saved_root
-        config[
-            'ann_vec_gff_converter'] = self._ann_vec_gff_converter.get_config(
-            )
+        config['ann_vec_gff_converter'] = self._ann_vec_gff_converter.get_config()
         config['region_table_path'] = self._region_table_path
         return config
 
+    def on_work_begin(self, worker):
+        self._inference = worker.executor.inference
+    
     def on_work_end(self, **kwargs):
         raw_predicts = []
         for path in read_json(self._output_list_path):
-            #path = os.path.join(self._signal_saver_output_root,path)
             data = dd.io.load(path)
             raw_predicts.append(data)
         convert_output_to_gff(raw_predicts, self._region_table,
@@ -166,18 +125,6 @@ class _SignalGffConverter(Callback):
 class _GFFCompare(Callback):
     def __init__(self, saved_root, region_table_path,
                  predict_path,answer_path,region_id_path):
-        variables = [
-            saved_root, predict_path, answer_path, region_table_path,
-            region_id_path
-        ]
-        names = [
-            'saved_root', 'predict_path', 'answer_path', 'region_table_path',
-            'region_id_path'
-        ]
-        for name, variable in zip(names, variables):
-            if variable is None:
-                raise Exception("The {} should not be None".format(name))
-
         self._saved_root = saved_root
         self._predict_path = predict_path
         self._answer_path = answer_path
@@ -203,21 +150,14 @@ class _GFFCompare(Callback):
 
 
 class SignalHandler(Callback):
-    def __init__(self,
-                 signal_saver,
-                 signal_gff_converter=None,
-                 gff_compare=None):
-        if gff_compare is not None:
-            if signal_gff_converter is None:
-                raise Exception(
-                    "To use gff_compare, the signal_gff_converter should be provided"
-                )
-        callbacks = [signal_saver]
+    def __init__(self,signal_saver,signal_gff_converter=None,gff_compare=None):
+        if gff_compare is not None and signal_gff_converter is None:
+            raise Exception("To use gff_compare, the signal_gff_converter should be provided")
+        self._callbacks = Callbacks([signal_saver])
         if signal_gff_converter is not None:
-            callbacks.append(signal_gff_converter)
+            self._callbacks.add(signal_gff_converter)
         if gff_compare is not None:
-            callbacks.append(gff_compare)
-        self._callbacks = Callbacks(callbacks)
+            self._callbacks.add(gff_compare)
 
     def get_config(self):
         config = super().get_config()
@@ -245,22 +185,17 @@ class SignalHandler(Callback):
 
 class SignalHandlerBuilder:
     def __init__(self, saved_root, prefix=None):
-        self.saved_root = saved_root
-        self.prefix = prefix
-        self.inference = None
-        self.region_table_path = None
-        self.ann_vec_gff_converter = None
-        self.answer_gff_path = None
+        self._saved_root = saved_root
+        self._prefix = prefix
+        self._region_table_path = None
+        self._ann_vec_gff_converter = None
+        self._answer_gff_path = None
         self._add_converter = False
         self._add_comparer = False
 
-    def add_converter_args(self,
-                           inference,
-                           region_table_path,
-                           ann_vec_gff_converter):
-        self.inference = inference
-        self.region_table_path = region_table_path
-        self.ann_vec_gff_converter = ann_vec_gff_converter
+    def add_converter_args(self,region_table_path,ann_vec_gff_converter):
+        self._region_table_path = region_table_path
+        self._ann_vec_gff_converter = ann_vec_gff_converter
         self._add_converter = True
 
     def add_answer_path(self, answer_gff_path):
@@ -268,22 +203,30 @@ class SignalHandlerBuilder:
         self._add_comparer = True
 
     def build(self):
-        signal_saver = _SignalSaver(self.saved_root, prefix=self.prefix)
+        signal_saver = _SignalSaver(self._saved_root, prefix=self._prefix)
         converter = None
         gff_compare = None
         if self._add_converter:
-            converter = _SignalGffConverter(self.saved_root,
-                                            self.region_table_path,
-                                            signal_saver.output_root,
+            converter = _SignalGffConverter(self._saved_root,
+                                            self._region_table_path,
                                             signal_saver.output_list_path,
-                                            self.inference,
-                                            self.ann_vec_gff_converter,
-                                            prefix=self.prefix)
+                                            self._ann_vec_gff_converter,
+                                            prefix=self._prefix)
             if self._add_comparer:
-                gff_compare = _GFFCompare(self.saved_root,
-                                          self.region_table_path,
+                gff_compare = _GFFCompare(self._saved_root,
+                                          self._region_table_path,
                                           converter.gff_path,
-                                          self.answer_gff_path,
+                                          self._answer_gff_path,
                                           signal_saver.region_id_path)
         signal_handler = SignalHandler(signal_saver, converter, gff_compare)
         return signal_handler
+    
+def get_signal_handler(ann_types,root,prefix=None,region_table_path=None,answer_gff_path=None):
+    builder = SignalHandlerBuilder(root, prefix=prefix)
+    if region_table_path is not None:
+        converter = build_ann_vec_gff_converter(ann_types)
+        builder.add_converter_args(region_table_path,converter)
+    if answer_gff_path is not None:
+        builder.add_answer_path(answer_gff_path)
+    signal_handler = builder.build()
+    return signal_handler

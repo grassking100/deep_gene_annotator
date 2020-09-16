@@ -9,15 +9,15 @@ from multiprocessing import cpu_count
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES, create_folder
+from sequence_annotation.file_process.utils import GENE_TYE,TRANSCRIPT_TYPE,EXON_TYPE, INTRON_TYPE,INTERGENIC_REGION_TYPE
 from sequence_annotation.utils.utils import read_gff, read_json, write_gff, write_json
 from sequence_annotation.genome_handler.select_data import load_data
-from sequence_annotation.preprocess.utils import get_data_names,read_region_table
 from sequence_annotation.preprocess.gff_feature_stats import main as gff_feature_stats_main
-from sequence_annotation.preprocess.utils import get_gff_with_intergenic_region
-from sequence_annotation.process.seq_ann_engine import get_best_model_and_origin_executor
-from sequence_annotation.process.seq_ann_engine import SeqAnnEngine, get_batch_size
+from sequence_annotation.process.director import get_best_model_and_origin_executor
+from sequence_annotation.process.director import SeqAnnEngine, get_batch_size
 from sequence_annotation.process.performance import main as performance_main
 from sequence_annotation.process.callback import Callbacks
+from sequence_annotation.postprocess.utils import get_data_names
 from sequence_annotation.postprocess.boundary_process import get_splicing_regex
 from sequence_annotation.postprocess.path_helper import PathHelper
 from sequence_annotation.postprocess.gff_reviser import main as gff_revise_main
@@ -102,7 +102,7 @@ def get_length_thresholds_v1(real_gaussian_path,predicted_gaussian_root, std_num
 
 def get_length_thresholds_v2(real_gaussian_path,predicted_gaussian_root, std_num):
     length_thresholds = {}
-    types = ['exon','intron','transcript','other']
+    types = [EXON_TYPE, INTRON_TYPE, TRANSCRIPT_TYPE,INTERGENIC_REGION_TYPE]
     names = ['exon_models.tsv','intron_models.tsv',
              'mRNA_models.tsv','intergenic_region_models.tsv']
     real_length_model = pd.read_csv(real_gaussian_path, sep='\t')

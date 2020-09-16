@@ -2,18 +2,19 @@ import os
 import sys
 import warning
 import pandas as pd
-import numpy as np
 from argparse import ArgumentParser
 from multiprocessing import Pool
 sys.path.append(os.path.dirname(__file__) + "/../..")
-from sequence_annotation.utils.utils import BASIC_GENE_MAP, get_gff_with_attribute
-from sequence_annotation.utils.utils import create_folder, write_gff, write_json, read_json, read_gff, read_fasta,write_bed
+from sequence_annotation.utils.utils import BASIC_GENE_MAP
+from sequence_annotation.utils.utils import create_folder, write_json, read_json, read_fasta
+from sequence_annotation.file_process.utils import write_gff, read_gff,write_bed, get_gff_with_attribute
+from sequence_annotation.file_process.utils import GENE_TYE,TRANSCRIPT_TYPE,EXON_TYPE, INTRON_TYPE,INTERGENIC_REGION_TYPE
+from sequence_annotation.file_process.utils import get_gff_with_intron, get_gff_with_intergenic_region, read_region_table
+from sequence_annotation.file_process.gff2bed import gff2bed
 from sequence_annotation.genome_handler.ann_seq_processor import get_background
 from sequence_annotation.genome_handler.seq_container import SeqInfoContainer
 from sequence_annotation.genome_handler.region_extractor import RegionExtractor,GeneInfoExtractor
 from sequence_annotation.genome_handler.sequence import AnnSequence, PLUS
-from sequence_annotation.preprocess.utils import RNA_TYPES, get_gff_with_intron, get_gff_with_intergenic_region, read_region_table
-from sequence_annotation.preprocess.gff2bed import gff2bed
 from sequence_annotation.process.flip_and_rename_coordinate import flip_and_rename_gff
 from sequence_annotation.postprocess.boundary_process import get_valid_intron_boundary, get_splice_pairs, find_substr
 from sequence_annotation.postprocess.boundary_process import get_splice_pair_statuses, get_exon_boundary
@@ -63,14 +64,14 @@ class GFFReviser:
         self.acceptor_pattern = acceptor_pattern or 'AG'
         if length_thresholds is not None:
             if set(length_thresholds.keys()) != set(
-                    ['exon', 'intron', 'other', 'transcript']):
+                    [EXON_TYPE, INTRON_TYPE, INTERGENIC_REGION_TYPE, TRANSCRIPT_TYPE]):
                 raise Exception("Wrong key in length_thresholds")
         self.length_thresholds = length_thresholds
         self.donor_distance = donor_distance or 0
         self.acceptor_distance = acceptor_distance or 0
         self.donor_index_shift = donor_index_shift or 0
         self.acceptor_index_shift = acceptor_index_shift or 1
-        self._ann_types = ['exon', 'intron', 'other']
+        self._ann_types = [[EXON_TYPE, INTRON_TYPE, INTERGENIC_REGION_TYPE]
         self.methods = methods or []
         
     def get_config(self):
@@ -96,13 +97,13 @@ class GFFReviser:
     def _create_ann_seq(self, chrom, length, gff):
         ann_seq = _create_ann_seq(chrom, length, self._ann_types)
         exon_introns = gff[gff['feature'].isin(
-            ['exon', 'intron'])].to_dict('record')
+            [EXON_TYPE, INTRON_TYPE])].to_dict('record')
         for item in exon_introns:
             ann_seq.add_ann(item['feature'],1,
                             item['start'] - 1,
                             item['end'] - 1)
-        other = get_background(ann_seq, ['exon', 'intron'])
-        ann_seq.add_ann('other', other)
+        other = get_background(ann_seq, [EXON_TYPE, INTRON_TYPE])
+        ann_seq.add_ann(INTERGENIC_REGION_TYPE, other)
         return ann_seq
 
     def _merge_current_to_previous(self,previous_block,current_block,block_table,fragment_lengths):
@@ -208,9 +209,9 @@ class GFFReviser:
             rna_boundary, splice_pair_statuses)
         rna_exon_boundarys = get_exon_boundary(rna_boundary, intron_boundarys)
         for boundary in rna_exon_boundarys:
-            ann_seq.add_ann('exon', 1, boundary[0] - 1, boundary[1] - 1)
+            ann_seq.add_ann(EXON_TYPE, 1, boundary[0] - 1, boundary[1] - 1)
         for boundary in intron_boundarys:
-            ann_seq.add_ann('intron', 1, boundary[0] - 1, boundary[1] - 1)
+            ann_seq.add_ann(INTRON_TYPE, 1, boundary[0] - 1, boundary[1] - 1)
 
     def _preprocess_gff(self, chrom_id, length, gff):
         self._validate_gff(gff)
@@ -218,11 +219,11 @@ class GFFReviser:
         gff = get_gff_with_attribute(gff)
         if 'intron' not in set(gff['feature']):
             gff = get_gff_with_intron(gff)
-        if 'intergenic region' not in set(gff['feature']):
+        if INTERGENIC_REGION_TYPE not in set(gff['feature']):
             region_table = pd.DataFrame.from_dict(
                 [{'chrom_id': chrom_id, 'length': length, 'strand': '+'}])
             gff = get_gff_with_intergenic_region(gff, region_table, 'chrom_id')
-        gff.loc[gff['feature'] == 'intergenic region', 'feature'] = 'other'
+        #gff.loc[gff['feature'] == INTERGENIC_REGION_TYPE, 'feature'] = INTERGENIC_REGION_TYPE
         return gff
 
     def filter_by_threshold(self, chrom_id, length, gff):
@@ -254,8 +255,7 @@ class GFFReviser:
                 # Filter transcript
                 invalid_ids = []
                 filtered_gff = get_gff_with_attribute(filtered_gff)
-                transcripts = filtered_gff[filtered_gff['feature'].isin(
-                    RNA_TYPES)].to_dict('record')
+                transcripts = filtered_gff[filtered_gff['feature']==TRANSCRIPT_TYPE].to_dict('record')
                 for transcript in transcripts:
                     length = transcript['end'] - transcript['start'] + 1
                     if length < self.length_thresholds['transcript']:
@@ -292,12 +292,12 @@ class GFFReviser:
         splice_pair_statuses = get_splice_pair_statuses(splice_pairs, ann_donor_sites, ann_acceptor_sites,
                                                         self.donor_distance, self.acceptor_distance)
         fixed_ann_seq = _create_ann_seq(chrom_id, length, self._ann_types)
-        transcripts = gff[gff['feature'].isin(RNA_TYPES)].to_dict('record')
+        transcripts = gff[gff['feature']==TRANSCRIPT_TYPE].to_dict('record')
         for transcript in transcripts:
             self._process_transcript(
                 transcript, splice_pair_statuses, fixed_ann_seq)
-        other = get_background(fixed_ann_seq, ['exon', 'intron'])
-        fixed_ann_seq.add_ann('other', other)
+        other = get_background(fixed_ann_seq, [EXON_TYPE, INTRON_TYPE])
+        fixed_ann_seq.add_ann(INTERGENIC_REGION_TYPE, other)
         info = self._gene_info_extractor.extract_per_seq(fixed_ann_seq)
         fixed_gff = None
         if len(info) > 0:
@@ -334,7 +334,7 @@ class GFFReviser:
             else:
                 raise Exception("Invalid method {}".format(method))
         if gff is not None and len(gff)>0:
-            gff = gff[gff['feature'].isin(['gene','mRNA','exon'])]
+            gff = gff[gff['feature'].isin([GENE_TYE,TRANSCRIPT_TYPE,EXON_TYPE])]
         return gff
 
 

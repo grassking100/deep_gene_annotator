@@ -1,3 +1,3 @@
 ##gff-version 3
 region_0333	.	gene	1316	1408	4	-	.	ID=AT2G26870
-region_0333	.	mRNA	1316	1408	4	-	.	ID=AT2G26870.1;Parent=AT2G26870
+region_0333	.	transcript	1316	1408	4	-	.	ID=AT2G26870.1;Parent=AT2G26870

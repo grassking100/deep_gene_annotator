@@ -1,4 +1,4 @@
 ##gff-version 3
 region_0333	.	gene	401	1000	4	+	.	ID=AT2G26870_gene
-region_0333	.	mRNA	401	1000	4	+	.	ID=AT2G26870;Parent=AT2G26870_gene
+region_0333	.	transcript	401	1000	4	+	.	ID=AT2G26870;Parent=AT2G26870_gene
 region_0333	.	exon	401	1000	4	+	.	Parent=AT2G26870

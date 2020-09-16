@@ -2,9 +2,9 @@ import sys,os
 import pandas as pd
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__) + "/../..")
-from sequence_annotation.utils.utils import read_gff, read_fasta,write_bed,create_folder,get_gff_with_attribute,find_substr
-from sequence_annotation.preprocess.utils import RNA_TYPES
-from sequence_annotation.preprocess.gff2bed import simple_gff2bed
+from sequence_annotation.utils.utils import create_folder,find_substr
+from sequence_annotation.file_process.utils import read_gff, read_fasta,write_bed,get_gff_with_attribute, RNA_TYPES
+from sequence_annotation.file_process.gff2bed import simple_gff2bed
 from sequence_annotation.preprocess.signal_analysis import get_donor_site_region,get_acceptor_site_region
 
 def get_bed_wtih_site_id(bed,is_donor=True):

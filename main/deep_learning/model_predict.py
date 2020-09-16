@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(__file__)+"/../..")
 from sequence_annotation.utils.utils import create_folder, read_fasta
 from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES
 from sequence_annotation.preprocess.gff2bed import main as gff2bed_main
-from sequence_annotation.process.seq_ann_engine import SeqAnnEngine,get_best_model_and_origin_executor,get_batch_size
+from sequence_annotation.process.director import SeqAnnEngine,get_best_model_and_origin_executor,get_batch_size
 from sequence_annotation.process.callback import Callbacks
 from sequence_annotation.postprocess.gff_reviser import main as revised_main
 from main.utils import backend_deterministic

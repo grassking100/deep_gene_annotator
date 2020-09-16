@@ -1,10 +1,8 @@
 from abc import ABCMeta, abstractmethod
 import torch.nn as nn
 from torch.nn.functional import binary_cross_entropy as BCE
-from .inference import create_basic_inference
 
 EPSILON = 1e-32
-
 
 def sum_by_mask(value, mask):
     return (value * mask).sum()
@@ -49,12 +47,12 @@ class FocalLoss(ILoss):
     def __init__(self, gamma=None):
         super().__init__()
         self.gamma = gamma or 0
-        self._accumulated_loss_sum = None
-        self._accumulated_mask_sum = None
+        self._loss_sum = None
+        self._mask_sum = None
 
     def reset_accumulated_data(self):
-        self._accumulated_loss_sum = None
-        self._accumulated_mask_sum = None
+        self._loss_sum = None
+        self._mask_sum = None
 
     def get_config(self):
         config = {}
@@ -89,19 +87,19 @@ class FocalLoss(ILoss):
         mask_sum = mask.sum()
 
         if not accumulate:
-            self._accumulated_loss_sum = loss_sum
-            self._accumulated_mask_sum = mask_sum
+            self._loss_sum = loss_sum
+            self._mask_sum = mask_sum
         else:
             # Initialized if it is None
-            self._accumulated_loss_sum = self._accumulated_loss_sum or 0
-            self._accumulated_mask_sum = self._accumulated_mask_sum or 0
-            self._accumulated_loss_sum = self._accumulated_loss_sum + loss_sum.detach(
+            self._loss_sum = self._loss_sum or 0
+            self._mask_sum = self._mask_sum or 0
+            self._loss_sum = self._loss_sum + loss_sum.detach(
             )
-            self._accumulated_mask_sum = self._accumulated_mask_sum + mask_sum.detach(
+            self._mask_sum = self._mask_sum + mask_sum.detach(
             )
 
-        loss = self._accumulated_loss_sum / \
-            (self._accumulated_mask_sum + EPSILON)
+        loss = self._loss_sum / \
+            (self._mask_sum + EPSILON)
         return loss
 
 
@@ -130,16 +128,16 @@ class SeqAnnLoss(ILoss):
         super().__init__()
         self.intron_coef = intron_coef or 1
         self.other_coef = other_coef or 1
-        self._accumulated_intron_loss_sum = None
-        self._accumulated_other_loss_sum = None
-        self._accumulated_mask_sum = None
-        self._accumulated_transcript_mask_sum = None
+        self._intron_loss_sum = None
+        self._other_loss_sum = None
+        self._mask_sum = None
+        self._transcript_mask_sum = None
 
     def reset_accumulated_data(self):
-        self._accumulated_intron_loss_sum = None
-        self._accumulated_other_loss_sum = None
-        self._accumulated_mask_sum = None
-        self._accumulated_transcript_mask_sum = None
+        self._intron_loss_sum = None
+        self._other_loss_sum = None
+        self._mask_sum = None
+        self._transcript_mask_sum = None
 
     def get_config(self):
         config = {}
@@ -148,8 +146,7 @@ class SeqAnnLoss(ILoss):
         config['other_coef'] = self.other_coef
         return config
 
-    def _calculate_mean(self, other_loss_sum, intron_loss_sum, mask_sum,
-                        transcript_mask_sum):
+    def _calculate_mean(self, other_loss_sum, intron_loss_sum, mask_sum, transcript_mask_sum):
         other_loss = other_loss_sum / (mask_sum + EPSILON)
         intron_loss = intron_loss_sum / (transcript_mask_sum + EPSILON)
         loss = other_loss + intron_loss
@@ -168,13 +165,9 @@ class SeqAnnLoss(ILoss):
         if output.shape[0] != answer.shape[0]:
             raise Exception("Inconsist batch size", output.shape, answer.shape)
         if output.shape[1] != 2:
-            raise Exception(
-                "Wrong output channel size, except 2 but got {}".format(
-                    output.shape[1]))
+            raise Exception("Wrong output channel size, except 2 but got {}".format(output.shape[1]))
         if answer.shape[1] != 3:
-            raise Exception(
-                "Wrong answer channel size, except 3 but got {}".format(
-                    answer.shape[1]))
+            raise Exception("Wrong answer channel size, except 3 but got {}".format(answer.shape[1]))
 
         N, _, L = output.shape
         answer = answer[:, :, :L].float()
@@ -189,10 +182,8 @@ class SeqAnnLoss(ILoss):
         # Get mask
         transcript_mask = mask * transcript_answer
         # Calculate loss
-        other_loss = bce_loss(other_output, other_answer,
-                              return_mean=False) * self.other_coef
-        intron_loss = bce_loss(intron_output, intron_answer,
-                               return_mean=False) * self.intron_coef * transcript_mask
+        other_loss = bce_loss(other_output, other_answer,return_mean=False) * self.other_coef
+        intron_loss = bce_loss(intron_output, intron_answer,return_mean=False) * self.intron_coef * transcript_mask
         if weights is not None:
             other_loss = other_loss*weights
             intron_loss = intron_loss*weights
@@ -202,74 +193,25 @@ class SeqAnnLoss(ILoss):
         mask_sum = mask.sum()
         transcript_mask_sum = transcript_mask.sum()
         if not accumulate:
-            self._accumulated_intron_loss_sum = intron_loss_sum
-            self._accumulated_other_loss_sum = other_loss_sum
-            self._accumulated_mask_sum = mask_sum
-            self._accumulated_transcript_mask_sum = transcript_mask_sum
+            self._intron_loss_sum = intron_loss_sum
+            self._other_loss_sum = other_loss_sum
+            self._mask_sum = mask_sum
+            self._transcript_mask_sum = transcript_mask_sum
         else:
             # Initialized if it is None
-            self._accumulated_intron_loss_sum = self._accumulated_intron_loss_sum or 0
-            self._accumulated_other_loss_sum = self._accumulated_other_loss_sum or 0
-            self._accumulated_mask_sum = self._accumulated_mask_sum or 0
-            self._accumulated_transcript_mask_sum = self._accumulated_transcript_mask_sum or 0
+            self._intron_loss_sum = self._intron_loss_sum or 0
+            self._other_loss_sum = self._other_loss_sum or 0
+            self._mask_sum = self._mask_sum or 0
+            self._transcript_mask_sum = self._transcript_mask_sum or 0
             # Add value
-            self._accumulated_intron_loss_sum = self._accumulated_intron_loss_sum + \
-                intron_loss_sum.detach()
-            self._accumulated_other_loss_sum = self._accumulated_other_loss_sum + \
-                other_loss_sum.detach()
-            self._accumulated_mask_sum = self._accumulated_mask_sum + mask_sum.detach(
-            )
-            self._accumulated_transcript_mask_sum = self._accumulated_transcript_mask_sum + \
-                transcript_mask_sum.detach()
+            self._intron_loss_sum = self._intron_loss_sum + intron_loss_sum.detach()
+            self._other_loss_sum = self._other_loss_sum + other_loss_sum.detach()
+            self._mask_sum = self._mask_sum + mask_sum.detach()
+            self._transcript_mask_sum = self._transcript_mask_sum + transcript_mask_sum.detach()
 
-        loss = self._calculate_mean(self._accumulated_other_loss_sum,
-                                    self._accumulated_intron_loss_sum,
-                                    self._accumulated_mask_sum,
-                                    self._accumulated_transcript_mask_sum)
+        loss = self._calculate_mean(self._other_loss_sum,self._intron_loss_sum,
+                                    self._mask_sum,self._transcript_mask_sum)
         return loss
 
 
-class LabelLoss(ILoss):
-    def __init__(self, loss):
-        super().__init__()
-        self.loss = loss
-        self.predict_inference = create_basic_inference(3)
-        self.answer_inference = create_basic_inference(3)
-
-    def reset_accumulated_data(self):
-        self.loss.reset_accumulated_data()
-
-    def get_config(self):
-        config = {}
-        config['name'] = self.__class__.__name__
-        config['loss_config'] = self.loss.get_config()
-        config['predict_inference'] = self.predict_inference.__name__
-        config['answer_inference'] = self.answer_inference.__name__
-        return config
-
-    def forward(self, output, answer, mask, **kwargs):
-        label_predict = self.predict_inference(output, mask)
-        label_answer = self.answer_inference(answer, mask)
-        loss = self.loss(label_predict, label_answer, mask, **kwargs)
-        return loss
-
-class WeightLabelLoss(ILoss):
-    def __init__(self, label_loss,score_calculator,output_root):
-        super().__init__()
-        self.label_loss = label_loss
-        self.score_calculator = score_calculator
-        self.output_root = output_root
-
-    def reset_accumulated_data(self):
-        self.label_loss.reset_accumulated_data()
-
-    def get_config(self):
-        config = {}
-        config['name'] = self.__class__.__name__
-        config['label_loss'] = self.label_loss.get_config()
-        return config
-
-    def forward(self, output, answer, mask, seq_data,  **kwargs):
-        weights = self.score_calculator.get_score(output,seq_data,self.output_root)
-        loss = self.label_loss(output, answer, mask, weights=weights, **kwargs)
-        return loss
+LOSS_TYPES = {'CCELoss':CCELoss,'SeqAnnLoss':SeqAnnLoss}

@@ -1,20 +1,30 @@
 import os
 import sys
 import torch
-from torch.utils.data import DataLoader
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__)+"/../..")
-from sequence_annotation.utils.utils import create_folder, write_json,copy_path,read_json,read_fasta
-from sequence_annotation.utils.utils import BASIC_COLOR_SETTING, BASIC_GENE_ANN_TYPES
+from sequence_annotation.utils.utils import copy_path, create_folder, read_json, write_json
+from sequence_annotation.utils.utils import BASIC_COLOR_SETTING, BASIC_GENE_ANN_TYPES,get_time_str
 from sequence_annotation.genome_handler.ann_seq_processor import class_count
 from sequence_annotation.genome_handler.select_data import load_data
+from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
 from sequence_annotation.process.data_processor import AnnSeqProcessor
-from sequence_annotation.process.seq_ann_engine import SeqAnnEngine,check_max_memory_usgae,get_model_executor
-from sequence_annotation.process.callback import Callbacks
-from sequence_annotation.process.data_generator import SeqDataset,SeqCollateWrapper
-from sequence_annotation.process.executor import AdvancedExecutor
-from main.utils import backend_deterministic
+from sequence_annotation.process.director import create_model_exe_builder, Trainer
 from main.deep_learning.test_model import test
+
+def _get_first_large_data(data, batch_size=None):
+    batch_size = batch_size or 1
+    seqs, ann_container = data
+    lengths = {key: len(seq) for key, seq in seqs.items()}
+    print("Max length is {}".format(max(lengths.values())))
+    sorted_length_keys = sorted(lengths, key=lengths.get, reverse=True)
+    part_keys = sorted_length_keys[:batch_size]
+    part_seqs = dict(zip(part_keys, [seqs[key] for key in part_keys]))
+    part_container = AnnSeqContainer()
+    part_container.ANN_TYPES = ann_container.ANN_TYPES
+    for key in part_keys:
+        part_container.add(ann_container.get(key))
+    return part_seqs, part_container
 
 
 def _get_max_target_seqs(seqs,ann_seqs,seq_fig_target=None):
@@ -27,209 +37,141 @@ def _get_max_target_seqs(seqs,ann_seqs,seq_fig_target=None):
             selected_id = ann_seq.id
     return seqs[selected_id],ann_seqs[selected_id]
 
-def train(saved_root,epoch,model,executor,train_data,val_data,
-          batch_size=None,patience=None,period=None,
-          discard_ratio_min=None,discard_ratio_max=None,
-          augment_up_max=None,augment_down_max=None,
-          deterministic=False,other_callbacks=None,
-          concat=False,same_generator=False,
-          drop_last=False,warmup_epoch=None,
-          both_discard_order=False,**kwargs):
-    print("The following parameter would not be used for train: {}".format(kwargs))
-    #Set engine
-    engine = SeqAnnEngine(BASIC_GENE_ANN_TYPES)
-    engine.batch_size = batch_size
-    engine.set_root(saved_root,with_test=False,with_train=True,with_val=True)
-    #Add callbacks
-    other_callbacks = other_callbacks or Callbacks()
-    seq,ann_seq = _get_max_target_seqs(val_data[0],val_data[1])
+
+def train(model,train_data,val_data,output_root=None,**kwargs):
+    train_seqs, train_anns = train_data
+    val_seqs, val_anns = val_data
+    seq,ann_seq = _get_max_target_seqs(val_seqs,val_ann_seqs)
     seq_fig = engine.get_seq_fig(seq,ann_seq,color_settings=BASIC_COLOR_SETTING)
     other_callbacks.add(seq_fig)
     #Prcoess data
-    train_seqs, train_ann_seqs = train_data
-    val_seqs, val_ann_seqs = val_data
     raw_data = {
-        'training': {'inputs': train_seqs,'answers': train_ann_seqs},
-        'validation':{'inputs': val_seqs, 'answers': val_ann_seqs}
+        'train': {'inputs': train_seqs,'answers': train_anns},
+        'val':{'inputs': val_seqs, 'answers': val_anns}
     }
-    data = engine.process_data(raw_data)
-    #Create loader
-    collate_fn = SeqCollateWrapper(discard_ratio_min,discard_ratio_max,
-                                   augment_up_max,augment_down_max,concat,
-                                   native_discard_order=not both_discard_order)
-    #
-    train_gen = engine.create_data_gen(collate_fn,not deterministic,drop_last=drop_last)
-    #
-    if same_generator:
-        val_gen = train_gen
-    else:
-        val_gen = engine.create_basic_data_gen()
+    data,stats = AnnSeqProcessor(BASIC_GENE_ANN_TYPES).process(raw_data,True)
+    if output_root is not None:
+        settings_path = os.path.join(output_root,'settings')
+        create_folder(settings_path)
+        write_json(stats,os.path.join(settings_path,'train_val_data_stats.json'))
+    trainer = Trainer(BASIC_GENE_ANN_TYPES,model,data['train'],
+                      data['val'],root=output_root,**kwargs)
+    trainer.execute()
+    return trainer
 
-    setting_root = os.path.join(saved_root,'settings')
-    create_folder(setting_root)
-    write_json(train_gen.get_config(),os.path.join(setting_root,'train_gen.json'))
-    write_json(val_gen.get_config(),os.path.join(setting_root,'val_gen.json'))
+def check_max_memory_usage(model,train_data, val_data,output_root=None,exe_builder=None):
+    train_batch_size = val_batch_size = None
+    if exe_builder is not None:
+        train_batch_size = exe_builder.get_data_generator('train').batch_size
+        val_batch_size = exe_builder.get_data_generator('test').batch_size
+    train_data = _get_first_large_data(train_data, train_batch_size)
+    val_data = _get_first_large_data(val_data, val_batch_size)
+    try:
+        torch.cuda.reset_max_memory_cached()
+        train(model,train_data,val_data,executor_builder=exe_builder)
+        max_memory = torch.cuda.max_memory_reserved()
+        messenge = "Max memory allocated is {}\n".format(max_memory)
+        print(messenge)
+        if output_root is not None:
+            path = os.path.join(output_root, 'max_memory.txt')
+            with open(path, "w") as fp:
+                fp.write(messenge)
+    except RuntimeError:
+        if output_root is not None:
+            path = os.path.join(output_root, 'error.txt')
+            with open(path, "a") as fp:
+                fp.write("Memory might be fulled at {}\n".format(get_time_str()))
+        raise Exception("Memory is fulled")
 
-    train_loader = train_gen(data['training'])
-    val_loader = val_gen(data['validation'])
-    #Train
-    checkpoint_kwargs={'patience':patience,'period':period,'warmup_epoch':warmup_epoch}
-    worker = engine.train(model,executor,train_loader,val_loader,
-                          epoch=epoch,other_callbacks=other_callbacks,
-                          checkpoint_kwargs=checkpoint_kwargs)
-    return worker
 
-def create_signal_loader(root,ann_seq_processor,batch_size):
-    donor_path = os.path.join(root,'donor.fasta')
-    acceptor_path = os.path.join(root,'acceptor.fasta')
-    fake_donor_path = os.path.join(root,'fake_donor.fasta')
-    fake_acceptor_path = os.path.join(root,'fake_acceptor.fasta')
-    donor = read_fasta(donor_path)
-    acceptor = read_fasta(acceptor_path)
-    fake_donor = read_fasta(fake_donor_path)
-    fake_acceptor = read_fasta(fake_acceptor_path)
-    raw_data = {
-        'donor':{'inputs':donor},
-        'acceptor':{'inputs':acceptor},
-        'fake_donor':{'inputs':fake_donor},
-        'fake_acceptor':{'inputs':fake_acceptor}
-    }
-    data = AnnSeqProcessor(BASIC_GENE_ANN_TYPES).process(raw_data)
-    for key,items in data.items():
-        data[key]['inputs'] = [torch.FloatTensor(item).transpose(0,1) for item in items['inputs']]
-
-    signal_loader = DataLoader(SeqDataset({'signals':data}),
-                               shuffle=True,batch_size=batch_size)
-    return signal_loader
-
-def main(saved_root,model_config_path,executor_config_path,
-         train_data_path,val_data_path,region_table_path,
-         batch_size=None,epoch=None,save_distribution=False,
-         model_weights_path=None,executor_weights_path=None,
-         deterministic=False,concat=False,splicing_root=None,
-         signal_loss_method=None,val_data_for_test_path=None,
-         warmup_epoch=None,**kwargs):
+def main(output_root,model_settings_path,executor_settings_path,
+         train_data_path,val_data_path,region_table_path,save_distribution=False,
+         model_weights_path=None,executor_weights_path=None,**kwargs):
+    
     setting = locals()
     kwargs = setting['kwargs']
     del setting['kwargs']
     setting.update(kwargs)
     #Create folder
-    create_folder(saved_root)
+    create_folder(output_root)
     #Save setting
-    setting_path = os.path.join(saved_root,"main_setting.json")
+    setting_path = os.path.join(output_root,"train_main_setting.json")
     if os.path.exists(setting_path):
         existed = read_json(setting_path)
         if setting != existed:
             raise Exception("The {} is not same as previous one".format(setting_path))
     write_json(setting,setting_path)
     
-    copied_paths = [model_config_path,executor_config_path,train_data_path,val_data_path]
+    copied_paths = [model_settings_path,executor_settings_path,train_data_path,val_data_path]
     if model_weights_path is not None:
         copied_paths.append(model_weights_path)
 
-    executor_config = read_json(executor_config_path)
     #Load, parse and save data
     
     train_data = load_data(train_data_path)
     val_data = load_data(val_data_path)
     
-    resource_path = os.path.join(saved_root,'resource')
+    resource_path = os.path.join(output_root,'resource')
     create_folder(resource_path)
     for path in copied_paths:
         copy_path(resource_path,path)
     
-    backend_deterministic(deterministic)
     
     #Verify path exist
-    if not os.path.exists(region_table_path):
-        raise Exception("{} is not exist".format(region_table_path))
+    #if not os.path.exists(region_table_path):
+    #    raise Exception("{} is not exist".format(region_table_path))
     
-    temp_model,temp_executor = get_model_executor(model_config_path,executor_config,
-                                                  save_distribution=save_distribution)
+    temp_model,temp_exe_builder = create_model_exe_builder(model_settings_path,executor_settings_path,
+                                                        save_distribution=save_distribution)
     
     print("Check memory")
-    check_max_memory_usgae(saved_root,temp_model,temp_executor,train_data,
-                           val_data,batch_size=batch_size,concat=concat)
+    check_max_memory_usage(temp_model,train_data,val_data,
+                           output_root=output_root,
+                           exe_builder=temp_exe_builder)
     del temp_model
-    del temp_executor
+    del temp_exe_builder
     torch.cuda.empty_cache()
     print("Memory is available")
-    
-   
-    if splicing_root is not None:
-        train_splicing_root = os.path.join(splicing_root,'train')
-        val_splicing_root = os.path.join(splicing_root,'val')
-        ann_seq_processor = AnnSeqProcessor(BASIC_GENE_ANN_TYPES)
-        train_signal_loader = create_signal_loader(train_splicing_root,ann_seq_processor,batch_size)
-        val_signal_loader = create_signal_loader(val_splicing_root,ann_seq_processor,batch_size)
-        def wrapper():
-            return AdvancedExecutor(train_signal_loader,val_signal_loader,signal_loss_method)
-        executor_config['executor_class'] = wrapper
-
-    model,executor = get_model_executor(model_config_path,executor_config,
-                                        save_distribution=save_distribution,
-                                        model_weights_path=model_weights_path,
-                                        executor_weights_path=executor_weights_path)
-    executor.warmup_epoch = warmup_epoch or 0
-    
+    model,exe_builder = create_model_exe_builder(model_settings_path,executor_settings_path,
+                                              save_distribution=save_distribution,
+                                              model_weights_path=model_weights_path,
+                                              executor_weights_path=executor_weights_path)
     try:
-        train(saved_root,epoch,model,executor,train_data,val_data,
-              batch_size=batch_size,deterministic=deterministic,
-              concat=concat,warmup_epoch=warmup_epoch,**kwargs)     
+        train(model,train_data,val_data,output_root=output_root,
+              executor_builder=exe_builder,**kwargs)     
     except RuntimeError:
-        raise Exception("Something wrong occurs in {}".format(saved_root))
+        raise Exception("Something wrong occurs in {}".format(output_root))
         
     #Test
-    test_paths = []
-    data_list = []
-
-    test_paths.append('test_on_train')
-    data_list.append(train_data)
-
-    test_paths.append('test_on_val')
-    if val_data_for_test_path is not None:
-        val_data = load_data(val_data_for_test_path)
-    data_list.append(val_data)
+    test_paths = ['test_on_train','test_on_val']
+    data_list = [train_data,val_data]
 
     for path,data in zip(test_paths,data_list):
-        test_root = os.path.join(saved_root,path)
+        test_root = os.path.join(output_root,path)
         create_folder(test_root)
-        test(test_root,model,executor,data,batch_size=batch_size,
-             region_table_path=region_table_path)
+        test(model,data,
+             output_root=test_root,
+             #region_table_path=region_table_path,
+             executor_builder=exe_builder)
 
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument("-m","--model_config_path",help="Path of model config "
+    parser.add_argument("-m","--model_settings_path",help="Path of model settings "
                         "build by SeqAnnBuilder",required=True)
-    parser.add_argument("-e","--executor_config_path",help="Path of Executor config",required=True)
-    parser.add_argument("-s","--saved_root",help="Root to save file",required=True)
+    parser.add_argument("-e","--executor_settings_path",help="Path of Executor settings",required=True)
+    parser.add_argument("-c","--generator_settings",help="Path of Generator settings",required=True)
+    parser.add_argument("-s","--output_root",help="Root to save file",required=True)
     parser.add_argument("-t","--train_data_path",help="Path of training data",required=True)
     parser.add_argument("-v","--val_data_path",help="Path of validation data",required=True)
-    parser.add_argument("--val_data_for_test_path",help="Path of validation data for testing")
-    parser.add_argument("--region_table_path",help="The path of region data table",required=True)
-    parser.add_argument("-b","--batch_size",type=int,default=32)
-    parser.add_argument("--augment_up_max",type=int,default=0)
-    parser.add_argument("--augment_down_max",type=int,default=0)
-    parser.add_argument("--discard_ratio_min",type=float,default=0)
-    parser.add_argument("--discard_ratio_max",type=float,default=0)
-    parser.add_argument("--both_discard_order",action="store_true")
-    parser.add_argument("-n","--epoch",type=int,default=100)
-    parser.add_argument("--period",default=1,type=int)
-    parser.add_argument("--patience",help="The epoch to stop traininig when val_loss "
+    parser.add_argument("-r","--region_table_path",help="The path of region data table",required=True)
+    parser.add_argument("-p","--patience",help="The epoch to stop traininig when val_loss "
                         "is not improving. Dafault value is None, the model won't be "
                         "stopped by early stopping",type=int,default=None)
+    parser.add_argument("-n","--epoch",type=int,default=100)
     parser.add_argument("-g","--gpu_id",type=int,default=0,help="GPU to used")
     parser.add_argument("--save_distribution",action='store_true')
-    parser.add_argument("--deterministic",action="store_true")
-    parser.add_argument("--concat",action="store_true")
-    parser.add_argument("--same_generator",action="store_true",
-                       help='Use same parameters of training generator to valdation generator')
     parser.add_argument("--model_weights_path")
     parser.add_argument("--executor_weights_path")
-    parser.add_argument("--splicing_root")
-    parser.add_argument("--drop_last",action="store_true")
-    parser.add_argument("--signal_loss_method",type=str)
-    
     args = parser.parse_args()
     kwargs = dict(vars(args))
     del kwargs['gpu_id']

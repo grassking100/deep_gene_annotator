@@ -1,0 +1,17 @@
+{
+    "FN_exon_block": 0,
+    "FP_exon_block": 0,
+    "TP_exon_block": 3,
+    "FN_gene": 1,
+    "FP_gene": 2,
+    "TP_gene": 0,
+    "FN_intron_block": 1,
+    "FP_intron_block": 0,
+    "TP_intron_block": 1,
+    "FN_chained_introns": 1,
+    "FP_chained_introns": 1,
+    "TP_chained_introns": 0,
+    "FN_transcript": 1,
+    "FP_transcript": 2,
+    "TP_transcript": 0
+}

@@ -2,19 +2,14 @@ import sys
 import os
 sys.path.append(os.path.dirname(__file__) + "/../..")
 from argparse import ArgumentParser
-from sequence_annotation.utils.utils import write_bed, read_bed, read_fasta
+from sequence_annotation.file_process.utils import write_bed, read_bed, read_fasta
 
-
-def main(bed_path, fasta_path, cleaned_bed_path, dirty_bed_path, codes):
-
+def get_cleaned_code_bed(bed, fasta, codes=None):
+    codes = codes or 'ATCG'
     codes = set(list(codes.upper()))
-
-    bed = read_bed(bed_path)
-    fasta = read_fasta(fasta_path, check_unique_id=False)
     if set(bed['id']) != set(fasta.keys()):
         ids = set(bed['id']).symmetric_difference(set(fasta.keys()))
         raise Exception("BED ids are not same as fasta ids, got {}".format(ids))
-
     cleaned_ids = []
     dirty_ids = []
     for name, seq in fasta.items():
@@ -25,18 +20,25 @@ def main(bed_path, fasta_path, cleaned_bed_path, dirty_bed_path, codes):
 
     cleaned_bed = bed[bed['id'].isin(cleaned_ids)]
     dirty_bed = bed[bed['id'].isin(dirty_ids)]
+    return cleaned_bed,dirty_bed
 
+
+def main(bed_path, fasta_path,cleaned_bed_path, dirty_bed_path=None,codes=None):
+    bed = read_bed(bed_path)
+    fasta = read_fasta(fasta_path)
+    cleaned_bed, dirty_bed = get_cleaned_code_bed(bed, fasta, codes=codes)
     write_bed(cleaned_bed, cleaned_bed_path)
-    write_bed(dirty_bed, dirty_bed_path)
+    if dirty_bed_path is not None:
+        write_bed(dirty_bed, dirty_bed_path)
 
-
+    
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument("-b", "--bed_path", required=True)
     parser.add_argument("-f", "--fasta_path", required=True)
     parser.add_argument("-o", "--cleaned_bed_path", required=True)
-    parser.add_argument("-d", "--dirty_bed_path", required=True)
-    parser.add_argument("-c", "--codes", default='ATCG')
+    parser.add_argument("-d", "--dirty_bed_path")
+    parser.add_argument("-c", "--codes")
     args = parser.parse_args()
     kwargs = vars(args)
     main(**kwargs)

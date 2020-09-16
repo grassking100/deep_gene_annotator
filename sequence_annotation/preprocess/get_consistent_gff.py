@@ -3,10 +3,12 @@ import numpy as np
 import pandas as pd
 from multiprocessing import Pool
 sys.path.append(os.path.dirname(__file__) + "/../..")
-from sequence_annotation.utils.utils import read_gff, write_gff, GFF_COLUMNS
-from sequence_annotation.utils.utils import get_gff_with_attribute, get_gff_with_updated_attribute
-from sequence_annotation.utils.utils import dupliacte_gff_by_parent
-from sequence_annotation.preprocess.utils import GENE_TYPES, RNA_TYPES, EXON_TYPES, SUBEXON_TYPES,get_gff_with_belonging
+from sequence_annotation.file_process.utils import read_gff, write_gff, GFF_COLUMNS
+from sequence_annotation.file_process.utils import get_gff_with_attribute, get_gff_with_updated_attribute
+from sequence_annotation.file_process.utils import GENE_TYPE, TRANSCRIPT_TYPE, EXON_TYPE
+from sequence_annotation.file_process.utils import CDS_TYPE, SUBEXON_TYPES
+from sequence_annotation.file_process.utils import UTR_TYPE
+
 from argparse import ArgumentParser
 
 
@@ -23,90 +25,95 @@ def _get_coord_ids(gff):
     return ids
 
 
-def _create_missing_UTRs(exons, subexons):
+def _create_missing_UTRs(subexons,exons):
     missing_UTRs = []
     orf_start = orf_end = None
-    CDSs_ = [e for e in subexons if e['feature'] == 'CDS']
+    coding_seqs = [e for e in subexons if e['feature']==CDS_TYPE]
     #If they beloings coding transcript
-    if len(CDSs_) != 0:
-        orf_start = min([CDS['start'] for CDS in CDSs_])
-        orf_end = max([CDS['end'] for CDS in CDSs_])
+    if len(coding_seqs) != 0:
+        orf_start = min([coding_seq['start'] for coding_seq in coding_seqs])
+        orf_end = max([coding_seq['end'] for coding_seq in coding_seqs])
         for exon in exons:
             #Create missing UTR
             strand = exon['strand']
-            start = end = None
+            #start = end = None
             selected_subexons = []
             for subexon in subexons:
-                if not (subexon['end'] < exon['start']
-                        or exon['end'] < subexon['start']):
+                if not (subexon['end'] < exon['start'] or exon['end'] < subexon['start']):
                     selected_subexons.append(subexon)
-            CDSs = [e for e in selected_subexons if e['feature'] == 'CDS']
-            five_prime_UTRs = [
-                e for e in selected_subexons
-                if e['feature'] == 'five_prime_UTR'
-            ]
-            three_prime_UTRs = [
-                e for e in selected_subexons
-                if e['feature'] == 'three_prime_UTR'
-            ]
-            if len(CDSs) > 1:
-                raise Exception("Wrong number of CDSs")
+            coding_seqs = [e for e in selected_subexons if e['feature']==CDS_TYPE]
+            five_prime_UTRs = []
+            three_prime_UTRs = []
+            if strand == '+':
+                for e in selected_subexons:
+                    if e['end'] < orf_start:
+                        five_prime_UTRs.append(e)
+                    if orf_end < e['start']:
+                        three_prime_UTRs.append(e)
+            else:
+                for e in selected_subexons:
+                    if e['end'] < orf_start:
+                        three_prime_UTRs.append(e)
+                    if orf_end < e['start']:
+                        five_prime_UTRs.append(e)
+            if len(coding_seqs) > 1:
+                raise Exception("Wrong number of coding_seqs")
             if len(five_prime_UTRs) > 1:
                 raise Exception("Wrong number of five_prime_UTRs")
             if len(three_prime_UTRs) > 1:
                 raise Exception("Wrong number of three_prime_UTRs")
-
-            #If there is no CDS in this exon, then create UTR for this exon
-            if len(CDSs) == 0:
+            #If there is no coding_seq in this exon, then create UTR for this exon
+            if len(coding_seqs) == 0:
                 UTR = dict(exon)
+                UTR['feature'] = UTR_TYPE
                 #Try to fix exon's 5'UTR or exon's 3'UTR, if exon doesn't have one
                 if len(five_prime_UTRs + three_prime_UTRs) == 0:
                     if strand == '+':
                         if exon['end'] < orf_start:
-                            UTR['feature'] = 'five_prime_UTR'
+                            #UTR['feature'] = FIVE_PRIME_UTR_TYPE
                             missing_UTRs.append(UTR)
                         elif exon['start'] > orf_end:
-                            UTR['feature'] = 'three_prime_UTR'
-                            missing_UTRs.append(three_prime_UTR)
+                            #UTR['feature'] = THREE_PRIME_UTR_TYPE
+                            missing_UTRs.append(UTR)
                     else:
                         if exon['start'] > orf_end:
-                            UTR['feature'] = 'five_prime_UTR'
+                            #UTR['feature'] = FIVE_PRIME_UTR_TYPE
                             missing_UTRs.append(UTR)
                         elif exon['end'] < orf_start:
-                            UTR['feature'] = 'three_prime_UTR'
-                            missing_UTRs.append(three_prime_UTR)
-            #If there is one CDS in this exon, then make create UTR by exon's ORF if it doesn't have one
+                            #UTR['feature'] = THREE_PRIME_UTR_TYPE
+                            missing_UTRs.append(UTR)
+            #If there is one coding_seq in this exon, then make create UTR by exon's ORF if it doesn't have one
             else:
-                CDS = CDSs[0]
+                coding_seq = coding_seqs[0]
                 if len(five_prime_UTRs) == 0:
-                    five_prime_UTR = dict(exon)
-                    five_prime_UTR['feature'] = 'five_prime_UTR'
+                    UTR = dict(exon)
+                    UTR['feature'] = UTR_TYPE
+                    #UTR['feature'] = FIVE_PRIME_UTR_TYPE
                     if strand == '+':
-                        five_prime_UTR['end'] = CDS['start'] - 1
+                        UTR['end'] = coding_seq['start'] - 1
                     else:
-                        five_prime_UTR['start'] = CDS['end'] + 1
-                    five_length = five_prime_UTR['end'] - five_prime_UTR[
-                        'start'] + 1
+                        UTR['start'] = coding_seq['end'] + 1
+                    five_length = UTR['end'] - UTR['start'] + 1
                     if five_length > 0:
-                        missing_UTRs.append(five_prime_UTR)
+                        missing_UTRs.append(UTR)
 
                 if len(three_prime_UTRs) == 0:
-                    three_prime_UTR = dict(exon)
-                    three_prime_UTR['feature'] = 'three_prime_UTR'
+                    UTR = dict(exon)
+                    UTR['feature'] = UTR_TYPE
+                    #UTR['feature'] = THREE_PRIME_UTR_TYPE
                     if strand == '+':
-                        three_prime_UTR['start'] = CDS['end'] + 1
+                        UTR['start'] = coding_seq['end'] + 1
                     else:
-                        three_prime_UTR['end'] = CDS['start'] - 1
-                    three_length = three_prime_UTR['end'] - three_prime_UTR[
-                        'start'] + 1
+                        UTR['end'] = coding_seq['start'] - 1
+                    three_length = UTR['end'] - UTR['start'] + 1
                     if three_length > 0:
-                        missing_UTRs.append(three_prime_UTR)
+                        missing_UTRs.append(UTR)
 
     else:
-        #Try to create exon's UTR, if exon doesn't have one
+        #Try to create exon's UTR, if exon doesn't have coding_seq
         for exon in exons:
             UTR = dict(exon)
-            UTR['feature'] = 'UTR'
+            UTR['feature'] = UTR_TYPE
             missing_UTRs.append(UTR)
 
     return missing_UTRs
@@ -142,14 +149,9 @@ def _create_blocks(subblock_list, feature):
     return blocks_info
 
 
-def _create_exons(subblock_list):
-    exons_info = _create_blocks(subblock_list, 'exon')
-    return exons_info
-
-
 def _get_item_with_repaired_boundary(parent, child_list):
     parent = dict(parent)
-    if len(child_list) != 0:
+    if len(child_list) > 0:
         start = min([item['start'] for item in child_list])
         end = max([item['end'] for item in child_list])
         parent['start'] = start
@@ -157,141 +159,151 @@ def _get_item_with_repaired_boundary(parent, child_list):
     return parent
 
 
-def _get_repaired_subexon_and_exon(transcript_id, exon_group, subexon_group):
-    print("Preproess for {}".format(transcript_id))
+def _grouping(blocks,by=None):
+    by = by or 'parent'
+    dict_ = {}
+    for block in blocks:
+        parent = block[by]
+        if parent not in dict_:
+            dict_[parent] = []
+        dict_[parent].append(block)
+    return dict_
+
+
+def _repaired_subexon_and_exon(transcript_id, subexons, exons):
+    print("Repair subexon and exon for {}".format(transcript_id))
     #If subexon exists, then try to use it to repair UTRs and exons and add reapired exons to list
     #Otherwise, directly add exons to list
-    exon_list = []
-    subexons_list = []
-    if transcript_id in list(exon_group.groups.keys()):
-        exons = exon_group.get_group(transcript_id).to_dict('record')
-        if transcript_id in list(subexon_group.groups.keys()):
-            subexons = subexon_group.get_group(transcript_id).to_dict('record')
-            missing_UTRs_ = _create_missing_UTRs(exons, subexons)
-            subexons += missing_UTRs_
-            created_subexons = []
-            for type_ in SUBEXON_TYPES:
-                list_ = [
-                    subexon for subexon in subexons
-                    if subexon['feature'] == type_
-                ]
-                if len(list_) > 0:
-                    created_subexons += _create_blocks(list_, type_)
-            subexons_list += created_subexons
-            created_exons = _create_exons(created_subexons)
-            if len(exons) != len(created_exons):
-                raise Exception(
-                    "Inconsist exon number at {}, got {} and {}".format(
-                        transcript_id, len(exons), len(created_exons)))
-            exon_list += created_exons
-        else:
-            exon_list += exons
-    return subexons_list, exon_list
+    if len(subexons) > 0:
+        created_subexons = []
+        missing_UTRs = _create_missing_UTRs(subexons,exons)
+        subexons += missing_UTRs
+        subexons_dict = _grouping(subexons,'feature')
+        for feature,subexons_ in subexons_dict.items():
+            created_subexons += _create_blocks(subexons_, feature)
+        created_exons = _create_blocks(created_subexons, 'exon')
+        if len(exons) != len(created_exons):
+            raise Exception("Inconsist exon number at {}, got {} and {}".format(transcript_id, 
+                                                                                len(exons), 
+                                                                                len(created_exons)))
+        subexons = created_subexons
+        exons = created_exons
+        
+    return transcript_id,subexons,exons
 
 
-def _group_list_by_parent(item_list):
-    group = {}
-    for item in item_list:
-        parent = item['parent']
-        if parent not in group:
-            group[parent] = []
-        group[parent].append(item)
-    return group
-
-def _repair_transcript(transcript,exon_list_group):
+def _repair_transcript(exon_list,transcript):
     transcript_id = transcript['id']
-    print("Repair for {}".format(transcript_id))
-    if transcript_id in exon_list_group:
-        matched_list = exon_list_group[transcript_id]
-        transcript = _get_item_with_repaired_boundary(
-            transcript, matched_list)
+    print("Repair transcript for {}".format(transcript_id))
+    transcript = _get_item_with_repaired_boundary(transcript, exon_list)
     return transcript
 
-def _repair_gene(gene,transcript_group):
-    print("Repair for {}".format(gene['id']))
-    matched_list = transcript_group.get_group(gene['id']).to_dict('record')
-    gene = _get_item_with_repaired_boundary(gene, matched_list)
+
+def _repair_gene(transcript_list,gene):
+    print("Repair gene for {}".format(gene['id']))
+    gene = _get_item_with_repaired_boundary(gene, transcript_list)
     return gene
 
-def repair_gff(gff):
-    strand = set(gff['strand'])
-    if len(strand - set(['+', '-'])) != 0:
-        raise Exception("Wrong strand", strand)
 
-    genes = gff[gff['feature'].isin(GENE_TYPES)]
-    transcripts = gff[gff['feature'].isin(RNA_TYPES)]
-    exons = gff[gff['feature'].isin(EXON_TYPES)]
-    subexons = gff[gff['feature'].isin(SUBEXON_TYPES)]
-    exon_group = exons.groupby('parent')
-    subexon_group = subexons.groupby('parent')
-    transcript_group = transcripts.groupby('parent')
-    #Recreate subexon data
-    gene_list = genes.to_dict('record')
-    transcript_list = transcripts.to_dict('record')
-    exon_list = []
-    subexons_list = []
-    print("Create exon and UTR")
-    kwargs_list = []
-    for index, transcript_id in enumerate(list(transcripts['id'])):
-        print("Processed {}%".format(int(100 * index / len(transcripts))),
-              end='\r')
+def repair_subexon_exon(subexons,exons):
+    exon_dict = _grouping(exons.to_dict('record'))
+    subexon_dict = _grouping(subexons.to_dict('record'))
+    repaired_exon_dict = {}
+    repaired_subexon_dict = {}
+    args_list = []
+    transcript_ids = list(set(exons['parent']))
+    for index, transcript_id in enumerate(transcript_ids):
+        print("Processed {}%".format(int(100 * index / len(transcript_ids))),end='\r')
         sys.stdout.write('\033[K')
-        kwargs_list.append((transcript_id, exon_group, subexon_group))
+        subexons_ = []
+        exons_ = exon_dict[transcript_id]
+        if transcript_id in subexon_dict:
+            subexons_ = subexon_dict[transcript_id]
+        args_list.append((transcript_id, subexons_, exons_))
         
     with Pool(processes=40) as pool:
-        result_tuples = pool.starmap(_get_repaired_subexon_and_exon,kwargs_list)
-    for subexons_list_,exon_list_ in result_tuples:
-        exon_list += exon_list_
-        subexons_list += subexons_list_
-
-    repaired = exon_list + subexons_list
-    repaired_transcripts = []
-    exon_list_group = _group_list_by_parent(exon_list)
-
-    print("Repair transcript boundary if transcript has any exon")
-    repaired_kwargs_list = []
-    for index, transcript in enumerate(transcript_list):
-        print("Processed {}%".format(int(100 * index / len(transcript_list))),
-              end='\r')
-        sys.stdout.write('\033[K')
-        repaired_kwargs_list.append((transcript,exon_list_group))
+        result_tuples = pool.starmap(_repaired_subexon_and_exon,args_list)
     
-    with Pool(processes=40) as pool:
-        repaired_transcripts = pool.starmap(_repair_transcript,repaired_kwargs_list)
-        
-    repaired += repaired_transcripts
+    for transcript_id, subexons_list, exon_list in result_tuples:
+        repaired_subexon_dict[transcript_id] = subexons_list
+        repaired_exon_dict[transcript_id] = exon_list
+    return repaired_subexon_dict,repaired_exon_dict
 
-    print("Repair gene boundary")
-    repaired_gene_kwargs_list = []
-    for index, gene in enumerate(gene_list):
-        print("Processed {}%".format(int(100 * index / len(genes))), end='\r')
+
+def repair_transcript(repaired_exon_dict,transcripts):
+    repaired_transcript_dict = {}
+    repaired_args_list = []
+    for index, transcript in enumerate(transcripts.to_dict('record')):
+        print("Processed {}%".format(int(100 * index / len(transcripts))),end='\r')
         sys.stdout.write('\033[K')
-        repaired_gene_kwargs_list.append((gene,transcript_group))
-        
-    with Pool(processes=40) as pool:
-        repaired_genes = pool.starmap(_repair_gene,repaired_gene_kwargs_list)
-    repaired += repaired_genes
+        id_ = transcript['id']
+        exons = []
+        if id_ in repaired_exon_dict:
+            exons = repaired_exon_dict[id_]
+        repaired_args_list.append((exons,transcript))
 
-    ALL_types = GENE_TYPES + RNA_TYPES + EXON_TYPES + SUBEXON_TYPES
-    others = gff[~gff['feature'].isin(ALL_types)].to_dict('record')
-    repaired += others
+    with Pool(processes=40) as pool:
+        results = pool.starmap(_repair_transcript,repaired_args_list)
+    repaired_transcript_dict = _grouping(results)
+    return repaired_transcript_dict
+
+
+def repair_gene(repaired_transcript_dict,genes):
+    repaired_gene_dict = {}
+    repaired_args_list = []
+    for index, gene in enumerate(genes.to_dict('records')):
+        print("Processed {}%".format(int(100 * index / len(genes))),end='\r')
+        sys.stdout.write('\033[K')
+        id_ = gene['id']
+        if id_ in repaired_transcript_dict:
+            transcripts = repaired_transcript_dict[id_]
+        repaired_args_list.append((transcripts,gene))
+
+    with Pool(processes=40) as pool:
+        results = pool.starmap(_repair_gene,repaired_args_list)
+    for gene in results:
+        repaired_gene_dict[gene['id']] = gene
+    return repaired_gene_dict
+
+
+def repair_gff(gff):
+    gff = gff.copy()
+    strand = set(gff['strand'])
+    invalid_strands = strand - set(['+', '-'])
+    if len(invalid_strands) > 0:
+        raise Exception("Wrong strand", invalid_strands)
+
+    genes = gff[gff['feature']==GENE_TYPE]
+    transcripts = gff[gff['feature']==TRANSCRIPT_TYPE]
+    exons = gff[gff['feature']==EXON_TYPE]
+    subexons = gff[gff['feature'].isin(SUBEXON_TYPES)]
+    print("Create exon and UTR")
+    repaired_subexon_dict,repaired_exon_dict = repair_subexon_exon(subexons,exons)
+    print("Repair transcript boundary if transcript has any exon")
+    repaired_transcript_dict = repair_transcript(repaired_exon_dict,transcripts)
+    print("Repair gene boundary")
+    repaired_gene_dict = repair_gene(repaired_transcript_dict,genes)
+    repaired = []
+    for list_ in list(repaired_subexon_dict.values()):
+        repaired += list_
+    for list_ in list(repaired_exon_dict.values()):
+        repaired += list_
+    for list_ in list(repaired_transcript_dict.values()):
+        repaired += list_
+    repaired += list(repaired_gene_dict.values())
+
+    all_types = [GENE_TYPE,TRANSCRIPT_TYPE,EXON_TYPE] + SUBEXON_TYPES
     repaired = pd.DataFrame.from_dict(repaired)
+    repaired = pd.concat([repaired,gff[~gff['feature'].isin(all_types)]])
     repaired.loc[:, 'coord_id'] = _get_coord_ids(repaired)
     repaired = get_gff_with_updated_attribute(repaired)
     return repaired
 
 
-def main(input_path, saved_root, postfix,split_by_parent=False):
+def main(input_path, saved_root, postfix):
     gff = read_gff(input_path)
-    if split_by_parent:
-        gff = get_gff_with_attribute(gff, ['parent'])
-        gff = dupliacte_gff_by_parent(gff)
-        gff = get_gff_with_belonging(gff)
-    else:
-        gff = get_gff_with_attribute(gff)
-    
+    gff = get_gff_with_attribute(gff)
     gff.loc[:, 'coord_id'] = _get_coord_ids(gff)
-
     repaired_gff = repair_gff(gff)
     repaired_path = os.path.join(saved_root,'repaired_{}.gff3').format(postfix)
     write_gff(repaired_gff,repaired_path)
@@ -308,36 +320,30 @@ def main(input_path, saved_root, postfix,split_by_parent=False):
     broken_gene_ids = set(broken_block_gff['belong_gene'])
     unseen_gene_ids = set(unseen_block_gff['belong_gene'])
     inconsistent_gene_id = unseen_gene_ids.union(broken_gene_ids)
-    inconsistent_gff = repaired_gff[repaired_gff['belong_gene'].isin(
-        inconsistent_gene_id)]
-    consistent_gff = repaired_gff[~repaired_gff['belong_gene'].
-                                  isin(inconsistent_gene_id)]
+    inconsistent_gff = repaired_gff[repaired_gff['belong_gene'].isin(inconsistent_gene_id)]
+    consistent_gff = repaired_gff[~repaired_gff['belong_gene'].isin(inconsistent_gene_id)]
 
-    write_gff(inconsistent_gff,
-              os.path.join(saved_root, 'inconsistent_{}.gff3').format(postfix))
-    write_gff(consistent_gff,
-              os.path.join(saved_root, 'consistent_{}.gff3').format(postfix))
-    write_gff(broken_block_gff,
-              os.path.join(saved_root, 'broken_block_{}.gff3').format(postfix))
-    write_gff(unseen_block_gff,
-              os.path.join(saved_root, 'unseen_block_{}.gff3').format(postfix))
+    inconsistent_gff_path = os.path.join(saved_root, 'inconsistent_{}.gff3').format(postfix)
+    consistent_gff_path = os.path.join(saved_root, 'consistent_{}.gff3').format(postfix)
+    broken_block_gff_path = os.path.join(saved_root, 'broken_block_{}.gff3').format(postfix)
+    unseen_block_gff_path = os.path.join(saved_root, 'unseen_block_{}.gff3').format(postfix)
+    write_gff(inconsistent_gff,inconsistent_gff_path)
+    write_gff(consistent_gff,consistent_gff_path)
+    write_gff(broken_block_gff,broken_block_gff_path)
+    write_gff(unseen_block_gff,unseen_block_gff_path)
 
 
 if __name__ == '__main__':
     parser = ArgumentParser(
-        description="This program would use CDS and exon to " +
-        "repair missing UTR, use CDS and UTR to repair exon\n" +
+        description="This program would use coding_seq and exon to " +
+        "repair missing UTR, use coding_seq and UTR to repair exon\n" +
         ", and use exon to repair transcript, and use transcript to repair gene."
         + "Output data would be consistent data which are not changed.")
-    parser.add_argument("-i","--input_path",
-                        help="Path of input GFF file",
+    parser.add_argument("-i","--input_path",help="Path of input GFF file",
                         required=True)
-    parser.add_argument("-s","--saved_root",
-                        help="Root to save result",
+    parser.add_argument("-s","--saved_root",help="Root to save result",
                         required=True)
     parser.add_argument("-p", "--postfix", required=True)
-    parser.add_argument("--split_by_parent", action='store_true')
-    
     args = parser.parse_args()
 
     kwargs = vars(args)

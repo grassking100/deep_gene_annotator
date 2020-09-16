@@ -1,9 +1,8 @@
 import os
 import sys
-import pandas as pd
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__) + "/../..")
-from sequence_annotation.utils.utils import get_file_name,create_folder
+from sequence_annotation.utils.utils import create_folder
 
 
 def main(trained_root, output_root, save_command_table_path,

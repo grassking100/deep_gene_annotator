@@ -2,15 +2,16 @@ import os, sys
 import deepdish as dd
 sys.path.append(os.path.dirname(__file__)+"/../..")
 from argparse import ArgumentParser
-from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES, get_gff_with_attribute, read_gff
-from sequence_annotation.preprocess.utils import EXON_SKIPPING,INTRON_RETENTION
-from sequence_annotation.preprocess.utils import ALT_DONOR,ALT_ACCEPTOR
+from sequence_annotation.file_process.utils import read_gff,get_gff_with_intron
+from sequence_annotation.file_process.utils import EXON_SKIPPING,INTRON_RETENTION
+from sequence_annotation.file_process.utils import ALT_DONOR,ALT_ACCEPTOR,BASIC_GENE_ANN_TYPES,ALT_STATUSES,BASIC_GFF_FEATURES
+from sequence_annotation.file_process.utils import UTR_TYPE, GENE_TYPE, CDS_TYPE,INTERGENIC_REGION_TYPE,TRANSCRIPT_TYPE
+from sequence_annotation.file_process.get_region_table import read_region_table
 from sequence_annotation.genome_handler.exception import NotOneHotException
 from sequence_annotation.genome_handler.ann_seq_processor import is_one_hot
 from sequence_annotation.genome_handler.sequence import AnnSequence
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
 from sequence_annotation.genome_handler.ann_genome_processor import get_backgrounded_genome
-from sequence_annotation.preprocess.utils import RNA_TYPES,read_region_table
 
 
 STRAND_CONVERT = {'+':'plus','-':'minus'}
@@ -40,8 +41,8 @@ class Gff2AnnSeqs:
             raise NotOneHotException(ann_seq.id)
 
     def convert(self,gff,region_table,source):
-        gff = get_gff_with_attribute(gff)
-        is_transcript = gff['feature'].isin(RNA_TYPES)
+        gff = get_gff_with_intron(gff)
+        is_transcript = gff['feature']==TRANSCRIPT_TYPE
         transcripts = gff[is_transcript].to_dict('record')
         blocks = gff[~is_transcript].groupby('parent')
         genome = AnnSeqContainer()
@@ -59,8 +60,8 @@ class Gff2AnnSeqs:
                     chrom.set_ann(block['feature'],1,block['start']-1,block['end']-1)
                     
         frontgrounded_type = list(self._ANN_TYPES)
-        frontgrounded_type.remove('other')
-        backgrounded = get_backgrounded_genome(genome,'other',frontgrounded_type)
+        frontgrounded_type.remove(INTERGENIC_REGION_TYPE)
+        backgrounded = get_backgrounded_genome(genome,INTERGENIC_REGION_TYPE,frontgrounded_type)
         for chrom in backgrounded:
             self._validate(chrom)
         return backgrounded
@@ -71,8 +72,9 @@ def create_ann_genome(gff,region_table,souce_name,ann_types,one_hot_ann_types):
     return genome
 
 def main(gff_path,region_table_path,souce_name,output_path,
-         with_alt_region,with_alt_site_region,discard_alt_region,discard_UTR_CDS):
-    gff = read_gff(gff_path)
+         with_alt_region=False,with_alt_site_region=False,
+         discard_alt_region=False,discard_UTR_CDS=False):
+    gff = read_gff(gff_path,with_attr=True,valid_features=BASIC_GFF_FEATURES+ALT_STATUSES)
     ann_types = list(BASIC_GENE_ANN_TYPES)
     one_hot_ann_types = list(BASIC_GENE_ANN_TYPES)
     if with_alt_region:
@@ -86,9 +88,9 @@ def main(gff_path,region_table_path,souce_name,output_path,
         gff = gff[~gff['feature'].isin([EXON_SKIPPING,INTRON_RETENTION])]
         
     if discard_UTR_CDS:
-        gff = gff[~gff['feature'].isin(['UTR','CDS'])]
+        gff = gff[~gff['feature'].isin([UTR_TYPE,CDS_TYPE])]
     
-    part_gff = gff[~gff['feature'].isin(ann_types+['UTR', 'mRNA', 'gene'])]
+    part_gff = gff[~gff['feature'].isin(ann_types+[UTR_TYPE,TRANSCRIPT_TYPE,GENE_TYPE])]
     if len(part_gff) > 0:
         invalid_options = set(part_gff['feature'])
         raise Exception("Invalid features, {}, in GFF, valid options are {}".format(invalid_options,ann_types))

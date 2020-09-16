@@ -74,31 +74,29 @@ class TestLoss(unittest.TestCase):
         self.assertEqual(0.27726, round(result, 5))
 
     def test_seq_ann_loss(self):
-        predict = torch.FloatTensor([[[0, 0.5, 1, 0, 0.0, 0, 0],
-                                      [0, 0.5, 0, 1, 0.5, 0, 0]]])
+        predict = torch.FloatTensor([[[0, 0.5, 1, 0, 0],
+                                      [0, 0.5, 0, 1, 0.5]]])
+        answer = torch.FloatTensor([[[0, 1, 0, 1, 0],
+                                     [0, 0, 1, 0, 0],
+                                     [1, 0, 0, 0, 1]]])
 
-        answer = torch.FloatTensor([[[0, 1, 0, 1, 0, 0, 0],
-                                     [0, 0, 1, 0, 0, 0, 0],
-                                     [1, 0, 0, 0, 1, 0, 0]]])
-
-        mask = torch.FloatTensor([[1, 1, 1, 1, 1, 0, 0]])
+        mask = torch.FloatTensor([[1, 1, 1, 1, 1]])
         loss = SeqAnnLoss()
         result = loss(predict, answer, mask).item()
-        self.assertEqual(12.15828, round(result, 5))
+        #Reference: https://github.com/pytorch/pytorch/issues/31453
+        #The infinity in loss would be clamped to 100
+        self.assertEqual(43.51817, round(result, 5))
 
     def test_accumulated_seq_ann_loss(self):
         predict = torch.FloatTensor([[[0, 0.5, 1, 0], [0, 0.5, 0, 1]]])
-
         predict_2 = torch.FloatTensor([[[0, 0, 0], [.5, 0, 0]]])
-
-        answer = torch.FloatTensor([[[0, 1, 0, 1], [0, 0, 1, 0], [1, 0, 0,
-                                                                  0]]])
-
+        answer = torch.FloatTensor([[[0, 1, 0, 1], [0, 0, 1, 0], [1, 0, 0, 0]]])
         answer_2 = torch.FloatTensor([[[0, 0, 0], [0, 0, 0], [1, 0, 0]]])
-
         mask = torch.FloatTensor([[1, 1, 1, 1]])
         mask_2 = torch.FloatTensor([[1, 0, 0]])
         loss = SeqAnnLoss()
         loss(predict, answer, mask, accumulate=True)
         result = loss(predict_2, answer_2, mask_2, accumulate=True).item()
-        self.assertEqual(12.15828, round(result, 5))
+        #Reference: https://github.com/pytorch/pytorch/issues/31453
+        #The infinity in loss would be clamped to 100
+        self.assertEqual(43.51817, round(result, 5))

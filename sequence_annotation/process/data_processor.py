@@ -1,18 +1,11 @@
-import warnings
-import random
 import numpy as np
-from ..genome_handler.seq_container import AnnSeqContainer
-from ..genome_handler import ann_genome_processor
+from ..genome_handler.ann_genome_processor import genome2dict_vec
 from ..utils.seq_converter import SeqConverter
 from ..utils.exception import LengthNotEqualException
-from ..utils.utils import get_subdict
 
 
 class AnnSeqProcessor:
-    def __init__(self,channel_order,
-                 seq_converter=None,
-                 validation_split=None):
-        self._validation_split = validation_split or 0
+    def __init__(self,channel_order,seq_converter=None):
         if seq_converter is None:
             self._seq_converter = SeqConverter()
         else:
@@ -21,51 +14,19 @@ class AnnSeqProcessor:
 
     def _validate(self, data):
         if 'answers' in data:
-            for id_, input_, answer in zip(data['ids'], data['inputs'],
-                                           data['answers']):
+            for id_, input_, answer in zip(data['ids'], data['inputs'],data['answers']):
                 seq_length = np.shape(input_)[0]
                 ann_length = np.shape(answer)[0]
                 if ann_length != seq_length:
                     raise LengthNotEqualException(ann_length, seq_length, id_)
 
-    def _split(self, data):
-        if self._validation_split > 0 and not 'validation' in data.keys():
-            returned = {}
-            shuffled_keys = list(data['training']['inputs'].keys())
-            random.shuffle(shuffled_keys)
-            val_length = int(len(shuffled_keys) * self._validation_split)
-            train_keys = shuffled_keys[val_length:]
-            val_keys = shuffled_keys[:val_length]
-            train_seqs = {}
-            val_seqs = {}
-            for type_, item in data.items():
-                if isinstance(item, AnnSeqContainer):
-                    train_seqs[type_] = item.get_seqs(train_keys)
-                    val_seqs[type_] = item.get_seqs(val_keys)
-                else:
-                    train_seqs[type_] = get_subdict(train_keys, item)
-                    val_seqs[type_] = get_subdict(val_keys, item)
-            returned['training'] = train_seqs
-            returned['validation'] = val_seqs
-        else:
-            returned = data
-        return returned
-
     def _to_dict(self, item):
-        data = {
-            'inputs': [],
-            'lengths': [],
-            'ids': [],
-            'seqs': [],
-            'has_gene_statuses': []
-        }
+        data = {'ids': [],'inputs': [],'seqs': [],'lengths': [],'has_gene_statuses': []}
         has_gene_list = {}
         seqs = self._seq_converter.seqs2dict_vec(item['inputs'])
         if 'answers' in item:
             data['answers'] = []
-            ann_seq_dict = ann_genome_processor.genome2dict_vec(
-                item['answers'], self._channel_order)
-
+            ann_seq_dict = genome2dict_vec(item['answers'], self._channel_order)
             for ann_seq in item['answers']:
                 has_gene_list[ann_seq.id] = (sum(ann_seq.get_ann('intron')) +
                                              sum(ann_seq.get_ann('exon'))) > 0
@@ -83,18 +44,33 @@ class AnnSeqProcessor:
             
         return data
 
-    def process(self, data):
-        splitted_data = self._split(data)
+    def process(self, data, return_stats=False):
         returned = {}
-        warning = "{} data have {} sequences, it left {} sequences after filtering"
-        for purpose in splitted_data.keys():
-            item = splitted_data[purpose]
+        stats = {}
+        for purpose in data.keys():
+            item = data[purpose]
             origin_num = len(item['inputs'])
             item = self._to_dict(item)
             new_num = len(item['inputs'])
-            if origin_num != new_num:
-                warnings.warn(warning.format(purpose, origin_num, new_num),
-                              UserWarning)
             self._validate(item)
             returned[purpose] = item
+            if return_stats:
+                stats[purpose] = {'origin count': origin_num,'filtered count': new_num}
+                stats[purpose].update(self._get_stats(item))
+        if return_stats:
+            return returned, stats
+        else:
+            return returned
+
+    def _get_stats(self, data):
+        returned = {}
+        if 'answers' in data:
+            count = {}
+            for type_ in self._channel_order:
+                count[type_] = 0
+            for vec in data['answers']:
+                for index,item_count in enumerate(vec.sum(0)):
+                    count[self._channel_order[index]] += item_count
+            returned['ann_count'] = count
+            returned['gene_count'] = int(sum(data['has_gene_statuses']))
         return returned

@@ -1,10 +1,14 @@
 import warnings
 import numpy as np
 import re
-from ..utils.exception import InvalidStrandType
-from .exception import ProcessedStatusNotSatisfied
-from .sequence import AnnSequence, PLUS, STRANDS
+from ..file_process.utils import PLUS, STRANDS, InvalidStrandType
+from .sequence import AnnSequence
 
+class ProcessedStatusNotSatisfied(Exception):
+    def __init__(self, get_status, predict_status):
+        msg = "Get {}, but it is expect to be {}".format(
+            get_status, predict_status)
+        super().__init__(msg)
 
 def get_certain_status(seq, focus_types=None):
     if not seq.processed_status == 'normalized':
@@ -184,14 +188,13 @@ def class_count(ann_seq):
     return ann_count
 
 
-def seq2vecs(ann_seq, ann_types=None):
+def seq2vecs(ann_seq, ann_types):
     warn = ("\n\n!!!\n"
             "\tAnnotation sequence will be rearranged from 5' to 3'.\n"
             "\tThe plus strand sequence will stay the same,"
             " but the minus strand sequence will be flipped!\n"
             "!!!\n")
     warnings.warn(warn)
-    ann_types = ann_types or ann_seq.ANN_TYPES
     ann = []
     for type_ in ann_types:
         value = ann_seq.get_ann(type_)

@@ -2,11 +2,10 @@ import os,sys
 import pandas as pd
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__)+"/../..")
-from sequence_annotation.utils.utils import read_bed,write_bed
-from sequence_annotation.preprocess.get_id_table import get_id_convert_dict
+from sequence_annotation.file_process.utils import read_bed,write_bed
+from sequence_annotation.file_process.get_id_table import get_id_convert_dict
 
-def gene_score_filter(bed,threshold,mode,id_table_path):
-    id_convert = get_id_convert_dict(id_table_path)
+def gene_score_filter(bed,threshold,mode,id_convert):
     bed['parent'] = [id_convert[id_] for id_ in bed['id']]
     bed_group = bed.groupby('parent')
     groups = []
@@ -34,12 +33,14 @@ def transcript_score_filter(bed,threshold,mode):
     bed = bed.loc[pass_index]
     return bed
 
+
 def main(input_bed_path,threshold,mode,output_bed_path,remove_gene=False,id_table_path=None):
     bed = read_bed(input_bed_path)
     if remove_gene:
         if id_table_path is None:
             raise Exception("The id_table_path must be provided if the remove_gene is true')")
-        bed = gene_score_filter(bed,threshold,mode,id_table_path)
+        id_convert = get_id_convert_dict(id_table_path)
+        bed = gene_score_filter(bed,threshold,mode,id_convert)
     else:
         bed = transcript_score_filter(bed,threshold,mode)
     write_bed(bed,output_bed_path)

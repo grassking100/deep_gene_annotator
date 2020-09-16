@@ -1,9 +1,8 @@
 from ..ann_seq_test_case import AnnSeqTestCase
 import numpy as np
 from numpy.testing import assert_array_equal
-from sequence_annotation.genome_handler.exception import ProcessedStatusNotSatisfied
 from sequence_annotation.genome_handler.sequence import AnnSequence
-from sequence_annotation.genome_handler.ann_seq_processor import get_normalized, get_one_hot
+from sequence_annotation.genome_handler.ann_seq_processor import get_normalized, get_one_hot, ProcessedStatusNotSatisfied
 from sequence_annotation.genome_handler.ann_seq_processor import is_full_annotated, get_certain_status, is_one_hot
 from sequence_annotation.genome_handler.ann_genome_processor import genome2dict_vec
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer

@@ -1,27 +1,29 @@
 import sys
 import os
-import pandas as pd
 import warnings
+import pandas as pd
 sys.path.append(os.path.dirname(__file__)+"/../..")
-from sequence_annotation.utils.exception import InvalidStrandType
-from sequence_annotation.utils.utils import get_gff_with_updated_attribute,read_gff,write_gff
-from sequence_annotation.genome_handler.sequence import STRANDS, PLUS, MINUS
-from sequence_annotation.genome_handler.seq_info_parser import BedInfoParser
+from sequence_annotation.file_process.utils import InvalidStrandType, STRANDS, PLUS, MINUS
+from sequence_annotation.file_process.utils import get_gff_with_updated_attribute,read_gff,write_gff
+from sequence_annotation.file_process.utils import EXON_TYPE,INTRON_TYPE,TRANSCRIPT_TYPE,GENE_TYPE
+from sequence_annotation.file_process.utils import EXON_SKIPPING,INTRON_RETENTION,DONOR_ACCEPTOR_SITE
+from sequence_annotation.file_process.utils import ALT_DONOR,ALT_DONOR_SITE
+from sequence_annotation.file_process.utils import ALT_ACCEPTOR,ALT_ACCEPTOR_SITE
+from sequence_annotation.file_process.utils import ALT_STATUSES,BASIC_GFF_FEATURES
+from sequence_annotation.file_process.gff2bed import gff2bed
+from sequence_annotation.file_process.get_id_table import get_id_table
+from sequence_annotation.file_process.seq_info_parser import BedInfoParser
 from sequence_annotation.genome_handler.ann_seq_converter import GeneticBedSeqConverter
 from sequence_annotation.genome_handler.region_extractor import RegionExtractor
 from sequence_annotation.genome_handler.ann_seq_processor import get_mixed_seq
-from sequence_annotation.preprocess.utils import EXON_SKIPPING,INTRON_RETENTION
-from sequence_annotation.preprocess.utils import ALT_DONOR,ALT_DONOR_SITE
-from sequence_annotation.preprocess.utils import ALT_ACCEPTOR,ALT_ACCEPTOR_SITE
-from sequence_annotation.preprocess.get_id_table import get_id_table
-from sequence_annotation.preprocess.gff2bed import gff2bed
+
+
+STRAND_CONVERT = {PLUS:'+',MINUS:'-'}
+CANONICAL_REGION = 'canonical_region'
+NONCANONICAL_REGION = 'nononical_region'
 
 class SingleSiteException(Exception):
     pass
-
-EXON='exon'
-INTRON='intron'
-STRAND_CONVERT = {PLUS:'+',MINUS:'-'}
 
 def _add_to_set(dict_,key,value):
     if key not in dict_.keys():
@@ -59,9 +61,9 @@ def _get_noncanonical_region(seqs,canonical_regions):
                 break
         if is_mixed:
             region_type = None
-            if type_ not in [EXON,INTRON]:
+            if type_ not in [EXON_TYPE,INTRON_TYPE]:
                 raise Exception("Unknown type")
-            if type_ == EXON:
+            if type_ in [EXON_TYPE]:
                 region_type = EXON_SKIPPING
             else:
                 region_type = INTRON_RETENTION
@@ -242,22 +244,22 @@ def get_canonical_region_and_alt_splice(seqs,select_site_by_election=False):
         type_ = None
         #Single exon transcript
         if '5' in start_types and '3' in end_types:
-            type_ = EXON
+            type_ = EXON_TYPE
         #Multiple exon transcript
         elif '5' in start_types and 'D' in end_types:
-            type_ = EXON
+            type_ = EXON_TYPE
         elif '5' in start_types and 'A' in end_types:
-            type_ = INTRON
+            type_ = INTRON_TYPE
         elif 'A' in start_types and '3' in end_types:
-            type_ = EXON
+            type_ = EXON_TYPE
         elif 'A' in start_types and 'D' in end_types:
-            type_ = EXON     
+            type_ = EXON_TYPE     
         elif 'D' in start_types and 'A' in end_types:
-            type_ = INTRON
+            type_ = INTRON_TYPE
         elif 'D' in start_types and '3' in end_types:
-            type_ = INTRON
+            type_ = INTRON_TYPE
         if type_ is not None:
-            if type_ == EXON:
+            if type_ == EXON_TYPE:
                 exon_boundary_pairs[start] = end
             else:
                 intron_boundary_pairs[start] = end
@@ -293,10 +295,6 @@ def get_canonical_region_and_alt_splice(seqs,select_site_by_election=False):
             if len(acceptor_site_group) > 0 :
                 acceptor_site_groups.append(acceptor_site_group)
             acceptor_site_group = []
-
-    #rint(intron_boundary_pairs)
-    #rint(donor_site_groups)
-    #rint(acceptor_site_groups)
             
     for group in donor_site_groups:
         if len(group)>1:
@@ -354,10 +352,10 @@ def get_canonical_region_and_alt_splice(seqs,select_site_by_election=False):
     canonical_regions = {}
     for start,end in exon_boundary_pairs.items():
         id_ = _get_id(start,end)
-        canonical_regions[id_] = EXON
+        canonical_regions[id_] = EXON_TYPE
     for start,end in intron_boundary_pairs.items():
         id_ = _get_id(start,end)
-        canonical_regions[id_] = INTRON
+        canonical_regions[id_] = INTRON_TYPE
         
     canonical_accepts = set()
     canonical_donors = set()
@@ -483,14 +481,14 @@ def _to_gff_item(item):
              'source':'.','frame':'.','id':'.','score':item['score']}
     gene = dict(block)
     #Convert zero-nt based to one-nt based
-    gene['feature'] = 'gene'
+    gene['feature'] = GENE_TYPE
     gene['id'] =  "{}_gene".format(item['id'])
     gene['start'] = item['start'] + 1
     gene['end'] = item['end'] + 1
     gene['parent'] = None
     
     transcript = dict(gene)
-    transcript['feature'] = 'mRNA'
+    transcript['feature'] = TRANSCRIPT_TYPE
     transcript['id'] = item['id']
     transcript['parent'] = gene['id']
     
@@ -498,7 +496,7 @@ def _to_gff_item(item):
     regions.append(transcript)
     
     #Add zero-site based to one-nt based ,then get one-nt based data
-    for info in item['canonical_regions']+item['noncanonical_regions']:
+    for info in item[CANONICAL_REGION]+item[NONCANONICAL_REGION]:
         region = dict(block)
         region['start'] = info['start'] + gene['start']
         region['end'] = info['end'] + gene['start'] - 1
@@ -517,6 +515,14 @@ def _to_gff_item(item):
     for site in item[ALT_DONOR_SITE]:
         alt_site = dict(block)
         alt_site['feature'] = ALT_DONOR_SITE
+        alt_site['end'] = site + gene['start']
+        alt_site['start'] = alt_site['end'] - 1
+        alt_site['parent'] = item['id']
+        regions.append(alt_site)
+        
+    for site in item[DONOR_ACCEPTOR_SITE]:
+        alt_site = dict(block)
+        alt_site['feature'] = DONOR_ACCEPTOR_SITE
         alt_site['end'] = site + gene['start']
         alt_site['start'] = alt_site['end'] - 1
         alt_site['parent'] = item['id']
@@ -561,8 +567,8 @@ def convert_from_bed_to_gene_with_alt_status_gff(bed,id_table,select_site_by_ele
         except:
             raise Exception("The gene {} causes error".format(gene_id))
 
-        SITE_NAMES = ['canonical_regions','noncanonical_regions',ALT_DONOR_SITE,ALT_ACCEPTOR_SITE,
-                      'donor_acceptor_site']
+        SITE_NAMES = [CANONICAL_REGION,NONCANONICAL_REGION,ALT_DONOR_SITE,ALT_ACCEPTOR_SITE,
+                      DONOR_ACCEPTOR_SITE]
         GLOBAL_NAMES = ['strand','chr','start','end']
             
         if parsed is not None:
@@ -588,7 +594,8 @@ def convert_from_bed_to_gene_with_alt_status_gff(bed,id_table,select_site_by_ele
         regions += _to_gff_item(item)
         
     gff = pd.DataFrame.from_dict(regions)
-    gff = get_gff_with_updated_attribute(gff)    
+    gff = gff[gff['feature'] != INTRON_TYPE]
+    gff = get_gff_with_updated_attribute(gff)
     return gff
 
 def convert_from_gff_to_gene_with_alt_status_gff(gff,**kwargs):
@@ -605,10 +612,10 @@ def main(input_path,output_gff_path,id_table_path=None,**kwargs):
         id_table = read_id_table(id_table_path)
         gene_gff = convert_from_bed_to_gene_with_alt_status_gff(bed,id_table,**kwargs)
     else:
-        gff = read_gff(input_path)
+        gff = read_gff(input_path,valid_features=ALT_STATUSES+BASIC_GFF_FEATURES)
         gene_gff = convert_from_gff_to_gene_with_alt_status_gff(gff,**kwargs)
 
-    write_gff(gene_gff,output_gff_path)
+    write_gff(gene_gff,output_gff_path,valid_features=ALT_STATUSES+BASIC_GFF_FEATURES)
 
 if __name__ == "__main__":
     #Reading arguments

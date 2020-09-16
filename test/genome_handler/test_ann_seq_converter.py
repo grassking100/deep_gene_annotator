@@ -1,5 +1,6 @@
 from ..ann_seq_test_case import AnnSeqTestCase
-from sequence_annotation.utils.exception import ValueOutOfRange, NegativeNumberException, InvalidStrandType
+from sequence_annotation.utils.exception import ValueOutOfRange, NegativeNumberException
+from sequence_annotation.file_process.utils import InvalidStrandType
 from sequence_annotation.genome_handler.ann_seq_converter import CodingBedSeqConverter
 from sequence_annotation.genome_handler.sequence import AnnSequence
 from sequence_annotation.genome_handler.exception import NotOneHotException, NotSameSizeException

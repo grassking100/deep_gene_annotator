@@ -10,13 +10,6 @@ class NotOneHotException(Exception):
         super().__init__(msg)
 
 
-class ProcessedStatusNotSatisfied(Exception):
-    def __init__(self, get_status, predict_status):
-        msg = "Get {}, but it is expect to be {}".format(
-            get_status, predict_status)
-        super().__init__(msg)
-
-
 class InvalidAnnotation(Exception):
     def __init__(self, ann_type=None, valid_types=None):
         type_ = ""

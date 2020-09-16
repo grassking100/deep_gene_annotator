@@ -2,22 +2,22 @@ import os, sys
 import pandas as pd
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__)+"/../..")
-from sequence_annotation.utils.utils import write_bed, get_gff_with_attribute, read_gff,write_gff, read_bed
-from sequence_annotation.preprocess.get_id_table import read_id_table
-from sequence_annotation.preprocess.gff2bed import gff_info2bed_info,gff2bed
-from sequence_annotation.preprocess.bed2gff import bed2gff
-from sequence_annotation.preprocess.utils import EXON_TYPES,RNA_TYPES,SUBEXON_TYPES
-from sequence_annotation.preprocess.get_id_table import get_id_table,convert_id_table_to_dict,write_id_table
-from sequence_annotation.preprocess.create_gene_with_alt_status_gff import convert_from_gff_to_gene_with_alt_status_gff
+from sequence_annotation.file_process.utils import get_gff_with_attribute, read_bed, write_bed, write_gff
+from sequence_annotation.file_process.get_id_table import read_id_table
+from sequence_annotation.file_process.gff2bed import gff_info2bed_info,gff2bed
+from sequence_annotation.file_process.bed2gff import bed2gff
+from sequence_annotation.file_process.utils import EXON_TYPE,TRANSCRIPT_TYPE,SUBEXON_TYPES
+from sequence_annotation.file_process.utils import ALT_STATUSES,BASIC_GFF_FEATURES
+from sequence_annotation.file_process.get_id_table import get_id_table,convert_id_table_to_dict,write_id_table
 from sequence_annotation.preprocess.create_gene_with_alt_status_gff import convert_from_bed_to_gene_with_alt_status_gff
 
 def create_gene_bed_from_exon_gff(gff):
-    gff = get_gff_with_attribute(gff)
-    transcripts = gff[gff['feature'].isin(RNA_TYPES)]
+    if 'parent' not in gff.columns:
+        gff = get_gff_with_attribute(gff)
+    transcripts = gff[gff['feature']==TRANSCRIPT_TYPE]
     ids = set(transcripts['id'])
     transcripts = transcripts.groupby('id')
-    exon_types = list(EXON_TYPES)
-    exons = gff[gff['feature'].isin(exon_types)]
+    exons = gff[gff['feature']==EXON_TYPE]
     exons = exons.groupby('parent')
     bed_info_list = []
     for id_ in ids:
@@ -30,7 +30,7 @@ def create_gene_bed_from_exon_gff(gff):
 
 
 def create_gene_gff_from_gene_alt_status_gff(gene_with_alt_status_gff):
-    id_table = get_id_table(get_gff_with_attribute(gene_with_alt_status_gff))
+    id_table = get_id_table(gene_with_alt_status_gff)
     id_convert_dict = convert_id_table_to_dict(id_table)
     bed = create_gene_bed_from_exon_gff(gene_with_alt_status_gff)
     gff = bed2gff(bed,id_convert_dict)
@@ -38,28 +38,22 @@ def create_gene_gff_from_gene_alt_status_gff(gene_with_alt_status_gff):
     return gff
 
 
-def main(input_path,output_gff_path,
-         output_status_path=None,output_bed_path=None,
-         output_id_table_path=None,id_table_path=None,**kwargs):
-    if 'bed' in input_path.split('.')[-1]:
-        if id_table_path is None:
-            raise Exception("If input data is bed format, then the id_table_path must be provided")
-        bed = read_bed(input_path)
-        id_table = read_id_table(id_table_path)
-        status_gff = convert_from_bed_to_gene_with_alt_status_gff(bed,id_table,**kwargs)
-    else:
-        gff = read_gff(input_path)
-        status_gff = convert_from_gff_to_gene_with_alt_status_gff(gff,**kwargs)
+def main(input_bed_path,id_table_path,
+         gene_gff_path=None,output_id_table_path=None,
+         status_gff_path=None,gene_bed_path=None,**kwargs):
+    bed = read_bed(input_bed_path)
+    id_table = read_id_table(id_table_path)
+    status_gff = convert_from_bed_to_gene_with_alt_status_gff(bed,id_table,**kwargs)
     gene_gff = create_gene_gff_from_gene_alt_status_gff(status_gff)
     gene_bed = gff2bed(gene_gff)
     gene_id_table = get_id_table(gene_gff)
     
-    write_gff(gene_gff,output_gff_path)
-    
-    if output_status_path is not None:
-        write_gff(status_gff,output_status_path)
-    if output_bed_path is not None:
-        write_bed(gene_bed,args.output_bed_path)
+    if gene_gff_path is not None:
+        write_gff(gene_gff,gene_gff_path)
+    if gene_bed_path is not None:
+        write_bed(gene_bed,gene_bed_path)
+    if status_gff_path is not None:
+        write_gff(status_gff,status_gff_path,valid_features=ALT_STATUSES+BASIC_GFF_FEATURES)
     if output_id_table_path is not None:
         write_id_table(gene_id_table,output_id_table_path)
     
@@ -67,12 +61,12 @@ def main(input_path,output_gff_path,
 if __name__ == "__main__":
     #Reading arguments
     parser = ArgumentParser()
-    parser.add_argument("-i", "--input_path",required=True)
-    parser.add_argument("-s", "--output_status_path",required=True)
-    parser.add_argument("-g", "--output_gff_path",required=True)
-    parser.add_argument("-b", "--output_bed_path",required=True)
+    parser.add_argument("-i", "--input_bed_path",required=True)
+    parser.add_argument("-s", "--status_gff_path",required=True)
+    parser.add_argument("-g", "--gene_gff_path",required=True)
+    parser.add_argument("-b", "--gene_bed_path",required=True)
     parser.add_argument("-o", "--output_id_table_path",required=True)
-    parser.add_argument("-t", "--id_table_path")
+    parser.add_argument("-t", "--id_table_path",required=True)
     parser.add_argument("--select_site_by_election",action='store_true')
     parser.add_argument("--allow_partial_gene",action='store_true')
     args = parser.parse_args()

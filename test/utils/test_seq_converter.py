@@ -1,6 +1,6 @@
 import unittest
 from sequence_annotation.utils.seq_converter import SeqConverter
-from sequence_annotation.utils.exception import SeqException, CodeException
+from sequence_annotation.utils.seq_converter import SeqException, CodeException
 
 
 class TestDNAVector(unittest.TestCase):

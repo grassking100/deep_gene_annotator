@@ -11,11 +11,42 @@ from optuna.trial import Trial
 from optuna.pruners import NopPruner
 from optuna.integration import SkoptSampler
 from optuna.storages.rdb import models
-from .callback import OptunaCallback, Callbacks
+from .callback import Callback, Callbacks
 from ..utils.utils import read_json, write_json, create_folder
 from ..utils.utils import from_time_str, replace_utc_to_local, to_time_str
-from .seq_ann_engine import check_max_memory_usgae
+from .director import check_max_memory_usgae
 
+
+class OptunaCallback(Callback):
+    def __init__(self, study, trial, target=None):
+        self.trial = trial
+        self.study = study
+        self.target = target or 'val_loss'
+        self._counter = None
+        self._worker = None
+
+    @property
+    def has_updated(self):
+        return self._counter is not None
+
+    def on_work_begin(self, worker, **kwargs):
+        self._counter = None
+        self._worker = worker
+
+    def get_config(self, **kwargs):
+        config = super().get_config(**kwargs)
+        config['target'] = self.target
+        return config
+
+    def on_epoch_begin(self, counter, **kwargs):
+        self._counter = counter
+
+    def on_epoch_end(self, metric, **kwargs):
+        target = metric[self.target]
+        if str(target) == 'nan':
+            return
+
+        self.trial.report(target, self._counter)
 
 def _config_to_json(config):
     if isinstance(config, dict):

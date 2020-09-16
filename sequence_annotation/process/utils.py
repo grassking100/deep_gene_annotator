@@ -4,6 +4,16 @@ import torch
 from collections import OrderedDict
 from torch.nn.init import _calculate_fan_in_and_fan_out, _no_grad_uniform_
 
+class MessageRecorder:
+    def __init__(self, path):
+        self.path = path
+
+    def notify(self, messages):
+        if not isinstance(messages, list):
+            messages = [messages]
+        with open(self.path, 'a+') as fp:
+            for message in messages:
+                fp.write("{}\n".format(message))
 
 def deep_copy(data):
     if isinstance(data, dict):
@@ -83,3 +93,15 @@ def get_name_parameter(model, names):
                 parameters.append(parameter)
                 returned_names.append(name_)
     return returned_names, parameters
+
+
+class ChannelSlicer:
+    def __init__(self,indice):
+        self._indice = indice
+        
+    def __call__(self,ann):
+        """
+            Input shape is N,C,L (where C>=2)
+        """
+        return ann[:,self._indice,:]
+        

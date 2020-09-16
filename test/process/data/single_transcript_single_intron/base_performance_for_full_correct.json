@@ -1,0 +1,25 @@
+{
+    "categorical_metric": {
+        "F1_exon": 1.0,
+        "F1_intron": 1.0,
+        "F1_other": 1.0,
+        "macro_F1": 1.0
+    },
+    "contagion_matrix": [
+        [
+            1288,
+            0,
+            0
+        ],
+        [
+            0,
+            93,
+            0
+        ],
+        [
+            0,
+            0,
+            3619
+        ]
+    ]
+}

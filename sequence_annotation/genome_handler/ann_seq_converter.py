@@ -1,7 +1,7 @@
 from abc import abstractmethod
 import numpy as np
-from ..utils.exception import InvalidStrandType
-from .sequence import AnnSequence, PLUS, STRANDS
+from ..file_process.utils import InvalidStrandType, PLUS, STRANDS
+from .sequence import AnnSequence
 from .ann_seq_processor import is_one_hot
 from .exception import NotOneHotException, NotSameSizeException
 

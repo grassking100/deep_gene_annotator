@@ -9,8 +9,7 @@ class TestCallback(unittest.TestCase):
                 super().__init__(prefix)
                 self.counter = 0
 
-            @property
-            def data(self):
+            def get_data(self):
                 return self.counter
 
             def _reset(self):
@@ -22,33 +21,33 @@ class TestCallback(unittest.TestCase):
 
         callback = BatchCounter()
         callback.counter = 10
-        self.assertEqual(10, callback.data)
+        self.assertEqual(10, callback.get_data())
         callback.on_work_begin()
-        self.assertEqual(0, callback.data)
+        self.assertEqual(0, callback.get_data())
         callback.counter = 10
-        self.assertEqual(10, callback.data)
+        self.assertEqual(10, callback.get_data())
         callback.on_epoch_begin(1)
-        self.assertEqual(10, callback.data)
+        self.assertEqual(10, callback.get_data())
         callback.on_batch_begin()
-        self.assertEqual(11, callback.data)
+        self.assertEqual(11, callback.get_data())
 
     def test_mean_recorder(self):
         callback = MeanRecorder()
         callback.on_epoch_begin()
         callback.on_batch_end({'loss': 10})
-        self.assertEqual(10, callback.data['loss'])
+        self.assertEqual(10, callback.get_data()['loss'])
         callback.on_batch_end({'loss': 20})
-        self.assertEqual(15, callback.data['loss'])
+        self.assertEqual(15, callback.get_data()['loss'])
         callback.on_epoch_begin()
         callback.on_batch_end({'loss': 20})
-        self.assertEqual(20, callback.data['loss'])
+        self.assertEqual(20, callback.get_data()['loss'])
 
     def test_data_holder(self):
         callback = DataHolder()
         callback.on_epoch_begin()
         callback.on_batch_end({'loss': 10})
-        self.assertEqual(10, callback.data['loss'])
+        self.assertEqual(10, callback.get_data()['loss'])
         callback.on_batch_end({'loss': 20})
-        self.assertEqual(20, callback.data['loss'])
+        self.assertEqual(20, callback.get_data()['loss'])
         callback.on_epoch_begin()
-        self.assertFalse('loss' in callback.data)
+        self.assertFalse('loss' in callback.get_data())

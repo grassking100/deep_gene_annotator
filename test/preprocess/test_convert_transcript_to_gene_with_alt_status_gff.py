@@ -1,10 +1,10 @@
 import os
 import unittest
+from sequence_annotation.file_process.utils import read_gff
+from sequence_annotation.file_process.utils import ALT_STATUSES,BASIC_GFF_FEATURES
 from sequence_annotation.preprocess.create_gene_with_alt_status_gff import main
-from sequence_annotation.utils.utils import read_gff
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
-DATA_ROOT = os.path.join(ROOT, 'data')
+DATA_ROOT = os.path.join(os.path.dirname(__file__,), 'data')
 
 
 class TestAltStatusConverter(unittest.TestCase):
@@ -13,16 +13,12 @@ class TestAltStatusConverter(unittest.TestCase):
         input_path = os.path.join(data_root, 'input.gff3')
         output_gff_path = os.path.join(data_root, 'output.gff3')
         answer_gff_path = os.path.join(data_root, 'answer.gff3')
-        main(input_path,output_gff_path,
-             select_site_by_election=select_site_by_election)
-        output = read_gff(output_gff_path).sort_values(
-            ['chr', 'strand', 'start', 'end',
-             'feature']).reset_index(drop=True)
-        answer = read_gff(answer_gff_path).sort_values(
-            ['chr', 'strand', 'start', 'end',
-             'feature']).reset_index(drop=True)
-        self.assertTrue(answer.equals(output),
-                        "Something wrong happen in {}".format(name))
+        main(input_path,output_gff_path,select_site_by_election=select_site_by_election)
+        output = read_gff(output_gff_path,valid_features=ALT_STATUSES+BASIC_GFF_FEATURES).sort_values(
+            ['chr', 'strand', 'start', 'end','feature']).reset_index(drop=True)
+        answer = read_gff(answer_gff_path,valid_features=ALT_STATUSES+BASIC_GFF_FEATURES).sort_values(
+            ['chr', 'strand', 'start', 'end','feature']).reset_index(drop=True)
+        self.assertTrue(answer.equals(output),"Something wrong happen in {}".format(name))
         os.remove(output_gff_path)
 
     def test_multiple_start(self):
@@ -30,7 +26,7 @@ class TestAltStatusConverter(unittest.TestCase):
 
     def test_multiple_start_plus_strand(self):
         self._test('multiple_start_plus_strand', True)
-
+        
     def test_multiple_end(self):
         self._test('multiple_end', True)
 

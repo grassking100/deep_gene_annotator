@@ -1,15 +1,13 @@
 import os
 import unittest
 import numpy as np
+from sequence_annotation.file_process.seq_info_parser import BedInfoParser
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer
-from sequence_annotation.genome_handler.seq_info_parser import BedInfoParser
 from sequence_annotation.genome_handler.ann_seq_converter import CodingBedSeqConverter
 from sequence_annotation.genome_handler.ann_genome_creator import AnnGenomeCreator
 from .real_genome import RealGenome
 
-file_root = os.path.abspath(os.path.join(__file__, '..'))
-bed_file_prefix = os.path.join(file_root, 'data/bed')
-
+bed_example_root = os.path.join(os.path.dirname(__file__), '..','data','bed')
 
 def _create_genome(path):
     parser = BedInfoParser()
@@ -31,8 +29,7 @@ class TestAnnGenomeCreator(unittest.TestCase):
     real_genome = RealGenome()
 
     def test_create_type(self):
-        file_path = os.path.join(bed_file_prefix,
-                                 'one_plus_strand_all_utr_5.bed')
+        file_path = os.path.join(bed_example_root,'one_plus_strand_all_utr_5.bed')
         result = _create_genome(file_path)
         self.assertEqual(AnnSeqContainer, type(result))
 
@@ -55,44 +52,40 @@ class TestAnnGenomeCreator(unittest.TestCase):
             self._test_seq(real_seq, test_seq)
 
     def test_one_plus_strand_all_utr_5(self):
-        file_path = os.path.join(bed_file_prefix,
-                                 'one_plus_strand_all_utr_5.bed')
+        file_path = os.path.join(bed_example_root,'one_plus_strand_all_utr_5.bed')
         real_genome = TestAnnGenomeCreator.real_genome.one_plus_strand_all_utr_5(
             False)
         result = _create_genome(file_path)
         self._test_genome(real_genome, result)
 
     def test_two_plus_strand(self):
-        file_path = os.path.join(bed_file_prefix, 'two_plus_strand.bed')
+        file_path = os.path.join(bed_example_root, 'two_plus_strand.bed')
         real_genome = TestAnnGenomeCreator.real_genome.two_plus_strand(False)
         result = _create_genome(file_path)
         self._test_genome(real_genome, result)
 
     def test_two_seq_on_same_plus(self):
-        file_path = os.path.join(bed_file_prefix,
-                                 'two_seq_on_same_plus_strand.bed')
+        file_path = os.path.join(bed_example_root,'two_seq_on_same_plus_strand.bed')
         real_genome = TestAnnGenomeCreator.real_genome.two_seq_on_same_plus_strand(
             False)
         result = _create_genome(file_path)
         self._test_genome(real_genome, result)
 
     def test_one_plus_strand_both(self):
-        file_path = os.path.join(bed_file_prefix,
-                                 'one_plus_strand_both_utr.bed')
+        file_path = os.path.join(bed_example_root,'one_plus_strand_both_utr.bed')
         real_genome = TestAnnGenomeCreator.real_genome.one_plus_strand_both_utr(
             False)
         result = _create_genome(file_path)
         self._test_genome(real_genome, result)
 
     def test_minus_strand(self):
-        file_path = os.path.join(bed_file_prefix, 'minus_strand.bed')
+        file_path = os.path.join(bed_example_root, 'minus_strand.bed')
         real_genome = TestAnnGenomeCreator.real_genome.minus_strand(False)
         result = _create_genome(file_path)
         self._test_genome(real_genome, result)
 
     def test_multiple_utr_intron_cds(self):
-        file_path = os.path.join(bed_file_prefix,
-                                 'multiple_utr_intron_cds.bed')
+        file_path = os.path.join(bed_example_root,'multiple_utr_intron_cds.bed')
         real_genome = TestAnnGenomeCreator.real_genome.multiple_utr_intron_cds(
             False)
         result = _create_genome(file_path)

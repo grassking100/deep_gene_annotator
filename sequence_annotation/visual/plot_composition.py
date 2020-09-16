@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 from matplotlib import colors as mcolors
 from matplotlib.ticker import AutoMinorLocator
 sys.path.append(os.path.dirname(__file__) + "/../..")
-from sequence_annotation.utils.utils import read_fasta
+from sequence_annotation.file_process.utils import read_fasta
 from sequence_annotation.utils.seq_converter import SeqConverter, DNA_CODES
 
 

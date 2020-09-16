@@ -75,3 +75,20 @@ def get_summary(root,data_type=None):
                 result[name].update(data)
     result = pd.DataFrame.from_dict(result).T[columns].T
     return result
+
+def get_data_names(split_root):
+    split_table = pd.read_csv(os.path.join(
+        split_root, 'split_table.csv')).to_dict('record')
+    paths = {}
+    for item in split_table:
+        training_name = get_file_name(item['training_path'])
+        val_name = get_file_name(item['validation_path'])
+        testing_name = get_file_name(item['testing_path'])
+        name = "{}_{}".format(training_name, val_name)
+        paths[name] = {
+            'validation': val_name,
+            'testing': testing_name,
+            'training': training_name
+        }
+    return paths
+

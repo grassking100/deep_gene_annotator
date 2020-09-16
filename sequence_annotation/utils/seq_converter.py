@@ -1,10 +1,36 @@
 """This submodule will handler character sequence and one-hot encoding seqeunce conversion"""
-from .exception import CodeException, SeqException
 import numpy as np
 from multiprocessing import Pool,cpu_count
 
 DNA_CODES = 'ATCG'
 AA_CODES = 'ARNDCQEGHILKMFPSTWYV'
+
+class CodeException(Exception):
+    """Raising when input code is not in in defined space"""
+    def __init__(self, invalid_code, valid_codes=None):
+        self._invalid_code = invalid_code
+        self._valid_codes = valid_codes
+        mess = str(invalid_code) + ' is not in defined space'
+        if self._valid_codes is not None:
+            mess += (",valid codes are " + str(self._valid_codes))
+        super().__init__(mess)
+
+    @property
+    def invalid_code(self):
+        return self._invalid_code
+
+    @property
+    def valid_codes(self):
+        return self._valid_codes
+
+
+class SeqException(Exception):
+    """Raising when input sequences has at least a code is not in in defined space"""
+    def __init__(self, invalid_code, valid_codes=None):
+        mess = "Seqeunce has a invalid code," + str(invalid_code)
+        if valid_codes is not None:
+            mess += (" ,valid codes are " + str(valid_codes))
+        super().__init__(mess)
 
 
 class SeqConverter:
@@ -72,7 +98,7 @@ class SeqConverter:
         else:
             return value.upper()
 
-    def _element_convert(self, element, dictionary):
+    def _convert_element(self, element, dictionary):
         """convert element by dictionary"""
         result = dictionary.get(self._preprocess(element))
         if result is None:
@@ -80,8 +106,8 @@ class SeqConverter:
         else:
             return result
 
-    def _array_convert(self, array, element_convert_method):
-        """convert sequence by dictionaty"""
+    def _convert_array(self, array, element_convert_method):
+        """convert sequence by dictionary"""
         code_list = list(array)
         arr = []
         for code in code_list:
@@ -93,20 +119,20 @@ class SeqConverter:
 
     def code2vec(self, code):
         """convert DNA code to one hot encoding"""
-        return self._element_convert(code, self._code_vec_dictionary)
+        return self._convert_element(code, self._code_vec_dictionary)
 
     def vec2code(self, vec):
         """convert DNA code to one hot encoding"""
-        return self._element_convert(vec, self._vec_code_dictionary)
+        return self._convert_element(vec, self._vec_code_dictionary)
 
     def seq2vecs(self, seq):
         """convert sequence to one hot encoding sequence"""
-        vecs = self._array_convert(seq, self.code2vec)
+        vecs = self._convert_array(seq, self.code2vec)
         return vecs
 
     def vecs2seq(self, vecs, join=True):
         """convert vector of vectir to converted result"""
-        seq = self._array_convert(vecs, self.vec2code)
+        seq = self._convert_array(vecs, self.vec2code)
         if join:
             return "".join(seq)
         else:
@@ -122,7 +148,6 @@ class SeqConverter:
         kwarg_list = []
         for name, seq in seqs.items():
             kwarg_list.append((name,seq))
-            #data[name] = self.seq2vecs(seq)    
         with Pool(processes=multiprocess) as pool:
             items = pool.starmap(self._seq2dict_vec, kwarg_list)
         data = {}

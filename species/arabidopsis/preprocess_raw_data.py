@@ -2,7 +2,8 @@ import os, sys
 sys.path.append(os.path.dirname(__file__) + "/../..")
 import pandas as pd
 from argparse import ArgumentParser
-from sequence_annotation.utils.utils import write_gff, get_gff_with_updated_attribute,write_json,create_folder
+from sequence_annotation.utils.utils import write_json, create_folder
+from sequence_annotation.file_process.utils import write_gff, get_gff_with_updated_attribute
 
 def _get_ids(gff):
     ids = list(gff['chr']+"_"+gff['start'].astype(str)+"_"+gff['strand'])
@@ -42,6 +43,46 @@ def _convert_pac_to_gff(pac):
     pac_site = get_gff_with_updated_attribute(pac_site)
     return pac_site
 
+
+def main(gro_1_path,gro_2_path,pac_path,output_root):
+    tss_gff_path = os.path.join(output_root, 'tss.gff3')
+    cs_gff_path = os.path.join(output_root,'cleavage_site.gff3')
+    preprocess_stats_path = os.path.join(output_root,'preprocess_stats.json')
+    create_folder(output_root)
+    gro_1 = pd.read_csv(gro_1_path, comment='#', sep='\t')
+    gro_2 = pd.read_csv(gro_2_path, comment='#', sep='\t')
+    cs = pd.read_csv(pac_path,dtype={'chr':str})
+    ###Process GRO sites data###
+    #The Normalized Tag Count at both data on the same location would be same, because they are from GRO dataset
+    gro_1 = _convert_gro_to_gff(gro_1)
+    gro_2 = _convert_gro_to_gff(gro_2)
+    gro_1_num = _get_unique_id_len(gro_1)
+    gro_2_num = _get_unique_id_len(gro_2)
+    gro = gro_1.merge(gro_2)
+    ###Process cleavage sites data###
+    raw_pac = _convert_pac_to_gff(cs)
+    raw_pac_num = _get_unique_id_len(raw_pac)
+    ###Drop duplicated ###
+    gro = gro.drop_duplicates()
+    pac = raw_pac.drop_duplicates()
+    gro_num = _get_unique_id_len(gro)
+    pac_num = _get_unique_id_len(pac)
+    ###Write data##
+    if _is_duplicated(gro) or _is_duplicated(pac):
+        raise Exception()
+
+    write_gff(gro, tss_gff_path,valid_features=['GRO site'])
+    write_gff(pac, cs_gff_path,valid_features=['PAT-Seq PAC'])
+    stats = {
+        'Raw GRO dataset 1 number':gro_1_num,
+        'Raw GRO dataset 2 number':gro_2_num,
+        'Consistent GRO dataset number':gro_num,
+        'Raw PAC dataset number':raw_pac_num,
+        'PAC dataset number':pac_num
+    }
+    write_json(stats,preprocess_stats_path)
+
+
 if __name__ == "__main__":
     #Reading arguments
     parser = ArgumentParser()
@@ -50,45 +91,6 @@ if __name__ == "__main__":
     parser.add_argument("--pac_path", required=True)
     parser.add_argument("--output_root", required=True)
     args = parser.parse_args()
+    main(**vars(args))
 
-    tss_gff_path = os.path.join(args.output_root, 'tss.gff3')
-    cs_gff_path = os.path.join(args.output_root,'cleavage_site.gff3')
-    preprocess_stats_path = os.path.join(args.output_root,'preprocess_stats.json')
-    paths = [tss_gff_path, cs_gff_path]
-    exists = [os.path.exists(path) for path in paths]
-    if all(exists):
-        print("Result files are already exist, procedure will be skipped.")
-    else:
-        create_folder(args.output_root)
-        gro_1 = pd.read_csv(args.gro_1_path, comment='#', sep='\t')
-        gro_2 = pd.read_csv(args.gro_2_path, comment='#', sep='\t')
-        cs = pd.read_csv(args.pac_path,dtype={'chr':str})
-        ###Process GRO sites data###
-        #The Normalized Tag Count at both data on the same location would be same, because they are from GRO dataset
-        gro_1 = _convert_gro_to_gff(gro_1)
-        gro_2 = _convert_gro_to_gff(gro_2)
-        gro_1_num = _get_unique_id_len(gro_1)
-        gro_2_num = _get_unique_id_len(gro_2)
-        gro = gro_1.merge(gro_2)
-        ###Process cleavage sites data###
-        raw_pac = _convert_pac_to_gff(cs)
-        raw_pac_num = _get_unique_id_len(raw_pac)
-        ###Drop duplicated ###
-        gro = gro.drop_duplicates()
-        pac = raw_pac.drop_duplicates()
-        gro_num = _get_unique_id_len(gro)
-        pac_num = _get_unique_id_len(pac)
-        ###Write data##
-        if _is_duplicated(gro) or _is_duplicated(pac):
-            raise Exception()
-        
-        write_gff(gro, tss_gff_path)
-        write_gff(pac, cs_gff_path)
-        stats = {
-            'Raw GRO dataset 1 number':gro_1_num,
-            'Raw GRO dataset 2 number':gro_2_num,
-            'Consistent GRO dataset number':gro_num,
-            'Raw PAC dataset number':raw_pac_num,
-            'PAC dataset number':pac_num
-        }
-        write_json(stats,preprocess_stats_path)
+    

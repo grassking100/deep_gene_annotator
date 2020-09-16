@@ -3,8 +3,9 @@ import sys
 from Bio import SeqIO
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__) + "/..")
-from sequence_annotation.utils.utils import read_gff, get_gff_with_attribute, write_gff
-from sequence_annotation.preprocess.get_id_table import get_id_table, convert_id_table_to_dict
+from sequence_annotation.file_process.utils import read_gff, get_gff_with_attribute, write_gff
+from sequence_annotation.file_process.utils import RMA_TYPES
+from sequence_annotation.file_process.get_id_table import get_id_table, convert_id_table_to_dict
 
 
 if __name__ == '__main__':
@@ -26,8 +27,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     fasta_sequences = SeqIO.parse(open(args.input_fasta_path), 'fasta')
     gff = get_gff_with_attribute(read_gff(args.input_gff_path))
-    mRNAs = gff[gff['feature'] == 'mRNA']
-    id_table = convert_id_table_to_dict(get_id_table(mRNAs))
+    rnas = gff[gff['feature'].isin(RMA_TYPES)]
+    id_table = convert_id_table_to_dict(get_id_table(rnas))
     valid_fasta = []
     valid_ids = []
     valid_status = "ORF type:complete"

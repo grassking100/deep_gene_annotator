@@ -4,7 +4,7 @@ from .seq_container import SeqInfoContainer
 from .sequence import SeqInformation
 from .ann_seq_processor import is_binary, simplify_seq
 from .exception import NotBinaryException
-
+from ..file_process.utils import TRANSCRIPT_TYPE,EXON_TYPE, INTRON_TYPE,GENE_TYPE
 
 class RegionExtractor:
     """#Get annotated region information"""
@@ -88,7 +88,7 @@ class GeneInfoExtractor(IInfoExtractor):
         self._use_alt = False
         self._alt_num = 0
         self._alt_region_id = 0
-        if 'gene' not in self._simply_map.keys():
+        if GENE_TYPE not in self._simply_map.keys():
             raise Exception("Gene must in map's key.")
             
     def reset(self):
@@ -116,12 +116,12 @@ class GeneInfoExtractor(IInfoExtractor):
         simple_seq = simplify_seq(ann, self._simply_map)
         simple_seq.chromosome_id = ann.chromosome_id or ann.id
         genes = [region for region in self._extractor.extract(
-            simple_seq) if region.ann_type == 'gene']
+            simple_seq) if region.ann_type.isin(GENE_TYPES)]
         seq_infos.add(genes)
         for gene in genes:
             mRNA = gene.copy()
-            mRNA.ann_type = 'mRNA'
-            mRNA.id = gene.id + "_mRNA"
+            mRNA.ann_type = TRANSCRIPT_TYPE
+            mRNA.id = gene.id + "_transcript"
             mRNA.parent = gene.id
             subseq = ann.get_subseq(mRNA.start, mRNA.end)
             subseq.id = mRNA.id
@@ -176,9 +176,9 @@ class GeneInfoExtractor(IInfoExtractor):
                 for id_, alt_intron in enumerate(alt_introns):
                     alt = alt_intron.copy()
                     if alt_ids[id_] == 1:
-                        alt.ann_type = 'exon'
+                        alt.ann_type = EXON_TYPE
                     else:
-                        alt.ann_type = 'intron'
+                        alt.ann_type = INTRON_TYPE
                     alt_seqs.append(alt)
 
                 for region in others + alt_seqs:

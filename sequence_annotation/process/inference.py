@@ -1,76 +1,74 @@
+import abc
 import torch
 import numpy as np
 
+def ann2one_hot(x):
+    N,C,L = x.shape
+    x = x.transpose(0,2,1).reshape(-1,C)
+    y = np.zeros(x.shape)
+    y[np.arange(N*L),x.argmax(1)]=1
+    y = y.reshape(N,L,C).transpose(0,2,1)
+    return y
 
-def create_basic_inference(first_n_channel=None, before=True):
-    first_n_channel = first_n_channel or 3
+class AbstractInference(metaclass=abc.ABCMeta):
+    @abc.abstractmethod
+    def __call__(self):
+        pass
+    
+    def get_config(self):
+        config = {}
+        config['class'] = self.__class__.__name__
+        return config
 
-    def basic_inference(ann, mask=None):
-        if first_n_channel > ann.shape[1]:
-            raise Exception("Wrong channel size, got {} and {}".format(
-                first_n_channel, ann.shape[1]))
-        if before:
-            ann = ann[:, :first_n_channel, :]
-        else:
-            ann = ann[:, first_n_channel:, :]
-        if mask is not None:
-            L = ann.shape[2]
-            ann = ann.transpose(0, 1)
-            ann = ann * (mask[:, :L].to(ann.dtype))
-            ann = ann.transpose(0, 1)
-        return ann
+class BasicInference(AbstractInference):
+    """Convert vectors into one-hot encoding"""
+    def __init__(self,first_n_channel):
+        self._first_n_channel = first_n_channel
+        
+    def get_config(self):
+        config = super().get_config()
+        config['first_n_channel'] = self._first_n_channel
+        return config
+        
+    def __call__(self, ann):
+        """
+            Input shape is N,C,L (where C>=2)
+            Output shape is N,FisrtN,L
+        """
+        C = ann.shape[1]
+        if self._first_n_channel > C:
+            raise Exception("Got {} channel, but except {}".format(C,self._first_n_channel))
+        ann = ann[:, :self._first_n_channel, :]
+        onehot = torch.FloatTensor(ann2one_hot(ann.cpu().numpy()))
+        return onehot
 
-    return basic_inference
+class SeqAnnInference(AbstractInference):
+    """Convert vectors into one-hot encoding of gene annotation"""
+    def __init__(self,transcript_threshold=None,intron_threshold=None):
+        self._transcript_threshold = transcript_threshold or 0.5
+        self._intron_threshold = intron_threshold or 0.5
+        
+    def get_config(self):
+        config = super().get_config()
+        config['transcript_threshold'] = self._transcript_threshold
+        config['intron_threshold'] = self._intron_threshold
+        return config
+        
+    def __call__(self,ann):
+        """
+            Input shape is N,C,L (where C>=2)
+            Input channel order: Transcription potential, Intron potential
+            Output channel order: Exon, Intron , Other
+        """
+        transcript_potential = ann[:, 0, :].unsqueeze(1)
+        intron_potential = ann[:, 1, :].unsqueeze(1)
+        transcript_mask = (transcript_potential >= self._transcript_threshold).float()
+        intron_mask = (intron_potential >= self._intron_threshold).float()
+        exon = transcript_mask * (1 - intron_mask)
+        intron = transcript_mask * intron_mask
+        other = 1 - transcript_mask
+        result = torch.cat([exon, intron, other], dim=1)
+        return result
 
-
-def seq_ann_inference(ann,
-                      mask,
-                      transcript_threshold=None,
-                      intron_threshold=None):
-    """
-        Data shape is N,C,L (where C>=2)
-        Input channel order: Transcription potential, Intron potential
-        Output channel order: Exon, Intron , Other
-    """
-    N, C, L = ann.shape
-    if C != 2:
-        raise Exception(
-            "Channel size should be equal to two, but got {}".format(C))
-
-    if mask is not None:
-        mask = mask[:, :L].unsqueeze(1).float()
-
-    transcript_threshold = transcript_threshold or 0.5
-    intron_threshold = intron_threshold or 0.5
-    transcript_potential = ann[:, 0, :].unsqueeze(1)
-    intron_potential = ann[:, 1, :].unsqueeze(1)
-
-    transcript_mask = (transcript_potential >= transcript_threshold).float()
-    intron_mask = (intron_potential >= intron_threshold).float()
-    exon = transcript_mask * (1 - intron_mask)
-    intron = transcript_mask * intron_mask
-    other = 1 - transcript_potential
-    if mask is not None:
-        exon = exon * mask
-        intron = intron * mask
-        other = other * mask
-    result = torch.cat([exon, intron, other], dim=1)
-    return result
-
-
-def index2one_hot(index, channel_size):
-    if (np.array(index) < 0).any() or (np.array(index) >= channel_size).any():
-        raise Exception("Invalid number")
-    L = len(index)
-    loc = list(range(L))
-    onehot = np.zeros((channel_size, L))
-    onehot[index, loc] = 1
-    return onehot
-
-
-def ann_vec2one_hot_vec(ann_vec, length=None):
-    C, L = ann_vec.shape
-    index = ann_vec.argmax(0)
-    if length is not None:
-        index = index[:length]
-    return index2one_hot(index, C)
+INFERENCES_TYPES = {'BasicInference':BasicInference,'SeqAnnInference':SeqAnnInference}
+    

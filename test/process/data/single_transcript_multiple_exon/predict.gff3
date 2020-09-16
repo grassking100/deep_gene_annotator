@@ -1,6 +1,6 @@
 ##gff-version 3
 region_0333	.	gene	501	2878	4	-	.	ID=AT2G26870_gene
-region_0333	.	mRNA	501	2878	4	-	.	ID=AT2G26870;Parent=AT2G26870_gene
+region_0333	.	transcript	501	2878	4	-	.	ID=AT2G26870;Parent=AT2G26870_gene
 region_0333	.	exon	501	1315	4	-	.	Parent=AT2G26870
 region_0333	.	exon	1409	1781	4	-	.	Parent=AT2G26870
 region_0333	.	exon	2383	2878	4	-	.	Parent=AT2G26870

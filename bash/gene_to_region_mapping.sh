@@ -74,10 +74,10 @@ else
 fi
     
 if [  "$single_count_path" ]; then
-    awk -F '\t' -v OFS='\t' '{print($1,$2,$3,$8,$5,$6,$7)}' ${region_file}_mapped.bed > $single_count_path
+    awk -F '\t' -v OFS='\t' '{print($1,$2,$3,$8,".",".",$7)}' ${region_file}_mapped.bed > $single_count_path
 fi
 
-awk -F '\t' -v OFS='\t' '{print($1,$2,$3,$8,$5,$6)}' ${region_file}_mapped.bed > $output_path
+awk -F '\t' -v OFS='\t' '{print($1,$2,$3,$8,".",".")}' ${region_file}_mapped.bed > $output_path
 
 rm ${region_file}_mapped.bed
 rm ${region_file}_sorted_simple.bed

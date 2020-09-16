@@ -1,7 +1,7 @@
 import math
 import unittest
 import os
-from sequence_annotation.genome_handler.seq_info_parser import BedInfoParser
+from sequence_annotation.file_process.seq_info_parser import BedInfoParser
 from sequence_annotation.genome_handler.exon_handler import ExonHandler
 from sequence_annotation.genome_handler.seq_container import AnnSeqContainer, SeqInfoContainer
 from sequence_annotation.genome_handler.ann_seq_processor import get_background, get_seq_with_added_type, get_one_hot, simplify_seq
@@ -10,9 +10,7 @@ from sequence_annotation.genome_handler.ann_genome_creator import AnnGenomeCreat
 from sequence_annotation.genome_handler.ann_genome_processor import get_sub_ann_seqs
 from sequence_annotation.genome_handler.sequence import SeqInformation
 
-file_root = os.path.abspath(os.path.join(__file__, '..'))
-bed_file_prefix = os.path.join(file_root, 'data/test_data')
-
+bed_root = os.path.join(os.path.dirname(__file__), '..','data','bed')
 
 class TestGenomeHandlePipeline(unittest.TestCase):
     def test_runable(self):
@@ -25,7 +23,7 @@ class TestGenomeHandlePipeline(unittest.TestCase):
             ann_genome_creator = AnnGenomeCreator()
             converted_data = AnnSeqContainer()
             exon_handler = ExonHandler()
-            ensembl_path = os.path.join(bed_file_prefix, 'test.bed')
+            ensembl_path = os.path.join(bed_root, 'simple.bed')
             seq_info = {'chromosome': {'chr1': 240}, 'source': 'test'}
             # Create Annotated Genoome
             map_ = {'exon': ['cds', 'utr_5', 'utr_3'], 'intron': ['intron']}

@@ -2,13 +2,13 @@ import os,sys
 sys.path.append(os.path.dirname(__file__)+"/../..")
 import pandas as pd
 from argparse import ArgumentParser
-from sequence_annotation.utils.utils import read_bed, write_bed
-from sequence_annotation.utils.exception import InvalidStrandType
+from sequence_annotation.file_process.utils import read_bed, write_bed
+from sequence_annotation.file_process.utils import InvalidStrandType
 
 def region_gene_count_filter(region_bed,gene_bed,upstream_distance,
                              downstream_distance):
     regions = region_bed.to_dict('record')
-    invalid_strands = gene_bed[~gene_bed['strand'].isin(['+','-'])]
+    invalid_strands = set(gene_bed['strand']) - set(['+','-'])
     if len(invalid_strands) != 0:
         raise InvalidStrandType(invalid_strands)
 
@@ -46,14 +46,14 @@ def region_gene_count_filter(region_bed,gene_bed,upstream_distance,
 
 def main(region_bed_path,gene_bed_path,region_output_path,upstream_distance,
          downstream_distance,discard_output_path=None):
-    region_bed = read_bed(region_bed_path)
+    region_bed = read_bed(region_bed_path,ignore_strand_check=True)
     gene_bed = read_bed(gene_bed_path)
-    valid_bed, invalid_bed = region_gene_count_filter(region_bed,gene_bed,
+    valid_regions, invalid_regions = region_gene_count_filter(region_bed,gene_bed,
                                                       upstream_distance,
                                                       downstream_distance)
-    write_bed(valid_bed,region_output_path)
+    write_bed(valid_regions,region_output_path,ignore_strand_check=True)
     if discard_output_path is not None:
-        write_bed(invalid_bed,discard_output_path)
+        write_bed(invalid_regions,discard_output_path,ignore_strand_check=True)
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="This program will print region which have at most one gene"+
