@@ -7,7 +7,6 @@ ROOT = os.path.dirname(__file__)+"/../.."
 sys.path.append(ROOT)
 from sequence_annotation.utils.utils import write_json, create_folder
 from sequence_annotation.file_process.utils import BED_COLUMNS, read_bed, write_bed, write_gff
-from sequence_annotation.file_process.get_subbed import get_subbed
 from sequence_annotation.file_process.get_id_table import get_id_convert_dict
 from sequence_annotation.file_process.bed2gff import bed2gff
 from sequence_annotation.file_process.gff2bed import gff2bed
@@ -146,7 +145,11 @@ def main(input_bed_path,background_bed_path,id_table_path,genome_path,
                                       upstream_dist,downstream_dist,discard_output_path=multi_gene_region_path)
     #Step 5: Get RNAs in selected regions
     final_gene_ids = list(read_bed(final_origin_region_bed_path,ignore_strand_check=True)['id'])
-    selected_transcripts = get_subbed(bed,final_gene_ids,id_convert_dict=id_convert_dict)
+    final_transcript_ids = []
+    for id_ in bed['id']:
+        if id_convert_dict[id_] in final_gene_ids:
+            final_transcript_ids.append(id_)
+    selected_transcripts = bed[bed['id'].isin(final_transcript_ids)]
     #Step 6: Rename region
     final_origin_region_bed = read_bed(final_origin_region_bed_path,ignore_strand_check=True)
     final_origin_region_bed['id'] = '.'

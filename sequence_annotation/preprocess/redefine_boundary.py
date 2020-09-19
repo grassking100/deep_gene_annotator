@@ -9,11 +9,22 @@ from sequence_annotation.utils.utils import write_json, create_folder
 from sequence_annotation.utils.stats import get_stats
 from sequence_annotation.utils.get_intersection_id import intersection
 from sequence_annotation.file_process.utils import GFF_COLUMNS, TRANSCRIPT_TYPE, read_bed, read_gff,write_gff
-from sequence_annotation.file_process.utils import get_gff_with_updated_attribute, write_bed
+from sequence_annotation.file_process.utils import write_bed
 from sequence_annotation.file_process.get_id_table import get_id_convert_dict
 from sequence_annotation.file_process.coordinate_compare import coordinate_compare
 from sequence_annotation.file_process.bed2gff import bed2gff
 from sequence_annotation.file_process.site_analysis import get_site_diff
+
+def get_coord_ids(gff):
+    chroms = gff['chr']
+    strands = gff['strand']
+    starts = gff['start'].astype(str)
+    coord_id = chroms + "_" + strands + "_" + starts
+    return coord_id
+
+
+def get_unique_coord_id_num(gff):
+    return len(set(get_coord_ids(gff)))
 
 
 def plot_distance_hist(title, path, values):
@@ -23,6 +34,7 @@ def plot_distance_hist(title, path, values):
     plt.xlabel("distance")
     plt.ylabel("number")
     plt.savefig(path)
+
 
 def calculate_distance_between_sites(bed,TSS,CS,id_dict,output_root):
     create_folder(output_root)
@@ -194,7 +206,7 @@ def belong_by_distance(sites,ref_sites,five_dist,three_dist,exp_site_name,ref_si
     return df
 
 
-def _consist(data, by, ref_value, drop_duplicated):
+def _consist(data, by, ref_value, drop_duplicated=True):
     returned = []
     for name,sector in data.groupby(by):
         max_value = max(sector[ref_value])
@@ -203,17 +215,15 @@ def _consist(data, by, ref_value, drop_duplicated):
         for item in sector:
             if item[ref_value] == max_value:
                 list_.append(item)
+
         true_count = len(list_)
-        
-        if drop_duplicated:
-            if true_count == 1:
-                returned += list_
-        else:
+        if true_count == 1 or not drop_duplicated:
             returned += list_
+            
     return returned
 
 
-def consist(data, by, ref_value, drop_duplicated):
+def consist(data, by, ref_value, drop_duplicated=True):
     strands = set(data['strand'])
     chrs = set(data['chr'])
     returned = []
@@ -224,12 +234,7 @@ def consist(data, by, ref_value, drop_duplicated):
     df = pd.DataFrame.from_dict(returned)
     return df
 
-def get_coord_ids(gff):
-    chroms = gff['chr']
-    strands = gff['strand']
-    starts = gff['start'].astype(str)
-    coord_id = chroms + "_" + strands + "_" + starts
-    return coord_id
+
 
 def preprocess_exp_data(gff):
     coord_id = get_coord_ids(gff)
@@ -240,8 +245,8 @@ def preprocess_exp_data(gff):
     return gff
 
 
-def get_ophan_on_ld_data(on_long_dist, on_external_UTR):
-    on_orphan  = on_long_dist[~on_long_dist['coord_id'].isin(on_external_UTR['coord_id'])].copy()
+def get_ophan_data(on_long_dist, on_transcript):
+    on_orphan  = on_long_dist[~on_long_dist['coord_id'].isin(on_transcript['coord_id'])].copy()
     on_orphan['feature'] = 'orphan'
     return on_orphan
 
@@ -261,22 +266,15 @@ def get_not_same_coord_transcript_id(compared, comparing):
 def get_transcrit_not_utr(on_transcript,on_external_UTR):
     other = get_not_same_coord_transcript_id(on_transcript, on_external_UTR)
     other['feature'] = 'other'
-    other = get_gff_with_updated_attribute(other)
     return other
 
-def get_consist_site(on_external_UTR, on_long_dist, on_transcript,remove_conflict=False):
-    #Create orhpan data
-    on_orphan = get_ophan_on_ld_data(on_long_dist, on_external_UTR)
+def get_consist_site(on_external_UTR, on_orphan, other=None):
     data = [on_external_UTR, on_orphan]
-    if remove_conflict:
-        #Add signal in transcript but not in external UTR to "other"
-        other = get_not_same_coord_transcript_id(on_transcript, on_external_UTR)
-        other['feature'] = 'other'
-        other = get_gff_with_updated_attribute(other)
+    if other is not None:
         data.append(other)
     data = pd.concat(data, sort=False).reset_index(drop=True)
     #Get consist site of every transcript
-    consist_site = consist(data,'belonging','experimental_score',drop_duplicated=True)
+    consist_site = consist(data,'belonging','experimental_score')
     consist_site['attribute'] = None
     return consist_site
 
@@ -293,6 +291,7 @@ def coordinate_consist_filter(data,group_by,site_name):
 
 
 def get_coordinate(tss,cs,id_convert_dict,single_start_end=False):
+    stats = {}
     columns = ['experimental_score','start','source','feature','chr','strand','belonging']
     tss = tss[columns]
     cs = cs[columns]
@@ -300,8 +299,8 @@ def get_coordinate(tss,cs,id_convert_dict,single_start_end=False):
                               'source':'tss_source','feature':'tss_feature'})
     cs = cs.rename(columns={'experimental_score':'cleavage_site_score','start':'evidence_3_end',
                             'source':'cleavage_site_source','feature':'cleavage_site_feature'})
+
     merged_data = cs.merge(tss,left_on=['chr','strand','belonging'],right_on=['chr','strand','belonging'])
-    stats = {}
     returned = merged_data[(~merged_data['evidence_5_end'].isna()) & (~merged_data['evidence_3_end'].isna())]
     returned = returned.rename(columns={'belonging':'id'})
     stats['Boundary'] = len(returned)
@@ -310,18 +309,11 @@ def get_coordinate(tss,cs,id_convert_dict,single_start_end=False):
     plus_valid_order = (returned.loc[plus_index,'evidence_5_end'] <= returned.loc[plus_index,'evidence_3_end']).index
     minus_valid_order = (returned.loc[minus_index,'evidence_5_end'] >= returned.loc[minus_index,'evidence_3_end']).index
     returned = returned.loc[list(plus_valid_order)+list(minus_valid_order),:]
+    stats['Transcript'] = len(returned)
     evidence_site = returned[['evidence_5_end','evidence_3_end']]
     returned['start'] =  evidence_site.min(1)
     returned['end'] =  evidence_site.max(1)
     returned['gene_id'] = [id_convert_dict[id_] for id_ in list(returned['id'])]
-    stats['Transcript'] = len(returned)
-    if single_start_end:
-        returned = consist(returned,'gene_id','tss_score',drop_duplicated=False)
-        returned = consist(returned,'gene_id','cleavage_site_score',drop_duplicated=False)
-        returned = coordinate_consist_filter(returned,'gene_id','start')
-        returned = coordinate_consist_filter(returned,'gene_id','end')
-        stats['Transcript which its gene has single start and single end'] = len(returned)
-
     returned['source'] = 'Experiment'
     returned['feature'] = 'boundary'
     returned['score'] = returned['frame'] = '.'
@@ -376,13 +368,10 @@ def get_coding_id(bed):
     return ids
 
 
-def get_unique_coord_id_num(gff):
-    return len(set(get_coord_ids(gff)))
-
-
 def main(input_bed_path,id_table_path,tss_path,cs_path,upstream_dist,downstream_dist,
          output_root,single_start_end=False,remove_conflict=False):
     ###Read file###
+    stats = {}
     id_convert_dict = get_id_convert_dict(id_table_path)
     bed = read_bed(input_bed_path)
     tss = read_gff(tss_path,with_attr=True,valid_features=False)
@@ -399,6 +388,7 @@ def main(input_bed_path,id_table_path,tss_path,cs_path,upstream_dist,downstream_
     write_bed(external_five_UTR,os.path.join(output_root,"external_five_UTR.bed"))
     write_bed(external_three_UTR,os.path.join(output_root,"external_three_UTR.bed"))
     ###Classify TSSs and cleavage sites and write data###
+    #For every transcript, the long distance site means the site is upstream of the transcript
     ld_TSS = belong_by_distance(tss,bed,-upstream_dist,-1,'start','five_end','id')
     ld_CS = belong_by_distance(cleavage_site,bed,1,downstream_dist,"start",'three_end','id')
     external_5_UTR_TSS = belong_by_boundary(tss,external_five_UTR,'start','start','end','id')
@@ -411,43 +401,75 @@ def main(input_bed_path,id_table_path,tss_path,cs_path,upstream_dist,downstream_
     transcript_CS['feature'] = 'transcript_CS'
     ld_TSS['feature'] = 'long_dist_TSS'
     ld_CS['feature'] = 'long_dist_CS'
-    consist_TSS = get_consist_site(external_5_UTR_TSS, ld_TSS, transcript_TSS, remove_conflict)
-    consist_CS = get_consist_site(external_3_UTR_CS, ld_CS, transcript_CS,remove_conflict)  
-    consist_TSS_on_external_5_UTR = consist_TSS[consist_TSS['feature']=="external_5_UTR_TSS"]
-    consist_CS_on_external_3_UTR = consist_CS[consist_CS['feature']=="external_3_UTR_CS"]
-    coordinate,transcript_num = get_coordinate(consist_TSS_on_external_5_UTR,consist_CS_on_external_3_UTR,
-                                               id_convert_dict,single_start_end)
+    #For every transcript, the orphan site means the site is upstream of the transcript and not belong to "any transcript"
+    orphan_TSS = get_ophan_data(ld_TSS, transcript_TSS)
+    orphan_CS = get_ophan_data(ld_CS, transcript_CS)
+    other_TSS = other_CS = None
+    if remove_conflict:
+        #For every transcript, the other site means the site is on "itself" but not on its 5 (or 3)' external UTR 
+        other_TSS = get_not_same_coord_transcript_id(transcript_TSS, external_5_UTR_TSS)
+        other_CS = get_not_same_coord_transcript_id(transcript_CS, external_3_UTR_CS)
+        other_TSS['feature'] = 'other'
+        other_CS['feature'] = 'other'
+    #For every transcript, the consist site means the strongest site related to itself and there is onlt one the strongest site
+    #For every transcript, the consist site would be defined as its redefined start ( or end) site
+    consist_TSS = get_consist_site(external_5_UTR_TSS, orphan_TSS, other_TSS)
+    consist_CS = get_consist_site(external_3_UTR_CS, orphan_CS, other_CS)
+    consist_TSS['gene_id'] = [id_convert_dict[id_] for id_ in consist_TSS['belonging']]
+    consist_CS['gene_id'] = [id_convert_dict[id_] for id_ in consist_CS['belonging']]
+    
+    consist_TSS_on_external_5_UTR = consist_TSS[consist_TSS['feature']=="external_5_UTR_TSS"].copy()
+    consist_CS_on_external_3_UTR = consist_CS[consist_CS['feature']=="external_3_UTR_CS"].copy()
+    if single_start_end:
+        #For every gene, the strongest redefined start ( or end) site of all transcripts would be defined
+        #as single gene start ( or end) site if there is only one the strongest redefined start ( or end) site
+        #The redefined start ( or end) site would be preserved if it was gene start ( or end) site
+        tss = consist(consist_TSS_on_external_5_UTR,'gene_id','experimental_score',drop_duplicated=False)
+        cs = consist(consist_CS_on_external_3_UTR,'gene_id','experimental_score',drop_duplicated=False)
+        tss = coordinate_consist_filter(tss,'gene_id','start')
+        cs = coordinate_consist_filter(cs,'gene_id','start')
+    else:
+        tss = consist_TSS_on_external_5_UTR
+        cs = consist_CS_on_external_3_UTR
+    coordinate,transcript_num = get_coordinate(tss,cs,id_convert_dict,single_start_end)
     redefined_bed = create_coordinate_bed(coordinate,bed,id_convert_dict)
-    ###Write data###
-    stats = {}
-    stats['Reference transcripts'] = len(bed)
-    stats['Redefined transcripts'] = len(redefined_bed)
-    stats['Processed number'] = transcript_num
-    stats['TSS evidence'] = get_unique_coord_id_num(tss)
-    stats['CS evidence'] = get_unique_coord_id_num(cleavage_site)
-    stats['TSS location'] = {}
-    stats['CS location'] = {}
-    stats['TSS location']['External 5\'UTR TSS'] = get_unique_coord_id_num(external_5_UTR_TSS)
-    stats['CS location']['External 3\'UTR CS'] = get_unique_coord_id_num(external_3_UTR_CS)
-    stats['TSS location']['Transcript TSS'] = get_unique_coord_id_num(transcript_TSS)
-    stats['CS location']['Transcript CS'] = get_unique_coord_id_num(transcript_CS)
-    stats['TSS location']['Intergenic TSS'] = get_unique_coord_id_num(ld_TSS)
-    stats['CS location']['Intergenic CS'] = get_unique_coord_id_num(ld_CS) 
-    stats['Stongest TSS location'] = get_location_count(consist_TSS)
-    stats['Stongest CS location'] = get_location_count(consist_CS)
-    write_json(stats, os.path.join(output_root,'boundary_stats.json'))
+    #Stats
+    stats['1. Reference transcripts'] = len(bed)
+    stats['2. TSS location'] = {
+        #Note the same TSS may be different types in the same time due to the point of view of different transcripts
+        'External 5\'UTR TSS': get_unique_coord_id_num(external_5_UTR_TSS),
+        'Transcript but not external 5\' UTR TSS': get_unique_coord_id_num(other_TSS),
+        'Orphan TSS': get_unique_coord_id_num(orphan_TSS),
+        'Transcript upstream TSS': get_unique_coord_id_num(ld_TSS)
+    }
+    stats['3. CS location'] = {
+        #Note the same CS may be different types in the same time due to the point of view of different transcripts
+        'External 3\'UTR CS': get_unique_coord_id_num(external_3_UTR_CS),
+        'Transcript but not external 3\' UTR CS': get_unique_coord_id_num(other_CS),
+        'Orphan CS': get_unique_coord_id_num(orphan_CS),
+        'Transcript downstream CS': get_unique_coord_id_num(ld_CS)
+    }
+    stats['4. Stongest TSS location'] = get_location_count(consist_TSS)
+    stats['5. Stongest CS location'] = get_location_count(consist_CS)
+    stats['6. Gene TSS'] = get_unique_coord_id_num(tss)
+    stats['7. Gene CS'] = get_unique_coord_id_num(cs)
+    stats['8. Processed number'] = transcript_num
+    stats['9. Redefined transcripts'] = len(redefined_bed)
     coordinate_compare(bed,redefined_bed).to_csv(os.path.join(output_root,"coordinate_compared.csv"))
     ids_list = [coding_transcript_ids,set(consist_TSS_on_external_5_UTR['belonging']),set(consist_CS_on_external_3_UTR['belonging'])]
     id_names = ["Coding","including TSS","including CS"]
-    intersection(ids_list,id_names,venn_path=os.path.join(output_root,'venn.png'))    
+    intersection(ids_list,id_names,venn_path=os.path.join(output_root,'venn.png'))
+    ###Write data###
+    write_json(stats, os.path.join(output_root,'boundary_stats.json'))
     write_bed(redefined_bed,os.path.join(output_root,"coordinate_redefined.bed"))
-    write_gff(external_5_UTR_TSS,os.path.join(output_root,"external_5_UTR_TSS.gff3"),valid_features=False)
-    write_gff(transcript_TSS,os.path.join(output_root,"transcript_TSS.gff3"),valid_features=False)
-    write_gff(ld_TSS,os.path.join(output_root,"ld_TSS.gff3"),valid_features=False)
-    write_gff(external_3_UTR_CS,os.path.join(output_root,"external_3_UTR_CS.gff3"),valid_features=False)
-    write_gff(transcript_CS,os.path.join(output_root,"transcript_CS.gff3"),valid_features=False)
-    write_gff(ld_CS,os.path.join(output_root,"ld_CS.gff3"),valid_features=False)
-    
+    write_gff(external_5_UTR_TSS,os.path.join(output_root,"external_5_UTR_TSS.gff3"),valid_features=False,update_attr=True)
+    write_gff(other_TSS,os.path.join(output_root,"other_TSS.gff3"),valid_features=False,update_attr=True)
+    write_gff(orphan_TSS,os.path.join(output_root,"orphan_TSS.gff3"),valid_features=False,update_attr=True)
+    write_gff(external_3_UTR_CS,os.path.join(output_root,"external_3_UTR_CS.gff3"),valid_features=False,update_attr=True)
+    write_gff(other_CS,os.path.join(output_root,"other_CS.gff3"),valid_features=False,update_attr=True)
+    write_gff(orphan_CS,os.path.join(output_root,"orphan_CS.gff3"),valid_features=False,update_attr=True)
+    write_gff(tss,os.path.join(output_root,"TSS.gff3"),valid_features=False,update_attr=True)
+    write_gff(cs,os.path.join(output_root,"CS.gff3"),valid_features=False,update_attr=True)
 
 if __name__ == "__main__":
     #Reading arguments

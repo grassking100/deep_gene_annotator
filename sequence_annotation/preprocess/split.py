@@ -8,7 +8,6 @@ from sequence_annotation.utils.utils import write_json, create_folder
 from sequence_annotation.file_process.utils import read_fai,read_bed,write_gff
 from sequence_annotation.file_process.get_region_table import read_region_table
 from sequence_annotation.file_process.get_id_table import get_id_convert_dict
-from sequence_annotation.file_process.get_subbed import get_subbed
 from sequence_annotation.file_process.bed2gff import bed2gff
 from sequence_annotation.file_process.get_subfasta import main as get_subfasta_main
 from sequence_annotation.file_process.get_sub_region_table import main as get_sub_region_table_main
@@ -259,8 +258,8 @@ def main(fai_path,id_convert_table_path,processed_root,output_root,fold_num=None
                 rna_stats_root=os.path.join(output_root,"ss_rna_stats","{}".format(file_name))
             region_ids = list(pd.read_csv(region_id_path,header=None,sep='\t')[0])
             region_num[file_name] = len(region_ids)
-            part_rna_bed = get_subbed(rna_bed,region_ids,query_column='chr')
-            part_canonical_bed = get_subbed(canonical_bed,region_ids,query_column='chr')
+            part_rna_bed = rna_bed[rna_bed['chr'].isin(region_ids)]
+            part_canonical_bed = canonical_bed[canonical_bed['chr'].isin(region_ids)]
             write_gff(bed2gff(part_rna_bed,id_convert_dict),part_gff_path)
             write_gff(bed2gff(part_canonical_bed,ss_canonical_id_convert_dict),part_canonical_gff_path)
             get_subfasta_main(output_region_fasta_root,region_id_path,fasta_path)

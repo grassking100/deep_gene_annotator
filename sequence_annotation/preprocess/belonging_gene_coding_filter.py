@@ -2,7 +2,7 @@ import os, sys
 sys.path.append(os.path.dirname(__file__) + "/../..")
 import pandas as pd
 from argparse import ArgumentParser
-from sequence_annotation.file_process.utils import write_bed, read_bed
+from sequence_annotation.file_process.utils import write_bed, read_bed,BED_COLUMNS
 from sequence_annotation.file_process.get_id_table import get_id_convert_dict
 
 def belonging_gene_coding_filter(bed,id_convert_dict):
@@ -15,20 +15,23 @@ def belonging_gene_coding_filter(bed,id_convert_dict):
         elif item['thick_length'] == 0:
             gene_id_has_noncoding_transcript.add(id_convert_dict[item['id']])
 
-    coding_gene_transcript_id = []
+    coding_gene_transcripts = []
     for item in bed.to_dict('record'):
         gene_id = id_convert_dict[item['id']]
         if gene_id not in gene_id_has_noncoding_transcript:
-            coding_gene_transcript_id.append(item)
-    coding_gene_transcript_id = pd.DataFrame.from_dict(coding_gene_transcript_id)
-    return coding_gene_transcript_id
+            coding_gene_transcripts.append(item)
+    if len(coding_gene_transcripts) > 0:
+        coding_gene_transcripts = pd.DataFrame.from_dict(coding_gene_transcripts)
+    else:
+        coding_gene_transcripts = pd.DataFrame(columns=BED_COLUMNS)
+    return coding_gene_transcripts
     
     
 def main(input_bed_path,id_table_path,output_bed_path):
     bed = read_bed(input_bed_path)
     id_convert_dict = get_id_convert_dict(id_table_path)
-    coding_gene_transcript_id = belonging_gene_coding_filter(bed,id_convert_dict)
-    write_bed(coding_gene_transcript_id, output_bed_path)
+    coding_gene_transcripts = belonging_gene_coding_filter(bed,id_convert_dict)
+    write_bed(coding_gene_transcripts, output_bed_path)
     
     
 if __name__ == "__main__":

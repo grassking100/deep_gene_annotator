@@ -41,7 +41,7 @@ class InvalidStrandType(Exception):
         type_ = ""
         if strand_type is not None:
             type_ = ", " + str(strand_type) + ", "
-        msg = "Strand type{} is not expected".format(type_)
+        msg = "Strand type, {}, is not expected".format(type_)
         super().__init__(msg)
 
 
@@ -322,14 +322,15 @@ def read_gff(path,with_attr=False,valid_features=None):
     return gff
 
 
-def write_gff(gff, path,valid_features=None):
+def write_gff(gff, path,valid_features=None,update_attr=False):
     if valid_features is None:
         valid_features = BASIC_GFF_FEATURES
     validate_gff(gff,valid_features=valid_features)
-    fp = open(path, 'w')
-    fp.write("##gff-version 3\n")
-    gff[GFF_COLUMNS].to_csv(fp, header=None, sep='\t', index=None)
-    fp.close()
+    if update_attr:
+        gff = get_gff_with_updated_attribute(gff)
+    with open(path, 'w') as fp:
+        fp.write("##gff-version 3\n")
+        gff[GFF_COLUMNS].to_csv(fp, header=None, sep='\t', index=None)
 
 
 def get_gff_item_with_attribute(item, split_attr=None):
@@ -337,11 +338,12 @@ def get_gff_item_with_attribute(item, split_attr=None):
     attributes = item['attribute'].split(';')
     attribute_dict = {}
     for attribute in attributes:
-        lhs, rhs = attribute.split('=')
-        lhs = lhs.lower().replace('-', '_')
-        if lhs in split_attr:
-            rhs = rhs.split(',')
-        attribute_dict[lhs] = rhs
+        if len(attribute)>1:
+            lhs, rhs = attribute.split('=')
+            lhs = lhs.lower().replace('-', '_')
+            if lhs in split_attr:
+                rhs = rhs.split(',')
+            attribute_dict[lhs] = rhs
     copied = dict(item)
     copied.update(attribute_dict)
     return copied

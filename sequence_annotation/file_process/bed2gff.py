@@ -37,22 +37,13 @@ def bed_item2gff_item(item, id_convert_dict):
         abs_start = item['block_related_start'][index] + gene['start']
         exon = dict(basic_block)
         exon['start'] = abs_start
-        exon['end'] = abs_start + item['block_size'][index] - 1
+        exon['end'] = item['block_related_end'][index] + gene['start']
         exon['feature'] = EXON_TYPE
         exon['parent'] = mRNA_id
         exons.append(exon)
 
     for index, exon in enumerate(exons):
         gff_items.append(exon)
-        # Create intron info
-        #if index < len(exons) - 1:
-        #    next_exon = exons[index + 1]
-        #    intron = dict(exon)
-        #    intron['start'] = exon['end'] + 1
-        #    intron['end'] = next_exon['start'] - 1
-        #    intron['feature'] = INTRON_TYPE
-        #    gff_items.append(intron)
-
         # If Coding region is exist, create UTR or CDS info
         if thick_start <= thick_end:
             cds_site = []

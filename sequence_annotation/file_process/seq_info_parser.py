@@ -58,25 +58,33 @@ class BedInfoParser(SeqInfoParser):
             parsed_data[key] = [int(item) for item in list_]
         starts = parsed_data['block_related_start']
         sizes = parsed_data['block_size']
-        parsed_data['block_related_end'] = [
-            start + size - 1 for start, size in zip(starts, sizes)]
+        parsed_data['block_related_end'] = [start + size - 1 for start, size in zip(starts, sizes)]
+        del parsed_data['block_size']
         self._validate(parsed_data)
         return parsed_data
 
     def _validate(self, data):
-        value_int = ['start', 'end']
+        transcript_size = data['end'] - data['start'] + 1
+        value_int = ['start', 'end','thick_start', 'count', 'thick_end']
         for key in value_int:
             if data[key] < 0:
                 raise NegativeNumberException(key, data[key])
-        value_int += ['thick_start', 'count', 'thick_end']
-        value_int_list = ['block_related_start', 'block_size']
-        for key in value_int_list:
-            if np.any(np.array(data[key]) < 0):
-                raise NegativeNumberException(key, data[key])
-        count = data['count']
-        if count <= 0:
-            raise NotPositiveException("count", count)
-        if len(data['block_related_start']) != count or len(
-                data['block_size']) != count:
-            raise Exception(
-                "Start sites or sizes number are not same as count")
+                
+        for rel_start,rel_end in zip(data['block_related_start'],data['block_related_end']):
+            if rel_start < 0:
+                raise NegativeNumberException('block relative start', rel_start)
+            if rel_end < 0:
+                raise NegativeNumberException('block relative start', rel_start)
+            if rel_end >= transcript_size:
+                raise Exception("Wrong relative end")
+                
+            if rel_end - rel_start + 1 > transcript_size:
+                print(rel_end,rel_start)
+                raise Exception("Wrong size")
+
+        if len(data['block_related_start']) != data['count']:
+            raise Exception("Start sites are not same as count")
+
+        if len(data['block_related_end']) != data['count']:
+            raise Exception("End sites are not same as count")
+            

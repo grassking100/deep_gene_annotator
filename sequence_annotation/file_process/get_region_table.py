@@ -38,7 +38,7 @@ def get_relation(bed, use_strand=True,id_prefix=None):
     ordinal_ids = []
     relations = {}
     used_coords = set()
-    for coord in sorted(coords):
+    for coord in coords:
         if coord not in used_coords:
             index += 1
             used_coords.add(coord)

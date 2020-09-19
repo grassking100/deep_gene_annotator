@@ -12,8 +12,9 @@ from sequence_annotation.preprocess.filter import main as filter_main
 from sequence_annotation.preprocess.process_data import main as process_data_main
 from sequence_annotation.preprocess.split import main as split_main
 
-def main(preserved_bed_path,background_bed_path,id_table_path,tss_path,cs_path,genome_path,
-         upstream_dist,downstream_dist,source_name,output_root,kwargs_json=None):
+def main(preserved_bed_path,background_bed_path,id_table_path,genome_path,
+         upstream_dist,downstream_dist,source_name,output_root,
+         tss_path=None,cs_path=None,kwargs_json=None):
     kwargs = locals()
     kwargs_json = kwargs_json or {}
     redefine_boundary_kwargs = filter_kwargs = process_data_kwargs = {}
@@ -36,7 +37,7 @@ def main(preserved_bed_path,background_bed_path,id_table_path,tss_path,cs_path,g
     splitted_root=os.path.join(output_root,"split")
     ds_splitted_root=os.path.join(splitted_root,"double_strand")
     ss_splitted_root=os.path.join(splitted_root,"single_strand")
-    coordinate_redefined_bed_path = os.path.join(coordinate_redefined_root,"coordinate_redefined.bed")
+    
     filtered_bed_path = os.path.join(filtered_root,"filtered.bed")
     background_redefined_bed_path = os.path.join(processed_root,"background_and_coordinate_redefined.bed")
     region_table_path=os.path.join(result_root,"region_table.tsv")
@@ -51,19 +52,24 @@ def main(preserved_bed_path,background_bed_path,id_table_path,tss_path,cs_path,g
     write_json(kwargs,kwarg_path)
     
     #Step 1: Redefining coordinate of transcript
-    #if True:
-    if not os.path.exists(coordinate_redefined_bed_path):
-        redefine_boundary_main(preserved_bed_path,id_table_path,tss_path,cs_path,
-                               upstream_dist,downstream_dist,coordinate_redefined_root,**redefine_boundary_kwargs)
+    if tss_path is not None and cs_path is not None:
+        quality_coordinate_bed_path = os.path.join(coordinate_redefined_root,"coordinate_redefined.bed")
+        if not os.path.exists(quality_coordinate_bed_path):
+            redefine_boundary_main(preserved_bed_path,id_table_path,tss_path,cs_path,
+                                   upstream_dist,downstream_dist,coordinate_redefined_root,
+                                   **redefine_boundary_kwargs)
+    else:
+        quality_coordinate_bed_path = preserved_bed_path
+        
     #Step 2: Filtering transcript
-    #if True:
     if not os.path.exists(filtered_bed_path):
-        filter_main(coordinate_redefined_bed_path,id_table_path,filtered_root,**filter_kwargs)
+        filter_main(quality_coordinate_bed_path,id_table_path,filtered_root,**filter_kwargs)
+
     #Step 3: Processing data
     if not os.path.exists(stats_path):
         create_folder(processed_root)
         background_bed = read_bed(background_bed_path)
-        coordinate_redefined_bed = read_bed(coordinate_redefined_bed_path)
+        coordinate_redefined_bed = read_bed(quality_coordinate_bed_path)
         background_redefined_bed = pd.concat([background_bed,coordinate_redefined_bed])
         write_bed(background_redefined_bed,background_redefined_bed_path)
         process_data_main(filtered_bed_path,background_redefined_bed_path,id_table_path,genome_path,
@@ -87,8 +93,8 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("-p", "--preserved_bed_path",help="Path of preserved transcript data in BED format",required=True)
     parser.add_argument("-b", "--background_bed_path",help="Path of background BED file",required=True)
-    parser.add_argument("-t", "--tss_path",help='TSS gff path',required=True)
-    parser.add_argument("-c", "--cs_path",help='Cleavage site gff path',required=True)
+    parser.add_argument("-t", "--tss_path",help="Path of TSS evidence GFF file")
+    parser.add_argument("-c", "--cs_path",help="Path of cleavage sites evidence GFF file")
     parser.add_argument("-g", "--genome_path",help="Path of genome fasta",required=True)
     parser.add_argument("-i", "--id_table_path",help='Transcript and gene id conversion table',required=True)
     parser.add_argument("-o", "--output_root",help="Directory of output folder",required=True)

@@ -2,7 +2,6 @@ import os, sys
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.file_process.utils import read_bed, write_bed
-from sequence_annotation.file_process.get_subbed import get_subbed
 from sequence_annotation.file_process.seq_info_parser import BedInfoParser
 from sequence_annotation.preprocess.create_gene_with_alt_status_gff import get_most_start_end_transcripts
 from sequence_annotation.preprocess.create_gene_with_alt_status_gff import get_canonical_region_and_alt_splice
@@ -38,7 +37,7 @@ def get_no_alt_site_transcript(bed,id_convert_dict,select_boundary_by_election=F
         except:
             raise Exception("The gene {} causes error".format(gene_id))
 
-    return get_subbed(bed, no_alt_site_transcript_ids)
+    return bed[bed['id'].isin(no_alt_site_transcript_ids)]
 
 def main(input_bed_path,id_table_path,output_bed_path,**kwargs):
     bed = read_bed(input_bed_path)

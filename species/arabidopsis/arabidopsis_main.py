@@ -33,8 +33,9 @@ def main(data_root,upstream_dist,downstream_dist,
     if kwargs_json['use_non_hypothetical_protein_gene_id']:
         kwargs_json['filter_kwargs']['non_hypothetical_protein_gene_id_path'] = real_protein_gene_id_path
 
-    pipeline_main(preserved_bed_path,background_bed_path,id_table_path,tss_path,cs_path,genome_path,
-                  upstream_dist,downstream_dist,source_name,output_root,kwargs_json=kwargs_json)
+    pipeline_main(preserved_bed_path,background_bed_path,id_table_path,genome_path,
+                  upstream_dist,downstream_dist,source_name,output_root,
+                  tss_path=tss_path,cs_path=cs_path,kwargs_json=kwargs_json)
 
     select_data_main(fasta_path,ann_seqs_path,split_table_path,half_data_root,
                      name='train_1_2_plus_3_5',ratio=0.5,select_each_type=True)

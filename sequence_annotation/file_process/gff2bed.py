@@ -5,8 +5,7 @@ import numpy as np
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.file_process.utils import get_gff_with_attribute, read_gff, write_bed
-from sequence_annotation.file_process.utils import GENE_TYPE, TRANSCRIPT_TYPE, GFF_COLUMNS, CDS_TYPE, EXON_TYPE
-
+from sequence_annotation.file_process.utils import GENE_TYPE, TRANSCRIPT_TYPE, CDS_TYPE, EXON_TYPE
 
 def gff_info2bed_info(RNA, exons, orf_info):
     # input one based data, return one based data
@@ -48,14 +47,13 @@ def extract_orf(selected_CDSs):
 
 def simple_gff2bed(gff):
     gff = get_gff_with_attribute(gff)
-    gff = gff.to_dict('record')
-    bed_info_list = []
-    for item in gff:
-        bed_item = {}
-        for index, name in enumerate(GFF_COLUMNS + ['id']):
-            bed_item[name] = item[name]
-        bed_info_list.append(bed_item)
-    bed = pd.DataFrame.from_dict(bed_info_list)
+    bed = gff[['chr', 'start', 'end', 'score', 'strand','id']].copy()
+    bed['thick_start'] = bed['start']
+    bed['thick_end'] = bed['start'] - 1
+    bed['rgb'] = '.'
+    bed['count'] = 1
+    bed['block_size'] = (bed['end'] - bed['start'] + 1).astype(str)
+    bed['block_related_start'] = '0'
     return bed
 
 

@@ -5,7 +5,8 @@ sys.path.append(os.path.dirname(__file__)+"/../..")
 from sequence_annotation.file_process.utils import read_bed,write_bed
 from sequence_annotation.file_process.get_id_table import get_id_convert_dict
 
-def gene_score_filter(bed,threshold,mode,id_convert):
+def gene_score_filter(bed,id_convert,threshold,mode=None):
+    mode = mode or "bigger_or_equal"
     bed['parent'] = [id_convert[id_] for id_ in bed['id']]
     bed_group = bed.groupby('parent')
     groups = []
@@ -22,7 +23,8 @@ def gene_score_filter(bed,threshold,mode,id_convert):
     bed = pd.concat(groups)
     return bed
 
-def transcript_score_filter(bed,threshold,mode):
+def transcript_score_filter(bed,threshold,mode=None):
+    mode = mode or "bigger_or_equal"
     has_score_index = bed['score']!='.'
     if mode == 'bigger_or_equal':
         pass_index = (bed.loc[has_score_index,'score'].astype(float)>=threshold).index
@@ -40,7 +42,7 @@ def main(input_bed_path,threshold,mode,output_bed_path,remove_gene=False,id_tabl
         if id_table_path is None:
             raise Exception("The id_table_path must be provided if the remove_gene is true')")
         id_convert = get_id_convert_dict(id_table_path)
-        bed = gene_score_filter(bed,threshold,mode,id_convert)
+        bed = gene_score_filter(bed,id_convert,threshold,mode)
     else:
         bed = transcript_score_filter(bed,threshold,mode)
     write_bed(bed,output_bed_path)
@@ -51,7 +53,7 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--input_bed_path",required=True)
     parser.add_argument("-o", "--output_bed_path",required=True)
     parser.add_argument("--threshold",type=float,required=True)
-    parser.add_argument("--mode",choices=['bigger_or_equal', 'smaller_or_equal'],required=True)
+    parser.add_argument("--mode",type=str,default=None)
     parser.add_argument("--remove_gene",action='store_true',help="Remove gene if at least one of its transcript doesn't pass threshold filter,"\
                        "otherwiese, only remove the transcript which doesn't pass threshold filter")
     parser.add_argument("-t","--id_table_path",type=str,help='The id_table_path must be provided if the remove_gene is true')

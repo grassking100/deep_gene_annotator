@@ -22,13 +22,13 @@ from sequence_annotation.process.inference import BasicInference, SeqAnnInferenc
 def ann_vecs2gene_info(channel_order, gene_info_extractor,
                        chrom_ids, lengths,ann_vecs):
     """Convert annotation vectors to dictionay of SeqInformation of region data"""
-    gene_info = {}
+    seq_info_container = SeqInfoContainer()
     for chrom_id, length, ann_vec in zip(chrom_ids, lengths, ann_vecs):
         one_hot_vec = ann2one_hot(ann_vec, length)
         ann_seq = vecs2seq(one_hot_vec, chrom_id, PLUS, channel_order)
         info = gene_info_extractor.extract_per_seq(ann_seq)
-        gene_info[chrom_id] = info
-    return gene_info
+        seq_info_container.add(info)
+    return seq_info_container
 
 
 class AnnVecGffConverter:
@@ -57,10 +57,8 @@ class AnnVecGffConverter:
         gene_info = ann_vecs2gene_info(self.channel_order,
                                        self.gene_info_extractor,
                                        chrom_ids,lengths, ann_vecs)
-        seq_info_container = SeqInfoContainer()
-        for seq in gene_info.values():
-            seq_info_container.add(seq)
-        gff = seq_info_container.to_gff()
+
+        gff = gene_info.to_gff()
         return gff
 
 
@@ -95,9 +93,8 @@ def convert_output_to_gff(raw_outputs,region_table,
     for index,raw_output in enumerate(raw_outputs):
         print_progress("{}% of data have been processed".format(int(100 * index / len(raw_outputs))))
         output = simple_output_to_vectors(raw_output)
-        onehot_vecs = inference(output['outputs'],output['masks'])
-        onehot_vecs = onehot_vecs.cpu().numpy()
         output_list.append(output)
+        onehot_vecs = inference(output['outputs'],output['masks']).cpu().numpy()
         output_vec_list.append(onehot_vecs)
     arg_list = []
     for onehot_vecs,output in zip(output_vec_list,output_list):

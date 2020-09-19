@@ -1,14 +1,16 @@
 import os, sys
 sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.file_process.utils import TRANSCRIPT_TYPE, INTRON_TYPE
-
+from sequence_annotation.file_process.utils import get_gff_with_intron,get_gff_with_updated_attribute
 
 def get_region_around_site(gff, feature_types, upstream_distance,
                            downstream_distance, is_start_location=True):
+    if INTRON_TYPE not in set(gff['feature']):
+        gff = get_gff_with_intron(gff)
     blocks = gff[gff['feature'].isin(feature_types)]
     if len(set(blocks['strand']) - set(['+', '-'])) > 0:
         raise Exception("Invalid strand")
-    blocks = blocks[['chr', 'strand', 'start', 'end','parent']].copy()
+    blocks = blocks[['chr', 'strand', 'start', 'end','parent']].copy().sort_values(['chr', 'start', 'end','strand'])
     blocks['transcript_source'] = blocks['parent']
     blocks['site'] = None
     blocks['id'] = ["site_{}".format(i) for i in range(1,1+len(blocks))]
@@ -27,6 +29,7 @@ def get_region_around_site(gff, feature_types, upstream_distance,
     blocks.loc[minus_index,'end'] = blocks.loc[minus_index, 'site'] + upstream_distance
     blocks.loc[minus_index,'start'] = blocks.loc[minus_index, 'site'] - downstream_distance
     blocks = blocks[blocks['start'] >= 0]
+    blocks = get_gff_with_updated_attribute(blocks)
     return blocks
 
     
