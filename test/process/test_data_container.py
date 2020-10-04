@@ -29,13 +29,11 @@ class TestDataContainer(unittest.TestCase):
             ann_seq2.set_ann('intron', 1, 0, 2)
             ann_seqs.add(ann_seq2)
             data = {
-                'training': {
-                    'inputs': {
+                    'seq': {
                         'A': 'AATCG',
                         'B': 'TTTC'
                     },
-                    'answers': ann_seqs
-                }
+                    'answer': ann_seqs
             }
             data_processor = AnnSeqProcessor(CHANNEL_ORDER)
             data_processor.process(data)

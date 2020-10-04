@@ -1,4 +1,3 @@
-import warnings
 import sys
 from .seq_container import AnnSeqContainer
 from . import ann_seq_processor
@@ -93,12 +92,6 @@ def class_count(ann_genome):
 
 
 def genome2dict_vec(ann_genome, ann_types):
-    warn = ("\n\n!!!\n"
-            "\tDNA sequence will be rearranged from 5' to 3'.\n"
-            "\tThe plus strand sequence will stay the same,"
-            " but the minus strand sequence will be flipped!\n"
-            "!!!\n")
-    warnings.warn(warn)
     dict_ = {}
     for ann_seq in ann_genome:
         dict_[str(ann_seq.id)] = ann_seq_processor.seq2vecs(ann_seq, ann_types)

@@ -40,19 +40,6 @@ class CONSTANT_DICT(dict):
         raise Exception("{} cannot delete element".format(
             self.__class__.__name__))
 
-        
-#BASIC_SIMPLIFY_MAP = CONSTANT_DICT({
-#    'exon': ['exon'],
-#    'intron': ['intron'],
-#    'other': ['other']
-#})
-
-#BASIC_COLOR_SETTING = CONSTANT_DICT({
-#    'other': 'blue',
-#    'exon': 'red',
-#    'intron': 'yellow'
-#})
-
 
 def logical_not(lhs, rhs):
     return np.logical_and(lhs, np.logical_not(rhs))
@@ -187,3 +174,9 @@ def find_substr(regex, string, shift_value=None):
     indice = [m.start() + shift_value for m in iter_]
     return indice
 
+def get_subdict(dict_,ids):
+    intersected_ids = set(ids).intersection(list(dict_.keys()))
+    subdict = {}
+    for id_ in intersected_ids:
+        subdict[id_] = dict_[id_]
+    return subdict

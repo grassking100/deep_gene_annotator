@@ -2,109 +2,109 @@
     "a_p_abs_diff": {
         "max": {
             "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 0.0,
-            "splicing_donor_site": 0.0
+            "CS": 0.0,
+            "AS": 0.0,
+            "DS": 0.0
         },
         "mean": {
             "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 0.0,
-            "splicing_donor_site": 0.0
+            "CS": 0.0,
+            "AS": 0.0,
+            "DS": 0.0
         },
         "median": {
             "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 0.0,
-            "splicing_donor_site": 0.0
+            "CS": 0.0,
+            "AS": 0.0,
+            "DS": 0.0
         },
         "min": {
             "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 0.0,
-            "splicing_donor_site": 0.0
+            "CS": 0.0,
+            "AS": 0.0,
+            "DS": 0.0
         },
         "mode": {
             "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 0.0,
-            "splicing_donor_site": 0.0
+            "CS": 0.0,
+            "AS": 0.0,
+            "DS": 0.0
         },
         "num": {
             "TSS": 1,
-            "cleavage_site": 1,
-            "splicing_acceptor_site": 1,
-            "splicing_donor_site": 1
+            "CS": 1,
+            "AS": 1,
+            "DS": 1
         },
         "std": {
             "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 0.0,
-            "splicing_donor_site": 0.0
+            "CS": 0.0,
+            "AS": 0.0,
+            "DS": 0.0
         },
         "valid_num": {
             "TSS": 1,
-            "cleavage_site": 1,
-            "splicing_acceptor_site": 1,
-            "splicing_donor_site": 1
+            "CS": 1,
+            "AS": 1,
+            "DS": 1
         }
     },
     "abs_diff": {
         "mean": {
             "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 0.0,
-            "splicing_donor_site": 0.0
+            "CS": 0.0,
+            "AS": 0.0,
+            "DS": 0.0
         }
     },
     "p_a_abs_diff": {
         "max": {
             "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 0.0,
-            "splicing_donor_site": 0.0
+            "CS": 0.0,
+            "AS": 0.0,
+            "DS": 0.0
         },
         "mean": {
             "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 0.0,
-            "splicing_donor_site": 0.0
+            "CS": 0.0,
+            "AS": 0.0,
+            "DS": 0.0
         },
         "median": {
             "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 0.0,
-            "splicing_donor_site": 0.0
+            "CS": 0.0,
+            "AS": 0.0,
+            "DS": 0.0
         },
         "min": {
             "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 0.0,
-            "splicing_donor_site": 0.0
+            "CS": 0.0,
+            "AS": 0.0,
+            "DS": 0.0
         },
         "mode": {
             "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 0.0,
-            "splicing_donor_site": 0.0
+            "CS": 0.0,
+            "AS": 0.0,
+            "DS": 0.0
         },
         "num": {
             "TSS": 1,
-            "cleavage_site": 1,
-            "splicing_acceptor_site": 1,
-            "splicing_donor_site": 1
+            "CS": 1,
+            "AS": 1,
+            "DS": 1
         },
         "std": {
             "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 0.0,
-            "splicing_donor_site": 0.0
+            "CS": 0.0,
+            "AS": 0.0,
+            "DS": 0.0
         },
         "valid_num": {
             "TSS": 1,
-            "cleavage_site": 1,
-            "splicing_acceptor_site": 1,
-            "splicing_donor_site": 1
+            "CS": 1,
+            "AS": 1,
+            "DS": 1
         }
     }
 }

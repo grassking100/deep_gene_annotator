@@ -44,7 +44,7 @@ class BasicModel(nn.Module, metaclass=ABCMeta):
         super().__init__()
         self._in_channels = None
         self._out_channels = None
-        self._save_distribution = True
+        self._save_distribution = False
         self._distribution = {}
 
     @property

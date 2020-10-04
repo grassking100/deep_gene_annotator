@@ -129,12 +129,13 @@ class SeqContainer(metaclass=ABCMeta):
         new_container.note = self.note
         if with_seq:
             for seq in self._data.values():
-                new_container._data[seq.id] = seq.copy()
+                new_container.add(seq.copy())
         return new_container
 
     def get_seqs(self, ids):
         seqs = self.copy(with_seq=False)
-        return seqs.add([seqs[id_] for id_ in ids])
+        seqs.add([self.get(id_) for id_ in ids])
+        return seqs
 
 
 class SeqInfoContainer(SeqContainer):
@@ -238,6 +239,8 @@ class AnnSeqContainer(SeqContainer):
             raise Exception("AnnSeqContainer's ANN_TYPES must not be None")
 
     def copy(self, with_seq=True):
-        new_container = super().copy(with_seq)
-        new_container.ANN_TYPES = self._ANN_TYPES
-        return new_container
+        seqs = super().copy(with_seq=False)
+        seqs.ANN_TYPES = self._ANN_TYPES
+        if with_seq:
+            seqs.add([self.get(id_) for id_ in self.ids])
+        return seqs

@@ -23,18 +23,16 @@ def get_alphabet_color_map():
     return color_map
 
 
-def fasta_composition(converter, fasta_data, truncated=None):
+def fasta_composition(converter, fasta, truncated=None):
     truncated = truncated or 0
-    sum_ = None
-    for seq in fasta_data.values():
+    truncated_seqs = {}
+    for key,seq in fasta.items():
         if truncated != 0:
             seq = seq[truncated:-truncated]
-        vecs = np.array(converter.seq2vecs(seq))
-        if sum_ is None:
-            sum_ = vecs
-        else:
-            sum_ += vecs
-    return sum_ / sum_.sum(1)[0]
+        truncated_seqs[key] = seq
+    
+    vecs = converter.seqs2dict_vec(truncated_seqs)
+    return np.array(list(vecs.values())).mean(0)
 
 
 def plot_composition(composition, output_path, title=None, 
@@ -52,14 +50,18 @@ def plot_composition(composition, output_path, title=None,
     for seq, label in zip(composition.T, list(codes)):
         if sum(seq) > 0:
             ax.plot(range_, seq, label=label, color=alphabet_color_map[label])
-    ax.set_title(title, fontsize=16)
+    ax.set_title(title, fontsize=16,y=1.02)
     ax.set_xlabel(xlabel, fontsize=16)
     ax.set_ylabel("Ratio", fontsize=16)
+    ax.legend(loc="upper right",fontsize=16)
+    ax.xaxis.set_minor_locator(AutoMinorLocator())
+    ax.yaxis.set_minor_locator(AutoMinorLocator())
+    ax.set_ylim([0,1])
+    plt.locator_params(axis='x', nbins=5)
+    plt.locator_params(axis='y', nbins=6)
     plt.xticks(fontsize=16)
     plt.yticks(fontsize=16)
-    ax.xaxis.set_minor_locator(AutoMinorLocator())
-    ax.legend(loc="upper right",fontsize=16)
-    fig.savefig(output_path, bbox_inches = 'tight',pad_inches = 0)
+    fig.savefig(output_path, bbox_inches = 'tight',pad_inches = 0.1)
 
 
 def main(input_path, output_path, truncated=None, **kwargs):
@@ -68,7 +70,7 @@ def main(input_path, output_path, truncated=None, **kwargs):
     for seq in fasta.values():
         codes = codes.union(set(seq))
     codes = sorted(list(codes))
-    converter = SeqConverter(codes=codes)
+    converter = SeqConverter(codes=codes,to_numpy=True)
     composition = fasta_composition(converter, fasta, truncated=truncated)
     plot_composition(composition, output_path, codes=codes, **kwargs)
 

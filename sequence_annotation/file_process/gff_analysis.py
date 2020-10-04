@@ -6,6 +6,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from argparse import ArgumentParser
 from sklearn.mixture import GaussianMixture
+from matplotlib.ticker import AutoMinorLocator
 sys.path.append(os.path.dirname(__file__)+"/../..")
 from sequence_annotation.utils.utils import create_folder
 from sequence_annotation.utils.utils import create_folder
@@ -89,16 +90,19 @@ def plot_log_gaussian(data, params=None, merge=False, title=None,density=True,sh
     step = 1000
     log_data = np.log10(data)
     range_ = np.arange(min(log_data) * step, max(log_data) * step) / step
+    fig, ax = plt.subplots()
     if params is not None:
         pdfs = get_norm_pdf(params, range_, merge)
-        plt.plot(range_, pdfs.sum(0), label='model summation')
+        plt.plot(range_, pdfs.sum(0), label='Model sum')
         for index, pdf in enumerate(pdfs):
-            plt.plot(range_, pdf, label='model {}'.format(index + 1))
+            plt.plot(range_, pdf, label='Model {}'.format(index + 1))
+    plt.hist(np.log10(data), bins=100, density=density)
     plt.xticks(fontsize=font_size)
     plt.yticks(fontsize=font_size)
-    plt.hist(np.log10(data), bins=100, density=density)
+    ax.xaxis.set_minor_locator(AutoMinorLocator())
+    ax.yaxis.set_minor_locator(AutoMinorLocator())
     plt.xlabel('log10(length)', fontsize=font_size)
-    plt.ylabel('density', fontsize=font_size)
+    plt.ylabel('Density', fontsize=font_size)
     if title is not None:
         plt.title(title, fontsize=font_size)
     if show_legend:
@@ -113,13 +117,13 @@ def length_gaussian_modeling(gff_path, output_root, component_num=None):
     gff = get_gff_with_intron(gff)
     gaussian_models = []
     for type_, feature in data_types.items():
-        title = 'The distribution and Gaussian model of {}\'s log-length (nt)'.format(type_)
+        title = 'The distribution and Gaussian model\n of {}\'s log-length (nt)'.format(type_)
         path = os.path.join(output_root,'{}_log10_length_gaussian_model'.format(type_))
         subgff = gff[gff['feature']==feature]
         lengths = np.array(list(subgff['end'] - subgff['start'] + 1))
         params = norm_fit_log10(lengths, component_num)
         plot_log_gaussian(lengths, params, title=title)
-        plt.savefig(path,bbox_inches = 'tight',pad_inches = 0)
+        plt.savefig(path,bbox_inches = 'tight',pad_inches = 0.1)
         for weight, mean, std in zip(params['weights'], params['means'],params['stds']):
             gaussian_models.append({'weights': weight,'means': mean,'stds': std,'types': type_})
     gaussian_models = pd.DataFrame.from_dict(gaussian_models)[['types', 'weights', 'means', 'stds']]
@@ -154,15 +158,18 @@ def get_feature_stats(gff,region_table,chrom_source):
     
 def plot_length(length_dict,output_root):
     for feature,lengths in length_dict.items():
+        fig, ax = plt.subplots()
         plt.figure()
         plt.hist(lengths,100)
+        ax.xaxis.set_minor_locator(AutoMinorLocator())
+        ax.yaxis.set_minor_locator(AutoMinorLocator())
         plt.title("The distribution of \n{}'s lengths (nt)".format(feature), fontsize=14)
-        plt.xlabel("length", fontsize=14)
-        plt.ylabel("number", fontsize=14)
+        plt.xlabel("Length", fontsize=14)
+        plt.ylabel("Number", fontsize=14)
         plt.xticks(fontsize=14)
         plt.yticks(fontsize=14)
         plt.savefig(os.path.join(output_root,'{}_length.png'.format(feature).replace(' ','_')),
-                   bbox_inches = 'tight',pad_inches = 0)
+                   bbox_inches = 'tight',pad_inches = 0.1)
         
         
 def plot_log_length(length_dict,output_root,predicted_mode=False,is_small_figure=False):
@@ -180,7 +187,7 @@ def plot_log_length(length_dict,output_root,predicted_mode=False,is_small_figure
         title = "The log distribution of \n{}'s lengths (nt)".format(feature)
         if with_gaussian:
             model_path = os.path.join(output_root,"{}_models.tsv").format(feature.replace(' ','_'))
-            title = 'The distribution and Gaussian model\n of {}\'s log-length (nt)'.format(feature)
+            title = 'The distribution and Gaussian model\n of {}\'s length (nt)'.format(feature)
             if feature in component_nums:
                 component_num = component_nums[feature]
             else:
@@ -193,7 +200,7 @@ def plot_log_length(length_dict,output_root,predicted_mode=False,is_small_figure
         else:
             plot_log_gaussian(lengths, params, title=title,show_legend=with_gaussian)
         plt.savefig(os.path.join(output_root,'{}_log10_length.png'.format(feature).replace(' ','_')),
-                    bbox_inches = 'tight',pad_inches = 0)
+                    bbox_inches = 'tight',pad_inches = 0.1)
     
     
 def gff_feature_stats(gff_path,region_table_path,chrom_source,output_root,**kwargs):
@@ -255,7 +262,7 @@ def main(input_gff_path,genome_path,output_root,chrom_source,region_table_path,
         fasta_path = os.path.join(fasta_root,name+".fasta")
         title = "Nucleotide composition around {}".format(site_name)
         figure_path = os.path.join(composition_root,name+".png")
-        plot_composition_main(fasta_path,figure_path,shift=radius,title=title)
+        plot_composition_main(fasta_path,figure_path,shift=-radius,title=title)
                               
     for name in ["tss_signal","cleavage_site_signal","donor_site_signal","acceptor_site_signal"]:
         fasta_path = os.path.join(fasta_root, name+".fasta")

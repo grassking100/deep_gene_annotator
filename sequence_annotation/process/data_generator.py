@@ -74,8 +74,8 @@ class SeqCollateWrapper:
         return config
     
     def _truncate_data(self,data):
-        returned = {'inputs':[],'answers':[],'seqs':[],
-                    'lengths':[]}
+        returned = {'input':[],'answer':[],'seq':[],
+                    'length':[]}
         num = len(data)
         start_diff_list = np.random.randint(0, self._aug_up_max + 1, size=num)
         end_diff_list = np.random.randint(0, self._aug_down_max + 1, size=num)
@@ -85,8 +85,8 @@ class SeqCollateWrapper:
             discard_order_from_starts = np.random.randint(0, 2, size=num)==0
         discard_left_ratios = np.random.random_sample(size=num) * self._discard_diff + self._discard_ratio_min
         discard_right_ratios = np.random.random_sample(size=num) * self._discard_diff + self._discard_ratio_min
-        iterator = zip(data.get('inputs'),data.get('answers'),data.get('seqs'),
-                       data.get('lengths'),data.get('has_gene_statuses'))
+        iterator = zip(data.get('input'),data.get('answer'),data.get('seq'),
+                       data.get('length'),data.get('has_gene_status'))
         for index, items in enumerate(iterator):
             input_, answer, seq, length, has_gene_status = items
             if has_gene_status:
@@ -106,10 +106,10 @@ class SeqCollateWrapper:
                     new_length = new_end_index
                     new_start_index = int(np.round(new_length *discard_left_ratio))
             new_length = new_end_index - new_start_index
-            returned['lengths'].append(new_length)
-            returned['inputs'].append(input_[new_start_index:new_end_index])
-            returned['answers'].append(answer[new_start_index:new_end_index])
-            returned['seqs'].append(seq[new_start_index:new_end_index])
+            returned['length'].append(new_length)
+            returned['input'].append(input_[new_start_index:new_end_index])
+            returned['answer'].append(answer[new_start_index:new_end_index])
+            returned['seq'].append(seq[new_start_index:new_end_index])
         for key,values in returned.items():
             data.set(key,values)
         return data
@@ -129,16 +129,16 @@ class SeqCollateWrapper:
             item = {}
             for index in indice:
                 if index is not None:
-                    if 'ids' not in item: 
+                    if 'id' not in item: 
                         for key in data.keys:
                             item[key] = data.get(key)[index]
                     else:
-                        item['ids'] += ("_and_" + data.get('ids')[index])
-                        item['inputs'] = torch.cat((item['inputs'],data.get('inputs')[index]))
-                        item['answers'] = torch.cat((item['answers'],data.get('answers')[index]))
-                        item['lengths'] += data.get('lengths')[index] 
-                        item['seqs'] += data.get('seqs')[index]
-                        item['has_gene_statuses'] = item['has_gene_statuses'] or data.get('has_gene_statuses')[index]
+                        item['id'] += ("_and_" + data.get('id')[index])
+                        item['input'] = torch.cat((item['input'],data.get('input')[index]))
+                        item['answer'] = torch.cat((item['answer'],data.get('answer')[index]))
+                        item['length'] += data.get('length')[index] 
+                        item['seq'] += data.get('seq')[index]
+                        item['has_gene_status'] = item['has_gene_status'] or data.get('has_gene_status')[index]
             new_data.append(item)
         
         returned = {}
@@ -163,22 +163,22 @@ class SeqCollateWrapper:
                 data_[key].append(item[key])
         data = SeqDataset(data_)
         data = self._aug_data(data)
-        inputs = pad_sequence(data.get('inputs'), batch_first=True)
-        answers = pad_sequence(data.get('answers'), batch_first=True)
-        length_order = np.flip(np.argsort(data.get('lengths')), axis=0).copy()
-        data.set('ids',order(data.get('ids'), length_order))
-        data.set('inputs',inputs[length_order].transpose(1, 2))
-        data.set('answers',answers[length_order].transpose(1, 2))
-        data.set('lengths',order(data.get('lengths'), length_order))
-        data.set('seqs',order(data.get('seqs'), length_order))
-        data.set('has_gene_statuses',order(data.get('has_gene_statuses'), length_order))
+        inputs = pad_sequence(data.get('input'), batch_first=True)
+        answers = pad_sequence(data.get('answer'), batch_first=True)
+        length_order = np.flip(np.argsort(data.get('length')), axis=0).copy()
+        data.set('id',order(data.get('id'), length_order))
+        data.set('input',inputs[length_order].transpose(1, 2))
+        data.set('answer',answers[length_order].transpose(1, 2))
+        data.set('length',order(data.get('length'), length_order))
+        data.set('seq',order(data.get('seq'), length_order))
+        data.set('has_gene_status',order(data.get('has_gene_status'), length_order))
         return data
 
 class SeqGenerator:
     def __init__(self, seq_collate_fn=None,*args, **kwargs):
         if 'batch_size' not in kwargs:
             kwargs['batch_size'] = 1
-        self.seq_collate_fn = seq_collate_fn or SeqCollateWrapper()
+        self.seq_collate_fn = seq_collate_fn
         self.args = args
         self.kwargs = kwargs
         self._batch_size = kwargs['batch_size']
@@ -197,7 +197,5 @@ class SeqGenerator:
 
     def __call__(self, data):
         data = SeqDataset(data)
-        data.set('inputs',[torch.FloatTensor(i) for i in data.get('inputs')])
-        data.set('answers',[torch.LongTensor(a) for a in data.get('answers')])
         return DataLoader(data, collate_fn=self.seq_collate_fn,
                           *self.args, **self.kwargs)

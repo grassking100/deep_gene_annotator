@@ -265,8 +265,8 @@ class TestAnnSeqProcessor(AnnSeqTestCase):
                           [1, 0, 0, 0, 1, 1, 1, 1, 1, 1]])),
             'seq2':
             np.transpose(
-                np.array([[0, 0, 0, 0, 0, 0, 1, 1, 1, 0],
-                          [1, 1, 1, 1, 1, 1, 0, 0, 0, 1]]))
+                np.array([[0, 1, 1, 1, 0, 0, 0, 0, 0, 0],
+                          [1, 0, 0, 0, 1, 1, 1, 1, 1, 1]]))
         }
         assert_array_equal(answer['seq1'], ann_vecs['seq1'])
         assert_array_equal(answer['seq2'], ann_vecs['seq2'])

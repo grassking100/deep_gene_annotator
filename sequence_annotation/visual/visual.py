@@ -1,8 +1,7 @@
 """This submodule provides library about visualize"""
 import matplotlib.pyplot as plt
 import numpy as np
-from sequence_annotation.utils.exception import InvalidStrandType
-from sequence_annotation.genome_handler.sequence import STRANDS, PLUS
+from sequence_annotation.file_process.utils import STRANDS, PLUS, InvalidStrandType
 
 
 def visual_ann_seq(seq):

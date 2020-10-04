@@ -2,6 +2,7 @@ import os, sys
 import numpy as np
 import deepdish as dd
 from matplotlib import pyplot as plt
+from matplotlib.ticker import AutoMinorLocator
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.utils.utils import create_folder,write_json
@@ -11,15 +12,18 @@ from sequence_annotation.preprocess.select_data import classify_ann_seqs
 
 def plot_log10_length(length_dict,output_root):
     for feature,lengths in length_dict.items():
+        fig, ax = plt.subplots()
         plt.figure()
         plt.hist(np.log10(lengths),100)
         plt.title("The log distribution of length (nt) of\n{}".format(feature),fontsize=16)
         plt.xlabel("log10(length)",fontsize=16)
-        plt.ylabel("number",fontsize=16)
+        plt.ylabel("Number",fontsize=16)
         plt.xticks(fontsize=16)
         plt.yticks(fontsize=16)
+        ax.xaxis.set_minor_locator(AutoMinorLocator())
+        ax.yaxis.set_minor_locator(AutoMinorLocator())
         plt_path=os.path.join(output_root,'{}_log10_length.png'.format(feature.replace(' ','_')))
-        plt.savefig(plt_path,bbox_inches = 'tight',pad_inches = 0)
+        plt.savefig(plt_path,bbox_inches = 'tight',pad_inches = 0.1)
 
 def main(input_path, output_root):
     create_folder(output_root)

@@ -10,7 +10,7 @@ from sequence_annotation.file_process.gff_analysis import main as gff_analysis_m
 from sequence_annotation.preprocess.redefine_boundary import main as redefine_boundary_main
 from sequence_annotation.preprocess.filter import main as filter_main
 from sequence_annotation.preprocess.process_data import main as process_data_main
-from sequence_annotation.preprocess.split import main as split_main
+from sequence_annotation.preprocess.split import split
 
 def main(preserved_bed_path,background_bed_path,id_table_path,genome_path,
          upstream_dist,downstream_dist,source_name,output_root,
@@ -26,7 +26,7 @@ def main(preserved_bed_path,background_bed_path,id_table_path,genome_path,
         process_data_kwargs = kwargs_json['process_data_kwargs']
     #Set path
     kwarg_path = os.path.join(output_root,"pipeline_kwargs.csv")
-    stats_root=os.path.join(output_root,"stats")
+
     split_root=os.path.join(output_root,"split")
     coordinate_redefined_root = os.path.join(output_root,"coordinate_redefined")
     filtered_root = os.path.join(output_root,"filtered")
@@ -34,20 +34,19 @@ def main(preserved_bed_path,background_bed_path,id_table_path,genome_path,
     result_root=os.path.join(processed_root,"result")
     ds_root=os.path.join(result_root,"double_strand")
     ss_root=os.path.join(result_root,"single_strand")
+    stats_root=os.path.join(ss_root,"stats")
     splitted_root=os.path.join(output_root,"split")
-    ds_splitted_root=os.path.join(splitted_root,"double_strand")
-    ss_splitted_root=os.path.join(splitted_root,"single_strand")
-    
     filtered_bed_path = os.path.join(filtered_root,"filtered.bed")
     background_redefined_bed_path = os.path.join(processed_root,"background_and_coordinate_redefined.bed")
     region_table_path=os.path.join(result_root,"region_table.tsv")
-    ds_rna_gff_path=os.path.join(ds_root,"ds_rna.gff3")
-    ds_canonical_gff_path=os.path.join(ds_root,"ds_canonical.gff3")
-    ds_region_fasta_path=os.path.join(ds_root,"ds_region.fasta")
-    ss_rna_gff_path=os.path.join(ss_root,"ss_rna.gff3")
-    ss_canonical_gff_path=os.path.join(ss_root,"ss_canonical.gff3")
-    ss_region_fasta_path=os.path.join(ss_root,"ss_region.fasta")
+    ds_rna_gff_path=os.path.join(ds_root,"transcript.gff3")
+    ds_canonical_gff_path=os.path.join(ds_root,"canonical_gene.gff3")
+    ds_region_fasta_path=os.path.join(ds_root,"region.fasta")
+    ss_rna_gff_path=os.path.join(ss_root,"transcript.gff3")
+    ss_canonical_gff_path=os.path.join(ss_root,"canonical_gene.gff3")
+    ss_region_fasta_path=os.path.join(ss_root,"region.fasta")
     stats_path = os.path.join(processed_root,"count.json")
+    splitted_log_path = os.path.join(splitted_root,'split.log')
     #Write kwargs
     write_json(kwargs,kwarg_path)
     
@@ -77,16 +76,22 @@ def main(preserved_bed_path,background_bed_path,id_table_path,genome_path,
 
     #Step 4: Write statistic data of GFF
     create_folder(splitted_root)
-    gff_paths = [ds_rna_gff_path,ds_canonical_gff_path,ss_rna_gff_path,ss_canonical_gff_path]
-    fasta_paths = [ds_region_fasta_path,ds_region_fasta_path,ss_region_fasta_path,ss_region_fasta_path]
-    output_names = ["ds_rna_stats","ds_canonical_stats","ss_rna_stats","ss_canonical_stats"]
-    id_sources = ['ordinal_id_wo_strand','ordinal_id_wo_strand','ordinal_id_with_strand','ordinal_id_with_strand']
-    for gff_path,fasta_path,output_name,id_source in zip(gff_paths,fasta_paths,output_names,id_sources):
+    gff_paths = [ss_rna_gff_path,ss_canonical_gff_path]
+    output_names = ["transcript_stats","canonical_gene_stats"]
+    
+    for gff_path,output_name in zip(gff_paths,output_names):
         root = os.path.join(stats_root,output_name)
-        gff_analysis_main(gff_path,fasta_path,root,id_source,region_table_path)
+        stats_log_path = os.path.join(root,'stats.log')
+        if not os.path.exists(stats_log_path):
+            gff_analysis_main(gff_path,ss_region_fasta_path,root,'ordinal_id_with_strand',region_table_path)
+            with open(stats_log_path,'w') as fp:
+                fp.write("Finish")
 
-    split_main(genome_path+".fai",id_table_path,processed_root,ds_splitted_root,on_double_strand_data=True)
-    split_main(genome_path+".fai",id_table_path,processed_root,ss_splitted_root,treat_strand_independent=True)
+    if not os.path.exists(splitted_log_path):
+        split(genome_path+".fai",splitted_root,region_table_path=region_table_path,treat_strand_independent=True)
+        with open(splitted_log_path,'w') as fp:
+            fp.write("Finish")
+            
 
 if __name__ == "__main__":
     #Reading arguments
@@ -106,4 +111,3 @@ if __name__ == "__main__":
     kwargs = vars(args)
     kwargs_json = read_json(args.kwargs_json_path)
     main(**kwargs,kwargs_json=kwargs_json)
-

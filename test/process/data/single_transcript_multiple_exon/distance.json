@@ -1,110 +1,110 @@
 {
     "a_p_abs_diff": {
         "max": {
-            "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 466.0,
-            "splicing_donor_site": 974.0
+            "AS": 466.0,
+            "CS": 0.0,
+            "DS": 974.0,
+            "TSS": 0.0
         },
         "mean": {
-            "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 233.0,
-            "splicing_donor_site": 487.0
+            "AS": 233.0,
+            "CS": 0.0,
+            "DS": 487.0,
+            "TSS": 0.0
         },
         "median": {
-            "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 233.0,
-            "splicing_donor_site": 487.0
+            "AS": 233.0,
+            "CS": 0.0,
+            "DS": 487.0,
+            "TSS": 0.0
         },
         "min": {
-            "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 0.0,
-            "splicing_donor_site": 0.0
+            "AS": 0.0,
+            "CS": 0.0,
+            "DS": 0.0,
+            "TSS": 0.0
         },
         "mode": {
-            "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 0.0,
-            "splicing_donor_site": 0.0
+            "AS": 0.0,
+            "CS": 0.0,
+            "DS": 0.0,
+            "TSS": 0.0
         },
         "num": {
-            "TSS": 1,
-            "cleavage_site": 1,
-            "splicing_acceptor_site": 2,
-            "splicing_donor_site": 2
+            "AS": 2,
+            "CS": 1,
+            "DS": 2,
+            "TSS": 1
         },
         "std": {
-            "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 233.0,
-            "splicing_donor_site": 487.0
+            "AS": 233.0,
+            "CS": 0.0,
+            "DS": 487.0,
+            "TSS": 0.0
         },
         "valid_num": {
-            "TSS": 1,
-            "cleavage_site": 1,
-            "splicing_acceptor_site": 2,
-            "splicing_donor_site": 2
+            "AS": 2,
+            "CS": 1,
+            "DS": 2,
+            "TSS": 1
         }
     },
     "abs_diff": {
         "mean": {
-            "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 116.5,
-            "splicing_donor_site": 243.5
+            "AS": 116.5,
+            "CS": 0.0,
+            "DS": 243.5,
+            "TSS": 0.0
         }
     },
     "p_a_abs_diff": {
         "max": {
-            "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 0.0,
-            "splicing_donor_site": 0.0
+            "AS": 0.0,
+            "CS": 0.0,
+            "DS": 0.0,
+            "TSS": 0.0
         },
         "mean": {
-            "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 0.0,
-            "splicing_donor_site": 0.0
+            "AS": 0.0,
+            "CS": 0.0,
+            "DS": 0.0,
+            "TSS": 0.0
         },
         "median": {
-            "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 0.0,
-            "splicing_donor_site": 0.0
+            "AS": 0.0,
+            "CS": 0.0,
+            "DS": 0.0,
+            "TSS": 0.0
         },
         "min": {
-            "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 0.0,
-            "splicing_donor_site": 0.0
+            "AS": 0.0,
+            "CS": 0.0,
+            "DS": 0.0,
+            "TSS": 0.0
         },
         "mode": {
-            "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 0.0,
-            "splicing_donor_site": 0.0
+            "AS": 0.0,
+            "CS": 0.0,
+            "DS": 0.0,
+            "TSS": 0.0
         },
         "num": {
-            "TSS": 1,
-            "cleavage_site": 1,
-            "splicing_acceptor_site": 1,
-            "splicing_donor_site": 1
+            "AS": 1,
+            "CS": 1,
+            "DS": 1,
+            "TSS": 1
         },
         "std": {
-            "TSS": 0.0,
-            "cleavage_site": 0.0,
-            "splicing_acceptor_site": 0.0,
-            "splicing_donor_site": 0.0
+            "AS": 0.0,
+            "CS": 0.0,
+            "DS": 0.0,
+            "TSS": 0.0
         },
         "valid_num": {
-            "TSS": 1,
-            "cleavage_site": 1,
-            "splicing_acceptor_site": 1,
-            "splicing_donor_site": 1
+            "AS": 1,
+            "CS": 1,
+            "DS": 1,
+            "TSS": 1
         }
     }
 }

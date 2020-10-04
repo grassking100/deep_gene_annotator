@@ -45,6 +45,11 @@ class InvalidStrandType(Exception):
         super().__init__(msg)
 
 
+def create_empty_gff(columns=None):
+    if columns is None:
+        columns = GFF_COLUMNS
+    return pd.DataFrame(columns=columns)
+        
 def get_gff_with_updated_attribute(gff):
     gff = gff.copy()
     columns = [c for c in gff.columns if c not in GFF_COLUMNS]
@@ -61,13 +66,12 @@ def get_gff_with_updated_attribute(gff):
         attribute = attributes[0]
         for attr in attributes[1:]:
             attribute = attribute + ";" + attr
-        gff['attribute'] = attribute.replace(
-            r"(;\w*=(None|\.))|(^\w*=(None|\.);)|(^\w*=(None|\.)$)",
-            '',
-            regex=True)
+        gff['attribute'] = attribute.replace(r"(;\w*=(None|\.))|(^\w*=(None|\.);)|(^\w*=(None|\.)$)",'',regex=True)
     return gff
         
 def get_gff_with_intron(gff):
+    if len(gff)==0:
+        return create_empty_gff(gff.columns)
     gff = gff.copy()
     if 'parent' not in gff.columns:
         gff = get_gff_with_attribute(gff)
@@ -350,6 +354,8 @@ def get_gff_item_with_attribute(item, split_attr=None):
 
 
 def get_gff_with_attribute(gff, split_attr=None):
+    if len(gff) == 0:
+        return create_empty_gff()
     df_dict = gff.to_dict('record')
     data = []
     for item in df_dict:

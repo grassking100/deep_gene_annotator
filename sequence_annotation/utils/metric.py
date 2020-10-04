@@ -23,8 +23,15 @@ def get_categorical_metric(predict, answer, mask):
     N, C, L = predict.shape
     if predict.shape != answer.shape:
         raise Exception("The shape of prediction ({}), answer ({})are not the same", predict.shape,answer.shape)
-    if not is_binary(predict) or not is_binary(answer) or not is_binary(mask):
-        raise Exception("Input should be binary data")
+    if not is_binary(predict):
+        raise Exception("Prediction should be binary data")
+        
+    if not is_binary(answer):
+        raise Exception("Answer should be binary data")
+        
+    if not is_binary(mask):
+        raise Exception("Mask should be binary data")
+        
     if (N,L) != mask.shape:
         raise Exception("Got the wrong mask shape {}",mask.shape)
     data = {}

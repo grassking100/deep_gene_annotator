@@ -1,7 +1,6 @@
 from abc import ABCMeta
 from abc import abstractmethod
-import numpy as np
-from ..utils.exception import NegativeNumberException, NotPositiveException
+from ..utils.exception import NegativeNumberException
 from .utils import read_bed, PLUS,MINUS, InvalidStrandType
 
 class SeqInfoParser(metaclass=ABCMeta):

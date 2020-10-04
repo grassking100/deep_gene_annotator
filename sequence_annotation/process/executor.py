@@ -2,9 +2,8 @@ import os
 import abc
 import torch
 import torch.optim
-from ..utils.utils import read_json
-from ..utils.utils import print_progress
-from .utils import get_seq_mask, get_name_parameter
+from ..utils.utils import read_json,write_json,print_progress
+from .utils import get_seq_mask, get_name_parameter,param_num
 from .loss import CCELoss
 from .inference import BasicInference
 from .grad_clipper import GradClipper
@@ -32,14 +31,16 @@ def _get_params(model, target_weight_decay=None, weight_decay_name=None):
     else:
         raise Exception("Different number between target_weight_decay and weight_decay_name")
 
+        
 def create_optimizer(type_,parameters,**kwargs):
     optimizer = getattr(torch.optim,type_)
     return optimizer(parameters,**kwargs)
 
+
 def _evaluate(loss, model,seq_data, inference, **kwargs):
-    inputs = seq_data.get('inputs').cuda()
-    labels = seq_data.get('answers').cuda()
-    lengths = seq_data.get('lengths')
+    inputs = seq_data.get('input').cuda()
+    labels = seq_data.get('answer').cuda()
+    lengths = seq_data.get('length')
     model.train(False)
     with torch.no_grad():
         outputs, lengths = model(inputs, lengths=lengths)
@@ -50,16 +51,16 @@ def _evaluate(loss, model,seq_data, inference, **kwargs):
         predict_result = inference(outputs)
     return {
         'loss': loss_,
-        'predicts': SeqDataset({'annotation':predict_result}),
-        'lengths': lengths,
-        'masks': masks,
-        'outputs': outputs.cpu().numpy()
+        'predict': SeqDataset({'annotation':predict_result}),
+        'length': lengths,
+        'mask': masks,
+        'output': outputs.cpu().numpy()
     }
 
 
-def _predict(model, seq_data, inference):
-    inputs = seq_data.get('inputs').cuda()
-    lengths=seq_data.get('lengths')
+def predict(model, seq_data, inference):
+    inputs = seq_data.get('input').cuda()
+    lengths=seq_data.get('length')
     model.train(False)
     with torch.no_grad():
         outputs, lengths = model(inputs, lengths=lengths)
@@ -67,22 +68,51 @@ def _predict(model, seq_data, inference):
         masks = get_seq_mask(lengths).cuda()
         predict_result = inference(outputs)
     return {
-        'predicts': SeqDataset({'annotation':predict_result}),
-        'lengths': lengths,
-        'masks': masks,
-        'outputs': outputs.cpu().numpy()
+        'predict': SeqDataset({'annotation':predict_result}),
+        'length': lengths,
+        'mask': masks,
+        'output': outputs.cpu().numpy()
     }
 
-class AbsractExecutor(metaclass=abc.ABCMeta):
-    @abc.abstractmethod
-    def execute(self,**kwargs):
-        pass
 
-    @abc.abstractmethod
+def save_model_settings(root,model):
+    model_config_path = os.path.join(root, "model_config.json")
+    model_component_path = os.path.join(root, "model_component.txt")
+    param_num_path = os.path.join(root, 'model_param_num.txt')
+    if not os.path.exists(model_config_path):
+        write_json(model.get_config(), model_config_path)
+    if not os.path.exists(model_component_path):
+        with open(model_component_path, "w") as fp:
+            fp.write(str(model))
+    if not os.path.exists(param_num_path):
+        with open(param_num_path, "w") as fp:
+            fp.write("Required-gradient parameters number:{}".format(param_num(model)))
+
+
+class BasicExecutor(metaclass=abc.ABCMeta):
+    def __init__(self,root=None):
+        self.callbacks = Callbacks()
+        self._root = root
+        
+    def on_work_begin(self,worker):
+        self.callbacks.on_work_begin(worker=worker)
+    
+    def on_work_end(self):
+        self.callbacks.on_work_end()
+    
+    def on_epoch_begin(self, counter):
+        self.callbacks.on_epoch_begin(counter=counter)
+    
+    def on_epoch_end(self, metric):
+        self.callbacks.on_epoch_end(metric=metric)
+                
     def get_config(self):
-        pass
+        config = {}
+        config['class'] = self.__class__.__name__
+        config['root'] = self._root
+        return config
 
-    def on_epoch_end(self,epoch, metric=None):
+    def execute(self,**kwargs):
         pass
     
     def get_state_dict(self):
@@ -95,27 +125,19 @@ class AbsractExecutor(metaclass=abc.ABCMeta):
     def load(self,path):
         state_dict = torch.load(path,map_location='cpu')
         self.load_state_dict(state_dict)
-        
+            
     def save(self,path,overwrite=False):
         if os.path.exists(path) and not overwrite:
             raise Exception("Try to overwrite the existed weights to {}".format(path))
         torch.save(self.get_state_dict(), path)
     
-class BasicExecutor(AbsractExecutor):
-    def __init__(self,model,data_generator, inference=None, callbacks=None):
-        self._inference = inference or BasicInference(3)
-        self._data_generator = data_generator
-        self._model = model
-        self._callbacks = callbacks or Callbacks()
 
-    @property
-    def model(self):
-        return self._model
-    
-    @property
-    def callbacks(self):
-        return self._callbacks
-    
+class AdvancedExecutor(BasicExecutor):
+    def __init__(self,model,data_loader, inference=None,root=None):
+        super().__init__(root)
+        self._inference = inference or BasicInference(3)
+        self._data_loader = data_loader
+        self._model = model
         
     @abc.abstractmethod
     def _process(self,data):
@@ -125,17 +147,17 @@ class BasicExecutor(AbsractExecutor):
         self.callbacks.on_batch_begin()
         returned = self._process(data)
         with torch.no_grad():
-            self.callbacks.on_batch_end(predicts=returned['predicts'],
-                                         outputs=returned['outputs'],
-                                         seq_data=data,
-                                         metric=returned['metric'],
-                                         masks=returned['masks'])
+            self.callbacks.on_batch_end(predicts=returned['predict'],
+                                        outputs=returned['output'],
+                                        seq_data=data,
+                                        metric=returned['metric'],
+                                        masks=returned['mask'])
         torch.cuda.empty_cache()
         
     def execute(self):
         batch_info = "Processing {:.1f}% of data\n"
-        for index, data in enumerate(self._data_generator):
-            info = batch_info.format(100*(index+1)/len(self._data_generator))
+        for index, data in enumerate(self._data_loader):
+            info = batch_info.format(100*(index+1)/len(self._data_loader))
             print_progress(info)
             self._batch_process(data)
 
@@ -143,12 +165,13 @@ class BasicExecutor(AbsractExecutor):
         config = {}
         config['class'] = self.__class__.__name__
         config['inference'] = self._inference.get_config()
-        config['callbacks'] = self._callbacks.get_config()
+        config['callbacks'] = self.callbacks.get_config()
         return config
     
-class TestExecutor(BasicExecutor):
-    def __init__(self,model,data_generator,loss=None,inference=None, callbacks=None):
-        super().__init__(model,data_generator,inference,callbacks)
+    
+class TestExecutor(AdvancedExecutor):
+    def __init__(self,model,data_loader,loss=None,inference=None,root=None):
+        super().__init__(model,data_loader,inference,root)
         self._loss = loss or CCELoss()
 
     def _process(self,data):
@@ -162,6 +185,7 @@ class TestExecutor(BasicExecutor):
         return returned
     
     def execute(self):
+        self._loss.reset_accumulated_data()
         super().execute()
         self._loss.reset_accumulated_data()
     
@@ -170,27 +194,33 @@ class TestExecutor(BasicExecutor):
         config['loss'] = self._loss.get_config()
         return config
     
-class PredictExecutor(BasicExecutor):
+
+class PredictExecutor(AdvancedExecutor):
     def _process(self,data):
         torch.cuda.empty_cache()
         self._model.reset()
-        returned = _predict(self._model,data,inference=self._inference)
+        returned = predict(self._model,data,inference=self._inference)
         returned['metric'] = {}
         self._model.reset()
         torch.cuda.empty_cache()
         return returned
 
-class TrainExecutor(BasicExecutor):
-    def __init__(self,model,data_generator,optimizer,
-                 loss=None,inference=None, callbacks=None,
-                 grad_clipper=None,lr_scheduler=None):
-        super().__init__(model,data_generator,inference,callbacks)
+    
+class TrainExecutor(AdvancedExecutor):
+    def __init__(self,model,optimizer,data_loader,loss=None,inference=None,
+                 grad_clipper=None,lr_scheduler=None,root=None):
+        super().__init__(model,data_loader,inference,root)
         self._loss = loss or CCELoss()
         self._optimizer = optimizer
         self._has_fit = False
         self._grad_clipper = grad_clipper or GradClipper()
         self._lr_scheduler = lr_scheduler
 
+    def on_work_begin(self,worker):
+        if self._root is not None:
+            save_model_settings(os.path.join(self._root, 'settings'),self._model)
+        super().on_work_begin(worker)
+        
     @property
     def optimizer(self):
         return self._optimizer
@@ -201,9 +231,9 @@ class TrainExecutor(BasicExecutor):
     
     def _process(self,data):
         torch.cuda.empty_cache()
-        inputs = data.get('inputs').cuda()
-        labels = data.get('answers').cuda()
-        lengths = data.get('lengths')
+        inputs = data.get('input').cuda()
+        labels = data.get('answer').cuda()
+        lengths = data.get('length')
         self._has_fit = True
         self._model.train()
         self._optimizer.zero_grad()
@@ -216,17 +246,14 @@ class TrainExecutor(BasicExecutor):
         self._grad_clipper.clip(self._model.parameters())
         self._optimizer.step()
         #Caution: the training result is result of model before updated
-        returned = {
-            'metric': {'loss': loss.item()},
-            'predicts': SeqDataset({'annotation':predict_result}),
-            'lengths': lengths,
-            'masks': masks,
-            'outputs': outputs
-        }
+        returned = {'metric': {'loss': loss.item()},
+                    'predict': SeqDataset({'annotation':predict_result}),
+                    'length': lengths,'mask': masks,'output': outputs}
         torch.cuda.empty_cache()
         return returned
 
     def execute(self):
+        self._loss.reset_accumulated_data()
         super().execute()
         self._loss.reset_accumulated_data()
     
@@ -258,7 +285,8 @@ class TrainExecutor(BasicExecutor):
             config['lr_scheduler'] = self._lr_scheduler.get_config()
         return config
 
-class BasicExecutorBuilder:
+    
+class AdvExeBuilder:
     def __init__(self,inference=None,loss=None):
         self._inference = inference or BasicInference(3)
         self._loss = loss or CCELoss()
@@ -270,9 +298,7 @@ class BasicExecutorBuilder:
         self._lr_scheduler_kwargs = {}
         self._weights_paths = {'train':None,'test':None,'predict':None}
         self._data_generators = {
-            'train':SeqGenerator(),
-            'test':SeqGenerator(),
-            'predict':SeqGenerator()
+            'train':SeqGenerator(),'test':SeqGenerator(),'predict':SeqGenerator()
         }
         
     def get_config(self):
@@ -313,12 +339,12 @@ class BasicExecutorBuilder:
         self._lr_scheduler_kwargs = kwargs
         return self
         
-    def set_data_generator(self,type_,batch_size=None,drop_last=False,**kwargs):
+    def set_data_generator(self,type_,batch_size=None,drop_last=False,shuffle=False,**seq_collate_kwargs):
         if type_ not in self._data_generators:
             raise
         batch_size = batch_size or 1
-        self._data_generators[type_] = SeqGenerator(batch_size=batch_size,drop_last=drop_last,
-                                                    seq_collate_fn=SeqCollateWrapper(**kwargs))
+        self._data_generators[type_] = SeqGenerator(batch_size=batch_size,drop_last=drop_last,shuffle=shuffle,
+                                                    seq_collate_fn=SeqCollateWrapper(**seq_collate_kwargs))
         return self
     
     def set_weights_path(self,type_,path):
@@ -326,22 +352,22 @@ class BasicExecutorBuilder:
             raise
         self._weights_paths[type_] = path
         
-    def build(self, type_, model, data, callbacks=None):
-        data_generator = self._data_generators[type_](data)
+    def build(self, type_, model, data ,root=None):
+        data_loader = self._data_generators[type_](data)
         if type_ == 'train':
             lr_scheduler = None
             optimizer = create_optimizer(self._optim_type,self._parameters or model.parameters(),
                                          **self._optimizer_kwargs)
             if self._set_lr_scheduler:
                 lr_scheduler = LRScheduler(optimizer,**self._lr_scheduler_kwargs)
-            exe = TrainExecutor(model,data_generator,optimizer,loss=self._loss,
-                                inference=self._inference, callbacks=callbacks,
-                                grad_clipper=self._grad_clipper,lr_scheduler=lr_scheduler)
+            exe = TrainExecutor(model,optimizer,data_loader=data_loader, loss=self._loss,
+                                inference=self._inference, grad_clipper=self._grad_clipper,
+                                lr_scheduler=lr_scheduler,root=root)
         elif type_ == 'test':
-            exe = TestExecutor(model,data_generator,loss=self._loss,
-                                inference=self._inference, callbacks=callbacks)
+            exe = TestExecutor(model,data_loader,loss=self._loss,
+                               inference=self._inference,root=root)
         elif type_ == 'predict':
-            exe = PredictExecutor(model,data_generator,inference=self._inference, callbacks=callbacks)
+            exe = PredictExecutor(model,data_loader, inference=self._inference,root=root)
         else:
             raise
         if self._weights_paths[type_] is not None:
@@ -354,19 +380,21 @@ def create_executor_builder(settings,weights_path=None):
 
     inference = loss = None
     batch_size = settings['batch_size']
-    train_data_generator_kwargs = settings['train_data_generator_kwargs']
+    seq_collate_kwargs = settings['seq_collate_kwargs']
     if settings['loss_type'] is not None:
         loss = LOSS_TYPES[settings['loss_type']]
     if settings['inference_type'] is not None:
         inference = INFERENCES_TYPES[settings['inference_type']]
         
-    exe_builder = BasicExecutorBuilder(loss=loss,inference=inference)
+    exe_builder = AdvExeBuilder(loss=loss,inference=inference)
     if settings['set_lr_scheduler']:
         exe_builder.set_lr_scheduler(**settings['lr_scheduler_kwargs'])
     if settings['set_grad_clipper']:
         exe_builder.set_grad_clipper(**settings['grad_clipper_kwargs'])
     exe_builder.set_optimizer(**settings['optimizer_kwargs'])        
-    exe_builder.set_data_generator('train',batch_size=batch_size,**train_data_generator_kwargs)
+    exe_builder.set_data_generator('train',batch_size=batch_size,
+                                   shuffle=True,drop_last=True,
+                                   **seq_collate_kwargs)
     exe_builder.set_data_generator('test',batch_size=batch_size)
     exe_builder.set_data_generator('predict',batch_size=batch_size)
     exe_builder.set_weights_path('train',weights_path)

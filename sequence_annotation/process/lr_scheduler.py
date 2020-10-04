@@ -43,6 +43,7 @@ class LRScheduler:
         self._lr_history = state_dicts['lr_history']
         self._lr_scheduler.load_state_dict(state_dicts['lr_scheduler'])
 
+        
 class LRSchedulerCallback(Callback):
     def __init__(self,lr_scheduler):
         self._scheduler = lr_scheduler
@@ -59,13 +60,11 @@ class LRSchedulerCallback(Callback):
     def on_epoch_end(self, metric):
         self._scheduler.step(self._counter,metric)
 
+        
 class LearningRateHolder(DataCallback):
-    def __init__(self, prefix=None):
+    def __init__(self, optimizer, prefix=None):
         self._prefix = get_prefix(prefix)
-        self._executor = None
-
-    def on_work_begin(self, worker, **kwargs):
-        self._executor = worker.executor
+        self._optimizer = optimizer
 
     def get_config(self):
         config = super().get_config()
@@ -74,6 +73,6 @@ class LearningRateHolder(DataCallback):
 
     def get_data(self):
         data = {}
-        for index, group in enumerate(self._executor.optimizer.param_groups):
+        for index, group in enumerate(self._optimizer.param_groups):
             data["{}lr_{}".format(self._prefix, index)] = group['lr']
         return data

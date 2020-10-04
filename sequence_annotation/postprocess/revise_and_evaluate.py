@@ -9,7 +9,7 @@ from multiprocessing import cpu_count
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.utils.utils import BASIC_GENE_ANN_TYPES, create_folder
-from sequence_annotation.file_process.utils import GENE_TYE,TRANSCRIPT_TYPE,EXON_TYPE, INTRON_TYPE,INTERGENIC_REGION_TYPE
+from sequence_annotation.file_process.utils import EXON_TYPE, INTERGENIC_REGION_TYPE, INTRON_TYPE, TRANSCRIPT_TYPE
 from sequence_annotation.utils.utils import read_gff, read_json, write_gff, write_json
 from sequence_annotation.genome_handler.select_data import load_data
 from sequence_annotation.preprocess.gff_feature_stats import main as gff_feature_stats_main

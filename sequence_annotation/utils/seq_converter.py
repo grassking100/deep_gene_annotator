@@ -34,7 +34,7 @@ class SeqException(Exception):
 
 
 class SeqConverter:
-    def __init__(self,code_vec_dictionary=None,
+    def __init__(self,code_vec_dictionary=None,to_numpy=False,
                  codes=None,is_case_sensitivity=False):
         if code_vec_dictionary is not None:
             if self._is_dict_inversible(code_vec_dictionary):
@@ -62,6 +62,7 @@ class SeqConverter:
             for k, v in self._code_vec_dictionary.items()
         }
         self._is_case_sensitivity = is_case_sensitivity
+        self._to_numpy = to_numpy
 
     def _add_soft_masked(self, seq, vecs):
         soft_mask = self._soft_masked_status(seq)
@@ -92,15 +93,16 @@ class SeqConverter:
         return dict_
 
     def _preprocess(self, value):
-        value = str(value)
-        if self._is_case_sensitivity:
-            return value
-        else:
-            return value.upper()
+        if not self._is_case_sensitivity:
+            if len(value)!=1:
+                value = list(''.join(value).upper())
+            else:
+                value = value.upper()
+        return value
 
     def _convert_element(self, element, dictionary):
         """convert element by dictionary"""
-        result = dictionary.get(self._preprocess(element))
+        result = dictionary.get(str(element))
         if result is None:
             raise CodeException(str(element), list(dictionary.keys()))
         else:
@@ -117,9 +119,16 @@ class SeqConverter:
                 raise SeqException(exp.invalid_code, exp.valid_codes)
         return arr
 
+    def _code2vec(self, code):
+        """convert DNA code to one hot encoding"""
+        vec = self._convert_element(code, self._code_vec_dictionary)
+        return vec
+    
     def code2vec(self, code):
         """convert DNA code to one hot encoding"""
-        return self._convert_element(code, self._code_vec_dictionary)
+        code = self._preprocess(code)
+        vec = self._code2vec(code)
+        return vec
 
     def vec2code(self, vec):
         """convert DNA code to one hot encoding"""
@@ -127,7 +136,10 @@ class SeqConverter:
 
     def seq2vecs(self, seq):
         """convert sequence to one hot encoding sequence"""
-        vecs = self._convert_array(seq, self.code2vec)
+        seq = self._preprocess(seq)
+        vecs = self._convert_array(seq, self._code2vec)
+        if self._to_numpy:
+            vecs = np.array(vecs)
         return vecs
 
     def vecs2seq(self, vecs, join=True):
@@ -139,7 +151,8 @@ class SeqConverter:
             return seq
 
     def _seq2dict_vec(self,name,seq):
-        data = {name:self.seq2vecs(seq)}
+        vec = self.seq2vecs(seq)
+        data = {name:vec}
         return data
         
     def seqs2dict_vec(self, seqs):

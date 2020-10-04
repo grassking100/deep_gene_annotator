@@ -11,8 +11,6 @@ from sequence_annotation.file_process.utils import read_gff, get_gff_with_intron
 from sequence_annotation.file_process.utils import INTRON_TYPE,TRANSCRIPT_TYPE
 
 def _get_site_diff(ref_sites,compare_sites,absolute):
-    ref_sites = np.array(list(ref_sites),dtype=float)
-    compare_sites = np.array(list(compare_sites),dtype=float)
     dist = ref_sites.reshape(-1,1).repeat(len(compare_sites.T),axis=1) - compare_sites.reshape(1,-1)
     if absolute:
         diff = np.nanmin(np.abs(dist),axis=1)
@@ -55,6 +53,8 @@ def get_site_diff(answer,predict,types=None,
             else:
                 ref_sites = predict_sites
                 compare_sites = answer_sites
+            ref_sites = np.array(list(ref_sites),dtype=float)
+            compare_sites = np.array(list(compare_sites),dtype=float)
             kwarg_list.append((ref_sites,compare_sites,absolute))
     
     if multiprocess is None:
@@ -141,16 +141,16 @@ def get_transcript_end_ratio(answer, predict, **kwargs):
 def get_all_site_ratio(answer, predict, round_value=None):
     ratio = {'precision': {}, 'recall': {}, 'F1': {}}
     ratio['precision']['TSS'] = get_transcript_start_ratio(answer, predict, get_recall=False)
-    ratio['precision']['cleavage_site'] = get_transcript_end_ratio(answer, predict, get_recall=False)
-    ratio['precision']['splicing_donor_site'] = get_donor_site_ratio(answer, predict, get_recall=False)
-    ratio['precision']['splicing_acceptor_site'] = get_acceptor_site_ratio(answer, predict, get_recall=False)
+    ratio['precision']['CS'] = get_transcript_end_ratio(answer, predict, get_recall=False)
+    ratio['precision']['DS'] = get_donor_site_ratio(answer, predict, get_recall=False)
+    ratio['precision']['AS'] = get_acceptor_site_ratio(answer, predict, get_recall=False)
 
     ratio['recall']['TSS'] = get_transcript_start_ratio(answer, predict)
-    ratio['recall']['cleavage_site'] = get_transcript_end_ratio(answer, predict)
-    ratio['recall']['splicing_donor_site'] = get_donor_site_ratio(answer, predict)
-    ratio['recall']['splicing_acceptor_site'] = get_acceptor_site_ratio(answer, predict)
+    ratio['recall']['CS'] = get_transcript_end_ratio(answer, predict)
+    ratio['recall']['DS'] = get_donor_site_ratio(answer, predict)
+    ratio['recall']['AS'] = get_acceptor_site_ratio(answer, predict)
 
-    for type_ in ['TSS', 'cleavage_site', 'splicing_donor_site', 'splicing_acceptor_site']:
+    for type_ in ['TSS', 'CS', 'DS', 'AS']:
         precision = ratio['precision'][type_]
         recall = ratio['recall'][type_]
         if precision + recall == 0:
@@ -173,7 +173,7 @@ def get_all_site_diff(answer,predict,round_value=None,
     donor_diff = get_donor_site_diff(answer, predict, **kwargs)
     acceptor_diff = get_acceptor_site_diff(answer, predict, **kwargs)
     site_diffs = {}
-    types = ['TSS', 'cleavage_site', 'splicing_donor_site', 'splicing_acceptor_site']
+    types = ['TSS', 'CS', 'DS', 'AS']
     arrs = [start_diff, end_diff, donor_diff, acceptor_diff]
     for type_, arr in zip(types, arrs):
         if return_value:

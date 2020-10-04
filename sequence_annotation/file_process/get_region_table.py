@@ -1,5 +1,6 @@
 import os
 import sys
+import numpy as np
 import pandas as pd
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__) + "/../..")
@@ -73,6 +74,32 @@ def write_region_table(table,path):
     table = table[REGION_COLUMNS]
     table.to_csv(path, index=None, sep='\t')
 
+    
+def get_region_table_from_fai(fai):
+    table = []
+    for chrom,length in fai.items():
+        for strand in ['+','-']:
+            item = {'ordinal_id_wo_strand':'.',
+                    'ordinal_id_with_strand':'.',
+                    'chr':chrom,'strand':strand,
+                    'start':1,'end':length}
+            table.append(item)
+            
+    table = pd.DataFrame.from_dict(table)
+    table['coord'] = get_coord(table,use_strand=True)
+    table = table[REGION_COLUMNS]
+    return table    
+
+
+def get_region_stats(table):
+    lengths = table['length']
+    stats = {}
+    stats['num'] = len(lengths) 
+    stats['max'] = max(lengths)
+    stats['min'] = min(lengths)
+    stats['median'] = np.median(lengths)
+    stats['mean'] = np.mean(lengths)
+    return stats
 
 def main(bed_path,region_table_path,renamed_bed_path):
     bed = read_bed(bed_path)

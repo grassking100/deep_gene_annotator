@@ -94,24 +94,24 @@ def main(input_bed_path,background_bed_path,id_table_path,genome_path,
     #
     final_origin_strand_region_bed_path=os.path.join(result_root,"final_origin_strand_region.bed")
     region_table_path=os.path.join(result_root,"region_table.tsv")
+    canonical_id_convert_path=os.path.join(result_root,"canonical_id_convert.tsv")
     #
-    region_bed_path=os.path.join(ss_root,"ss_region.bed")
-    region_fasta_path=os.path.join(ss_root,"ss_region.fasta")
-    rna_bed_path = os.path.join(ss_root,"ss_rna.bed")
-    rna_gff_path = os.path.join(ss_root,"ss_rna.gff3")
-    canonical_bed_path=os.path.join(ss_root,"ss_canonical.bed")
-    canonical_gff_path=os.path.join(ss_root,"ss_canonical.gff3")
-    canonical_h5_path=os.path.join(ss_root,"ss_canonical.h5")
-    canonical_length_stats_root=os.path.join(ss_root,"ss_canonical_length_stats")
-    alt_region_gff_path=os.path.join(ss_root,"ss_alt_region.gff3")
-    alt_region_h5_path=os.path.join(ss_root,"ss_alt_region.h5")
-    ss_canonical_id_convert_path=os.path.join(ss_root,"ss_canonical_id_convert.tsv")
+    region_bed_path=os.path.join(ss_root,"region.bed")
+    region_fasta_path=os.path.join(ss_root,"region.fasta")
+    rna_bed_path = os.path.join(ss_root,"transcript.bed")
+    rna_gff_path = os.path.join(ss_root,"transcript.gff3")
+    canonical_bed_path=os.path.join(ss_root,"canonical_gene.bed")
+    canonical_gff_path=os.path.join(ss_root,"canonical_gene.gff3")
+    canonical_h5_path=os.path.join(ss_root,"canonical_gene.h5")
+    canonical_length_stats_root=os.path.join(ss_root,"canonical_length_stats")
+    alt_region_gff_path=os.path.join(ss_root,"alt_region.gff3")
+    alt_region_h5_path=os.path.join(ss_root,"alt_region.h5")
     #
-    ds_region_fasta_path=os.path.join(ds_root,"ds_region.fasta")
-    ds_rna_bed_path=os.path.join(ds_root,"ds_rna.bed")
-    ds_rna_gff_path=os.path.join(ds_root,"ds_rna.gff3")
-    ds_canonical_bed_path=os.path.join(ds_root,"ds_canonical.bed")
-    ds_canonical_gff_path=os.path.join(ds_root,"ds_canonical.gff3")
+    ds_region_fasta_path=os.path.join(ds_root,"region.fasta")
+    ds_rna_bed_path=os.path.join(ds_root,"transcript.bed")
+    ds_rna_gff_path=os.path.join(ds_root,"transcript.gff3")
+    ds_canonical_bed_path=os.path.join(ds_root,"canonical_gene.bed")
+    ds_canonical_gff_path=os.path.join(ds_root,"canonical_gene.gff3")
     ###Read file###
     id_convert_dict = get_id_convert_dict(id_table_path)
     bed = read_bed(input_bed_path)
@@ -171,21 +171,23 @@ def main(input_bed_path,background_bed_path,id_table_path,genome_path,
     write_gff(ds_redefined_gff,ds_rna_gff_path)
     write_bed(ds_redefined_bed,ds_rna_bed_path)
     #Step 8: Redefine coordinate based on single-strand region data
-    ss_redefined_gff = redefine_coordinate(selected_transcript_gff,region_table,with_strand=True)
+    ss_redefined_gff = redefine_coordinate(selected_transcript_gff,region_table,to_single_strand=True)
     ss_redefined_bed = gff2bed(ss_redefined_gff)
     write_gff(ss_redefined_gff,rna_gff_path)
     write_bed(ss_redefined_bed,rna_bed_path)
     #Step 9: Create data about gene structure and alternative status
-    create_canonical_gene_main(rna_bed_path,id_table_path,gene_gff_path=canonical_gff_path,
-                               gene_bed_path=canonical_bed_path,status_gff_path=alt_region_gff_path,
-                               output_id_table_path=ss_canonical_id_convert_path)
-    create_canonical_gene_main(ds_rna_bed_path,id_table_path,gene_gff_path=ds_canonical_gff_path,
-                               gene_bed_path=ds_canonical_bed_path)
+    create_canonical_gene_main(rna_bed_path,id_table_path,
+                               output_gene_gff_path=canonical_gff_path,
+                               output_gene_bed_path=canonical_bed_path,
+                               output_status_gff_path=alt_region_gff_path,
+                               output_id_table_path=canonical_id_convert_path)
+    create_canonical_gene_main(ds_rna_bed_path,id_table_path,
+                               output_gene_gff_path=ds_canonical_gff_path,
+                               output_gene_bed_path=ds_canonical_bed_path)
     #Step 10: Create annotation
-    create_ann_genome_main(canonical_gff_path,region_table_path,source_name,canonical_h5_path,
-                           discard_alt_region=True,discard_UTR_CDS=True)
+    create_ann_genome_main(canonical_gff_path,region_table_path,source_name,canonical_h5_path)
     create_ann_genome_main(alt_region_gff_path,region_table_path,source_name,alt_region_h5_path,
-                           with_alt_region=True ,with_alt_site_region=True)
+                           with_alt_region=True)
     ann_seqs_summary_main(canonical_h5_path,canonical_length_stats_root)
     #Step 11: Get double strand sequence
     _get_fasta(genome_path,region_bed_path,ds_region_fasta_path,use_name=True)

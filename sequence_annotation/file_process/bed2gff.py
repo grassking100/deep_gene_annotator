@@ -5,7 +5,7 @@ pd.set_option('mode.chained_assignment', 'raise')
 from argparse import ArgumentParser
 sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.file_process.utils import write_gff, read_bed, get_gff_with_updated_attribute
-from sequence_annotation.file_process.utils import GENE_TYPE,TRANSCRIPT_TYPE,EXON_TYPE,INTRON_TYPE,CDS_TYPE,UTR_TYPE
+from sequence_annotation.file_process.utils import CDS_TYPE, EXON_TYPE, GENE_TYPE, TRANSCRIPT_TYPE, UTR_TYPE
 from sequence_annotation.file_process.seq_info_parser import BedInfoParser
 from sequence_annotation.file_process.get_id_table import get_id_convert_dict
 

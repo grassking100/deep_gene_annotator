@@ -82,6 +82,7 @@ def create_model(settings,weights_path=None,frozen_names=None,save_distribution=
     model = builder.build()
     model.save_distribution = save_distribution
     if weights_path is not None:
+        print("Load weights from {}".format(weights_path))
         model.load(weights_path)
 
     frozen_names = frozen_names or []

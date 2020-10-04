@@ -132,7 +132,7 @@ class _Checkpoint(Callback):
 
 
 class ModelCheckpoint(_Checkpoint):
-    def __init__(self,root,target=None,optimize_min=True,
+    def __init__(self,model, root,target=None,optimize_min=True,
                  patience=None,warmup_epoch=None):
         super().__init__(root)
         self._warmup_epoch = warmup_epoch or 0
@@ -142,7 +142,7 @@ class ModelCheckpoint(_Checkpoint):
         self._counter = None
         self._best_result = None
         self._best_epoch = None
-        self._model = None
+        self._model = model
         self._best_weights = None
         self.latest_status_path = os.path.join(self._root,'latest_model.status')
         self.best_status_path = os.path.join(self._root, 'best_model.status')
@@ -178,7 +178,7 @@ class ModelCheckpoint(_Checkpoint):
         self._best_result = None
         self._best_epoch = 0
         self._best_weights = None
-        self._model = self._worker.model
+        #self._model = self._worker.executor.model
         # Load model weights
         biggest_epoch = 0
         model_path = None
@@ -199,9 +199,9 @@ class ModelCheckpoint(_Checkpoint):
             self._best_result = best_target
             print("Load existed best model of epoch {} from {}".format(best_epoch, self.best_model_path))
             print("Load best target, {}, of epoch {} from {}".format(best_target, best_epoch, self.best_status_path))
-            if self._counter < self._best_result:
+            if self._counter < self._best_epoch:
                 inconsist_prompt = "Best epoch {} should not exceed current epoch {}"
-                raise Exception(inconsist_prompt.format(self._best_result, self._counter))
+                raise Exception(inconsist_prompt.format(self._best_epoch, self._counter))
 
         if self.should_stop():
             self._stop_worker()
@@ -275,9 +275,9 @@ class ModelCheckpoint(_Checkpoint):
 
 
 class ExecutorCheckpoint(_Checkpoint):
-    def __init__(self, root):
+    def __init__(self, executor, root):
         super().__init__(root)
-        self._executor = None
+        self._executor = executor
         self.latest_status_path = os.path.join(self._root,'latest_executor.status')
         self.latest_executor_path = os.path.join(self._root,'latest_executor.pth')
 
@@ -289,7 +289,7 @@ class ExecutorCheckpoint(_Checkpoint):
 
     def on_work_begin(self, worker, **kwargs):
         self._has_updated = False
-        self._executor = worker.executor
+        #self._executor = worker.executor
         executor_path = None
         biggest_epoch = 0
         if os.path.exists(self.latest_status_path):
@@ -466,17 +466,17 @@ class Checkpoint(Callback):
         self.callbacks.on_batch_end(**kwargs)
 
 
-def build_checkpoint(root,prefix,only_recorder=False,force_reset=False,
+def build_checkpoint(root,prefix,model=None,executor=None,force_reset=False,
                      monitor_target=None,patience=None,warmup_epoch=None):
     record_path = os.path.join(root, "{}_record.json".format(prefix))
     recorder = Recorder(path=record_path, force_reset=force_reset)
-    if only_recorder:
+    if model is None or executor is None:
         return recorder
     else:
         best_record_path = os.path.join(root, 'best_record.json')
-        model_checkpoint = ModelCheckpoint(target=monitor_target,patience=patience,
+        model_checkpoint = ModelCheckpoint(model,target=monitor_target,patience=patience,
                                            root=root,warmup_epoch=warmup_epoch)
-        executor_checkpoint = ExecutorCheckpoint(root=root)
+        executor_checkpoint = ExecutorCheckpoint(executor,root=root)
         checkpoint = Checkpoint(model_checkpoint, executor_checkpoint,
                                 recorder, root, best_record_path)
 

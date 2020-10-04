@@ -1,4 +1,3 @@
-import warnings
 import numpy as np
 import re
 from ..file_process.utils import PLUS, STRANDS, InvalidStrandType
@@ -189,30 +188,24 @@ def class_count(ann_seq):
 
 
 def seq2vecs(ann_seq, ann_types):
-    warn = ("\n\n!!!\n"
-            "\tAnnotation sequence will be rearranged from 5' to 3'.\n"
-            "\tThe plus strand sequence will stay the same,"
-            " but the minus strand sequence will be flipped!\n"
-            "!!!\n")
-    warnings.warn(warn)
+    """Convert sequence into vector.
+    #If the sequence is on minus strand,
+    #then the exception would be raise
+    """
+    #if ann_seq.strand != PLUS:
+    #    raise Exception("Exception invalid strand type")
     ann = []
     for type_ in ann_types:
         value = ann_seq.get_ann(type_)
-        if ann_seq.strand not in STRANDS:
-            raise InvalidStrandType(ann_seq.strand)
-        if ann_seq.strand == PLUS:
-            ann.append(value)
-        else:
-            ann.append(np.flip(value, 0))
+        ann.append(value)
     return np.transpose(ann)
 
 
 def vecs2seq(vecs, id_, strand, ann_types, length=None):
     # vecs shape is channel,length
     if vecs.shape[0] != len(ann_types):
-        raise Exception(
-            "The number({}) of annotation type is not match with the channel number({}).".format(
-                len(ann_types), vecs.shape[0]))
+        message = "The number({}) of annotation type is not match with the channel number({})."
+        raise Exception(message.format(len(ann_types), vecs.shape[0]))
     ann_seq = AnnSequence()
     ann_seq.ANN_TYPES = ann_types
     ann_seq.id = id_
@@ -294,7 +287,7 @@ def get_tss(seq):
         return get_end(signal)
 
 
-def get_ca(seq):
+def get_cs(seq):
     if seq.strand not in STRANDS:
         raise InvalidStrandType(seq.strand)
     signal = ''.join(seq.get_ann('gene').astype(int).astype(str))

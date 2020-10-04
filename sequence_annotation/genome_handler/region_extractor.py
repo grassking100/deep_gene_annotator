@@ -115,8 +115,7 @@ class GeneInfoExtractor(IInfoExtractor):
         seq_infos = SeqInfoContainer()
         simple_seq = simplify_seq(ann, self._simply_map)
         simple_seq.chromosome_id = ann.chromosome_id or ann.id
-        genes = [region for region in self._extractor.extract(
-            simple_seq) if region.ann_type.isin(GENE_TYPES)]
+        genes = [region for region in self._extractor.extract(simple_seq) if region.ann_type==GENE_TYPE]
         seq_infos.add(genes)
         for gene in genes:
             mRNA = gene.copy()

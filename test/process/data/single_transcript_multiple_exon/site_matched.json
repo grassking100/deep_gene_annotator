@@ -1,20 +1,20 @@
 {
     "F1": {
-        "TSS": 1.0,
-        "cleavage_site": 1.0,
-        "splicing_acceptor_site": 0.6666666666666666,
-        "splicing_donor_site": 0.6666666666666666
+        "AS": 0.6666666666666666,
+        "CS": 1.0,
+        "DS": 0.6666666666666666,
+        "TSS": 1.0
     },
     "precision": {
-        "TSS": 1.0,
-        "cleavage_site": 1.0,
-        "splicing_acceptor_site": 0.5,
-        "splicing_donor_site": 0.5
+        "AS": 0.5,
+        "CS": 1.0,
+        "DS": 0.5,
+        "TSS": 1.0
     },
     "recall": {
-        "TSS": 1.0,
-        "cleavage_site": 1.0,
-        "splicing_acceptor_site": 1.0,
-        "splicing_donor_site": 1.0
+        "AS": 1.0,
+        "CS": 1.0,
+        "DS": 1.0,
+        "TSS": 1.0
     }
 }

@@ -5,7 +5,7 @@ sys.path.append(os.path.dirname(__file__) + "/../..")
 from sequence_annotation.file_process.utils import get_gff_with_belonging
 from sequence_annotation.file_process.utils import get_gff_with_attribute, get_gff_with_updated_attribute
 from sequence_annotation.file_process.utils import read_gff, write_gff, dupliacte_gff_by_parent
-from sequence_annotation.file_process.utils import GENE_TYPE,TRANSCRIPT_TYPE,EXON_TYPE,CDS_TYPE,UTR_TYPE,BASIC_GFF_FEATURES
+from sequence_annotation.file_process.utils import CDS_TYPE, EXON_TYPE, GENE_TYPE, TRANSCRIPT_TYPE, UTR_TYPE
 from species.arabidopsis.utils import GENE_TYPES,TRANSCRIPT_TYPES,EXON_TYPES,CDS_TYPES,FIVE_PRIME_UTR_TYPES,THREE_PRIME_UTR_TYPES
 from species.arabidopsis.utils import PRIMARY_MIRNA_TPYES,MIRNA_TPYES,UORF_TYPES,PROTEIN_TYPES,ALL_TYPES
 

@@ -25,7 +25,10 @@ class ICallback(metaclass=ABCMeta):
     def on_batch_end(self, seq_data, masks, predicts, metric, outputs):
         pass
 
-
+    def get_data(self):
+        return {}
+    
+    
 def get_prefix(prefix=None):
     if prefix is not None and len(prefix) > 0:
         prefix += "_"
@@ -101,21 +104,17 @@ class Callbacks(ICallback):
             callback.on_batch_end(**kwargs)
 
     def get_data(self):
-        record = {}
+        record = super().get_data()
         for callback in self.callbacks:
-            if hasattr(callback, 'get_data'):
-                for type_, value in callback.get_data().items():
-                    record[type_] = value
+            #if hasattr(callback, 'get_data'):
+            for type_, value in callback.get_data().items():
+                record[type_] = value
         return record
 
 class DataCallback(Callback):
     def __init__(self, prefix=None):
         self._prefix = get_prefix(prefix)
         self._data = None
-    
-    @abstractmethod
-    def get_data(self):
-        pass
 
     def _reset(self):
         pass
@@ -156,7 +155,7 @@ class MeanRecorder(DataCallback):
         self._batch_count += 1
 
     def get_data(self):
-        data = {}
+        data = super().get_data()
         for key, value in self._data.items():
             value = round(value / self._batch_count, self.round_value)
             data[self._prefix + key] = value
@@ -184,7 +183,7 @@ class DataHolder(DataCallback):
         self._data.update(metric)
 
     def get_data(self):
-        data = {}
+        data = super().get_data()
         for key, value in self._data.items():
             value = round(value, self.round_value)
             data[self._prefix + key] = value
@@ -213,22 +212,18 @@ class CategoricalMetric(DataCallback):
     
     def _reset(self):
         self._data = {}
-        for type_ in ['TPs', 'FPs', 'TNs', 'FNs']:
+        for type_ in ['TP', 'FP', 'FN']:
             self._data[type_] = [0] * self._label_num
-        self._data['T'] = 0
-        self._data['F'] = 0
     
     def on_batch_end(self, seq_data, masks, predicts, **kwargs):
         predicted_anns = predicts.get('annotation').cpu().numpy()
-        answers = seq_data.get('answers').cpu().numpy()
+        answers = seq_data.get('answer').cpu().numpy()
         masks = masks.cpu().numpy()
         # N,C,L
         data = get_categorical_metric(predicted_anns,answers,masks)
-        for type_ in ['TPs', 'FPs', 'TNs', 'FNs']:
+        for type_ in ['TP', 'FP', 'FN']:
             for index in range(self._label_num):
                 self._data[type_][index] += data[type_][index]
-        self._data['T'] += data['T']
-        self._data['F'] += data['F']
         self._result = self._metric_calculator(self._data)
 
     def get_data(self):
@@ -250,7 +245,7 @@ class ConfusionMatrix(DataCallback):
 
     def on_batch_end(self, seq_data, masks, predicts, **kwargs):
         predicted_anns = predicts.get('annotation').cpu().numpy()
-        answers = seq_data.get('answers').cpu().numpy()
+        answers = seq_data.get('answer').cpu().numpy()
         # N,C,L
         data = get_confusion_matrix(predicted_anns,answers,masks.cpu().numpy())
         self._data += np.array(data)

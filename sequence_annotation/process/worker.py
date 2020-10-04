@@ -1,29 +1,20 @@
 """This submodule provides trainer to train model"""
-import signal
 import time
+import signal
 from abc import ABCMeta, abstractmethod
 from ..utils.utils import get_time_str, print_progress
-from .callback import Callbacks
+
 
 class Worker(metaclass=ABCMeta):
-    def __init__(self, executor):
+    def __init__(self):
         super().__init__()
-        self._model = executor.model
-        self._executor = executor
         self._settings = {}
         self._message_recorder = None
         self._result = {}
         self.is_verbose_visible = True
+        self._is_running = True
         signal.signal(signal.SIGTERM, self.handle_signal)
 
-    @property
-    def model(self):
-        return self._model
-        
-    @property
-    def executor(self):
-        return self._executor
-        
     @property
     def result(self):
         return self._result
@@ -42,7 +33,7 @@ class Worker(metaclass=ABCMeta):
         """Do something after worker work"""
 
     def _before_work(self):
-        """Do something before worker work"""
+        self._is_running = True
 
     def print_verbose(self, info, is_progress=False):
         if self.is_verbose_visible:
@@ -54,32 +45,34 @@ class Worker(metaclass=ABCMeta):
     def handle_signal(self, signum, frame):
         pass
 
+    def set_running_stauts(self, value):
+        self._is_running = value
+        
+    def set_start_epoch(self, value):
+        pass
 
 class TrainWorker(Worker):
-    """a worker which will train and evaluate the model"""
-    def __init__(self,train_executor,val_executor,epoch=None,
-                 other_callbacks=None,message_recorder=None):
-        super().__init__(train_executor)
+    """
+        A worker which will train and evaluate the model
+        #The other_callbacks on_batch_begin and on_batch_end won't be called by worker
+    """
+    def __init__(self,train_executor,val_executor,
+                 other_executor=None,epoch=None,
+                 message_recorder=None):
+        super().__init__()
         self._train_executor = train_executor
         self._val_executor = val_executor
+        self._other_executor = other_executor
         self._current_epoch = None
-        self._is_running = True
-        self._train_callbacks = train_executor.callbacks
-        self._val_callbacks = val_executor.callbacks
-        self._other_callbacks = other_callbacks or Callbacks()
         self._epoch = epoch or 1
         self._start_epoch = 1
+
 
     def set_start_epoch(self,value):
         if value <= 0:
             raise
         self._start_epoch = value
-
-    def set_running_stauts(self, value):
-        self._is_running = value
-
-    def _before_work(self):
-        self._is_running = True
+        
 
     def handle_signal(self, signum, frame):
         self._is_running = False
@@ -104,8 +97,10 @@ class TrainWorker(Worker):
 
     def _work(self):
         """Train model"""
-        all_callbacks = Callbacks([self._train_callbacks, self._val_callbacks, self._other_callbacks])
-        all_callbacks.on_work_begin(worker=self)
+        #Call on_work_begin
+        self._train_executor.on_work_begin(worker=self)
+        self._val_executor.on_work_begin(worker=self)
+        self._other_executor.on_work_begin(worker=self)
         start = self._start_epoch
         end = self._epoch
         epoch_info = "Epoch: ({}/{}), Time cost of: {}, {}\n"
@@ -117,53 +112,58 @@ class TrainWorker(Worker):
             self.print_verbose(time_messgae)
             if self._message_recorder is not None:
                 self._message_recorder.notify(time_messgae)
-            save_distribution = self._model.save_distribution
             for epoch_counter in range(start, end+1):
                 self._current_epoch = epoch_counter
                 pre_time = time.time()
-                all_callbacks.on_epoch_begin(counter=epoch_counter)
-                self._model.save_distribution = False
+                #Call on_epoch_begin
+                self._train_executor.on_epoch_begin(counter=epoch_counter)
+                self._val_executor.on_epoch_begin(counter=epoch_counter)
+                self._other_executor.on_epoch_begin(counter=epoch_counter)
+                #Execute
                 self._train_executor.execute()
                 self._val_executor.execute()
-                self._model.save_distribution = save_distribution
-                record = all_callbacks.get_data()
+                self._other_executor.execute()
+                #Get record
+                train_record = self._train_executor.callbacks.get_data()
+                val_record = self._val_executor.callbacks.get_data()
+                record = dict(train_record)
+                record.update(val_record)
                 if str(record['loss']) == 'nan':
                     self._is_running = False
                 if 'val_loss' in record.keys() and str(record['val_loss']) == 'nan':
                     self._is_running = False
-                self._train_callbacks.on_epoch_end(metric=self._train_callbacks.get_data())
-                self._val_callbacks.on_epoch_end(metric=self._val_callbacks.get_data())
-                self._other_callbacks.on_epoch_end(metric=record)
-
+                #Call on_epoch_end
+                self._train_executor.on_epoch_end(metric=train_record)
+                self._val_executor.on_epoch_end(metric=val_record)
+                self._other_executor.on_epoch_end(metric=record)
                 time_cost = round(time.time() - pre_time, 3)
-                self.print_verbose(epoch_info.format(epoch_counter, self._epoch, 
-                                                     time_cost, record),True)
-
+                self.print_verbose(epoch_info.format(epoch_counter, self._epoch, time_cost, record),True)
                 if not self._is_running:
                     self.print_verbose("Stop at {}".format(epoch_counter))
                     break
+                    
             time_messgae = "Stop training at {}".format(get_time_str())
             self.print_verbose(time_messgae)
             if self._message_recorder is not None:
                 self._message_recorder.notify(time_messgae)
 
-        all_callbacks.on_work_end()
+        #Call on_work_end
+        self._train_executor.on_work_end()
+        self._val_executor.on_work_end()
+        self._other_executor.on_work_end()
         
 
 class BasicWorker(Worker):
     """a worker which will evaluate the model"""
     def __init__(self,executor):
-        super().__init__(executor)
-        self._callbacks = executor.callbacks
+        super().__init__()
+        self._executor = executor
 
     def _work(self):
         """Test model"""
-        self._callbacks.on_work_begin(worker=self)
-        self._callbacks.on_epoch_begin(counter=1)
-        save_distribution = self._model.save_distribution
-        self._model.save_distribution = False
+        self._executor.on_work_begin(worker=self)
+        self._executor.on_epoch_begin(counter=1)
         self._executor.execute()
-        self._model.save_distribution = save_distribution
-        record = self._callbacks.get_data()
-        self._callbacks.on_epoch_end(metric=record)
-        self._callbacks.on_work_end()
+        record = self._executor.callbacks.get_data()
+        self._executor.on_epoch_end(metric=record)
+        self._executor.on_work_end()

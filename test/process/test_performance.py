@@ -9,6 +9,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 RESULT_ROOT = os.path.join(ROOT, 'result')
 DATA_ROOT = os.path.join(ROOT, 'data')
 
+
 def assert_json(test_case,name,answer,predict):
     if isinstance(answer,dict):
         for key, answer_val in answer.items():
@@ -24,11 +25,13 @@ def assert_json(test_case,name,answer,predict):
             predict = 'nan'
         test_case.assertEqual(answer, predict,"Get {} but expect {} in {}".format(predict,answer,name)) 
 
+        
 def assert_equal(test_case,answer_root,predicted_root,full_correct=False,calculate_base=True):
     if full_correct:
         postfix='_for_full_correct'
     else:
         postfix=''
+
     names = ['site_matched','distance','block_performance']
     if calculate_base:
         names.append('base_performance')
@@ -36,8 +39,9 @@ def assert_equal(test_case,answer_root,predicted_root,full_correct=False,calcula
         answer_path = os.path.join(answer_root, '{}{}.json'.format(name,postfix))
         predict_path = os.path.join(predicted_root, '{}.json'.format(name))
         answer = read_json(answer_path)
-        predict = read_json(predict_path)
+        predict = read_json(predict_path)        
         assert_json(test_case,name,answer,predict)
+            
 
 class TestPerformance(unittest.TestCase):
     def _test(self, name,calculate_base=True):
@@ -51,24 +55,32 @@ class TestPerformance(unittest.TestCase):
         main(answer_path,answer_path,region_table_path,saved_root,calculate_base=calculate_base)
         assert_equal(self,answer_root,saved_root,True,calculate_base)
         shutil.rmtree(RESULT_ROOT)
-
+   
+    
     def test_single_transcript_single_exon(self):
         self._test('single_transcript_single_exon')
+
 
     def test_single_transcript_multiple_exon(self):
         self._test('single_transcript_multiple_exon')
 
+
     def test_merged_gene(self):
         self._test('merged_gene')
 
+    
     def test_single_transcript_single_intron(self):
         self._test('single_transcript_single_intron')
-
+    
+    
     def test_single_transcript_five_end_intron(self):
         self._test('single_transcript_five_end_intron')
 
+       
     def test_single_transcript_three_end_intron(self):
         self._test('single_transcript_three_end_intron')
 
+
     def test_multiple_transcript_multiple_exon(self):
         self._test('multiple_transcript_multiple_exon',calculate_base=False)
+    
